@@ -1,6 +1,4 @@
 
-'use server';
-
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
@@ -443,19 +441,15 @@ export async function PATCH(
                         nextStatus = `Pending_${nextStep.role}`;
                     } else {
                         nextStatus = 'Approved';
-                        nextApproverId = null;
                     }
                 } else {
                     nextStatus = 'Approved';
-                    nextApproverId = null;
                 }
             } else if (requisition.status === 'Pending_Approval') {
                 nextStatus = 'Approved';
-                nextApproverId = null;
                 auditDetails += ` Department Head approved. Ready for RFQ.`;
             } else {
                 nextStatus = 'Approved';
-                nextApproverId = null;
             }
 
             dataToUpdate.status = nextStatus?.replace(/ /g, '_');
@@ -574,5 +568,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
