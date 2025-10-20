@@ -97,48 +97,49 @@ This scenario illustrates the end-to-end journey of a procurement request, invol
 
 ### 3. **RFQ Distribution (Procurement Officer / RFQ Sender)**
 - **Actor**: Charlie, the designated RFQ Sender.
-- **Scenario**: Charlie sees the newly approved requisition in his queue with the status **"Ready for RFQ"**. He opens it, sets a deadline for vendors to submit quotes, and assigns a committee of financial and technical experts.
-- **System Action**: Charlie sends the RFQ. The requisition's status changes to **"RFQ In Progress"**. The item remains visible in Charlie's queue, now with a status of **"Accepting Quotes"**.
+- **Scenario**: Charlie sees the newly approved requisition in his queue. He opens it, sets a deadline for vendors to submit quotes, and assigns a committee of financial and technical experts. He then sends the RFQ.
+- **System Action**: The requisition's status changes to **"RFQ In Progress"**. The item remains visible in Charlie's queue, now with a status of **"Accepting Quotes"**. At this stage, Charlie can update the deadline or cancel the RFQ if needed.
 
 ### 4. **Quotation Submission & Deadline**
 - **Actor**: Vendors.
 - **Scenario**: Vendors submit their quotations before the deadline.
-- **System Action**: Once the deadline passes, the requisition's status in Charlie's queue automatically updates to **"Ready for Committee Assignment"**.
+- **System Action**: Once the deadline passes, the requisition's status in Charlie's queue automatically updates to **"Scoring in Progress"** (or "Ready for Committee Assignment" if not yet assigned).
 
 ### 5. **Committee Scoring**
 - **Actors**: Fiona (Financial Expert) and George (Technical Expert).
-- **Scenario**: Fiona and George are notified. They log in, review the masked vendor submissions, and submit their scores.
+- **Scenario**: Fiona and George are notified. They log in, review the masked vendor submissions, and submit their scores before the scoring deadline.
 - **System Action**: The system tracks which committee members have submitted their scores. In Charlie's queue, the requisition's status now shows **"Scoring in Progress"**.
 
 ### 6. **Award Finalization (Procurement Officer)**
 - **Actor**: Charlie, the Procurement Officer.
-- **Scenario**: Once all committee members have finalized their scores, the requisition status in Charlie's queue automatically updates to **"Ready to Award"**. Charlie opens it, views the ranked results, and finalizes the award, recommending "Apple Inc."
-- **System Action**: Charlie clicks "Finalize Scores and Award." Because the award value (150,000 ETB) is between 10,001 and 200,000 ETB, the system consults the **Approval Matrix**. It determines that a review by "Committee B" is required next.
-    - The requisition's status changes to **"Pending Committee B Review."**
-    - The item remains visible in Charlie's queue with this new, specific status. It also appears in the "Reviews" queue for all members of Committee B.
+- **Scenario**: Once all committee members have finalized their scores, the requisition status in Charlie's queue automatically updates to **"Ready to Award"**. Charlie opens it, views the ranked results in the "Award Center," and finalizes the award, recommending "Apple Inc."
+- **System Action**: Charlie clicks "Finalize & Send Awards." The system calculates the total award value (e.g., 150,000 ETB) and consults the **Approval Matrix** in the database.
 
-### 7. **Hierarchical Review (Committee B Member)**
-- **Actor**: Jack, a member of Committee B.
-- **Scenario**: Jack logs in, sees the pending review, and approves the award recommendation.
-- **System Action**: The system logs Jack's approval. Once all required Committee B members approve, the system consults the Approval Matrix again. It sees that the next step is approval from the "Manager, Procurement Division." The requisition's status updates to **"Pending Managerial Approval"** and is assigned to that specific user. The status in Charlie's queue updates accordingly.
+### 7. **Hierarchical Review (Database-Driven)**
+- **Scenario**: Based on the award value of 150,000 ETB, the system determines this falls into the **"Mid Value"** tier. It initiates the specific approval chain defined for that tier *only*.
+- **System Action (Example "Mid Value" Chain):**
+    1.  The requisition status changes to **"Pending Committee B Review."** The item appears in the "Reviews" queue for all members of Committee B.
+    2.  Once Committee B approves, the status updates to **"Pending Managerial Review,"** and it is assigned to the "Manager, Procurement Division".
+    3.  Once the Manager approves, the status updates to **"Pending Director Approval,"** and it is assigned to the "Director, Supply Chain and Property Management".
 
 ### 8. **Final Approval & Vendor Notification**
-- **Actor**: The "Manager, Procurement Division."
-- **Scenario**: The manager gives the final approval.
-- **System Action**: The system recognizes this is the last step in the chain.
+- **Actor**: The "Director, Supply Chain and Property Management" (the final approver for the "Mid Value" tier).
+- **Scenario**: The Director gives the final approval for this tier.
+- **System Action**: The system recognizes this is the **last step in the chain for this specific tier**.
     - The requisition's status is set back to a final, unambiguous **"Approved"** state.
-    - On the quotation page, the **"Notify Vendor"** button now becomes active for Charlie, the Procurement Officer.
-    - Charlie clicks the button, officially notifying the winning vendor. The status changes to **"RFQ In Progress"** (as it's now waiting on the vendor's response).
+    - The requisition reappears in Charlie's (the RFQ Sender's) "Quotations" queue, now marked as ready for notification.
+    - On the quotation page, the **"Notify Vendor"** button becomes active for Charlie.
+    - Charlie clicks the button, officially notifying the winning vendor. The requisition status changes back to **"RFQ In Progress"** as it now waits for the vendor's response.
 
 ### 9. **Award Acceptance & PO Generation (Vendor & System)**
 - **Actor**: The sales rep from "Apple Inc."
-- **Scenario**: The vendor receives the award notification and accepts it in the portal.
+- **Scenario**: The vendor receives the award notification and accepts it in the vendor portal.
 - **System Action**: The system automatically generates a **Purchase Order (PO)** and updates the requisition status to **"PO Created."**
 
 ### 10. **Goods Receipt, Invoicing & Payment**
 - **Actors**: David (Receiving) and Eve (Finance).
-- **Scenario**: The goods are delivered and logged (GRN). An invoice is submitted and automatically matched against the PO and GRN. Finance processes the payment.
-- **System Action**: The system tracks the delivery, matching, and payment status, finally closing the requisition once payment is complete.
+- **Scenario**: The goods are delivered and logged (GRN). An invoice is submitted and automatically matched against the PO and GRN. Finance processes the payment for the matched invoice.
+- **System Action**: The system tracks the delivery, matching, and payment status, finally closing the requisition with a "Fulfilled" or "Closed" status once the process is complete.
 
 ---
 ## Project Structure
