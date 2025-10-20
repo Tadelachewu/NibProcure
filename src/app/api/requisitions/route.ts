@@ -16,8 +16,6 @@ async function findApproverId(role: UserRole): Promise<string | null> {
     return user?.id || null;
 }
 
-export const dynamic = 'force-dynamic';
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const statusParam = searchParams.get('status');
@@ -146,6 +144,12 @@ export async function GET(request: Request) {
         requesterName: req.requester.name,
         financialCommitteeMemberIds: req.financialCommitteeMembers.map(m => m.id),
         technicalCommitteeMemberIds: req.technicalCommitteeMembers.map(m => m.id),
+        committeeAssignments: true,
+        quotations: {
+            include: {
+                vendor: true
+            }
+        },
     }));
 
     return NextResponse.json(formattedRequisitions);
@@ -469,7 +473,7 @@ export async function DELETE(
     const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id }});
     if (oldCriteria) {
         await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
-        await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
+        await prisma.technicalCriterion.deleteMany({ where: evaluationCriteriaId: oldCriteria.id });
         await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id }});
     }
 
@@ -496,3 +500,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
