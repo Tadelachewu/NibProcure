@@ -29,59 +29,78 @@ export async function POST(
     }
 
     const user: User | null = await prisma.user.findUnique({where: {id: userId}});
-    if (!user || (user.role !== 'Procurement Officer' && user.role !== 'Committee')) {
+    if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Committee' && user.role !== 'Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+    
+    // Start a transaction to ensure atomicity
+    const transactionResult = await prisma.$transaction(async (tx) => {
 
-    const updatedRequisition = await prisma.purchaseRequisition.update({
-      where: { id },
-      data: {
-        committeeName,
-        committeePurpose,
-        scoringDeadline: scoringDeadline ? new Date(scoringDeadline) : undefined,
-        rfqSettings: rfqSettings || {},
-        financialCommitteeMembers: {
-          set: financialCommitteeMemberIds.map((id: string) => ({ id }))
-        },
-        technicalCommitteeMembers: {
-          set: technicalCommitteeMemberIds.map((id: string) => ({ id }))
-        }
-      }
-    });
-
-    const allMemberIds = [...(financialCommitteeMemberIds || []), ...(technicalCommitteeMemberIds || [])];
-    const uniqueMemberIds = [...new Set(allMemberIds)];
-
-    // Clear old assignments for this requisition
-    await prisma.committeeAssignment.deleteMany({
-      where: { requisitionId: id },
-    });
-
-    // Create new assignments
-    if (uniqueMemberIds.length > 0) {
-        await prisma.committeeAssignment.createMany({
-            data: uniqueMemberIds.map(memberId => ({
-                userId: memberId,
-                requisitionId: id,
-                scoresSubmitted: false,
-            })),
-            skipDuplicates: true, // In case of any race conditions
-        });
-    }
-
-    await prisma.auditLog.create({
+        const updatedRequisition = await tx.purchaseRequisition.update({
+        where: { id },
         data: {
-            timestamp: new Date(),
-            user: { connect: { id: user.id } },
-            action: 'ASSIGN_COMMITTEE',
-            entity: 'Requisition',
-            entityId: id,
-            details: `Assigned/updated committee for requisition ${id}. Name: ${committeeName}.`,
+            committeeName,
+            committeePurpose,
+            scoringDeadline: scoringDeadline ? new Date(scoringDeadline) : undefined,
+            rfqSettings: rfqSettings || {},
+            financialCommitteeMembers: {
+            set: financialCommitteeMemberIds.map((id: string) => ({ id }))
+            },
+            technicalCommitteeMembers: {
+            set: technicalCommitteeMemberIds.map((id: string) => ({ id }))
+            }
         }
+        });
+
+        const newAllMemberIds = new Set([...(financialCommitteeMemberIds || []), ...(technicalCommitteeMemberIds || [])]);
+        const existingAssignments = await tx.committeeAssignment.findMany({
+            where: { requisitionId: id },
+        });
+
+        const existingMemberIds = new Set(existingAssignments.map(a => a.userId));
+        
+        // Members to be removed
+        const membersToRemove = existingAssignments.filter(a => !newAllMemberIds.has(a.userId));
+        if (membersToRemove.length > 0) {
+            await tx.committeeAssignment.deleteMany({
+                where: {
+                    requisitionId: id,
+                    userId: { in: membersToRemove.map(m => m.userId) }
+                }
+            });
+        }
+        
+        // Members to be added
+        const membersToAdd = Array.from(newAllMemberIds).filter(memberId => !existingMemberIds.has(memberId));
+        if (membersToAdd.length > 0) {
+            await tx.committeeAssignment.createMany({
+                data: membersToAdd.map(memberId => ({
+                    userId: memberId,
+                    requisitionId: id,
+                    scoresSubmitted: false,
+                })),
+            });
+        }
+        
+        // Unchanged members' status is preserved automatically by not touching them.
+
+        await tx.auditLog.create({
+            data: {
+                transactionId: requisition.transactionId,
+                timestamp: new Date(),
+                user: { connect: { id: user.id } },
+                action: 'ASSIGN_EVALUATION_COMMITTEE',
+                entity: 'Requisition',
+                entityId: id,
+                details: `Assigned/updated evaluation committee for requisition ${id}. Name: ${committeeName}.`,
+            }
+        });
+
+        return updatedRequisition;
     });
 
 
-    return NextResponse.json(updatedRequisition);
+    return NextResponse.json(transactionResult);
 
   } catch (error) {
     console.error('Failed to assign committee:', error);
