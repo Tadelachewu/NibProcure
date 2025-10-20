@@ -9,6 +9,8 @@ import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { differenceInMinutes, format } from 'date-fns';
 
+export const dynamic = 'force-dynamic';
+
 async function findApproverId(role: UserRole): Promise<string | null> {
     const user = await prisma.user.findFirst({
         where: { role: role.replace(/ /g, '_') }
@@ -424,7 +426,7 @@ export async function PATCH(
             const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && totalValue <= (tier.max ?? Infinity));
             
             if (relevantTier) {
-                const currentStepIndex = relevantTier.steps.findIndex(step => step.role.replace(/_/g, ' ') === user.role.replace(/_/g, ' '));
+                const currentStepIndex = relevantTier.steps.findIndex(step => `Pending_${step.role}` === requisition.status || `Pending ${step.role.replace(/_/g, ' ')}` === requisition.status.replace(/_/g, ' '));
                 
                 if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
                     // There is a next step in this tier
@@ -432,30 +434,22 @@ export async function PATCH(
                     const approverForNextStep = await findApproverId(nextStep.role as UserRole);
                     if (approverForNextStep) {
                         nextApproverId = approverForNextStep;
-                        nextStatus = `Pending_${nextStep.role}` as any;
+                        nextStatus = `Pending_${nextStep.role}`;
                     } else {
-                         // This case should be handled by admin, fallback to final approval for now
                         nextStatus = 'Approved';
                         nextApproverId = null;
                     }
                 } else {
-                    // This was the final approval step for this tier
+                    // This was the final approval step for this tier, or no step was matched
                     nextStatus = 'Approved';
                     nextApproverId = null;
                 }
             } else if (requisition.status === 'Pending_Approval') {
-                // Initial Departmental Approval - not part of the matrix, goes to RFQ sender.
+                // Initial Departmental Approval
                 nextStatus = 'Approved';
-                nextApproverId = rfqSenderId;
+                nextApproverId = null;
                 auditDetails += ` Department Head approved. Ready for RFQ.`;
-                 if (nextApproverId) {
-                   auditDetails += ` Assigned to designated sender.`
-                } else {
-                    auditDetails += ` No designated sender found.`
-                }
-            }
-             else {
-                // Fallback if no tier is found (shouldn't happen with good data)
+            } else {
                 nextStatus = 'Approved';
                 nextApproverId = null;
             }
