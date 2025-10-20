@@ -23,21 +23,15 @@ export async function GET(request: Request) {
     const userRole = userPayload.role.replace(/ /g, '_');
     const userId = userPayload.user.id;
 
+    // This logic is now corrected. It checks the status based on the user's role
+    // without incorrectly checking for membership in the scoring committee.
     if (userRole === 'Committee_A_Member') {
       whereClause = {
         status: 'Pending_Committee_A_Recommendation',
-        OR: [
-          { financialCommitteeMembers: { some: { id: userId } } },
-          { technicalCommitteeMembers: { some: { id: userId } } },
-        ],
       };
     } else if (userRole === 'Committee_B_Member') {
       whereClause = {
         status: 'Pending_Committee_B_Review',
-        OR: [
-          { financialCommitteeMembers: { some: { id: userId } } },
-          { technicalCommitteeMembers: { some: { id: userId } } },
-        ],
       };
     } else if (userRole === 'Manager_Procurement_Division' || userRole === 'Director_Supply_Chain_and_Property_Management' || userRole === 'VP_Resources_and_Facilities' || userRole === 'President') {
       whereClause = { currentApproverId: userId };
