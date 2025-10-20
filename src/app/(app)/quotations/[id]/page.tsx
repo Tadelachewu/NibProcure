@@ -1208,28 +1208,26 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                 )}
             </CardContent>
             <CardFooter className="flex flex-wrap items-center justify-between gap-2">
-                 {!isSent ? (
-                    <div className="flex items-center gap-4">
-                        <Button onClick={handleSendRFQ} disabled={isSubmitting || !deadline || !isAuthorized}>
-                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                            Send RFQ
-                        </Button>
-                        {!deadline && (
-                            <p className="text-xs text-muted-foreground">A quotation deadline must be set before sending the RFQ.</p>
-                        )}
-                    </div>
-                ) : (
-                    <div className="flex w-full items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <Button onClick={handleSendRFQ} disabled={isSubmitting || !deadline || !isAuthorized || isSent}>
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Send RFQ
+                    </Button>
+                    {isSent ? (
                         <Badge variant="default" className="gap-2">
                             <CheckCircle className="h-4 w-4" />
                             RFQ Distributed on {format(new Date(requisition.updatedAt), 'PP')}
                         </Badge>
-                        {canManageRfq && (
-                            <div className="flex gap-2">
-                                <Button variant="outline" size="sm" onClick={() => setActionDialog({isOpen: true, type: 'update'})}><Settings2 className="mr-2"/> Update RFQ</Button>
-                                <Button variant="destructive" size="sm" onClick={() => setActionDialog({isOpen: true, type: 'cancel'})}><Ban className="mr-2"/> Cancel RFQ</Button>
-                            </div>
-                        )}
+                    ) : (
+                        !deadline && (
+                            <p className="text-xs text-muted-foreground">A quotation deadline must be set.</p>
+                        )
+                    )}
+                </div>
+                {canManageRfq && (
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setActionDialog({isOpen: true, type: 'update'})}><Settings2 className="mr-2"/> Update RFQ</Button>
+                        <Button variant="destructive" size="sm" onClick={() => setActionDialog({isOpen: true, type: 'cancel'})}><Ban className="mr-2"/> Cancel RFQ</Button>
                     </div>
                 )}
             </CardFooter>
@@ -2900,7 +2898,7 @@ export default function QuotationDetailsPage() {
             </>
         )}
         
-        {currentStep === 'committee' && user.role === 'Committee_Member' && (
+        {(currentStep === 'committee' || currentStep === 'award') && user.role === 'Committee_Member' && (
              <CommitteeActions 
                 user={user}
                 requisition={requisition}
@@ -2919,15 +2917,6 @@ export default function QuotationDetailsPage() {
                 isFinalizing={isFinalizing}
                 isAwarded={isAwarded}
             />
-        )}
-        
-        {user.role === 'Committee_Member' && currentStep === 'award' && (
-             <CommitteeActions 
-                user={user}
-                requisition={requisition}
-                quotations={quotations}
-                onFinalScoresSubmitted={fetchRequisitionAndQuotes}
-             />
         )}
 
         {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
@@ -2981,6 +2970,7 @@ export default function QuotationDetailsPage() {
     
 
     
+
 
 
 
