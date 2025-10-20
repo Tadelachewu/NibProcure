@@ -1,6 +1,4 @@
 
-'use server';
-
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
@@ -418,16 +416,24 @@ export async function PATCH(
             let nextApproverId: string | null = null;
             let nextStatus: string = 'Approved'; // Default to final approved state
             
-            // This logic is now for Post-Award approvals.
-            // Initial departmental approval just sets status to 'Approved'.
-            if (requisition.status !== 'Pending_Approval') {
+            // This is a Pre-Award, initial departmental approval
+            if (requisition.status === 'Pending_Approval') {
+                nextStatus = 'Approved';
+                nextApproverId = null; // No next approver, it now waits for RFQ
+            } 
+            // This is a Post-Award approval
+            else {
                 const approvalMatrix = await prisma.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
                 const totalValue = requisition.totalPrice;
+                
+                // Find the correct tier in the matrix based on the value
                 const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
 
                 if (relevantTier) {
-                    const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status.endsWith(step.role));
+                    const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === `Pending_${step.role}`);
+                    
                     if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
+                        // There is a next step in the chain
                         const nextStep = relevantTier.steps[currentStepIndex + 1];
                         nextStatus = `Pending_${nextStep.role}`;
                         nextApproverId = await findApproverId(nextStep.role as UserRole);
