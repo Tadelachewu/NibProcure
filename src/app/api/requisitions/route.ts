@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
@@ -417,23 +419,22 @@ export async function PATCH(
             let nextApproverId: string | null = null;
             let nextStatus: string | null = null;
             
-            //--- CORRECTED DATABASE-DRIVEN APPROVAL LOGIC ---
             const approvalMatrix = await prisma.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
             const totalValue = requisition.totalPrice;
 
-            // Find the first tier that matches the total value
             const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
             
             if (relevantTier) {
-                // Find the current step based on the requisition's status
                 const currentStepIndex = relevantTier.steps.findIndex(step => {
                     const normalizedReqStatus = requisition.status.replace(/_/g, ' ');
                     const normalizedStepRole = step.role.replace(/_/g, ' ');
-                    return `Pending ${normalizedStepRole}` === normalizedReqStatus || `Pending ${normalizedStepRole} Review` === normalizedReqStatus || `Pending ${normalizedStepRole} Recommendation` === normalizedReqStatus;
+                    return `Pending ${normalizedStepRole}` === normalizedReqStatus || 
+                           `Pending ${normalizedStepRole} Review` === normalizedReqStatus || 
+                           `Pending ${normalizedStepRole} Recommendation` === normalizedReqStatus ||
+                           `Pending ${normalizedStepRole.replace(/ /g, '')}` === normalizedReqStatus.replace(/ /g, '');
                 });
                 
                 if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
-                    // There is a next step in this tier
                     const nextStep = relevantTier.steps[currentStepIndex + 1];
                     const approverForNextStep = await findApproverId(nextStep.role as UserRole);
 
@@ -445,17 +446,14 @@ export async function PATCH(
                         nextApproverId = null;
                     }
                 } else {
-                    // This was the final approval step for this tier.
                     nextStatus = 'Approved';
                     nextApproverId = null;
                 }
             } else if (requisition.status === 'Pending_Approval') {
-                // This is the initial Departmental Approval, which doesn't use the matrix.
                 nextStatus = 'Approved';
                 nextApproverId = null;
                 auditDetails += ` Department Head approved. Ready for RFQ.`;
             } else {
-                // Fallback for safety, if no tier is found but it was in some approval state.
                 nextStatus = 'Approved';
                 nextApproverId = null;
             }
@@ -464,11 +462,11 @@ export async function PATCH(
             if(nextApproverId) {
                  dataToUpdate.currentApprover = { connect: { id: nextApproverId } };
             } else {
-                dataToUpdate.currentApproverId = null;
+                dataToUpdate.currentApprover = { disconnect: true };
             }
 
         } else if (status === 'Rejected') {
-            dataToUpdate.currentApproverId = null; // Clear approver on rejection
+            dataToUpdate.currentApprover = { disconnect: true };
             auditAction = 'REJECT_REQUISITION';
             auditDetails = `Requisition ${id} was rejected with comment: "${comment}".`;
         } else if (status === 'Pending Approval') {
@@ -478,7 +476,7 @@ export async function PATCH(
             if (department?.headId) { 
                 dataToUpdate.currentApprover = { connect: { id: department.headId } };
             } else {
-                dataToUpdate.currentApproverId = null;
+                dataToUpdate.currentApprover = { disconnect: true };
             }
         }
 
@@ -576,3 +574,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
