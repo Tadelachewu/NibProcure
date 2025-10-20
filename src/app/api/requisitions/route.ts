@@ -106,7 +106,7 @@ export async function GET(request: Request) {
     let whereClause: any = {};
     
     if (forReview === 'true' && userPayload) {
-        const userRole = userPayload.role.replace(/ /g, '_');
+        const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
         
         const isHierarchicalApprover = [
             'Manager_Procurement_Division',
@@ -151,13 +151,14 @@ export async function GET(request: Request) {
             whereClause.id = { in: assignedReqs.map(a => a.requisitionId) };
              whereClause.status = 'RFQ_In_Progress'
         } else if (isProcurementStaff) {
-            const hasAwardedQuoteCondition = {
-                quotations: { some: { status: { in: ['Awarded', 'Partially_Awarded', 'Standby', 'Declined', 'Accepted', 'Failed'] } } }
-            };
              whereClause.OR = [
-                { status: 'Approved', currentApproverId: null, ...hasAwardedQuoteCondition }, // For notifying vendors
-                { status: 'Approved', currentApproverId: { not: null } }, // For initial RFQ sending
+                // Requisitions approved and waiting for vendor notification
+                { status: 'Approved', quotations: { some: { status: { in: ['Awarded', 'Partially_Awarded'] } } } },
+                // Requisitions approved and waiting for RFQ to be sent
+                { status: 'Approved', currentApproverId: null, NOT: { quotations: { some: { status: { in: ['Awarded', 'Partially_Awarded'] } } } } },
+                // Requisitions currently accepting quotes
                 { status: 'RFQ_In_Progress' },
+                // Requisitions in any review/approval state
                 { status: { startsWith: 'Pending_' } }
             ]
         } else {
@@ -415,67 +416,48 @@ export async function PATCH(
 
             let nextApproverId: string | null = null;
             let nextStatus: string | null = null;
+            
+            //--- NEW DATABASE-DRIVEN APPROVAL LOGIC ---
+            const approvalMatrix = await prisma.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } } });
             const totalValue = requisition.totalPrice;
 
-            // This switch handles the approval chain logic
-            switch (requisition.status) {
-                case 'Pending_Approval': // Initial departmental approval
-                    const settings = await prisma.setting.findMany();
-                    const rfqSetting = settings.find(s => s.key === 'rfqSenderSetting')?.value as any;
-                    
-                    nextStatus = 'Approved';
-                    auditDetails += ` Department Head approved. Ready for RFQ.`;
-
-                    if (rfqSetting?.type === 'specific' && rfqSetting.userId) {
-                        nextApproverId = rfqSetting.userId;
-                    } else {
-                        const firstProcOfficer = await prisma.user.findFirst({ where: { role: 'Procurement_Officer' } });
-                        nextApproverId = firstProcOfficer?.id || null;
-                    }
-                    if (nextApproverId) {
-                       auditDetails += ` Assigned to designated sender.`
-                    } else {
-                        auditDetails += ` No designated sender found.`
-                    }
-                    break;
-
-                case 'Pending_Committee_A_Recommendation':
-                    if (totalValue > 1000000) {
-                        nextApproverId = await findApproverId('VP_Resources_and_Facilities');
-                        nextStatus = 'Pending_VP_Approval';
-                    } else {
-                        nextApproverId = await findApproverId('Director_Supply_Chain_and_Property_Management');
-                        nextStatus = 'Pending_Director_Approval';
-                    }
-                    break;
-                case 'Pending_Committee_B_Review':
-                    nextApproverId = await findApproverId('Manager_Procurement_Division');
-                    nextStatus = 'Pending_Managerial_Review';
-                    break;
-
-                case 'Pending_Managerial_Review':
-                    nextApproverId = await findApproverId('Director_Supply_Chain_and_Property_Management');
-                    nextStatus = 'Pending_Director_Approval';
-                    break;
-                case 'Pending_Director_Approval':
-                    nextApproverId = await findApproverId('VP_Resources_and_Facilities');
-                    nextStatus = 'Pending_VP_Approval';
-                    break;
-                case 'Pending_VP_Approval':
-                    nextApproverId = await findApproverId('President');
-                    nextStatus = 'Pending_President_Approval';
-                    break;
-
-                case 'Pending_Managerial_Approval':
-                case 'Pending_President_Approval':
-                    nextStatus = 'Approved'; // Final approval state before notifying vendor
-                    nextApproverId = null; // Cleared, as it's now up to PO to notify
-                    auditDetails += ' Final approval received. Ready for vendor notification.';
-                    break;
+            const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && totalValue <= (tier.max ?? Infinity));
+            
+            if (relevantTier) {
+                const currentStepIndex = relevantTier.steps.findIndex(step => step.role.replace(/_/g, ' ') === user.role.replace(/_/g, ' '));
                 
-                default:
-                    nextStatus = 'Approved'; // Fallback
-                    nextApproverId = rfqSenderId;
+                if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
+                    // There is a next step in this tier
+                    const nextStep = relevantTier.steps[currentStepIndex + 1];
+                    const approverForNextStep = await findApproverId(nextStep.role as UserRole);
+                    if (approverForNextStep) {
+                        nextApproverId = approverForNextStep;
+                        nextStatus = `Pending_${nextStep.role}` as any;
+                    } else {
+                         // This case should be handled by admin, fallback to final approval for now
+                        nextStatus = 'Approved';
+                        nextApproverId = null;
+                    }
+                } else {
+                    // This was the final approval step for this tier
+                    nextStatus = 'Approved';
+                    nextApproverId = null;
+                }
+            } else if (requisition.status === 'Pending_Approval') {
+                // Initial Departmental Approval - not part of the matrix, goes to RFQ sender.
+                nextStatus = 'Approved';
+                nextApproverId = rfqSenderId;
+                auditDetails += ` Department Head approved. Ready for RFQ.`;
+                 if (nextApproverId) {
+                   auditDetails += ` Assigned to designated sender.`
+                } else {
+                    auditDetails += ` No designated sender found.`
+                }
+            }
+             else {
+                // Fallback if no tier is found (shouldn't happen with good data)
+                nextStatus = 'Approved';
+                nextApproverId = null;
             }
 
             dataToUpdate.status = nextStatus?.replace(/ /g, '_');
