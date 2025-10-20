@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
@@ -420,37 +422,40 @@ export async function PATCH(
             const approvalMatrix = await prisma.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
             const totalValue = requisition.totalPrice;
 
-            const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
-            
-            if (relevantTier) {
-                const currentStepIndex = relevantTier.steps.findIndex(step => {
-                    const normalizedReqStatus = requisition.status.replace(/_/g, ' ');
-                    const normalizedStepRole = step.role.replace(/_/g, ' ');
-                    return `Pending ${normalizedStepRole}` === normalizedReqStatus || 
-                           `Pending ${normalizedStepRole} Review` === normalizedReqStatus || 
-                           `Pending ${normalizedStepRole} Recommendation` === normalizedReqStatus ||
-                           `Pending ${normalizedStepRole.replace(/ /g, '')}` === normalizedReqStatus.replace(/ /g, '');
-                });
-                
-                if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
-                    const nextStep = relevantTier.steps[currentStepIndex + 1];
-                    const approverForNextStep = await findApproverId(nextStep.role as UserRole);
-
-                    if (approverForNextStep) {
+            // CORRECTED LOGIC: Check current status to determine next step
+            if (requisition.status === 'Pending_Approval') { // This is a departmental approval
+                const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
+                if (relevantTier && relevantTier.steps.length > 0) {
+                    const firstStep = relevantTier.steps[0];
+                    const approverForFirstStep = await findApproverId(firstStep.role as UserRole);
+                    nextApproverId = approverForFirstStep;
+                    nextStatus = `Pending_${firstStep.role}`;
+                } else {
+                    // No steps for this tier, so it's directly approved for RFQ
+                    nextStatus = 'Approved';
+                }
+                auditDetails += ` Department Head approved. Routing to first step of "${relevantTier?.name || 'N/A'}" tier.`;
+            } else { // This is a hierarchical or committee approval
+                 const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
+                 if (relevantTier) {
+                    const currentStepIndex = relevantTier.steps.findIndex(step => {
+                        return requisition.status.endsWith(step.role);
+                    });
+                    
+                    if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
+                        const nextStep = relevantTier.steps[currentStepIndex + 1];
+                        const approverForNextStep = await findApproverId(nextStep.role as UserRole);
                         nextApproverId = approverForNextStep;
                         nextStatus = `Pending_${nextStep.role}`;
                     } else {
+                        // This was the final step in the chain
                         nextStatus = 'Approved';
                     }
                 } else {
-                    nextStatus = 'Approved';
+                     nextStatus = 'Approved'; // Fallback if no tier found (should not happen)
                 }
-            } else if (requisition.status === 'Pending_Approval') {
-                nextStatus = 'Approved';
-                auditDetails += ` Department Head approved. Ready for RFQ.`;
-            } else {
-                nextStatus = 'Approved';
             }
+
 
             dataToUpdate.status = nextStatus?.replace(/ /g, '_');
             if(nextApproverId) {

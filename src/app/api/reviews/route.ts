@@ -1,5 +1,7 @@
 
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserByToken } from '@/lib/auth';
