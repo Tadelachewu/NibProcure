@@ -1,6 +1,4 @@
 
-'use server';
-
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
@@ -347,7 +345,6 @@ export async function PATCH(
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
     
-    // This handles editing a draft or rejected requisition and resubmitting
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && updateData.title) {
         const totalPrice = updateData.items.reduce((acc: number, item: any) => {
             const price = item.unitPrice || 0;
@@ -422,8 +419,7 @@ export async function PATCH(
             const approvalMatrix = await prisma.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
             const totalValue = requisition.totalPrice;
 
-            // CORRECTED LOGIC: Check current status to determine next step
-            if (requisition.status === 'Pending_Approval') { // This is a departmental approval
+            if (requisition.status === 'Pending_Approval') { // Initial departmental approval
                 const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
                 if (relevantTier && relevantTier.steps.length > 0) {
                     const firstStep = relevantTier.steps[0];
@@ -431,28 +427,23 @@ export async function PATCH(
                     nextApproverId = approverForFirstStep;
                     nextStatus = `Pending_${firstStep.role}`;
                 } else {
-                    // No steps for this tier, so it's directly approved for RFQ
                     nextStatus = 'Approved';
                 }
                 auditDetails += ` Department Head approved. Routing to first step of "${relevantTier?.name || 'N/A'}" tier.`;
-            } else { // This is a hierarchical or committee approval
+            } else { // Hierarchical or committee approval
                  const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
                  if (relevantTier) {
-                    const currentStepIndex = relevantTier.steps.findIndex(step => {
-                        return requisition.status.endsWith(step.role);
-                    });
-                    
+                    const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status.endsWith(step.role));
                     if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
                         const nextStep = relevantTier.steps[currentStepIndex + 1];
                         const approverForNextStep = await findApproverId(nextStep.role as UserRole);
                         nextApproverId = approverForNextStep;
                         nextStatus = `Pending_${nextStep.role}`;
                     } else {
-                        // This was the final step in the chain
                         nextStatus = 'Approved';
                     }
                 } else {
-                     nextStatus = 'Approved'; // Fallback if no tier found (should not happen)
+                     nextStatus = 'Approved';
                 }
             }
 
@@ -573,3 +564,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
