@@ -96,12 +96,27 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'Another department with this name already exists' }, { status: 409 });
     }
 
+    // Check if the new head is already a head of another department
+    const newHeadId = headId === 'null' ? null : headId;
+    if (newHeadId) {
+        const anotherDeptWithHead = await prisma.department.findFirst({
+            where: {
+                headId: newHeadId,
+                NOT: { id: id } // Exclude the current department from the check
+            }
+        });
+        if (anotherDeptWithHead) {
+            return NextResponse.json({ error: `This user is already the head of the "${anotherDeptWithHead.name}" department.` }, { status: 409 });
+        }
+    }
+
+
     const updatedDepartment = await prisma.department.update({
         where: { id },
         data: { 
           name,
           description,
-          headId: headId === 'null' ? null : headId
+          headId: newHeadId,
         },
     });
     
@@ -121,6 +136,10 @@ export async function PATCH(request: Request) {
   } catch (error) {
      console.error("Error updating department:", error);
      if (error instanceof Error) {
+        // Handle potential unique constraint errors on the 'headId' field
+        if ((error as any).code === 'P2002' && (error as any).meta?.target?.includes('headId')) {
+            return NextResponse.json({ error: 'This user is already the head of another department.' }, { status: 409 });
+        }
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
