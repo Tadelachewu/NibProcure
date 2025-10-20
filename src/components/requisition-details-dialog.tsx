@@ -59,7 +59,7 @@ export function RequisitionDetailsDialog({ reuisition, isOpen, onClose }: Requis
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {reuisition.items.map(item => (
+                                {reuisition.items && reuisition.items.map(item => (
                                      <TableRow key={item.id}>
                                         <TableCell>{item.name}</TableCell>
                                         <TableCell className="text-right">{item.quantity}</TableCell>
