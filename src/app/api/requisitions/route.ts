@@ -16,6 +16,8 @@ async function findApproverId(role: UserRole): Promise<string | null> {
     return user?.id || null;
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const statusParam = searchParams.get('status');
@@ -37,33 +39,28 @@ export async function GET(request: Request) {
     
     if (forReview === 'true' && userPayload) {
         const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
-        
-        if (userRole === 'Committee_A_Member') {
-             whereClause.status = 'Pending_Committee_A_Member';
-        } else if (userRole === 'Committee_B_Member') {
-            whereClause.status = 'Pending_Committee_B_Member';
-        } else {
-            const isHierarchicalApprover = [
-                'Manager_Procurement_Division',
-                'Director_Supply_Chain_and_Property_Management',
-                'VP_Resources_and_Facilities',
-                'President'
-            ].includes(userRole);
+        const userId = userPayload.user.id;
 
-            if (isHierarchicalApprover) {
-                whereClause.currentApproverId = userPayload.user.id;
-            } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-                 whereClause.status = { in: [
-                    'Pending_Committee_A_Member',
-                    'Pending_Committee_B_Member',
-                    'Pending_Managerial_Review',
-                    'Pending_Director_Approval',
-                    'Pending_VP_Approval',
-                    'Pending_President_Approval'
-                 ]};
-            } else {
-                 return NextResponse.json([]);
-            }
+        if (userRole === 'Committee_A_Member') {
+          whereClause = { status: 'Pending_Committee_A_Member' };
+        } else if (userRole === 'Committee_B_Member') {
+          whereClause = { status: 'Pending_Committee_B_Member' };
+        } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
+           whereClause = { 
+             status: { 
+               in: [
+                  'Pending_Committee_A_Member',
+                  'Pending_Committee_B_Member',
+                  'Pending_Managerial_Review',
+                  'Pending_Director_Approval',
+                  'Pending_VP_Approval',
+                  'Pending_President_Approval'
+               ]
+             }
+          };
+        } else {
+            // For hierarchical approvers, they are assigned directly.
+             whereClause.currentApproverId = userId;
         }
 
     } else if (statusParam) {
@@ -376,7 +373,6 @@ export async function PATCH(
                         auditDetails += ` Final approval in "${relevantTier.name}" tier complete. Ready for vendor notification.`
                     }
                 } else {
-                    // Fallback if no tier is found (shouldn't happen with proper config)
                      nextStatus = 'Approved';
                      nextApproverId = null;
                      auditDetails += ' No specific award tier found. Approved for notification.'
@@ -500,5 +496,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    

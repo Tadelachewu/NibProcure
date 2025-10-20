@@ -39,7 +39,6 @@ export async function POST(
                 throw new Error("No quotes found to process for this requisition.");
             }
             
-            // This is the definitive logic for finding the correct approval tier.
             const approvalMatrix = await tx.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
             const relevantTier = approvalMatrix.find(tier => totalAwardValue >= tier.min && (tier.max === null || totalAwardValue <= tier.max));
 
@@ -84,7 +83,6 @@ export async function POST(
             if (relevantTier.steps.length > 0) {
                 const firstStep = relevantTier.steps[0];
                 nextStatus = `Pending_${firstStep.role}`;
-                // Only assign a specific approver if it's not a committee review
                 if (!firstStep.role.includes('Committee')) {
                     nextApproverId = await findApproverId(firstStep.role as UserRole);
                     if (!nextApproverId) {
@@ -93,7 +91,6 @@ export async function POST(
                 }
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.replace(/_/g, ' ')} for approval.`;
             } else {
-                // Tier has no steps, so it's auto-approved for notification
                 nextStatus = 'Approved';
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier, which has no approval steps. Approved for notification.`;
             }
