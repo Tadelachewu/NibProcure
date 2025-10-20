@@ -16,7 +16,7 @@ import { Reorder } from 'framer-motion';
 import { produce } from 'immer';
 
 export function ApprovalMatrixEditor() {
-    const { approvalThresholds, updateApprovalThresholds } = useAuth();
+    const { approvalThresholds, updateApprovalThresholds, committeeConfig } = useAuth();
     const [localThresholds, setLocalThresholds] = useState<ApprovalThreshold[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
@@ -27,14 +27,46 @@ export function ApprovalMatrixEditor() {
 
     const handleSave = async () => {
         setIsSaving(true);
-        // Basic validation
+        
+        // --- START VALIDATION LOGIC ---
         for (const threshold of localThresholds) {
-            if (threshold.min > (threshold.max || Infinity)) {
+            // Basic range validation
+            if (threshold.min > (threshold.max ?? Infinity)) {
                 toast({ variant: 'destructive', title: 'Invalid Range', description: `In "${threshold.name}", the minimum value cannot be greater than the maximum.`});
                 setIsSaving(false);
                 return;
             }
+
+            // Committee range validation
+            for (const step of threshold.steps) {
+                let committeeKey: 'A' | 'B' | null = null;
+                if (step.role === 'Committee_A_Member') committeeKey = 'A';
+                if (step.role === 'Committee_B_Member') committeeKey = 'B';
+
+                if (committeeKey && committeeConfig[committeeKey]) {
+                    const committeeRange = committeeConfig[committeeKey];
+                    const tierMin = threshold.min;
+                    const tierMax = threshold.max ?? Infinity;
+
+                    // Check for any overlap between the tier's range and the committee's configured range.
+                    // The tier is valid if it starts before the committee ends AND ends after the committee starts.
+                    const isOverlapping = tierMin < committeeRange.max && tierMax > committeeRange.min;
+                    
+                    if (!isOverlapping) {
+                        toast({ 
+                            variant: 'destructive', 
+                            title: 'Configuration Conflict', 
+                            description: `Tier "${threshold.name}" (range: ${tierMin.toLocaleString()} - ${tierMax === Infinity ? 'Infinity' : tierMax.toLocaleString()}) is incompatible with Committee ${committeeKey}'s configured range (${committeeRange.min.toLocaleString()} - ${committeeRange.max.toLocaleString()}).`,
+                            duration: 10000,
+                        });
+                        setIsSaving(false);
+                        return;
+                    }
+                }
+            }
         }
+        // --- END VALIDATION LOGIC ---
+
         await updateApprovalThresholds(localThresholds);
         toast({
             title: 'Settings Saved',
