@@ -473,7 +473,7 @@ export async function DELETE(
     const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id }});
     if (oldCriteria) {
         await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
-        await prisma.technicalCriterion.deleteMany({ where: evaluationCriteriaId: oldCriteria.id });
+        await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
         await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id }});
     }
 
@@ -500,5 +500,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
 
     
