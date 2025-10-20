@@ -45,18 +45,15 @@ export function ApprovalMatrixEditor() {
 
                 if (committeeKey && committeeConfig[committeeKey]) {
                     const committeeRange = committeeConfig[committeeKey];
-                    const tierMin = threshold.min;
                     const tierMax = threshold.max ?? Infinity;
 
-                    // Check for any overlap between the tier's range and the committee's configured range.
-                    // The tier is valid if it starts before the committee ends AND ends after the committee starts.
-                    const isOverlapping = tierMin < committeeRange.max && tierMax > committeeRange.min;
-                    
-                    if (!isOverlapping) {
-                        toast({ 
+                    // A tier is invalid IF its max value is less than the committee's minimum value.
+                    // This prevents assigning a high-value committee to a low-value tier.
+                    if (tierMax < committeeRange.min) {
+                         toast({ 
                             variant: 'destructive', 
                             title: 'Configuration Conflict', 
-                            description: `Tier "${threshold.name}" (range: ${tierMin.toLocaleString()} - ${tierMax === Infinity ? 'Infinity' : tierMax.toLocaleString()}) is incompatible with Committee ${committeeKey}'s configured range (${committeeRange.min.toLocaleString()} - ${committeeRange.max.toLocaleString()}).`,
+                            description: `Tier "${threshold.name}" (max value: ${tierMax.toLocaleString()}) is too low for Committee ${committeeKey}, which reviews items starting at ${committeeRange.min.toLocaleString()} ETB.`,
                             duration: 10000,
                         });
                         setIsSaving(false);
