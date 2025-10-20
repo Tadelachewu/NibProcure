@@ -18,7 +18,7 @@ import {
   CardDescription,
 } from './ui/card';
 import { Button } from './ui/button';
-import { PurchaseRequisition, UserRole } from '@/lib/types';
+import { PurchaseRequisition } from '@/lib/types';
 import { format } from 'date-fns';
 import {
   Check,
@@ -54,7 +54,7 @@ export function ReviewsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, role, token } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -69,11 +69,11 @@ export function ReviewsTable() {
     if (!user || !token) {
       setLoading(false);
       return;
-    };
+    }
     try {
       setLoading(true);
       
-      const response = await fetch(`/api/requisitions?forReview=true`, {
+      const response = await fetch(`/api/reviews`, {
         headers: {
             'Authorization': `Bearer ${token}`
         }
@@ -125,7 +125,7 @@ export function ReviewsTable() {
       if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
       toast({
         title: "Success",
-        description: `Requisition award for ${selectedRequisition.id} has been ${actionType === 'approve' ? 'approved' : 'rejected'}.`,
+        description: `Requisition award for ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       fetchRequisitions();
     } catch (error) {

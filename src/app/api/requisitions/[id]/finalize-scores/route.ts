@@ -27,11 +27,6 @@ export async function POST(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
         
-        // Define approval chain thresholds
-        const committeeAMin = 200001;
-        const committeeBMin = 10001;
-        const managerMin = 0; // <= 10,000
-
         // Start transaction
         const result = await prisma.$transaction(async (tx) => {
             
@@ -42,6 +37,14 @@ export async function POST(
 
             if (allQuotes.length === 0) {
                 throw new Error("No quotes found to process for this requisition.");
+            }
+            
+            // This is the definitive logic for finding the correct approval tier.
+            const approvalMatrix = await tx.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
+            const relevantTier = approvalMatrix.find(tier => totalAwardValue >= tier.min && (tier.max === null || totalAwardValue <= tier.max));
+
+            if (!relevantTier) {
+                throw new Error(`No approval tier found for an award value of ${totalAwardValue.toLocaleString()} ETB. Please configure the Approval Matrix.`);
             }
 
             const awardedVendorIds = Object.keys(awards);
@@ -78,27 +81,23 @@ export async function POST(
             let nextApproverId: string | null = null;
             let auditDetails: string;
 
-            // 4. CORRECTED: Determine initial routing based on value, starting with committee review where applicable.
-            if (totalAwardValue >= committeeAMin) {
-                // High-Value items go to Committee A first
-                nextStatus = 'Pending_Committee_A_Recommendation';
-                auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB. Routing to Committee A for recommendation.`;
-            } else if (totalAwardValue >= committeeBMin) {
-                // Mid-Value items go to Committee B first
-                nextStatus = 'Pending_Committee_B_Review';
-                auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB. Routing to Committee B for review.`;
+            if (relevantTier.steps.length > 0) {
+                const firstStep = relevantTier.steps[0];
+                nextStatus = `Pending_${firstStep.role}`;
+                // Only assign a specific approver if it's not a committee review
+                if (!firstStep.role.includes('Committee')) {
+                    nextApproverId = await findApproverId(firstStep.role as UserRole);
+                    if (!nextApproverId) {
+                        throw new Error(`Could not find a user for the role: ${firstStep.role.replace(/_/g, ' ')}`);
+                    }
+                }
+                auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.replace(/_/g, ' ')} for approval.`;
             } else {
-                // Low-Value items go directly to Manager for final approval
-                nextApproverId = await findApproverId('Manager_Procurement_Division');
-                nextStatus = 'Pending_Managerial_Approval';
-                auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB. Routing for final Managerial Approval.`;
+                // Tier has no steps, so it's auto-approved for notification
+                nextStatus = 'Approved';
+                auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier, which has no approval steps. Approved for notification.`;
             }
             
-            // For committee routes, currentApproverId is null as it's a group review.
-            // For direct manager approval, we found the ID.
-            if(nextStatus === 'Pending_Managerial_Approval' && !nextApproverId) {
-                throw new Error(`Could not find a user for the Manager, Procurement Division role.`);
-            }
 
             const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
             
@@ -106,7 +105,7 @@ export async function POST(
                 where: { id: requisitionId },
                 data: {
                     status: nextStatus as any,
-                    currentApproverId: nextApproverId, // This will be null for committee reviews, which is correct
+                    currentApproverId: nextApproverId,
                     awardedQuoteItemIds: awardedItemIds,
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
                     totalPrice: totalAwardValue
@@ -139,5 +138,3 @@ export async function POST(
         return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
 }
-
-    

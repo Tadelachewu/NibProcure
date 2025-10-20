@@ -13,31 +13,45 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const userPayload = await getUserByToken(token);
-    if (!userPayload || (userPayload.role !== 'Admin' && userPayload.role !== 'Procurement_Officer' && userPayload.role !== 'Committee_A_Member' && userPayload.role !== 'Committee_B_Member')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    
+    const reviewStatuses = [
+      'Pending_Committee_A_Recommendation',
+      'Pending_Committee_B_Review',
+      'Pending_Managerial_Review',
+      'Pending_Director_Approval',
+      'Pending_VP_Approval',
+      'Pending_President_Approval'
+    ];
 
-    const reviews = await prisma.review.findMany({
+    let whereClause: any = {
+      status: { in: reviewStatuses }
+    };
+
+    if (userPayload?.role === 'Committee_A_Member') {
+      whereClause.status = 'Pending_Committee_A_Recommendation';
+    } else if (userPayload?.role === 'Committee_B_Member') {
+      whereClause.status = 'Pending_Committee_B_Review';
+    } else if (userPayload && ['Manager_Procurement_Division', 'Director_Supply_Chain_and_Property_Management', 'VP_Resources_and_Facilities', 'President'].includes(userPayload.role)) {
+      whereClause.currentApproverId = userPayload.user.id;
+    } else if (userPayload?.role !== 'Admin' && userPayload?.role !== 'Procurement_Officer') {
+      // If user doesn't have a specific review role, return empty
+      return NextResponse.json([]);
+    }
+    // For Admin/Procurement Officer, the default `whereClause` shows all reviews.
+
+    const requisitions = await prisma.purchaseRequisition.findMany({
+      where: whereClause,
       include: {
-        reviewer: {
-          select: {
-            name: true,
-          }
-        },
-        requisition: {
-          select: {
-            title: true,
-          }
-        }
+        requester: { select: { name: true } },
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    return NextResponse.json(reviews);
+    return NextResponse.json(requisitions);
   } catch (error) {
-    console.error('Failed to fetch reviews:', error);
+    console.error('Failed to fetch requisitions for review:', error);
     if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to fetch reviews', details: error.message }, { status: 500 });
     }

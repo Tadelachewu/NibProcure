@@ -16,76 +16,6 @@ async function findApproverId(role: UserRole): Promise<string | null> {
     return user?.id || null;
 }
 
-export async function finalizeAndNotifyVendors(requisitionId: string, awardResponseDeadline?: Date) {
-    const allQuotesForReq = await prisma.quotation.findMany({
-        where: { requisitionId },
-        include: { items: true }
-    });
-
-    const sortedByScore = allQuotesForReq.sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
-
-    if (sortedByScore.length === 0) {
-        throw new Error("No quotes available to award.");
-    }
-    
-    const winner = sortedByScore[0];
-    
-    await prisma.quotation.updateMany({
-        where: { requisitionId: requisitionId, NOT: { id: winner.id } },
-        data: { status: 'Rejected', rank: null }
-    });
-    
-    await prisma.quotation.update({
-        where: { id: winner.id },
-        data: { status: 'Awarded', rank: 1 }
-    });
-
-    const standbyCandidates = sortedByScore.slice(1, 3);
-    for (let i = 0; i < standbyCandidates.length; i++) {
-        await prisma.quotation.update({
-            where: { id: standbyCandidates[i].id },
-            data: { status: 'Standby', rank: (i + 2) as 2 | 3 }
-        });
-    }
-
-    const awardResponseDurationMinutes = awardResponseDeadline
-        ? differenceInMinutes(awardResponseDeadline, new Date())
-        : undefined;
-
-    await prisma.purchaseRequisition.update({
-      where: { id: requisitionId },
-      data: {
-        status: 'RFQ_In_Progress', // Stays in this status until vendor accepts
-        awardResponseDeadline: awardResponseDeadline,
-        awardResponseDurationMinutes,
-        awardedQuoteItemIds: winner.items.map(item => item.id), // Store IDs of awarded items from the winning quote
-        currentApprover: { disconnect: true },
-      }
-    });
-
-    const requisition = await prisma.purchaseRequisition.findUnique({where: { id: requisitionId }});
-    const vendor = await prisma.vendor.findUnique({ where: { id: winner.vendorId }});
-
-    if (vendor && requisition) {
-        const emailHtml = `
-            <h1>Congratulations, ${vendor.name}!</h1>
-            <p>You have been awarded the contract for requisition <strong>${requisition.title}</strong>.</p>
-            <p>Please log in to the vendor portal to review the award and respond.</p>
-            ${awardResponseDeadline ? `<p><strong>This award must be accepted by ${format(awardResponseDeadline, 'PPpp')}.</strong></p>` : ''}
-            <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
-            <p>Thank you,</p>
-            <p>Nib InternationalBank Procurement</p>
-        `;
-
-        await sendEmail({
-            to: vendor.email,
-            subject: `Contract Awarded: ${requisition.title}`,
-            html: emailHtml
-        });
-    }
-}
-
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const statusParam = searchParams.get('status');
@@ -420,28 +350,35 @@ export async function PATCH(
             if (requisition.status === 'Pending_Approval') {
                 nextStatus = 'Approved';
                 nextApproverId = null; // No next approver, it now waits for RFQ
+                auditDetails += ' Initial departmental approval complete. Ready for RFQ.'
             } 
             // This is a Post-Award approval
             else {
                 const approvalMatrix = await prisma.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
                 const totalValue = requisition.totalPrice;
                 
-                // Find the correct tier in the matrix based on the value
                 const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
 
                 if (relevantTier) {
                     const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === `Pending_${step.role}`);
                     
                     if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
-                        // There is a next step in the chain
                         const nextStep = relevantTier.steps[currentStepIndex + 1];
                         nextStatus = `Pending_${nextStep.role}`;
-                        nextApproverId = await findApproverId(nextStep.role as UserRole);
+                        if (!nextStep.role.includes('Committee')) {
+                            nextApproverId = await findApproverId(nextStep.role as UserRole);
+                        }
+                        auditDetails += ` Advanced to next step in "${relevantTier.name}" tier: ${nextStatus.replace(/_/g, ' ')}.`;
                     } else {
-                        // This was the last step in the chain
                         nextStatus = 'Approved';
                         nextApproverId = null;
+                        auditDetails += ` Final approval in "${relevantTier.name}" tier complete. Ready for vendor notification.`
                     }
+                } else {
+                    // Fallback if no tier is found (shouldn't happen with proper config)
+                     nextStatus = 'Approved';
+                     nextApproverId = null;
+                     auditDetails += ' No specific award tier found. Approved for notification.'
                 }
             }
 
