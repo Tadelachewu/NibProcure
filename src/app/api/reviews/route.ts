@@ -1,6 +1,4 @@
 
-'use server';
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserByToken } from '@/lib/auth';
@@ -23,8 +21,6 @@ export async function GET(request: Request) {
     const userRole = userPayload.role.replace(/ /g, '_');
     const userId = userPayload.user.id;
 
-    // This logic is now corrected. It checks the status based on the user's role
-    // without incorrectly checking for membership in the scoring committee.
     if (userRole === 'Committee_A_Member') {
       whereClause = {
         status: 'Pending_Committee_A_Recommendation',
