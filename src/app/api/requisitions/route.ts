@@ -144,12 +144,6 @@ export async function GET(request: Request) {
         requesterName: req.requester.name,
         financialCommitteeMemberIds: req.financialCommitteeMembers.map(m => m.id),
         technicalCommitteeMemberIds: req.technicalCommitteeMembers.map(m => m.id),
-        committeeAssignments: true,
-        quotations: {
-            include: {
-                vendor: true
-            }
-        },
     }));
 
     return NextResponse.json(formattedRequisitions);
@@ -473,7 +467,7 @@ export async function DELETE(
     const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id }});
     if (oldCriteria) {
         await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
-        await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+        await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
         await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id }});
     }
 
@@ -495,12 +489,12 @@ export async function DELETE(
   } catch (error) {
      console.error('Failed to delete requisition:', error);
      if (error instanceof Error) {
+        const prismaError = error as any;
+        if(prismaError.code === 'P2025') {
+            return NextResponse.json({ error: 'Failed to delete related data. The requisition may have already been deleted.' }, { status: 404 });
+        }
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
-
-    
