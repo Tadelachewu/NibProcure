@@ -1,6 +1,4 @@
 
-'use server';
-
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
@@ -426,7 +424,11 @@ export async function PATCH(
             const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && totalValue <= (tier.max ?? Infinity));
             
             if (relevantTier) {
-                const currentStepIndex = relevantTier.steps.findIndex(step => `Pending_${step.role}` === requisition.status || `Pending ${step.role.replace(/_/g, ' ')}` === requisition.status.replace(/_/g, ' '));
+                const currentStepIndex = relevantTier.steps.findIndex(step => {
+                    const normalizedReqStatus = requisition.status.replace(/_/g, ' ');
+                    const normalizedStepRole = step.role.replace(/_/g, ' ');
+                    return `Pending ${normalizedStepRole}` === normalizedReqStatus || `Pending ${normalizedStepRole.replace(' Member', '')} Recommendation` === normalizedReqStatus || `Pending ${normalizedStepRole.replace(' Member', '')} Review` === normalizedReqStatus;
+                });
                 
                 if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
                     // There is a next step in this tier
@@ -436,6 +438,7 @@ export async function PATCH(
                         nextApproverId = approverForNextStep;
                         nextStatus = `Pending_${nextStep.role}`;
                     } else {
+                        // If next approver not found, end the chain
                         nextStatus = 'Approved';
                         nextApproverId = null;
                     }
@@ -450,6 +453,7 @@ export async function PATCH(
                 nextApproverId = null;
                 auditDetails += ` Department Head approved. Ready for RFQ.`;
             } else {
+                // Fallback for safety, but should be covered by above logic
                 nextStatus = 'Approved';
                 nextApproverId = null;
             }
