@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserByToken } from '@/lib/auth';
@@ -31,17 +33,21 @@ export async function GET(request: Request) {
     };
 
     if (userPayload.role === 'Committee_A_Member') {
-      whereClause.status = 'Pending_Committee_A_Recommendation';
-      whereClause.OR = [
-          { financialCommitteeMembers: { some: { id: userPayload.user.id } } },
-          { technicalCommitteeMembers: { some: { id: userPayload.user.id } } },
-      ];
+      whereClause = {
+        status: 'Pending_Committee_A_Recommendation',
+        OR: [
+            { financialCommitteeMembers: { some: { id: userPayload.user.id } } },
+            { technicalCommitteeMembers: { some: { id: userPayload.user.id } } },
+        ],
+      };
     } else if (userPayload.role === 'Committee_B_Member') {
-      whereClause.status = 'Pending_Committee_B_Review';
-       whereClause.OR = [
+      whereClause = {
+        status: 'Pending_Committee_B_Review',
+        OR: [
           { financialCommitteeMembers: { some: { id: userPayload.user.id } } },
           { technicalCommitteeMembers: { some: { id: userPayload.user.id } } },
-      ];
+        ],
+      };
     } else if (userPayload && ['Manager_Procurement_Division', 'Director_Supply_Chain_and_Property_Management', 'VP_Resources_and_Facilities', 'President'].includes(userPayload.role)) {
       whereClause.currentApproverId = userPayload.user.id;
     } else if (userPayload?.role !== 'Admin' && userPayload?.role !== 'Procurement_Officer') {
