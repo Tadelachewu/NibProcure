@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserByToken } from '@/lib/auth';
@@ -23,11 +25,11 @@ export async function GET(request: Request) {
 
     if (userRole === 'Committee_A_Member') {
       whereClause = {
-        status: 'Pending_Committee_A_Recommendation',
+        status: 'Pending_Committee_A_Member',
       };
     } else if (userRole === 'Committee_B_Member') {
       whereClause = {
-        status: 'Pending_Committee_B_Review',
+        status: 'Pending_Committee_B_Member',
       };
     } else if (userRole === 'Manager_Procurement_Division' || userRole === 'Director_Supply_Chain_and_Property_Management' || userRole === 'VP_Resources_and_Facilities' || userRole === 'President') {
       whereClause = { currentApproverId: userId };
@@ -35,8 +37,8 @@ export async function GET(request: Request) {
        whereClause = { 
          status: { 
            in: [
-              'Pending_Committee_A_Recommendation',
-              'Pending_Committee_B_Review',
+              'Pending_Committee_A_Member',
+              'Pending_Committee_B_Member',
               'Pending_Managerial_Review',
               'Pending_Director_Approval',
               'Pending_VP_Approval',

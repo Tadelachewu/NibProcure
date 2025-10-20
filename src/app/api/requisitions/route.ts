@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
@@ -45,16 +47,16 @@ export async function GET(request: Request) {
             'President'
         ].includes(userRole);
 
-        if (userRole === 'Committee_A_Member' || userRole === 'Committee_B_Member') {
-             whereClause.status = userRole === 'Committee_A_Member' 
-                ? 'Pending_Committee_A_Recommendation'
-                : 'Pending_Committee_B_Review';
+        if (userRole === 'Committee_A_Member') {
+             whereClause.status = 'Pending_Committee_A_Member';
+        } else if (userRole === 'Committee_B_Member') {
+            whereClause.status = 'Pending_Committee_B_Member';
         } else if (isHierarchicalApprover) {
             whereClause.currentApproverId = userPayload.user.id;
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
              whereClause.status = { in: [
-                'Pending_Committee_A_Recommendation',
-                'Pending_Committee_B_Review',
+                'Pending_Committee_A_Member',
+                'Pending_Committee_B_Member',
                 'Pending_Managerial_Review',
                 'Pending_Director_Approval',
                 'Pending_VP_Approval',
