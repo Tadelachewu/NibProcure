@@ -86,10 +86,14 @@ export async function POST(
             const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
             totalWeightedScore += finalScore;
 
+            if (!itemScoreData.quoteItemId) {
+              throw new Error(`quoteItemId is missing for an item score. Data: ${JSON.stringify(itemScoreData)}`);
+            }
+            
             await tx.itemScore.create({
                 data: {
                     scoreSet: { connect: { id: scoreSet.id } },
-                    quoteItem: { connect: { id: itemScoreData.quoteItemId } }, // Correctly connect to the QuoteItem
+                    quoteItem: { connect: { id: itemScoreData.quoteItemId } },
                     finalScore: finalScore,
                     scores: {
                         create: allScores.map((s: any) => ({
