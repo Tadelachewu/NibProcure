@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -51,7 +50,7 @@ const evaluationCriteriaSchema = z.object({
 });
 
 const formSchema = z.object({
-  requesterName: z.string().min(2, 'Name must be at least 2 characters.'),
+  requesterId: z.string(),
   department: z.string().min(1, 'Department is required.'),
   title: z.string().min(5, 'Title must be at least 5 characters.'),
   urgency: z.enum(['Low', 'Medium', 'High', 'Critical']),
@@ -112,7 +111,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: isEditMode ? {
-        requesterName: existingRequisition.requesterName,
+        requesterId: existingRequisition.requesterId,
         department: existingRequisition.department,
         title: existingRequisition.title,
         urgency: existingRequisition.urgency || 'Low',
@@ -130,7 +129,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
             options: q.options?.map(opt => ({ value: opt })) || []
         }))
     } : {
-      requesterName: user?.name || '',
+      requesterId: user?.id || '',
       department: user?.department || '',
       title: '',
       urgency: 'Low',
@@ -152,7 +151,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   useEffect(() => {
     if (user && !isEditMode) {
       form.setValue('department', user.department || '');
-      form.setValue('requesterName', user.name || '');
+      form.setValue('requesterId', user.id || '');
     }
   }, [user, isEditMode, form]);
 
@@ -246,19 +245,12 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
             <div className="grid md:grid-cols-2 gap-8">
-              <FormField
-                control={form.control}
-                name="requesterName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Your Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Jane Doe" {...field} disabled />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormItem>
+                  <FormLabel>Your Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. Jane Doe" value={user?.name || ''} disabled />
+                  </FormControl>
+                </FormItem>
               <FormField
                 control={form.control}
                 name="department"

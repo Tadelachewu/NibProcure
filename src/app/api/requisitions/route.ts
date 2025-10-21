@@ -112,23 +112,17 @@ export async function GET(request: Request) {
 
     if (userPayload && userPayload.role === 'Requester') {
       whereClause.requesterId = userPayload.user.id;
-    } else if (userPayload && userPayload.role !== 'Admin') {
+    } else if (userPayload && userPayload.role !== 'Admin' && whereClause.OR) {
       // For non-admin roles other than requester, show their own requisitions PLUS any others matching the filter
       const existingOR = whereClause.OR;
-      if (existingOR) {
-        whereClause = {
+      whereClause = {
           AND: [
-            { OR: existingOR },
-            { OR: [ { requesterId: userPayload.user.id }, whereClause ] }
+              { OR: existingOR },
+              { OR: [ { requesterId: userPayload.user.id } ] }
           ]
-        }
-        delete whereClause.OR; // cleanup
-      } else {
-        whereClause.OR = [
-          { requesterId: userPayload.user.id },
-          whereClause,
-        ]
       }
+    } else if (userPayload && userPayload.role !== 'Admin') {
+        whereClause.requesterId = userPayload.user.id;
     }
 
 
