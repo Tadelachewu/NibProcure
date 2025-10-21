@@ -110,6 +110,27 @@ export async function GET(request: Request) {
         whereClause.currentApproverId = approverId;
     }
 
+    if (userPayload && userPayload.role === 'Requester') {
+      whereClause.requesterId = userPayload.user.id;
+    } else if (userPayload && userPayload.role !== 'Admin') {
+      // For non-admin roles other than requester, show their own requisitions PLUS any others matching the filter
+      const existingOR = whereClause.OR;
+      if (existingOR) {
+        whereClause = {
+          AND: [
+            { OR: existingOR },
+            { OR: [ { requesterId: userPayload.user.id }, whereClause ] }
+          ]
+        }
+        delete whereClause.OR; // cleanup
+      } else {
+        whereClause.OR = [
+          { requesterId: userPayload.user.id },
+          whereClause,
+        ]
+      }
+    }
+
 
     const requisitions = await prisma.purchaseRequisition.findMany({
       where: whereClause,

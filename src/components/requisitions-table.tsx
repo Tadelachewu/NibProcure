@@ -151,11 +151,6 @@ export function RequisitionsTable() {
   const filteredRequisitions = useMemo(() => {
     let filtered = requisitions;
 
-    // Apply role-based filtering first
-    if (role === 'Requester' && user) {
-        filtered = filtered.filter(req => req.requesterId === user.id);
-    }
-
     // Apply other filters
     return filtered
       .filter(req => {
@@ -331,13 +326,13 @@ export function RequisitionsTable() {
                                 Edit
                               </DropdownMenuItem>
                             )}
-                            {req.status === 'Draft' && req.requesterId === user?.id && (
+                            {req.requesterId === user?.id && req.status === 'Draft' && (
                               <DropdownMenuItem onClick={() => handleSubmitForApproval(req.id)}>
                                 <Send className="mr-2 h-4 w-4" />
                                 Submit for Approval
                               </DropdownMenuItem>
                             )}
-                            {(req.status === 'Draft' || req.status === 'Pending_Approval') && req.requesterId === user?.id && (
+                            {req.requesterId === user?.id && (req.status === 'Draft' || req.status === 'Pending_Approval') && (
                               <>
                                 <DropdownMenuSeparator />
                                  <AlertDialog>
@@ -437,5 +432,3 @@ export function RequisitionsTable() {
     </>
   );
 }
-
-    
