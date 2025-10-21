@@ -55,6 +55,11 @@ interface CommitteeConfig {
     }
 }
 
+interface Setting {
+    key: string;
+    value: any;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -64,6 +69,7 @@ interface AuthContextType {
   rfqSenderSetting: RfqSenderSetting;
   approvalThresholds: ApprovalThreshold[];
   committeeConfig: CommitteeConfig;
+  settings: Setting[];
   login: (token: string, user: User, role: UserRole) => void;
   logout: () => void;
   loading: boolean;
@@ -73,6 +79,7 @@ interface AuthContextType {
   updateUserRole: (userId: string, newRole: UserRole) => void;
   updateApprovalThresholds: (newThresholds: ApprovalThreshold[]) => void;
   updateCommitteeConfig: (newConfig: any) => Promise<void>;
+  updateSetting: (key: string, value: any) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -87,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [rfqSenderSetting, setRfqSenderSetting] = useState<RfqSenderSetting>({ type: 'all' });
   const [approvalThresholds, setApprovalThresholds] = useState<ApprovalThreshold[]>([]);
   const [committeeConfig, setCommitteeConfig] = useState<CommitteeConfig>({});
+  const [settings, setSettings] = useState<Setting[]>([]);
 
 
   const fetchAllUsers = useCallback(async () => {
@@ -108,14 +116,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const settingsRes = await fetch('/api/settings');
       if (settingsRes.ok) {
-        const settings = await settingsRes.json();
-        const rfqSetting = settings.find((s:any) => s.key === 'rfqSenderSetting');
+        const settingsData = await settingsRes.json();
+        setSettings(settingsData);
+        
+        const rfqSetting = settingsData.find((s:any) => s.key === 'rfqSenderSetting');
         if (rfqSetting) setRfqSenderSetting(rfqSetting.value);
         
-        const committeeConf = settings.find((s:any) => s.key === 'committeeConfig');
+        const committeeConf = settingsData.find((s:any) => s.key === 'committeeConfig');
         if (committeeConf) setCommitteeConfig(committeeConf.value);
         
-        const rolePerms = settings.find((s:any) => s.key === 'rolePermissions');
+        const rolePerms = settingsData.find((s:any) => s.key === 'rolePermissions');
         if (rolePerms) setRolePermissions(rolePerms.value);
       }
       
@@ -192,33 +202,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
   };
 
-  const updateRolePermissions = async (newPermissions: Record<UserRole, string[]>) => {
-    try {
-        await fetch('/api/settings', {
+  const updateSetting = async (key: string, value: any) => {
+     try {
+        const response = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: 'rolePermissions', value: newPermissions }),
+            body: JSON.stringify({ key, value }),
         });
-        setRolePermissions(newPermissions);
+        if (!response.ok) throw new Error('Failed to save setting');
+        await fetchSettings();
     } catch(e) {
         console.error(e);
         throw e;
     }
   }
+
+  const updateRolePermissions = async (newPermissions: Record<UserRole, string[]>) => {
+    await updateSetting('rolePermissions', newPermissions);
+  }
   
   const updateRfqSenderSetting = async (newSetting: RfqSenderSetting) => {
-    try {
-      const response = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: 'rfqSenderSetting', value: newSetting }),
-      });
-      if (!response.ok) throw new Error('Failed to save RFQ sender setting');
-      setRfqSenderSetting(newSetting);
-    } catch (e) {
-      console.error(e);
-      throw e;
-    }
+    await updateSetting('rfqSenderSetting', newSetting);
   }
 
   const updateUserRole = async (userId: string, newRole: UserRole) => {
@@ -256,18 +260,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const updateCommitteeConfig = async (newConfig: CommitteeConfig) => {
-      try {
-        const response = await fetch('/api/settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: 'committeeConfig', value: newConfig }),
-        });
-        if (!response.ok) throw new Error('Failed to save committee configuration');
-        setCommitteeConfig(newConfig);
-      } catch(e) {
-          console.error(e);
-          throw e;
-      }
+      await updateSetting('committeeConfig', newConfig);
   }
 
   const authContextValue = useMemo(() => ({
@@ -279,6 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       rfqSenderSetting,
       approvalThresholds,
       committeeConfig,
+      settings,
       login,
       logout,
       loading,
@@ -288,7 +282,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateUserRole,
       updateApprovalThresholds,
       updateCommitteeConfig,
-  }), [user, token, role, loading, allUsers, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, fetchAllUsers, fetchSettings]);
+      updateSetting,
+  }), [user, token, role, loading, allUsers, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, fetchAllUsers, fetchSettings]);
 
 
   return (

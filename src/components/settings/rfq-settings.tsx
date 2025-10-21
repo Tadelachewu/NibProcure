@@ -51,7 +51,7 @@ export function RfqSettings() {
             <CardHeader>
                 <CardTitle>RFQ Sender Configuration</CardTitle>
                 <CardDescription>
-                    Define who has the permission to send RFQs to vendors.
+                    Define who has the permission to send Requests for Quotation (RFQs) to vendors.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
