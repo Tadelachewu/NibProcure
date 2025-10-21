@@ -9,6 +9,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log(`Clearing existing data...`);
   // Manually manage order of deletion to avoid foreign key constraint violations
+  await prisma.minute.deleteMany({});
   await prisma.approvalStep.deleteMany({});
   await prisma.approvalThreshold.deleteMany({});
   await prisma.score.deleteMany({});
@@ -195,8 +196,8 @@ async function main() {
 
   // Seed Vendors and their associated users
   for (const vendor of seedData.vendors) {
-      const { kycDocuments, userId, ...vendorData } = vendor; // Destructure userId out
-      const vendorUser = seedData.users.find(u => u.id === userId);
+      const { kycDocuments, ...vendorData } = vendor; // userId is part of vendorData now
+      const vendorUser = seedData.users.find(u => u.id === vendor.userId);
 
       if (!vendorUser) {
           console.warn(`Skipping vendor ${vendor.name} because its user was not found.`);
@@ -217,11 +218,17 @@ async function main() {
           }
       });
       
-      // Then create the vendor and link it to the user
+    // Then create the vendor and link it to the user
     const createdVendor = await prisma.vendor.create({
       data: {
-          ...vendorData,
-          kycStatus: vendorData.kycStatus.replace(/ /g, '_') as any,
+          id: vendor.id,
+          name: vendor.name,
+          contactPerson: vendor.contactPerson,
+          email: vendor.email,
+          phone: vendor.phone,
+          address: vendor.address,
+          kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
+          userId: createdUser.id,
           user: { connect: { id: createdUser.id } },
       },
     });
@@ -471,7 +478,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-    
 
     
