@@ -196,7 +196,7 @@ async function main() {
 
   // Seed Vendors and their associated users
   for (const vendor of seedData.vendors) {
-      const { kycDocuments, ...vendorData } = vendor; // userId is part of vendorData now
+      const { kycDocuments, ...vendorData } = vendor;
       const vendorUser = seedData.users.find(u => u.id === vendor.userId);
 
       if (!vendorUser) {
@@ -214,7 +214,7 @@ async function main() {
               email: vendorUser.email,
               password: hashedPassword,
               approvalLimit: vendorUser.approvalLimit,
-              role: vendorUser.role.replace(/ /g, '_'), // Pass role as a string
+              role: vendorUser.role.replace(/ /g, '_'),
           }
       });
       
@@ -228,7 +228,7 @@ async function main() {
           phone: vendor.phone,
           address: vendor.address,
           kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
-          user: { connect: { id: createdUser.id } },
+          userId: createdUser.id, // Explicitly provide the userId
       },
     });
 
