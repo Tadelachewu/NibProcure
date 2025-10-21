@@ -1367,12 +1367,12 @@ const ScoringDialog = ({
     });
 
     useEffect(() => {
-        if (quote && requisition) {
+        if (quote && requisition && user) {
             const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
             const initialItemScores = quote.items.map(item => {
                 const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
                 return {
-                    quoteItemId: item.id, // Ensure quoteItemId is included
+                    quoteItemId: item.id, // This is the crucial part
                     financialScores: requisition.evaluationCriteria?.financialCriteria.map(c => {
                         const existing = existingItemScore?.scores.find(s => s.criterionId === c.id);
                         return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
