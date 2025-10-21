@@ -118,10 +118,9 @@ export async function GET(request: Request) {
     if (approverId) {
         whereClause.currentApproverId = approverId;
     }
-
-    if (userPayload && userPayload.role === 'Requester') {
-      whereClause.requesterId = userPayload.user.id;
-    } else if (userPayload && userPayload.role !== 'Admin' && !whereClause.OR && !forQuoting) {
+    
+    // If a regular user is fetching, only show their own unless other flags are set
+    if (userPayload && userPayload.role === 'Requester' && !forQuoting) {
       whereClause.requesterId = userPayload.user.id;
     }
 
@@ -308,7 +307,6 @@ export async function PATCH(
             totalPrice: totalPrice,
             status: status ? status.replace(/ /g, '_') : requisition.status,
             approver: { disconnect: true },
-            approverComment: null,
             items: {
                 deleteMany: {},
                 create: updateData.items.map((item: any) => ({
@@ -352,7 +350,6 @@ export async function PATCH(
     if (status) {
         dataToUpdate.status = status.replace(/ /g, '_');
         dataToUpdate.approver = { connect: { id: userId } };
-        dataToUpdate.approverComment = comment;
 
         if (status === 'Pending Approval') {
             auditAction = 'SUBMIT_FOR_APPROVAL';
