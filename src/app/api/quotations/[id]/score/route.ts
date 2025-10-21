@@ -90,7 +90,7 @@ export async function POST(
             await tx.itemScore.create({
                 data: {
                     scoreSet: { connect: { id: scoreSet.id } },
-                    quoteItem: { connect: { id: itemScoreData.quoteItemId } },
+                    quoteItem: { connect: { id: itemScoreData.quoteItemId } }, // Correctly connect to the QuoteItem
                     finalScore: finalScore,
                     scores: {
                         create: allScores.map((s: any) => ({
