@@ -99,6 +99,20 @@ async function main() {
     }
   });
 
+  await prisma.setting.create({
+    data: {
+        key: 'rfqQuorum',
+        value: 3,
+    }
+  });
+
+  await prisma.setting.create({
+    data: {
+        key: 'committeeQuorum',
+        value: 3,
+    }
+  });
+
   console.log('Seeded settings.');
 
   // Seed Approval Matrix
