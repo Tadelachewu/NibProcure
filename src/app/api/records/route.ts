@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -19,7 +20,7 @@ const createNameFinder = (users: User[], vendors: Vendor[]) => {
 export async function GET() {
     try {
         const [requisitions, quotations, purchaseOrders, goodsReceipts, invoices, contracts, auditLogs, users, vendors] = await Promise.all([
-            prisma.purchaseRequisition.findMany({ include: { department: true, minutes: { include: { author: true, attendees: true } } } }),
+            prisma.purchaseRequisition.findMany({ include: { department: true, requester: true, minutes: { include: { author: true, attendees: true } } } }),
             prisma.quotation.findMany(),
             prisma.purchaseOrder.findMany({ include: { vendor: true } }),
             prisma.goodsReceiptNote.findMany({ include: { receivedBy: true } }),
@@ -30,7 +31,7 @@ export async function GET() {
             prisma.vendor.findMany(),
         ]);
 
-        const getName = createNameFinder(users, vendors);
+        const getName = createNameFinder(users as User[], vendors as Vendor[]);
         const allRecords: DocumentRecord[] = [];
 
         requisitions.forEach(r => {
@@ -41,9 +42,9 @@ export async function GET() {
                 status: r.status.replace(/_/g, ' '),
                 date: r.createdAt,
                 amount: r.totalPrice,
-                user: r.requesterName || 'N/A',
-                transactionId: r.transactionId,
-                minutes: r.minutes as Minute[],
+                user: r.requester.name || 'N/A',
+                transactionId: r.transactionId!,
+                minutes: r.minutes as unknown as Minute[],
             });
         });
 
@@ -56,7 +57,7 @@ export async function GET() {
                 date: q.createdAt,
                 amount: q.totalPrice,
                 user: q.vendorName,
-                transactionId: q.transactionId
+                transactionId: q.transactionId!
             });
         });
 
@@ -69,7 +70,7 @@ export async function GET() {
                 date: po.createdAt,
                 amount: po.totalAmount,
                 user: po.vendor.name,
-                transactionId: po.transactionId,
+                transactionId: po.transactionId!,
             });
         });
 
@@ -82,7 +83,7 @@ export async function GET() {
                 date: grn.receivedDate,
                 amount: 0, // GRNs don't typically have an amount
                 user: grn.receivedBy.name,
-                transactionId: grn.transactionId,
+                transactionId: grn.transactionId!,
             });
         });
 
@@ -95,7 +96,7 @@ export async function GET() {
                 date: inv.invoiceDate,
                 amount: inv.totalAmount,
                 user: getName(inv.vendorId, 'vendor'),
-                transactionId: inv.transactionId,
+                transactionId: inv.transactionId!,
             });
         });
 
