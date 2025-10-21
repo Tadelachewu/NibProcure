@@ -58,6 +58,7 @@ export async function POST(
             action: 'EXTEND_SCORING_DEADLINE',
             entity: 'Requisition',
             entityId: id,
+            timestamp: new Date(),
             details: `Extended committee scoring deadline from ${oldDeadline ? format(new Date(oldDeadline), 'PPp') : 'N/A'} to ${format(new Date(newDeadline), 'PPpp')}.`,
         }
     });
