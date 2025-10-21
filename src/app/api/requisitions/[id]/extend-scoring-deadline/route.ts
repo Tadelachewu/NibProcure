@@ -3,9 +3,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User, UserRole } from '@/lib/types';
+import { User } from '@/lib/types';
 import { format } from 'date-fns';
-import { rolePermissions } from '@/lib/roles'; // Assuming settings might be stored here or similar config place
 
 export async function POST(
   request: Request,
@@ -21,16 +20,14 @@ export async function POST(
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
-    // In a real app, settings would be fetched from a DB. We'll simulate fetching a setting.
-    // This is a placeholder for a real settings service.
-    const rfqSenderSetting = { type: 'all' }; // Or 'specific', with a userId
-
+    // Authorization check
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
     if (user.role === 'Admin') {
         isAuthorized = true;
-    } else if (rfqSenderSetting.type === 'all' && user.role === 'Procurement_Officer') {
+    } else if (rfqSenderSetting?.value?.type === 'all' && user.role === 'Procurement_Officer') {
         isAuthorized = true;
-    } else if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userId === userId) {
+    } else if (rfqSenderSetting?.value?.type === 'specific' && rfqSenderSetting.value.userId === userId) {
         isAuthorized = true;
     }
 
