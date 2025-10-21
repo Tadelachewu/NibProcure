@@ -25,16 +25,27 @@ export async function POST(
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
+    
+    // Authorization check
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    if (user.role === 'Admin') {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value?.type === 'all' && user.role === 'Procurement_Officer') {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value?.type === 'specific' && rfqSenderSetting.value.userId === userId) {
+        isAuthorized = true;
+    }
 
-    // This check is too restrictive. A PO can reset the RFQ process.
-    // The main protection should be that only an authorized user can trigger this.
-    // A check for "Closed" or "Fulfilled" might be better.
+    if (!isAuthorized) {
+        return NextResponse.json({ error: 'Unauthorized: You do not have permission to send RFQs.' }, { status: 403 });
+    }
+
     if (requisition.status === 'Closed' || requisition.status === 'Fulfilled') {
         return NextResponse.json({ error: `Cannot start RFQ for a requisition that is already ${requisition.status}.` }, { status: 400 });
     }
     
     let finalVendorIds = vendorIds;
-    // If vendorIds is an empty array, it means 'all verified vendors'.
     if (Array.isArray(vendorIds) && vendorIds.length === 0) {
         const verifiedVendors = await prisma.vendor.findMany({
             where: { kycStatus: 'Verified' },
@@ -57,6 +68,7 @@ export async function POST(
 
     await prisma.auditLog.create({
         data: {
+            transactionId: updatedRequisition.transactionId,
             user: { connect: { id: user.id } },
             timestamp: new Date(),
             action: 'SEND_RFQ',

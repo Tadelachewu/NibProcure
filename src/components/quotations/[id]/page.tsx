@@ -927,7 +927,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     
     const [allowQuoteEdits, setAllowQuoteEdits] = useState(requisition.rfqSettings?.allowQuoteEdits ?? true);
     const [experienceDocumentRequired, setExperienceDocumentRequired] = useState(requisition.rfqSettings?.experienceDocumentRequired ?? false);
-    const { user } = useAuth();
+    const { user, rfqQuorum } = useAuth();
     const { toast } = useToast();
     
     const isSent = requisition.status === 'RFQ_In_Progress';
@@ -974,8 +974,8 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
             return;
         }
 
-        if (distributionType === 'select' && selectedVendors.length === 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Please select at least one vendor.' });
+        if (distributionType === 'select' && selectedVendors.length < rfqQuorum) {
+            toast({ variant: 'destructive', title: 'Quorum Not Met', description: `Please select at least ${rfqQuorum} vendors.` });
             return;
         }
 
@@ -1100,7 +1100,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">Send to all verified vendors</SelectItem>
-                                <SelectItem value="select">Send to selected vendors</SelectItem>
+                                <SelectItem value="select">Send to selected vendors (min. {rfqQuorum})</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -1237,7 +1237,7 @@ const ManageRFQ = ({
     isAuthorized: boolean,
 }) => {
     const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel'}>({isOpen: false, type: 'update'});
-    const canManageRfq = isAuthorized && requisition.status === 'RFQ_In_Progress' && !isPast(new Date(requisition.deadline!));
+    const canManageRfq = isAuthorized && requisition.status === 'RFQ_In_Progress' && requisition.deadline && !isPast(new Date(requisition.deadline));
     
     if (!canManageRfq) return null;
 
@@ -2473,11 +2473,12 @@ export default function QuotationDetailsPage() {
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
     if (role === 'Admin') return true;
-    if (rfqSenderSetting.type === 'all') {
-      return role === 'Procurement_Officer';
+
+    if (rfqSenderSetting.type === 'all' && role === 'Procurement_Officer') {
+      return true;
     }
-    if (rfqSenderSetting.type === 'specific') {
-      return user.id === rfqSenderSetting.userId;
+    if (rfqSenderSetting.type === 'specific' && user.id === rfqSenderSetting.userId) {
+      return true;
     }
     return false;
   }, [user, role, rfqSenderSetting]);
