@@ -120,6 +120,7 @@ export async function POST(
 
         await tx.auditLog.create({
             data: {
+                timestamp: new Date(),
                 user: { connect: { id: user.id } },
                 action: 'SCORE_QUOTE',
                 entity: 'Quotation',
