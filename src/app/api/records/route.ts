@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { DocumentRecord, User, Vendor } from '@/lib/types';
+import { DocumentRecord, User, Vendor, Minute } from '@/lib/types';
 
 // Helper function to find user/vendor names efficiently
 const createNameFinder = (users: User[], vendors: Vendor[]) => {
@@ -19,7 +19,7 @@ const createNameFinder = (users: User[], vendors: Vendor[]) => {
 export async function GET() {
     try {
         const [requisitions, quotations, purchaseOrders, goodsReceipts, invoices, contracts, auditLogs, users, vendors] = await Promise.all([
-            prisma.purchaseRequisition.findMany({ include: { department: true } }),
+            prisma.purchaseRequisition.findMany({ include: { department: true, minutes: { include: { author: true, attendees: true } } } }),
             prisma.quotation.findMany(),
             prisma.purchaseOrder.findMany({ include: { vendor: true } }),
             prisma.goodsReceiptNote.findMany({ include: { receivedBy: true } }),
@@ -43,6 +43,7 @@ export async function GET() {
                 amount: r.totalPrice,
                 user: r.requesterName || 'N/A',
                 transactionId: r.transactionId,
+                minutes: r.minutes as Minute[],
             });
         });
 

@@ -128,9 +128,15 @@ export async function GET(request: Request) {
         committeeAssignments: true,
         quotations: {
             include: {
-                vendor: true
-            }
+                vendor: true,
+            },
         },
+        minutes: {
+            include: {
+                author: true,
+                attendees: true,
+            }
+        }
       },
       orderBy: {
         createdAt: 'desc',
@@ -160,7 +166,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    const user = await prisma.user.findFirst({where: {name: body.requesterName}});
+    const user = await prisma.user.findFirst({where: {id: body.requesterId}});
     if (!user) {
         return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
     }
@@ -250,7 +256,7 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    const { id, status, userId, comment, rfqSenderId } = body;
+    const { id, status, userId, comment, minute } = body;
     const updateData = body;
 
 
@@ -329,8 +335,7 @@ export async function PATCH(
             auditDetails = `Requisition ${id} ("${updateData.title}") was edited and submitted for approval.`;
         }
 
-    } else if (status) { // This handles normal status changes (approve, reject, submit)
-        dataToUpdate.status = status.replace(/ /g, '_');
+    } else if (status) { 
         dataToUpdate.approver = { connect: { id: userId } };
         dataToUpdate.approverComment = comment;
 
@@ -340,19 +345,16 @@ export async function PATCH(
             if (comment) auditDetails += ` Comment: "${comment}".`;
 
             let nextApproverId: string | null = null;
-            let nextStatus: string = 'Approved'; // Default to final approved state
-            
-            // This is a Pre-Award, initial departmental approval
+            let nextStatus: string = 'Approved'; 
+
             if (requisition.status === 'Pending_Approval') {
                 nextStatus = 'Approved';
-                nextApproverId = null; // No next approver, it now waits for RFQ
+                nextApproverId = null; 
                 auditDetails += ' Initial departmental approval complete. Ready for RFQ.'
             } 
-            // This is a Post-Award approval
             else {
                 const approvalMatrix = await prisma.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
                 const totalValue = requisition.totalPrice;
-                
                 const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
 
                 if (relevantTier) {
@@ -387,6 +389,7 @@ export async function PATCH(
 
         } else if (status === 'Rejected') {
             dataToUpdate.currentApprover = { disconnect: true };
+            dataToUpdate.status = 'Rejected';
             auditAction = 'REJECT_REQUISITION';
             auditDetails = `Requisition ${id} was rejected with comment: "${comment}".`;
         } else if (status === 'Pending Approval') {
@@ -398,6 +401,22 @@ export async function PATCH(
             } else {
                 dataToUpdate.currentApprover = { disconnect: true };
             }
+        }
+        
+         if (minute) {
+            await prisma.minute.create({
+                data: {
+                    requisition: { connect: { id: id } },
+                    author: { connect: { id: userId } },
+                    decision: status === 'Approved' ? 'APPROVED' : 'REJECTED',
+                    decisionBody: minute.decisionBody,
+                    justification: minute.justification,
+                    attendees: {
+                        connect: minute.attendeeIds.map((id: string) => ({ id }))
+                    }
+                }
+            });
+            auditDetails += ` Minute recorded.`;
         }
 
     } else {

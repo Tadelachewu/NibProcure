@@ -18,7 +18,7 @@ import {
   CardDescription,
 } from './ui/card';
 import { Button } from './ui/button';
-import { PurchaseRequisition } from '@/lib/types';
+import { PurchaseRequisition, User } from '@/lib/types';
 import { format } from 'date-fns';
 import {
   Check,
@@ -53,12 +53,12 @@ export function ManagerialApprovalsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, token, rfqSenderSetting, allUsers } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
-  const [comment, setComment] = useState('');
+  const [justification, setJustification] = useState('');
   const [isActionDialogOpen, setActionDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
@@ -71,7 +71,7 @@ export function ManagerialApprovalsTable() {
     }
     try {
       setLoading(true);
-      const response = await fetch(`/api/requisitions?forReview=true`, {
+      const response = await fetch(`/api/requisitions?currentApproverId=${user.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for approval');
@@ -105,17 +105,11 @@ export function ManagerialApprovalsTable() {
     
     setActiveActionId(selectedRequisition.id);
 
-    let rfqSenderId: string | null = null;
-    if (actionType === 'approve' && selectedRequisition.status.replace(/_/g, ' ') === 'Pending Approval') {
-      if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userId) {
-        rfqSenderId = rfqSenderSetting.userId;
-      } else {
-        // Fallback to the first available Procurement Officer if 'all' is selected or specific user not found
-        const firstProcOfficer = allUsers.find(u => u.role === 'Procurement_Officer');
-        rfqSenderId = firstProcOfficer?.id || null;
-      }
+    const minute = {
+        decisionBody: user.role.replace(/_/g, ' '),
+        justification,
+        attendeeIds: [user.id],
     }
-
 
     try {
       const response = await fetch(`/api/requisitions`, {
@@ -125,14 +119,14 @@ export function ManagerialApprovalsTable() {
             id: selectedRequisition.id, 
             status: actionType === 'approve' ? 'Approved' : 'Rejected', 
             userId: user.id, 
-            comment,
-            rfqSenderId, // Pass the designated RFQ sender ID to the API
+            comment: justification,
+            minute,
         }),
       });
       if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
       toast({
         title: "Success",
-        description: `Requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
+        description: `Requisition award for ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       fetchRequisitions();
     } catch (error) {
@@ -144,7 +138,7 @@ export function ManagerialApprovalsTable() {
     } finally {
         setActiveActionId(null);
         setActionDialogOpen(false);
-        setComment('');
+        setJustification('');
         setSelectedRequisition(null);
         setActionType(null);
     }
@@ -197,9 +191,6 @@ export function ManagerialApprovalsTable() {
                         <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
                         <TableCell>
                         <div className="flex gap-2">
-                              <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
-                                  <Eye className="mr-2 h-4 w-4" /> Details
-                              </Button>
                               <Button variant="outline" size="sm" asChild>
                                   <Link href={`/quotations/${req.id}`}>
                                       <Eye className="mr-2 h-4 w-4" /> Review Bids
@@ -224,7 +215,7 @@ export function ManagerialApprovalsTable() {
                     <div className="flex flex-col items-center gap-4">
                       <Inbox className="h-16 w-16 text-muted-foreground/50" />
                       <div className="space-y-1">
-                        <p className="font-semibold">All caught up!</p>
+                        <p className="font-semibold">All Caught Up!</p>
                         <p className="text-muted-foreground">No items are currently pending your approval.</p>
                       </div>
                     </div>
@@ -256,16 +247,16 @@ export function ManagerialApprovalsTable() {
               {actionType === 'approve' ? 'Approve Award' : 'Reject Award'} for {selectedRequisition?.id}
             </DialogTitle>
             <DialogDescription>
-                You are about to {actionType} this award recommendation. Please provide a comment for your decision.
+                You are about to {actionType} this award recommendation. Please provide a comment for your decision. This will be formally recorded.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="grid gap-2">
-              <Label htmlFor="comment">Comment (Required)</Label>
+              <Label htmlFor="comment">Justification / Minute</Label>
               <Textarea 
                 id="comment" 
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
                 placeholder="Type your justification here..."
               />
             </div>

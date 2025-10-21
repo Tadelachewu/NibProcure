@@ -18,7 +18,7 @@ import {
   CardDescription,
 } from './ui/card';
 import { Button } from './ui/button';
-import { PurchaseRequisition } from '@/lib/types';
+import { PurchaseRequisition, User } from '@/lib/types';
 import { format } from 'date-fns';
 import {
   Check,
@@ -29,6 +29,7 @@ import {
   Eye,
   Inbox,
   Loader2,
+  Users,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
@@ -46,6 +47,8 @@ import { Label } from './ui/label';
 import { RequisitionDetailsDialog } from './requisition-details-dialog';
 import { Badge } from './ui/badge';
 import Link from 'next/link';
+import { ScrollArea } from './ui/scroll-area';
+import { Checkbox } from './ui/checkbox';
 
 
 const PAGE_SIZE = 10;
@@ -54,16 +57,40 @@ export function ReviewsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, token } = useAuth();
+  const { user, token, allUsers } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
-  const [comment, setComment] = useState('');
+  const [justification, setJustification] = useState('');
+  const [attendees, setAttendees] = useState<string[]>([]);
   const [isActionDialogOpen, setActionDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
+  
+
+  const potentialAttendees = useMemo(() => {
+    if (!selectedRequisition || !user) return [];
+    
+    if (selectedRequisition.status.includes('Committee')) {
+        const committeeKey = selectedRequisition.status.includes('Committee_A') ? 'financialCommitteeMemberIds' : 'technicalCommitteeMemberIds';
+        // In a real scenario, you might have separate financial & tech members for Committee A vs B
+        const memberIds = new Set([
+            ...(selectedRequisition.financialCommitteeMemberIds || []),
+            ...(selectedRequisition.technicalCommitteeMemberIds || [])
+        ]);
+        return allUsers.filter(u => memberIds.has(u.id));
+    }
+    // For managerial roles, attendees are likely just the individual approver
+    return [user];
+  }, [selectedRequisition, allUsers, user]);
+
+  useEffect(() => {
+    if(selectedRequisition && user) {
+        setAttendees(potentialAttendees.map(u => u.id));
+    }
+  }, [selectedRequisition, user, potentialAttendees]);
 
   const fetchRequisitions = async () => {
     if (!user || !token) {
@@ -108,8 +135,22 @@ export function ReviewsTable() {
   
   const submitAction = async () => {
     if (!selectedRequisition || !actionType || !user) return;
+    if (!justification.trim()) {
+        toast({
+            variant: 'destructive',
+            title: 'Justification Required',
+            description: 'A justification for the decision is required for the minutes.',
+        });
+        return;
+    }
     
     setActiveActionId(selectedRequisition.id);
+
+    const minute = {
+        decisionBody: selectedRequisition.status.replace(/_/g, ' '),
+        justification,
+        attendeeIds: attendees,
+    }
 
     try {
       const response = await fetch(`/api/requisitions`, {
@@ -119,7 +160,8 @@ export function ReviewsTable() {
             id: selectedRequisition.id, 
             status: actionType === 'approve' ? 'Approved' : 'Rejected', 
             userId: user.id, 
-            comment,
+            comment: justification,
+            minute,
         }),
       });
       if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
@@ -137,9 +179,10 @@ export function ReviewsTable() {
     } finally {
         setActiveActionId(null);
         setActionDialogOpen(false);
-        setComment('');
+        setJustification('');
         setSelectedRequisition(null);
         setActionType(null);
+        setAttendees([]);
     }
   }
 
@@ -157,9 +200,9 @@ export function ReviewsTable() {
     <>
     <Card>
       <CardHeader>
-        <CardTitle>Award Recommendations for Committee Review</CardTitle>
+        <CardTitle>Award Recommendations for Review</CardTitle>
         <CardDescription>
-          Review and act on award recommendations that require your committee's approval.
+          Review and act on award recommendations that require your approval.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -190,9 +233,6 @@ export function ReviewsTable() {
                         <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
                         <TableCell>
                         <div className="flex gap-2">
-                              <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
-                                  <Eye className="mr-2 h-4 w-4" /> Details
-                              </Button>
                               <Button variant="outline" size="sm" asChild>
                                   <Link href={`/quotations/${req.id}`}>
                                       <Eye className="mr-2 h-4 w-4" /> Review Bids
@@ -243,24 +283,44 @@ export function ReviewsTable() {
         )}
       </CardContent>
        <Dialog open={isActionDialogOpen} onOpenChange={setActionDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {actionType === 'approve' ? 'Approve Recommendation' : 'Reject Recommendation'} for {selectedRequisition?.id}
+              Record Minute for {actionType === 'approve' ? 'Approval' : 'Rejection'}
             </DialogTitle>
             <DialogDescription>
-                You are about to {actionType} this award recommendation. Please provide a comment for this action.
+                Record the official minute for the decision on the award for {selectedRequisition?.id}. This is a formal record for auditing purposes.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="grid gap-2">
-              <Label htmlFor="comment">Comment (Required)</Label>
+              <Label htmlFor="justification">Justification / Remarks</Label>
               <Textarea 
-                id="comment" 
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Type your justification here..."
+                id="justification" 
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                placeholder="Provide a detailed rationale for the committee's decision..."
+                rows={6}
               />
+            </div>
+            <div className="grid gap-2">
+                <Label>Attendees</Label>
+                <ScrollArea className="h-40 w-full rounded-md border p-2">
+                    <div className="space-y-2">
+                    {potentialAttendees.map(attendee => (
+                        <div key={attendee.id} className="flex items-center space-x-2">
+                            <Checkbox 
+                                id={`attendee-${attendee.id}`} 
+                                checked={attendees.includes(attendee.id)}
+                                onCheckedChange={(checked) => {
+                                    setAttendees(prev => checked ? [...prev, attendee.id] : prev.filter(id => id !== attendee.id))
+                                }}
+                            />
+                            <Label htmlFor={`attendee-${attendee.id}`} className="font-normal">{attendee.name}</Label>
+                        </div>
+                    ))}
+                    </div>
+                </ScrollArea>
             </div>
           </div>
           <DialogFooter>

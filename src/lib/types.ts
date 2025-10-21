@@ -55,13 +55,12 @@ export type RequisitionStatus =
   | 'PO Created'
   | 'Fulfilled'
   | 'Closed'
-  | 'Pending Managerial Approval'
   | 'Pending_Committee_B_Review'
-  | 'Pending_Committee_A_Recommendation'
-  | 'Pending Managerial Review'
-  | 'Pending Director Approval'
-  | 'Pending VP Approval'
-  | 'Pending President Approval';
+  | 'Pending_Committee_A_Member'
+  | 'Pending_Managerial_Review'
+  | 'Pending_Director_Approval'
+  | 'Pending_VP_Approval'
+  | 'Pending_President_Approval';
 
 export type Urgency = 'Low' | 'Medium' | 'High' | 'Critical';
 
@@ -116,11 +115,27 @@ export type EvaluationCriteria = {
   technicalCriteria: EvaluationCriterion[];
 };
 
+export type MinuteDecision = 'APPROVED' | 'REJECTED' | 'REVISION';
+
+export type Minute = {
+    id: string;
+    requisitionId: string;
+    authorId: string;
+    author: User;
+    decision: MinuteDecision;
+    decisionBody: string; // e.g., "Committee A", "VP Resources"
+    justification: string;
+    attendeeIds: string[];
+    attendees: User[];
+    createdAt: Date;
+}
+
 
 export type PurchaseRequisition = {
   id:string; // Will be UUID
   transactionId: string;
   requesterId: string; // User ID
+  requesterName?: string;
   title: string;
   department: string;
   departmentId: string;
@@ -160,6 +175,7 @@ export type PurchaseRequisition = {
       experienceDocumentRequired?: boolean;
       [key: string]: any;
   };
+  minutes?: Minute[];
 };
 
 export type AuditLog = {
@@ -371,4 +387,19 @@ export type DocumentRecord = {
     user: string;
     transactionId: string;
     auditTrail?: AuditLog[];
+    minutes?: Minute[];
+}
+
+export interface ApprovalStep {
+    role: UserRole;
+    id?: string;
+    order?: number;
+}
+
+export interface ApprovalThreshold {
+    id: string;
+    name: string;
+    min: number;
+    max: number | null; // null for infinity
+    steps: ApprovalStep[];
 }

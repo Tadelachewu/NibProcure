@@ -22,7 +22,7 @@ import {
 } from './ui/card';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
-import { DocumentRecord, AuditLog as AuditLogType } from '@/lib/types';
+import { DocumentRecord, AuditLog as AuditLogType, Minute } from '@/lib/types';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Badge } from './ui/badge';
 import {
@@ -36,11 +36,13 @@ import {
   ArchiveX,
   Loader2,
   Printer,
+  FileText,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from './ui/dialog';
 import { useAuth } from '@/contexts/auth-context';
 import { ScrollArea } from './ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 const PAGE_SIZE = 15;
 
@@ -52,7 +54,7 @@ const getStatusVariant = (status: string) => {
     return 'outline';
 };
 
-const AuditTrailDialog = ({ document, auditTrail }: { document: DocumentRecord, auditTrail: AuditLogType[] }) => {
+const AuditTrailDialog = ({ document, auditTrail, minutes }: { document: DocumentRecord, auditTrail: AuditLogType[], minutes: Minute[] }) => {
     const { toast } = useToast();
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const printRef = useRef<HTMLDivElement>(null);
@@ -105,48 +107,82 @@ const AuditTrailDialog = ({ document, auditTrail }: { document: DocumentRecord, 
     return (
         <DialogContent className="max-w-3xl flex flex-col h-[90vh]">
             <DialogHeader>
-                <DialogTitle>Audit Trail for {document.type}: {document.id}</DialogTitle>
+                <DialogTitle>History for {document.type}: {document.id}</DialogTitle>
                 <DialogDescription>
-                    Showing all events related to this document, from newest to oldest.
+                    Showing all events and meeting minutes related to this document.
                 </DialogDescription>
             </DialogHeader>
-             <div className="flex-grow overflow-hidden">
-                <ScrollArea className="h-full">
-                    <div ref={printRef} className="p-1 space-y-6 bg-background text-foreground print:bg-white print:text-black">
-                        {/* Header for PDF */}
-                        <div className="hidden print:block text-center mb-8 pt-4">
-                            <Image src="/logo.png" alt="Logo" width={40} height={40} className="mx-auto mb-2" />
-                            <h1 className="text-2xl font-bold text-black">Audit Trail Report</h1>
-                            <p className="text-gray-600">{document.type}: {document.id}</p>
-                            <p className="text-sm text-gray-500">Report Generated: {format(new Date(), 'PPpp')}</p>
-                        </div>
-                        {auditTrail.length > 0 ? (
-                            <div className="relative pl-6">
-                                <div className="absolute left-6 top-0 h-full w-0.5 bg-border -translate-x-1/2"></div>
-                                {auditTrail.map((log, index) => (
-                                <div key={log.id} className="relative mb-8">
-                                    <div className="absolute -left-3 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-secondary print:bg-gray-200">
-                                        <div className="h-3 w-3 rounded-full bg-primary print:bg-blue-500"></div>
-                                    </div>
-                                    <div className="pl-8">
-                                        <div className="flex items-center justify-between">
-                                            <Badge variant={getStatusVariant(log.action)}>{log.action.replace(/_/g, ' ')}</Badge>
-                                            <time className="text-xs text-muted-foreground print:text-gray-600">{format(new Date(log.timestamp), 'PPpp')}</time>
-                                        </div>
-                                        <p className="mt-2 text-sm text-muted-foreground print:text-gray-700">{log.details}</p>
-                                        <p className="mt-2 text-xs text-muted-foreground print:text-gray-600">
-                                            By <span className="font-semibold text-foreground print:text-black">{log.user}</span> ({log.role})
-                                        </p>
-                                    </div>
-                                </div>
-                                ))}
+            <Tabs defaultValue="audit" className="flex-1 flex flex-col min-h-0">
+                <TabsList>
+                    <TabsTrigger value="audit">Audit Trail</TabsTrigger>
+                    <TabsTrigger value="minutes">Meeting Minutes ({minutes?.length || 0})</TabsTrigger>
+                </TabsList>
+                <TabsContent value="audit" className="flex-1 overflow-hidden">
+                     <ScrollArea className="h-full">
+                        <div ref={printRef} className="p-1 space-y-6 bg-background text-foreground print:bg-white print:text-black">
+                            <div className="hidden print:block text-center mb-8 pt-4">
+                                <Image src="/logo.png" alt="Logo" width={40} height={40} className="mx-auto mb-2" />
+                                <h1 className="text-2xl font-bold text-black">Audit Trail Report</h1>
+                                <p className="text-gray-600">{document.type}: {document.id}</p>
+                                <p className="text-sm text-gray-500">Report Generated: {format(new Date(), 'PPpp')}</p>
                             </div>
-                        ) : (
-                            <div className="text-center h-24 flex items-center justify-center text-muted-foreground">No audit history found for this document.</div>
-                        )}
-                    </div>
-                </ScrollArea>
-             </div>
+                            {auditTrail.length > 0 ? (
+                                <div className="relative pl-6">
+                                    <div className="absolute left-6 top-0 h-full w-0.5 bg-border -translate-x-1/2"></div>
+                                    {auditTrail.map((log, index) => (
+                                    <div key={log.id} className="relative mb-8">
+                                        <div className="absolute -left-3 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-secondary print:bg-gray-200">
+                                            <div className="h-3 w-3 rounded-full bg-primary print:bg-blue-500"></div>
+                                        </div>
+                                        <div className="pl-8">
+                                            <div className="flex items-center justify-between">
+                                                <Badge variant={getStatusVariant(log.action)}>{log.action.replace(/_/g, ' ')}</Badge>
+                                                <time className="text-xs text-muted-foreground print:text-gray-600">{format(new Date(log.timestamp), 'PPpp')}</time>
+                                            </div>
+                                            <p className="mt-2 text-sm text-muted-foreground print:text-gray-700">{log.details}</p>
+                                            <p className="mt-2 text-xs text-muted-foreground print:text-gray-600">
+                                                By <span className="font-semibold text-foreground print:text-black">{log.user}</span> ({log.role})
+                                            </p>
+                                        </div>
+                                    </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center h-24 flex items-center justify-center text-muted-foreground">No audit history found for this document.</div>
+                            )}
+                        </div>
+                    </ScrollArea>
+                </TabsContent>
+                 <TabsContent value="minutes" className="flex-1 overflow-hidden">
+                     <ScrollArea className="h-full">
+                         {minutes && minutes.length > 0 ? (
+                             <div className="space-y-4">
+                                {minutes.map(minute => (
+                                    <Card key={minute.id}>
+                                        <CardHeader>
+                                            <CardTitle className="flex justify-between items-center">
+                                                <span>Minute: {minute.decisionBody}</span>
+                                                <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
+                                            </CardTitle>
+                                            <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <h4 className="font-semibold text-sm">Justification</h4>
+                                            <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50 mt-1">{minute.justification}</p>
+                                             <h4 className="font-semibold text-sm mt-4">Attendees</h4>
+                                             <div className="flex flex-wrap gap-4 mt-2">
+                                                {minute.attendees.map(attendee => <Badge key={attendee.id} variant="outline">{attendee.name}</Badge>)}
+                                             </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                             </div>
+                         ): (
+                            <div className="text-center h-24 flex items-center justify-center text-muted-foreground">No meeting minutes found for this document.</div>
+                         )}
+                     </ScrollArea>
+                 </TabsContent>
+            </Tabs>
              <DialogFooter>
                 <Button onClick={handleGeneratePdf} variant="outline" disabled={isGeneratingPdf}>
                     {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4"/>}
@@ -282,7 +318,7 @@ export function RecordsPage() {
                                         <History className="mr-2 h-4 w-4" /> Trail
                                     </Button>
                                 </DialogTrigger>
-                                <AuditTrailDialog document={record} auditTrail={record.auditTrail || []}/>
+                                <AuditTrailDialog document={record} auditTrail={record.auditTrail || []} minutes={record.minutes || []}/>
                              </Dialog>
                         </div>
                     </TableCell>
