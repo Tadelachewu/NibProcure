@@ -23,7 +23,7 @@ async function main() {
   await prisma.quoteAnswer.deleteMany({});
   await prisma.itemScore.deleteMany({});
   await prisma.committeeScoreSet.deleteMany({});
-  await prisma.quoteItem.deleteMany({});
+  await prisma.quotation.deleteMany({});
   await prisma.technicalCriterion.deleteMany({});
   await prisma.financialCriterion.deleteMany({});
   await prisma.evaluationCriteria.deleteMany({});
@@ -228,7 +228,6 @@ async function main() {
           phone: vendor.phone,
           address: vendor.address,
           kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
-          userId: createdUser.id,
           user: { connect: { id: createdUser.id } },
       },
     });
@@ -478,5 +477,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-    

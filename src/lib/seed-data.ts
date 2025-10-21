@@ -88,7 +88,6 @@ const seedData: AppData = {
             urgency: 'Low',
             createdAt: new Date('2023-10-01T10:00:00Z'),
             updatedAt: new Date('2023-10-05T11:30:00Z'),
-            approverComment: 'Urgent need, proceed.',
             quotations: [],
             financialCommitteeMemberIds: ['9'],
             technicalCommitteeMemberIds: ['10'],
