@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -89,7 +88,17 @@ export async function GET(request: Request) {
                 { status: { startsWith: 'Pending_' } }
             ]
         } else {
-            return NextResponse.json([]); // Other roles don't see this queue
+             // If user is a requester, only show their own requisitions in this queue
+            if (userPayload.role === 'Requester') {
+                whereClause.requesterId = userPayload.user.id;
+                whereClause.OR = [
+                    { status: 'Approved' },
+                    { status: 'RFQ_In_Progress' },
+                    { status: { startsWith: 'Pending_' } }
+                ]
+            } else {
+                return NextResponse.json([]); // Other roles don't see this queue by default
+            }
         }
     }
 
@@ -112,17 +121,8 @@ export async function GET(request: Request) {
 
     if (userPayload && userPayload.role === 'Requester') {
       whereClause.requesterId = userPayload.user.id;
-    } else if (userPayload && userPayload.role !== 'Admin' && whereClause.OR) {
-      // For non-admin roles other than requester, show their own requisitions PLUS any others matching the filter
-      const existingOR = whereClause.OR;
-      whereClause = {
-          AND: [
-              { OR: existingOR },
-              { OR: [ { requesterId: userPayload.user.id } ] }
-          ]
-      }
-    } else if (userPayload && userPayload.role !== 'Admin') {
-        whereClause.requesterId = userPayload.user.id;
+    } else if (userPayload && userPayload.role !== 'Admin' && !whereClause.OR && !forQuoting) {
+      whereClause.requesterId = userPayload.user.id;
     }
 
 
@@ -344,18 +344,26 @@ export async function PATCH(
             }
         };
         
-        if (status === 'Pending Approval') {
-            const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
-            if (department?.headId) { dataToUpdate.currentApprover = { connect: { id: department.headId } }; }
-            auditAction = 'SUBMIT_FOR_APPROVAL';
-            auditDetails = `Requisition ${id} ("${updateData.title}") was edited and submitted for approval.`;
-        }
+        auditAction = 'UPDATE_REQUISITION';
+        auditDetails = `Requisition ${id} ("${updateData.title}") was edited.`;
 
-    } else if (status) { 
+    } 
+    
+    if (status) {
+        dataToUpdate.status = status.replace(/ /g, '_');
         dataToUpdate.approver = { connect: { id: userId } };
         dataToUpdate.approverComment = comment;
 
-        if (status === 'Approved') {
+        if (status === 'Pending Approval') {
+            auditAction = 'SUBMIT_FOR_APPROVAL';
+            auditDetails = `Requisition ${id} was submitted for approval.`;
+            const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
+            if (department?.headId) { 
+                dataToUpdate.currentApprover = { connect: { id: department.headId } };
+            } else {
+                dataToUpdate.currentApprover = { disconnect: true };
+            }
+        } else if (status === 'Approved') {
             auditAction = 'APPROVE_REQUISITION';
             auditDetails = `Requisition ${id} was approved by ${user.role.replace(/_/g, ' ')}.`;
             if (comment) auditDetails += ` Comment: "${comment}".`;
@@ -408,15 +416,6 @@ export async function PATCH(
             dataToUpdate.status = 'Rejected';
             auditAction = 'REJECT_REQUISITION';
             auditDetails = `Requisition ${id} was rejected with comment: "${comment}".`;
-        } else if (status === 'Pending Approval') {
-            auditAction = 'SUBMIT_FOR_APPROVAL';
-            auditDetails = `Draft requisition ${id} was submitted for approval.`;
-            const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
-            if (department?.headId) { 
-                dataToUpdate.currentApprover = { connect: { id: department.headId } };
-            } else {
-                dataToUpdate.currentApprover = { disconnect: true };
-            }
         }
         
          if (minute) {
@@ -435,7 +434,7 @@ export async function PATCH(
             auditDetails += ` Minute recorded.`;
         }
 
-    } else {
+    } else if (!updateData.title) {
         return NextResponse.json({ error: 'No valid update action specified.' }, { status: 400 });
     }
     
