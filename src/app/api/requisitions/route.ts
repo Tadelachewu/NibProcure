@@ -296,6 +296,7 @@ export async function PATCH(
         
         const isRequester = requisition.requesterId === userId;
         const isProcurementStaff = user.role === 'Procurement_Officer' || user.role === 'Admin';
+
         if (!isRequester && !isProcurementStaff) {
             return NextResponse.json({ error: 'Unauthorized to submit this requisition.' }, { status: 403 });
         }
