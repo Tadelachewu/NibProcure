@@ -79,7 +79,7 @@ export async function POST(
             action: 'SEND_RFQ',
             entity: 'Requisition',
             entityId: id,
-            details: `Sent RFQ to ${finalVendorIds.length === 0 ? 'all verified vendors' : `${finalVendorIds.length} selected vendors`.`,
+            details: `Sent RFQ to ${finalVendorIds.length === 0 ? 'all verified vendors' : `${finalVendorIds.length} selected vendors`}.`,
         }
     });
 
@@ -126,6 +126,3 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-
-    
