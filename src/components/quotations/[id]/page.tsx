@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -945,6 +944,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const { toast } = useToast();
     
     const isSent = requisition.status === 'RFQ_In_Progress';
+    const isQuorumMet = distributionType === 'all' || selectedVendors.length >= rfqQuorum;
 
 
      useEffect(() => {
@@ -988,7 +988,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
             return;
         }
 
-        if (distributionType === 'select' && selectedVendors.length < rfqQuorum) {
+        if (distributionType === 'select' && !isQuorumMet) {
             toast({ variant: 'destructive', title: 'Quorum Not Met', description: `Please select at least ${rfqQuorum} vendors.` });
             return;
         }
@@ -1165,6 +1165,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-lg">Select Vendors</CardTitle>
+                                {!isQuorumMet && <CardDescription className="text-destructive">Please select at least {rfqQuorum} vendors.</CardDescription>}
                                 <div className="relative mt-2">
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                     <Input 
@@ -1220,7 +1221,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                 </CardContent>
                 <CardFooter className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-4">
-                        <Button onClick={handleSendRFQ} disabled={isSubmitting || !deadline || !isAuthorized || isSent}>
+                        <Button onClick={handleSendRFQ} disabled={isSubmitting || !deadline || !isAuthorized || isSent || !isQuorumMet}>
                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                             Send RFQ
                         </Button>
@@ -1389,17 +1390,17 @@ const ScoringDialog = ({
             const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
             
             const financialScores = (requisition.evaluationCriteria?.financialCriteria || []).map(c => {
-                const existingScore = existingItemScore?.scores.find(s => s.criterionId === c.id);
+                const existingScore = existingItemScore?.scores.find(s => s.financialCriterionId === c.id);
                 return { criterionId: c.id, score: existingScore?.score || 0, comment: existingScore?.comment || "" };
             });
     
             const technicalScores = (requisition.evaluationCriteria?.technicalCriteria || []).map(c => {
-                const existingScore = existingItemScore?.scores.find(s => s.criterionId === c.id);
+                const existingScore = existingItemScore?.scores.find(s => s.technicalCriterionId === c.id);
                 return { criterionId: c.id, score: existingScore?.score || 0, comment: existingScore?.comment || "" };
             });
     
             return {
-                quoteItemId: item.id, // This is the critical part
+                quoteItemId: item.id,
                 financialScores,
                 technicalScores,
             };
@@ -1410,7 +1411,7 @@ const ScoringDialog = ({
             itemScores: initialItemScores,
         });
     
-    }, [quote, requisition, user.id, form]);
+    }, [quote, requisition, user, form]);
 
     const onSubmit = async (values: ScoreFormValues) => {
         setSubmitting(true);
@@ -1784,7 +1785,10 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     const printRef = useRef<HTMLDivElement>(null);
     const { toast } = useToast();
 
-    const getCriterionName = (criterionId: string, criteria?: EvaluationCriterion[]) => {
+    const getCriterionName = (criterionId: string, type: 'financial' | 'technical') => {
+        const criteria = type === 'financial' 
+            ? requisition.evaluationCriteria?.financialCriteria 
+            : requisition.evaluationCriteria?.technicalCriteria;
         return criteria?.find(c => c.id === criterionId)?.name || 'Unknown Criterion';
     }
 
@@ -1896,7 +1900,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                             {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'FINANCIAL').map(s => (
                                                                 <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
                                                                     <div className="flex justify-between items-center font-medium">
-                                                                        <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                        <p>{getCriterionName(s.financialCriterionId!, 'financial')}</p>
                                                                         <p className="font-bold">{s.score}/100</p>
                                                                     </div>
                                                                     {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
@@ -1908,7 +1912,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                             {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'TECHNICAL').map(s => (
                                                                 <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
                                                                     <div className="flex justify-between items-center font-medium">
-                                                                        <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
+                                                                        <p>{getCriterionName(s.technicalCriterionId!, 'technical')}</p>
                                                                         <p className="font-bold">{s.score}/100</p>
                                                                     </div>
                                                                     {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
@@ -3029,5 +3033,3 @@ export default function QuotationDetailsPage() {
 
 
 
-
-    

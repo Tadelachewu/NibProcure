@@ -42,6 +42,7 @@ export async function POST(
     const rfqQuorumSetting = await prisma.setting.findUnique({ where: { key: 'rfqQuorum' } });
     const rfqQuorum = rfqQuorumSetting ? Number(rfqQuorumSetting.value) : 3;
 
+    // This is the key validation logic
     if (Array.isArray(vendorIds) && vendorIds.length > 0 && vendorIds.length < rfqQuorum) {
          return NextResponse.json({ error: `Quorum not met. At least ${rfqQuorum} vendors must be selected.` }, { status: 400 });
     }
@@ -52,6 +53,7 @@ export async function POST(
     }
     
     let finalVendorIds = vendorIds;
+    // If vendorIds is an empty array, it means "send to all".
     if (Array.isArray(vendorIds) && vendorIds.length === 0) {
         const verifiedVendors = await prisma.vendor.findMany({
             where: { kycStatus: 'Verified' },
@@ -80,7 +82,7 @@ export async function POST(
             action: 'SEND_RFQ',
             entity: 'Requisition',
             entityId: id,
-            details: `Sent RFQ to ${finalVendorIds.length === 0 ? 'all verified vendors' : `${finalVendorIds.length} selected vendors`}.`,
+            details: `Sent RFQ to ${vendorIds.length === 0 ? 'all verified vendors' : `${finalVendorIds.length} selected vendors`}.`,
         }
     });
 
