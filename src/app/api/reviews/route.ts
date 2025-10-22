@@ -22,15 +22,15 @@ export async function GET(request: Request) {
     const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
     const userId = userPayload.user.id;
 
-    // Define the specific post-award review statuses.
-    // This is the key change: we are no longer looking for generic "Pending" statuses.
+    // This is the key change: we are adding the specific managerial status to the list.
     const reviewStatuses = [
       'Pending_Committee_A_Member',
       'Pending_Committee_B_Member',
       'Pending_Managerial_Review',
       'Pending_Director_Approval',
       'Pending_VP_Approval',
-      'Pending_President_Approval'
+      'Pending_President_Approval',
+      'Pending_Manager_Procurement_Division'
     ];
 
     if (userRole === 'Committee_A_Member') {
@@ -91,5 +91,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
