@@ -42,9 +42,26 @@ export async function POST(
     const rfqQuorumSetting = await prisma.setting.findUnique({ where: { key: 'rfqQuorum' } });
     const rfqQuorum = rfqQuorumSetting ? Number(rfqQuorumSetting.value) : 3;
 
-    // This is the key validation logic, now using the dynamic setting
-    if (Array.isArray(vendorIds) && vendorIds.length > 0 && vendorIds.length < rfqQuorum) {
-         return NextResponse.json({ error: `Quorum not met. At least ${rfqQuorum} vendors must be selected.` }, { status: 400 });
+    let finalVendorIds = vendorIds;
+
+    // If vendorIds is an empty array, it means "send to all".
+    if (Array.isArray(vendorIds) && vendorIds.length === 0) {
+        const verifiedVendors = await prisma.vendor.findMany({
+            where: { kycStatus: 'Verified' },
+            select: { id: true }
+        });
+        
+        // **FIX:** Validate that the number of all verified vendors meets the quorum.
+        if (verifiedVendors.length < rfqQuorum) {
+            return NextResponse.json({ error: `Quorum not met. There are only ${verifiedVendors.length} verified vendors available, but the minimum required is ${rfqQuorum}.` }, { status: 400 });
+        }
+        
+        finalVendorIds = verifiedVendors.map(v => v.id);
+    } else if (Array.isArray(vendorIds) && vendorIds.length > 0) {
+        // This is the existing check for selected vendors.
+        if (vendorIds.length < rfqQuorum) {
+             return NextResponse.json({ error: `Quorum not met. At least ${rfqQuorum} vendors must be selected.` }, { status: 400 });
+        }
     }
 
 
@@ -52,16 +69,6 @@ export async function POST(
         return NextResponse.json({ error: `Cannot start RFQ for a requisition that is already ${requisition.status}.` }, { status: 400 });
     }
     
-    let finalVendorIds = vendorIds;
-    // If vendorIds is an empty array, it means "send to all".
-    if (Array.isArray(vendorIds) && vendorIds.length === 0) {
-        const verifiedVendors = await prisma.vendor.findMany({
-            where: { kycStatus: 'Verified' },
-            select: { id: true }
-        });
-        finalVendorIds = verifiedVendors.map(v => v.id);
-    }
-
 
     const updatedRequisition = await prisma.purchaseRequisition.update({
         where: { id },
