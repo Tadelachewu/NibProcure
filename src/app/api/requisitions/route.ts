@@ -58,13 +58,23 @@ export async function GET(request: Request) {
           userRole === 'VP_Resources_and_Facilities' || 
           userRole === 'President'
         ) {
+          // Hierarchical reviewers should only see items explicitly assigned to them
+          // AND the status must be one of the post-award review statuses.
           whereClause = { 
             currentApproverId: userId,
-            status: { in: reviewStatuses }
+            status: {
+              in: reviewStatuses
+            }
           };
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-           whereClause = { status: { in: reviewStatuses }};
+           // Admins/Officers can see all items currently in any review stage
+           whereClause = { 
+             status: { 
+               in: reviewStatuses
+             }
+          };
         } else {
+          // If user doesn't have a specific review role, return empty
           return NextResponse.json([]);
         }
 
@@ -302,20 +312,22 @@ export async function PATCH(
     // WORKFLOW 1: SUBMITTING A DRAFT OR RE-SUBMITTING A REJECTED REQ
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && status === 'Pending_Approval') {
         const isRequester = requisition.requesterId === userId;
-        const isProcurementStaff = user.role === 'Procurement_Officer' || user.role === 'Admin';
         
-        if (!isRequester && !isProcurementStaff) {
-            return NextResponse.json({ error: 'Unauthorized to submit this requisition for approval.' }, { status: 403 });
+        if (!isRequester) {
+            return NextResponse.json({ error: 'Only the original requester can submit this requisition for approval.' }, { status: 403 });
         }
 
         const department = await prisma.department.findUnique({ where: { id: requisition.departmentId } });
         if (department?.headId) {
             dataToUpdate.currentApproverId = department.headId;
             dataToUpdate.status = 'Pending_Approval';
+            auditAction = 'SUBMIT_FOR_APPROVAL';
             auditDetails = `Requisition ${id} submitted for departmental approval.`;
         } else {
+            // Auto-approve if no department head is set
             dataToUpdate.status = 'Approved';
             dataToUpdate.currentApproverId = null;
+            auditAction = 'SUBMIT_FOR_APPROVAL';
             auditDetails = `Requisition ${id} submitted and auto-approved as no department head is set.`;
         }
         
