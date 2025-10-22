@@ -96,18 +96,22 @@ export function RequisitionsTable() {
   }, []);
   
   const handleSubmitForApproval = async (req: PurchaseRequisition) => {
+    if (!user) return;
     try {
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...req, status: 'Pending Approval', userId: user?.id }),
+        body: JSON.stringify({ ...req, status: 'Pending Approval', userId: user.id }),
       });
-      if (!response.ok) throw new Error('Failed to submit for approval');
+      if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to submit for approval');
+      }
       toast({
         title: "Success",
         description: `Requisition ${req.id} submitted for approval.`,
       });
-      fetchRequisitions(); // Re-fetch data to update the table
+      fetchRequisitions();
     } catch (error) {
       toast({
         variant: 'destructive',
