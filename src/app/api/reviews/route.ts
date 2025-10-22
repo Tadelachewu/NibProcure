@@ -22,6 +22,17 @@ export async function GET(request: Request) {
     const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
     const userId = userPayload.user.id;
 
+    // Define the specific post-award review statuses.
+    // This is the key change: we are no longer looking for generic "Pending" statuses.
+    const reviewStatuses = [
+      'Pending_Committee_A_Member',
+      'Pending_Committee_B_Member',
+      'Pending_Managerial_Review',
+      'Pending_Director_Approval',
+      'Pending_VP_Approval',
+      'Pending_President_Approval'
+    ];
+
     if (userRole === 'Committee_A_Member') {
       whereClause = {
         status: 'Pending_Committee_A_Member',
@@ -37,24 +48,18 @@ export async function GET(request: Request) {
       userRole === 'President'
     ) {
       // Hierarchical reviewers should only see items explicitly assigned to them
+      // AND the status must be one of the post-award review statuses.
       whereClause = { 
         currentApproverId: userId,
         status: {
-          startsWith: 'Pending_' // And the status must be a pending review status
+          in: reviewStatuses
         }
       };
     } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
        // Admins/Officers can see all items currently in any review stage
        whereClause = { 
          status: { 
-           in: [
-              'Pending_Committee_A_Member',
-              'Pending_Committee_B_Member',
-              'Pending_Managerial_Review',
-              'Pending_Director_Approval',
-              'Pending_VP_Approval',
-              'Pending_President_Approval'
-           ]
+           in: reviewStatuses
          }
       };
     } else {
@@ -86,3 +91,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    

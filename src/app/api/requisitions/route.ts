@@ -39,27 +39,25 @@ export async function GET(request: Request) {
         const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
         const userId = userPayload.user.id;
 
+        const reviewStatuses = [
+            'Pending_Committee_A_Member',
+            'Pending_Committee_B_Member',
+            'Pending_Managerial_Review',
+            'Pending_Director_Approval',
+            'Pending_VP_Approval',
+            'Pending_President_Approval'
+        ];
+
         if (userRole === 'Committee_A_Member') {
           whereClause = { status: 'Pending_Committee_A_Member' };
         } else if (userRole === 'Committee_B_Member') {
           whereClause = { status: 'Pending_Committee_B_Member' };
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-           whereClause = { 
-             status: { 
-               in: [
-                  'Pending_Committee_A_Member',
-                  'Pending_Committee_B_Member',
-                  'Pending_Managerial_Review',
-                  'Pending_Director_Approval',
-                  'Pending_VP_Approval',
-                  'Pending_President_Approval'
-               ]
-             }
-          };
+           whereClause = { status: { in: reviewStatuses }};
         } else {
             // For hierarchical approvers, they are assigned directly.
              whereClause.currentApproverId = userId;
-             whereClause.status = { startsWith: 'Pending_' }; // Ensure it's a review status
+             whereClause.status = { in: reviewStatuses };
         }
 
     } else if (statusParam) {
@@ -296,7 +294,7 @@ export async function PATCH(
     let auditDetails = `Updated requisition ${id}.`;
 
     // --- WORKFLOW 1: SUBMITTING A DRAFT OR RE-SUBMITTING A REJECTED REQ ---
-    if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && status === 'Pending Approval') {
+    if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && status === 'Pending_Approval') {
         
         // Authorization: Only original requester, procurement officer, or admin can submit.
         const isRequester = requisition.requesterId === userId;
@@ -501,3 +499,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
