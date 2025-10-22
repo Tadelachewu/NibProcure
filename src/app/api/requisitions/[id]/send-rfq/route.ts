@@ -25,7 +25,6 @@ export async function POST(
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
-    // Authorization check
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
     if (user.role === 'Admin') {
@@ -39,12 +38,14 @@ export async function POST(
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized: You do not have permission to send RFQs.' }, { status: 403 });
     }
-    
+
     const rfqQuorumSetting = await prisma.setting.findUnique({ where: { key: 'rfqQuorum' } });
     const rfqQuorum = rfqQuorumSetting ? Number(rfqQuorumSetting.value) : 3;
+
     if (Array.isArray(vendorIds) && vendorIds.length > 0 && vendorIds.length < rfqQuorum) {
          return NextResponse.json({ error: `Quorum not met. At least ${rfqQuorum} vendors must be selected.` }, { status: 400 });
     }
+
 
     if (requisition.status === 'Closed' || requisition.status === 'Fulfilled') {
         return NextResponse.json({ error: `Cannot start RFQ for a requisition that is already ${requisition.status}.` }, { status: 400 });
