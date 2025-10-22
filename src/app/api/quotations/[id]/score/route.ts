@@ -84,12 +84,12 @@ export async function POST(
         const totalItems = scores.itemScores.length;
 
         for (const itemScoreData of scores.itemScores) {
-            const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
-            totalWeightedScore += finalScore;
-
             if (!itemScoreData.quoteItemId) {
               throw new Error(`Critical error: quoteItemId is missing for an item score. This should not happen.`);
             }
+            const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
+            totalWeightedScore += finalScore;
+
             
             await tx.itemScore.create({
                 data: {
