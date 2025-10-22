@@ -129,7 +129,7 @@ export async function GET(request: Request) {
     }
     
     // If a regular user is fetching, only show their own unless other flags are set
-    if (userPayload && userPayload.role === 'Requester' && !forQuoting && !statusParam) {
+    if (userPayload && userPayload.role === 'Requester' && !forQuoting && !statusParam && !approverId && !forReview) {
       whereClause.requesterId = userPayload.user.id;
     }
 
@@ -314,7 +314,6 @@ export async function PATCH(
             dataToUpdate.status = 'Pending_Approval';
             auditDetails = `Requisition ${id} submitted for departmental approval.`;
         } else {
-            // Auto-approve if no department head is assigned
             dataToUpdate.status = 'Approved';
             dataToUpdate.currentApproverId = null;
             auditDetails = `Requisition ${id} submitted and auto-approved as no department head is set.`;
