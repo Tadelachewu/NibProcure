@@ -381,9 +381,17 @@ async function main() {
    // Seed Purchase Orders
     for (const po of seedData.purchaseOrders) {
         const { items, receipts, invoices, vendor, ...poData } = po;
+
+        const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: po.requisitionId }});
+        if (!requisition) {
+            console.warn(`Skipping PO ${po.id} because its requisition ${po.requisitionId} was not found.`);
+            continue;
+        }
+
         const createdPO = await prisma.purchaseOrder.create({
             data: {
                 ...poData,
+                transactionId: requisition.transactionId, // Get transaction ID from requisition
                 status: poData.status.replace(/ /g, '_') as any,
                 createdAt: new Date(poData.createdAt),
                 vendorId: vendor.id,
