@@ -104,7 +104,7 @@ export async function POST(
                         nextStatus = 'Pending_Committee_B_Review';
                         break;
                     default:
-                        // Fallback using the role name, but prefer standardized statuses
+                        // Fallback, should not be hit with proper config
                         nextStatus = `Pending_${firstStep.role}`;
                 }
 
@@ -116,11 +116,11 @@ export async function POST(
                 }
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.replace(/_/g, ' ')} for approval.`;
             } else {
+                // If a tier has no steps, it is considered approved and ready for vendor notification
                 nextStatus = 'Approved';
-                auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier, which has no approval steps. Approved for notification.`;
+                auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier, which has no approval steps. Approved for vendor notification.`;
             }
             
-
             const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
             
             const updatedRequisition = await tx.purchaseRequisition.update({
