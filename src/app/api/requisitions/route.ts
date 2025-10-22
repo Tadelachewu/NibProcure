@@ -40,24 +40,32 @@ export async function GET(request: Request) {
         const userId = userPayload.user.id;
 
         const reviewStatuses = [
-            'Pending_Committee_A_Member',
-            'Pending_Committee_B_Member',
-            'Pending_Managerial_Review',
-            'Pending_Director_Approval',
-            'Pending_VP_Approval',
-            'Pending_President_Approval'
+          'Pending_Committee_A_Member',
+          'Pending_Committee_B_Member',
+          'Pending_Managerial_Review',
+          'Pending_Director_Approval',
+          'Pending_VP_Approval',
+          'Pending_President_Approval'
         ];
 
         if (userRole === 'Committee_A_Member') {
           whereClause = { status: 'Pending_Committee_A_Member' };
         } else if (userRole === 'Committee_B_Member') {
           whereClause = { status: 'Pending_Committee_B_Member' };
+        } else if (
+          userRole === 'Manager_Procurement_Division' || 
+          userRole === 'Director_Supply_Chain_and_Property_Management' || 
+          userRole === 'VP_Resources_and_Facilities' || 
+          userRole === 'President'
+        ) {
+          whereClause = { 
+            currentApproverId: userId,
+            status: { in: reviewStatuses }
+          };
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
            whereClause = { status: { in: reviewStatuses }};
         } else {
-            // For hierarchical approvers, they are assigned directly.
-             whereClause.currentApproverId = userId;
-             whereClause.status = { in: reviewStatuses };
+          return NextResponse.json([]);
         }
 
     } else if (statusParam) {
@@ -121,7 +129,7 @@ export async function GET(request: Request) {
     }
     
     // If a regular user is fetching, only show their own unless other flags are set
-    if (userPayload && userPayload.role === 'Requester' && !forQuoting) {
+    if (userPayload && userPayload.role === 'Requester' && !forQuoting && !statusParam) {
       whereClause.requesterId = userPayload.user.id;
     }
 
@@ -291,34 +299,32 @@ export async function PATCH(
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
 
-    // --- WORKFLOW 1: SUBMITTING A DRAFT OR RE-SUBMITTING A REJECTED REQ ---
+    // WORKFLOW 1: SUBMITTING A DRAFT OR RE-SUBMITTING A REJECTED REQ
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && status === 'Pending_Approval') {
-        
         const isRequester = requisition.requesterId === userId;
         const isProcurementStaff = user.role === 'Procurement_Officer' || user.role === 'Admin';
-
+        
         if (!isRequester && !isProcurementStaff) {
-            return NextResponse.json({ error: 'Unauthorized to submit this requisition.' }, { status: 403 });
+            return NextResponse.json({ error: 'Unauthorized to submit this requisition for approval.' }, { status: 403 });
         }
 
         const department = await prisma.department.findUnique({ where: { id: requisition.departmentId } });
-        if (!department?.headId) {
+        if (department?.headId) {
+            dataToUpdate.currentApproverId = department.headId;
+            dataToUpdate.status = 'Pending_Approval';
+            auditDetails = `Requisition ${id} submitted for departmental approval.`;
+        } else {
+            // Auto-approve if no department head is assigned
             dataToUpdate.status = 'Approved';
             dataToUpdate.currentApproverId = null;
-            auditDetails = `Requisition ${id} submitted but no department head found. Auto-approved.`;
-        } else {
-            dataToUpdate.status = 'Pending_Approval';
-            dataToUpdate.currentApproverId = department.headId;
-            auditDetails = `Requisition ${id} submitted for departmental approval.`;
+            auditDetails = `Requisition ${id} submitted and auto-approved as no department head is set.`;
         }
         
-    // --- WORKFLOW 2: DEPARTMENTAL HEAD APPROVAL/REJECTION ---
+    // WORKFLOW 2: DEPARTMENTAL HEAD APPROVAL/REJECTION
     } else if (requisition.status === 'Pending_Approval') {
-        
         if (requisition.currentApproverId !== userId) {
             return NextResponse.json({ error: 'You are not the designated approver for this requisition.' }, { status: 403 });
         }
-
         if (status === 'Approved') {
             dataToUpdate.status = 'Approved';
             dataToUpdate.currentApproverId = null; // Clean hand-off to procurement
@@ -333,9 +339,8 @@ export async function PATCH(
             return NextResponse.json({ error: 'Invalid action for this requisition state.' }, { status: 400 });
         }
     
-    // --- WORKFLOW 3: POST-AWARD HIERARCHICAL APPROVAL ---
+    // WORKFLOW 3: POST-AWARD HIERARCHICAL APPROVAL
     } else if (requisition.status.startsWith('Pending_')) {
-
         const isCommitteeMember = user.role === 'Committee_A_Member' || user.role === 'Committee_B_Member';
         const isCorrectCommittee = (requisition.status === 'Pending_Committee_A_Member' && user.role === 'Committee_A_Member') || (requisition.status === 'Pending_Committee_B_Member' && user.role === 'Committee_B_Member');
         const isDesignatedApprover = requisition.currentApproverId === userId;
@@ -346,7 +351,7 @@ export async function PATCH(
         
         if (status === 'Rejected') {
              dataToUpdate.currentApproverId = null;
-             dataToUpdate.status = 'Rejected'; // Rejects the entire award/req
+             dataToUpdate.status = 'Rejected';
              auditAction = 'REJECT_AWARD';
              auditDetails = `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. Reason: "${comment}".`;
         } else if (status === 'Approved') {
@@ -361,18 +366,16 @@ export async function PATCH(
             const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === `Pending_${step.role}`);
             
             if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
-                // There is a next step in the chain
                 const nextStep = relevantTier.steps[currentStepIndex + 1];
                 dataToUpdate.status = `Pending_${nextStep.role}`;
                 if (!nextStep.role.includes('Committee')) {
                     dataToUpdate.currentApproverId = await findApproverId(nextStep.role as UserRole);
                 } else {
-                     dataToUpdate.currentApproverId = null; // Committee review is role-based, not user-specific
+                     dataToUpdate.currentApproverId = null;
                 }
                 auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
             } else {
-                // This is the final approval in the chain
-                dataToUpdate.status = 'Approved'; // Requisition status becomes 'Approved' again, indicating it's ready for vendor notification
+                dataToUpdate.status = 'Approved';
                 dataToUpdate.currentApproverId = null;
                 auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
             }
@@ -401,7 +404,7 @@ export async function PATCH(
         return NextResponse.json({ error: 'Invalid operation. The requisition is not in a state that can be updated this way.' }, { status: 400 });
     }
     
-    // --- EXECUTE THE UPDATE ---
+    // EXECUTE THE UPDATE
     const updatedRequisition = await prisma.purchaseRequisition.update({
       where: { id },
       data: dataToUpdate,
@@ -459,7 +462,7 @@ export async function DELETE(
     }
     
     if (requisition.status !== 'Draft' && requisition.status !== 'Rejected') {
-        return NextResponse.json({ error: `Cannot delete a requisition with status "${requisition.status}".` }, { status: 403 });
+        return NextResponse.json({ error: `Cannot delete a requisition with status "${requisition.status}".` }, { status: 400 });
     }
     
     await prisma.requisitionItem.deleteMany({ where: { requisitionId: id } });

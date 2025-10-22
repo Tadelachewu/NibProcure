@@ -95,17 +95,17 @@ export function RequisitionsTable() {
     fetchRequisitions();
   }, []);
   
-  const handleSubmitForApproval = async (id: string) => {
+  const handleSubmitForApproval = async (req: PurchaseRequisition) => {
     try {
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: 'Pending Approval', userId: user?.id }),
+        body: JSON.stringify({ ...req, status: 'Pending Approval', userId: user?.id }),
       });
       if (!response.ok) throw new Error('Failed to submit for approval');
       toast({
         title: "Success",
-        description: `Requisition ${id} submitted for approval.`,
+        description: `Requisition ${req.id} submitted for approval.`,
       });
       fetchRequisitions(); // Re-fetch data to update the table
     } catch (error) {
@@ -327,7 +327,7 @@ export function RequisitionsTable() {
                               </DropdownMenuItem>
                             )}
                             {req.requesterId === user?.id && req.status === 'Draft' && (
-                              <DropdownMenuItem onClick={() => handleSubmitForApproval(req.id)}>
+                              <DropdownMenuItem onClick={() => handleSubmitForApproval(req)}>
                                 <Send className="mr-2 h-4 w-4" />
                                 Submit for Approval
                               </DropdownMenuItem>
