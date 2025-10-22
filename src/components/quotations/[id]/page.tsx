@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -1803,7 +1804,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             const canvas = await html2canvas(input, {
                 scale: 2, // Increase resolution
                 useCORS: true,
-                backgroundColor: null // Important for dark mode
+                backgroundColor: null, // Important for dark mode
             });
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');
@@ -3022,6 +3023,7 @@ export default function QuotationDetailsPage() {
     
 
     
+
 
 
 
