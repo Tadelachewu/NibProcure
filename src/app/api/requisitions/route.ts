@@ -273,9 +273,7 @@ export async function PATCH(
   try {
     const body = await request.json();
     const { id, status, userId, comment, minute } = body;
-    const updateData = body;
-
-
+    
     const user = await prisma.user.findUnique({where: {id: userId}});
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -296,7 +294,6 @@ export async function PATCH(
     // --- WORKFLOW 1: SUBMITTING A DRAFT OR RE-SUBMITTING A REJECTED REQ ---
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && status === 'Pending_Approval') {
         
-        // Authorization: Only original requester, procurement officer, or admin can submit.
         const isRequester = requisition.requesterId === userId;
         const isProcurementStaff = user.role === 'Procurement_Officer' || user.role === 'Admin';
         if (!isRequester && !isProcurementStaff) {
@@ -305,7 +302,6 @@ export async function PATCH(
 
         const department = await prisma.department.findUnique({ where: { id: requisition.departmentId } });
         if (!department?.headId) {
-            // No department head, auto-approve and hand off to procurement.
             dataToUpdate.status = 'Approved';
             dataToUpdate.currentApproverId = null;
             auditDetails = `Requisition ${id} submitted but no department head found. Auto-approved.`;
@@ -318,14 +314,13 @@ export async function PATCH(
     // --- WORKFLOW 2: DEPARTMENTAL HEAD APPROVAL/REJECTION ---
     } else if (requisition.status === 'Pending_Approval') {
         
-        // Authorization: Only the current approver (dept head) can act.
         if (requisition.currentApproverId !== userId) {
             return NextResponse.json({ error: 'You are not the designated approver for this requisition.' }, { status: 403 });
         }
 
         if (status === 'Approved') {
             dataToUpdate.status = 'Approved';
-            dataToUpdate.currentApproverId = null; // Clear the approver for clean hand-off to procurement
+            dataToUpdate.currentApproverId = null; // Clean hand-off to procurement
             auditAction = 'APPROVE_REQUISITION';
             auditDetails = `Requisition ${id} was approved by department head. Comment: "${comment}".`;
         } else if (status === 'Rejected') {
@@ -340,13 +335,17 @@ export async function PATCH(
     // --- WORKFLOW 3: POST-AWARD HIERARCHICAL APPROVAL ---
     } else if (requisition.status.startsWith('Pending_')) {
 
-        if (requisition.currentApproverId && requisition.currentApproverId !== userId) {
-             return NextResponse.json({ error: 'You are not the designated reviewer for this award.' }, { status: 403 });
+        const isCommitteeMember = user.role === 'Committee_A_Member' || user.role === 'Committee_B_Member';
+        const isCorrectCommittee = (requisition.status === 'Pending_Committee_A_Member' && user.role === 'Committee_A_Member') || (requisition.status === 'Pending_Committee_B_Member' && user.role === 'Committee_B_Member');
+        const isDesignatedApprover = requisition.currentApproverId === userId;
+        
+        if (!isDesignatedApprover && !(isCommitteeMember && isCorrectCommittee)) {
+            return NextResponse.json({ error: 'You are not the designated reviewer for this award.' }, { status: 403 });
         }
         
         if (status === 'Rejected') {
              dataToUpdate.currentApproverId = null;
-             dataToUpdate.status = 'Rejected';
+             dataToUpdate.status = 'Rejected'; // Rejects the entire award/req
              auditAction = 'REJECT_AWARD';
              auditDetails = `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. Reason: "${comment}".`;
         } else if (status === 'Approved') {
@@ -372,7 +371,7 @@ export async function PATCH(
                 auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
             } else {
                 // This is the final approval in the chain
-                dataToUpdate.status = 'Approved';
+                dataToUpdate.status = 'Approved'; // Requisition status becomes 'Approved' again, indicating it's ready for vendor notification
                 dataToUpdate.currentApproverId = null;
                 auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
             }
@@ -499,5 +498,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
