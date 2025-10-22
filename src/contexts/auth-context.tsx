@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
@@ -72,6 +71,7 @@ interface AuthContextType {
   committeeConfig: CommitteeConfig;
   settings: Setting[];
   rfqQuorum: number;
+  committeeQuorum: number;
   login: (token: string, user: User, role: UserRole) => void;
   logout: () => void;
   loading: boolean;
@@ -98,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [committeeConfig, setCommitteeConfig] = useState<CommitteeConfig>({});
   const [settings, setSettings] = useState<Setting[]>([]);
   const [rfqQuorum, setRfqQuorum] = useState<number>(3);
+  const [committeeQuorum, setCommitteeQuorum] = useState<number>(3);
 
 
   const fetchAllUsers = useCallback(async () => {
@@ -133,6 +134,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         const rfqQuorumSetting = settingsData.find((s:any) => s.key === 'rfqQuorum');
         if (rfqQuorumSetting) setRfqQuorum(Number(rfqQuorumSetting.value));
+        
+        const committeeQuorumSetting = settingsData.find((s:any) => s.key === 'committeeQuorum');
+        if (committeeQuorumSetting) setCommitteeQuorum(Number(committeeQuorumSetting.value));
       }
       
       const approvalMatrixRes = await fetch('/api/settings/approval-matrix');
@@ -280,6 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       committeeConfig,
       settings,
       rfqQuorum,
+      committeeQuorum,
       login,
       logout,
       loading,
@@ -290,7 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateApprovalThresholds,
       updateCommitteeConfig,
       updateSetting,
-  }), [user, token, role, loading, allUsers, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, fetchAllUsers, fetchSettings]);
+  }), [user, token, role, loading, allUsers, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchSettings]);
 
 
   return (
@@ -307,3 +312,5 @@ export function useAuth() {
   }
   return context;
 }
+
+    

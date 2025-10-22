@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -40,6 +39,12 @@ export async function POST(
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized: You do not have permission to send RFQs.' }, { status: 403 });
     }
+    
+    const rfqQuorumSetting = await prisma.setting.findUnique({ where: { key: 'rfqQuorum' } });
+    const rfqQuorum = rfqQuorumSetting ? Number(rfqQuorumSetting.value) : 3;
+    if (Array.isArray(vendorIds) && vendorIds.length > 0 && vendorIds.length < rfqQuorum) {
+         return NextResponse.json({ error: `Quorum not met. At least ${rfqQuorum} vendors must be selected.` }, { status: 400 });
+    }
 
     if (requisition.status === 'Closed' || requisition.status === 'Fulfilled') {
         return NextResponse.json({ error: `Cannot start RFQ for a requisition that is already ${requisition.status}.` }, { status: 400 });
@@ -74,7 +79,7 @@ export async function POST(
             action: 'SEND_RFQ',
             entity: 'Requisition',
             entityId: id,
-            details: `Sent RFQ to ${finalVendorIds.length === 0 ? 'all verified vendors' : `${finalVendorIds.length} selected vendors`}.`,
+            details: `Sent RFQ to ${finalVendorIds.length === 0 ? 'all verified vendors' : `${finalVendorIds.length} selected vendors`.`,
         }
     });
 
@@ -116,8 +121,11 @@ export async function POST(
   } catch (error) {
     console.error('Failed to send RFQ:', error);
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+
+    

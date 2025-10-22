@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -446,7 +445,7 @@ const committeeFormSchema = z.object({
 type CommitteeFormValues = z.infer<typeof committeeFormSchema>;
 
 const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, onOpenChange, isAuthorized }: { requisition: PurchaseRequisition; onCommitteeUpdated: () => void; open: boolean; onOpenChange: (open: boolean) => void; isAuthorized: boolean; }) => {
-    const { user, allUsers } = useAuth();
+    const { user, allUsers, committeeQuorum } = useAuth();
     const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>(
@@ -642,9 +641,13 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             </div>
         );
     }
+    
+    const isDeadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+    const submittedQuotesCount = requisition.quotations?.filter(q => q.status === 'Submitted').length || 0;
+    const canAssignCommittee = isDeadlinePassed && submittedQuotesCount >= committeeQuorum;
 
     const triggerButton = (
-        <Button variant="outline" className="w-full sm:w-auto" disabled={!isAuthorized}>
+        <Button variant="outline" className="w-full sm:w-auto" disabled={!isAuthorized || !canAssignCommittee}>
             {allAssignedMemberIds.length > 0 ? (
                 <><Edit2 className="mr-2 h-4 w-4" /> Edit Committee</>
             ) : (
@@ -653,6 +656,31 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         </Button>
     );
 
+    const TriggerWrapper = () => {
+         if (!isAuthorized || canAssignCommittee) {
+             return (
+                 <DialogTrigger asChild>
+                     {triggerButton}
+                 </DialogTrigger>
+             );
+         }
+        
+         return (
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <span tabIndex={0}>{triggerButton}</span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        {!isDeadlinePassed 
+                            ? <p>Cannot assign committee until the RFQ deadline has passed.</p>
+                            : <p>Requires at least {committeeQuorum} submitted quotes to proceed (currently {submittedQuotesCount}).</p>
+                        }
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        );
+    };
 
     return (
         <Card className="border-dashed">
@@ -664,22 +692,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                     </CardDescription>
                 </div>
                  <Dialog open={open} onOpenChange={onOpenChange}>
-                    <DialogTrigger asChild>
-                         {isAuthorized ? (
-                            triggerButton
-                        ) : (
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <span tabIndex={0}>{triggerButton}</span>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>You are not authorized to manage committees.</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        )}
-                    </DialogTrigger>
+                    <TriggerWrapper />
                     <DialogContent className="max-w-4xl flex flex-col max-h-[90vh]">
                          <Form {...form}>
                          <form onSubmit={form.handleSubmit(handleSaveCommittee)} className="flex flex-col flex-1 min-h-0">
@@ -1370,7 +1383,6 @@ const ScoringDialog = ({
         if (quote && requisition && user) {
             const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
             
-            // Rebuild the structure from scratch to ensure quoteItemId is always present
             const initialItemScores = quote.items.map(item => {
                 const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
                 
@@ -1385,7 +1397,7 @@ const ScoringDialog = ({
                 }) || [];
 
                 return {
-                    quoteItemId: item.id, // This is the crucial part
+                    quoteItemId: item.id,
                     financialScores,
                     technicalScores,
                 };
@@ -3015,3 +3027,5 @@ export default function QuotationDetailsPage() {
 
 
 
+
+    
