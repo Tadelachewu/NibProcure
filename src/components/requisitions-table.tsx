@@ -98,10 +98,11 @@ export function RequisitionsTable() {
   const handleSubmitForApproval = async (req: PurchaseRequisition) => {
     if (!user) return;
     try {
+      // Send the full requisition object to ensure the backend has context like departmentId
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...req, status: 'Pending Approval', userId: user.id }),
+        body: JSON.stringify({ ...req, id: req.id, status: 'Pending_Approval', userId: user.id }),
       });
       if (!response.ok) {
           const errorData = await response.json();
@@ -436,3 +437,5 @@ export function RequisitionsTable() {
     </>
   );
 }
+
+    

@@ -39,6 +39,7 @@ export async function GET(request: Request) {
         const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
         const userId = userPayload.user.id;
 
+        // Define the specific post-award review statuses.
         const reviewStatuses = [
           'Pending_Committee_A_Member',
           'Pending_Committee_B_Member',
@@ -312,9 +313,10 @@ export async function PATCH(
     // WORKFLOW 1: SUBMITTING A DRAFT OR RE-SUBMITTING A REJECTED REQ
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && status === 'Pending_Approval') {
         const isRequester = requisition.requesterId === userId;
+        const isProcurementStaff = user.role === 'Procurement_Officer' || user.role === 'Admin';
         
-        if (!isRequester) {
-            return NextResponse.json({ error: 'Only the original requester can submit this requisition for approval.' }, { status: 403 });
+        if (!isRequester && !isProcurementStaff) {
+            return NextResponse.json({ error: 'You are not authorized to submit this requisition for approval.' }, { status: 403 });
         }
 
         const department = await prisma.department.findUnique({ where: { id: requisition.departmentId } });
@@ -513,3 +515,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
