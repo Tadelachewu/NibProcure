@@ -74,13 +74,13 @@ export function ReviewsTable() {
     if (!selectedRequisition || !user) return [];
     
     if (selectedRequisition.status.includes('Committee')) {
-        const committeeKey = selectedRequisition.status.includes('Committee_A') ? 'financialCommitteeMemberIds' : 'technicalCommitteeMemberIds';
-        // In a real scenario, you might have separate financial & tech members for Committee A vs B
-        const memberIds = new Set([
-            ...(selectedRequisition.financialCommitteeMemberIds || []),
-            ...(selectedRequisition.technicalCommitteeMemberIds || [])
-        ]);
-        return allUsers.filter(u => memberIds.has(u.id));
+        // For committee reviews, all members of that committee are potential attendees.
+        const isCommitteeA = selectedRequisition.status.includes('Committee A');
+        const assignedMemberIds = isCommitteeA 
+            ? new Set(selectedRequisition.financialCommitteeMemberIds) 
+            : new Set(selectedRequisition.technicalCommitteeMemberIds);
+        
+        return allUsers.filter(u => assignedMemberIds.has(u.id));
     }
     // For managerial roles, attendees are likely just the individual approver
     return [user];
@@ -99,16 +99,12 @@ export function ReviewsTable() {
     }
     try {
       setLoading(true);
-      
-      const response = await fetch(`/api/reviews`, {
-        headers: {
-            'Authorization': `Bearer ${token}`
-        }
+      // Use forReview=true to fetch all items in any review state relevant to the user
+      const response = await fetch(`/api/requisitions?forReview=true`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch requisitions for review');
-      }
+      if (!response.ok) throw new Error('Failed to fetch requisitions for review');
+      
       const data: PurchaseRequisition[] = await response.json();
       setRequisitions(data);
     } catch (e) {
@@ -135,6 +131,7 @@ export function ReviewsTable() {
   
   const submitAction = async () => {
     if (!selectedRequisition || !actionType || !user) return;
+    
     if (!justification.trim()) {
         toast({
             variant: 'destructive',
@@ -143,7 +140,7 @@ export function ReviewsTable() {
         });
         return;
     }
-    
+
     setActiveActionId(selectedRequisition.id);
 
     const minute = {
@@ -164,10 +161,10 @@ export function ReviewsTable() {
             minute,
         }),
       });
-      if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
+      if (!response.ok) throw new Error(`Failed to ${actionType} requisition award`);
       toast({
         title: "Success",
-        description: `Requisition award for ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
+        description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       fetchRequisitions();
     } catch (error) {
@@ -202,7 +199,7 @@ export function ReviewsTable() {
       <CardHeader>
         <CardTitle>Award Recommendations for Review</CardTitle>
         <CardDescription>
-          Review and act on award recommendations that require your approval.
+          Review and act on award recommendations that require your committee's approval.
         </CardDescription>
       </CardHeader>
       <CardContent>
