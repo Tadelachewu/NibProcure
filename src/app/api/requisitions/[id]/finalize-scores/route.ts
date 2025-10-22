@@ -83,7 +83,7 @@ export async function POST(
             if (relevantTier.steps.length > 0) {
                 const firstStep = relevantTier.steps[0];
                 
-                // **FIX**: Use a standardized, non-dynamic status name based on the role.
+                // Standardize the status based on the role.
                 switch (firstStep.role) {
                     case 'Manager_Procurement_Division':
                         nextStatus = 'Pending_Managerial_Approval';
@@ -104,7 +104,7 @@ export async function POST(
                         nextStatus = 'Pending_Committee_B_Review';
                         break;
                     default:
-                        // Fallback, though should ideally not be reached with proper config
+                        // Fallback using the role name, but prefer standardized statuses
                         nextStatus = `Pending_${firstStep.role}`;
                 }
 
