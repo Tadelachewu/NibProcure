@@ -42,7 +42,7 @@ export async function POST(
     const rfqQuorumSetting = await prisma.setting.findUnique({ where: { key: 'rfqQuorum' } });
     const rfqQuorum = rfqQuorumSetting ? Number(rfqQuorumSetting.value) : 3;
 
-    // This is the key validation logic
+    // This is the key validation logic, now using the dynamic setting
     if (Array.isArray(vendorIds) && vendorIds.length > 0 && vendorIds.length < rfqQuorum) {
          return NextResponse.json({ error: `Quorum not met. At least ${rfqQuorum} vendors must be selected.` }, { status: 400 });
     }
