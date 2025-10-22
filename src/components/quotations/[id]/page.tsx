@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -1369,20 +1368,30 @@ const ScoringDialog = ({
     useEffect(() => {
         if (quote && requisition && user) {
             const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
+            
             const initialItemScores = quote.items.map(item => {
                 const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
                 return {
-                    quoteItemId: item.id, // This is the crucial part
+                    quoteItemId: item.id, // Ensure this is always set from the source of truth: the quote item
                     financialScores: requisition.evaluationCriteria?.financialCriteria.map(c => {
-                        const existing = existingItemScore?.scores.find(s => s.criterionId === c.id);
-                        return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
+                        const existingScore = existingItemScore?.scores.find(s => s.criterionId === c.id);
+                        return { 
+                            criterionId: c.id, 
+                            score: existingScore?.score || 0, 
+                            comment: existingScore?.comment || "" 
+                        };
                     }) || [],
                     technicalScores: requisition.evaluationCriteria?.technicalCriteria.map(c => {
-                        const existing = existingItemScore?.scores.find(s => s.criterionId === c.id);
-                        return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
+                        const existingScore = existingItemScore?.scores.find(s => s.criterionId === c.id);
+                        return { 
+                            criterionId: c.id, 
+                            score: existingScore?.score || 0, 
+                            comment: existingScore?.comment || "" 
+                        };
                     }) || [],
-                }
+                };
             });
+
             form.reset({
                 committeeComment: existingScoreSet?.committeeComment || "",
                 itemScores: initialItemScores,
