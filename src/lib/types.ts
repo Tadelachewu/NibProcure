@@ -3,12 +3,12 @@
 export type UserRole =
   | 'Requester'
   | 'Approver'
-  | 'Procurement Officer'
+  | 'Procurement_Officer'
   | 'Finance'
   | 'Admin'
   | 'Receiving'
   | 'Vendor'
-  | 'Committee Member'
+  | 'Committee_Member'
   | 'Committee'
   | 'Committee_A_Member'
   | 'Committee_B_Member'
@@ -29,7 +29,6 @@ export type User = {
   password?: string; // Should not be sent to client
   role: UserRole;
   vendorId?: string;
-  department?: string;
   departmentId?: string;
   committeeAssignments?: CommitteeAssignment[];
   approvalLimit?: number;
