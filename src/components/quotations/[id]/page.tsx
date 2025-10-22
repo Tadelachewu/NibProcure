@@ -134,7 +134,6 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
         }
     };
     
-    // Filter for only verified vendors
     const verifiedVendors = vendors.filter(v => v.kycStatus === 'Verified');
 
     return (
@@ -1802,9 +1801,9 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
 
         try {
             const canvas = await html2canvas(input, {
-                scale: 2, // Increase resolution
+                scale: 2,
                 useCORS: true,
-                backgroundColor: null, // Important for dark mode
+                backgroundColor: null, 
             });
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');
@@ -1813,7 +1812,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             const imgWidth = canvas.width;
             const imgHeight = canvas.height;
             const ratio = imgWidth / imgHeight;
-            let width = pdfWidth - 20; // with margin
+            let width = pdfWidth - 20; 
             let height = width / ratio;
 
             if (height > pdfHeight - 20) {
@@ -1824,7 +1823,6 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             const x = (pdfWidth - width) / 2;
             const y = 10;
 
-            // Add a white background to the PDF before adding the image
             pdf.setFillColor(255, 255, 255);
             pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
             
@@ -1853,7 +1851,6 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                 <div className="flex-grow overflow-hidden">
                     <ScrollArea className="h-full">
                         <div ref={printRef} className="p-1 space-y-6 bg-background text-foreground print:bg-white print:text-black">
-                            {/* Header for PDF */}
                             <div className="hidden print:block text-center mb-8 pt-4">
                                 <Image src="/logo.png" alt="Logo" width={40} height={40} className="mx-auto mb-2" />
                                 <h1 className="text-2xl font-bold text-black">Scoring & Award Justification Report</h1>
@@ -1966,7 +1963,6 @@ const AwardCenterDialog = ({
         return setMinutes(setHours(awardResponseDeadlineDate, hours), minutes);
     }, [awardResponseDeadlineDate, awardResponseDeadlineTime]);
     
-    // Per-item award logic
     const itemWinners = useMemo(() => {
         if (!requisition.items) return [];
 
@@ -2011,7 +2007,6 @@ const AwardCenterDialog = ({
         });
     }, [requisition, quotations]);
     
-    // Single vendor award logic
     const overallWinner = useMemo(() => {
         let bestOverallScore = -1;
         let overallWinner: { vendorId: string; vendorName: string; items: { requisitionItemId: string, quoteItemId: string }[] } | null = null;
@@ -2022,7 +2017,6 @@ const AwardCenterDialog = ({
                 overallWinner = {
                     vendorId: quote.vendorId,
                     vendorName: quote.vendorName,
-                    // Award all original items, assuming vendor quoted them
                     items: requisition.items.map(reqItem => {
                         const vendorItem = quote.items.find(i => i.requisitionItemId === reqItem.id);
                         return { requisitionItemId: reqItem.id, quoteItemId: vendorItem!.id }
@@ -2160,7 +2154,7 @@ const AwardCenterDialog = ({
                         <AlertDialogTitle>Confirm Award Decision</AlertDialogTitle>
                         <AlertDialogDescription>
                             You are about to finalize the award based on the <strong>{awardStrategy === 'item' ? 'Best Offer Per Item' : 'Single Best Vendor'}</strong> strategy.
-                            This will notify the selected vendor(s) and cannot be undone.
+                            This will initiate the final approval workflow.
                         </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -2490,7 +2484,6 @@ export default function QuotationDetailsPage() {
     if (allMemberIds.length === 0) return false;
     if (quotations.length === 0) return false;
 
-    // Check if every assigned member has finalized their scores.
     return allMemberIds.every(memberId => {
         const member = allUsers.find(u => u.id === memberId);
         return member?.committeeAssignments?.some(a => a.requisitionId === requisition.id && a.scoresSubmitted) || false;
@@ -2524,7 +2517,6 @@ export default function QuotationDetailsPage() {
             const quoData = await quoResponse.json();
 
             if (currentReq) {
-                // Check for expired award and auto-promote if necessary
                 const awardedQuote = quoData.find((q: Quotation) => q.status === 'Awarded');
                 if (awardedQuote && currentReq.awardResponseDeadline && isPast(new Date(currentReq.awardResponseDeadline))) {
                     toast({
@@ -2533,7 +2525,7 @@ export default function QuotationDetailsPage() {
                         variant: 'destructive',
                     });
                     await handleAwardChange(secondStandby ? 'promote_second' : 'restart_rfq');
-                    // Refetch after the change
+                    
                     const [refetchedReqRes, refetchedQuoRes] = await Promise.all([
                         fetch(`/api/requisitions/${id}`),
                         fetch(`/api/quotations?requisitionId=${id}`)
@@ -2559,7 +2551,7 @@ export default function QuotationDetailsPage() {
 
 
   useEffect(() => {
-    if (id && user) { // ensure user is loaded
+    if (id && user) {
         fetchRequisitionAndQuotes();
     }
   }, [id, user]);
@@ -2710,11 +2702,10 @@ export default function QuotationDetailsPage() {
       if (requisition.status === 'RFQ_In_Progress' && !isDeadlinePassed) return 'rfq';
       if (isDeadlinePassed && !isAwarded && !isScoringComplete) return 'committee';
       if (isDeadlinePassed && isScoringComplete && !isAwarded) return 'award';
-      if (requisition.status.startsWith('Pending')) return 'award';
-      if (requisition.status === 'Approved' && isAwarded) return 'award';
+      if (requisition.status.startsWith('Pending') || requisition.status === 'Review_Complete') return 'award';
       if (isAccepted) return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
       if (isAwarded) return 'award';
-      return 'rfq'; // Default fallback
+      return 'rfq';
   };
   const currentStep = getCurrentStep();
   
@@ -2751,7 +2742,7 @@ export default function QuotationDetailsPage() {
   }
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
-  const isReadyForNotification = requisition.status === 'Approved' && isAwarded;
+  const isReadyForFinalAction = requisition.status === 'Review_Complete' && isAwarded;
 
   return (
     <div className="space-y-6">
@@ -2832,7 +2823,6 @@ export default function QuotationDetailsPage() {
 
         {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
             <>
-                {/* Always render committee management when in award step so dialog can open */}
                 {canManageCommittees && currentStep !== 'committee' && (
                      <div className="hidden">
                         <EvaluationCommitteeManagement
@@ -2972,11 +2962,11 @@ export default function QuotationDetailsPage() {
             />
         )}
 
-        {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
+        {isReadyForFinalAction && (role === 'Procurement_Officer' || role === 'Admin') && (
             <Card className="mt-6 border-amber-500">
                  <CardHeader>
                     <CardTitle>Action Required: Notify Vendor</CardTitle>
-                    <CardDescription>The award has passed committee review. You may now notify the winning vendor.</CardDescription>
+                    <CardDescription>The award has passed all reviews. You may now notify the winning vendor.</CardDescription>
                 </CardHeader>
                 <CardFooter>
                      <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
@@ -3035,3 +3025,4 @@ export default function QuotationDetailsPage() {
 
 
 
+    

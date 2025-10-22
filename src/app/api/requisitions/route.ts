@@ -2,7 +2,7 @@
 'use server';
 
 import { NextResponse } from 'next/server';
-import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
+import type { PurchaseRequisition, User, UserRole, Vendor, Minute } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
 import { getUserByToken } from '@/lib/auth';
 import { headers } from 'next/headers';
@@ -15,37 +15,6 @@ async function findApproverId(role: UserRole): Promise<string | null> {
     });
     return user?.id || null;
 }
-
-const validTransitions: Record<string, { from: string[], to: string, role?: UserRole[] }> = {
-    submit: { from: ['Draft', 'Rejected'], to: 'Pending_Approval', role: ['Requester', 'Procurement_Officer', 'Admin'] },
-    approve_departmental: { from: ['Pending_Approval'], to: 'Approved', role: ['Approver', 'Admin'] },
-    reject_departmental: { from: ['Pending_Approval'], to: 'Rejected', role: ['Approver', 'Admin'] },
-    approve_review: { 
-        from: [
-            'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review', 
-            'Pending_Managerial_Approval', 'Pending_Director_Approval', 
-            'Pending_VP_Approval', 'Pending_President_Approval'
-        ], 
-        to: 'Approved', // This is a generic 'to', the logic will determine the *actual* next state
-        role: [
-            'Committee_A_Member', 'Committee_B_Member', 'Manager_Procurement_Division',
-            'Director_Supply_Chain_and_Property_Management', 'VP_Resources_and_Facilities', 'President', 'Admin'
-        ]
-    },
-    reject_review: {
-        from: [
-            'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review', 
-            'Pending_Managerial_Approval', 'Pending_Director_Approval', 
-            'Pending_VP_Approval', 'Pending_President_Approval'
-        ], 
-        to: 'Rejected',
-        role: [
-            'Committee_A_Member', 'Committee_B_Member', 'Manager_Procurement_Division',
-            'Director_Supply_Chain_and_Property_Management', 'VP_Resources_and_Facilities', 'President', 'Admin'
-        ]
-    }
-};
-
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -70,7 +39,6 @@ export async function GET(request: Request) {
         const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
         const userId = userPayload.user.id;
 
-        // Define the specific post-award review statuses.
         const reviewStatuses = [
           'Pending_Committee_A_Recommendation',
           'Pending_Committee_B_Review',
@@ -90,8 +58,6 @@ export async function GET(request: Request) {
           userRole === 'VP_Resources_and_Facilities' || 
           userRole === 'President'
         ) {
-          // Hierarchical reviewers should only see items explicitly assigned to them
-          // AND the status must be one of the post-award review statuses.
           whereClause = { 
             currentApproverId: userId,
             status: {
@@ -99,14 +65,12 @@ export async function GET(request: Request) {
             }
           };
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-           // Admins/Officers can see all items currently in any review stage
            whereClause = { 
              status: { 
                in: reviewStatuses
              }
           };
         } else {
-          // If user doesn't have a specific review role, return empty
           return NextResponse.json([]);
         }
 
@@ -127,26 +91,22 @@ export async function GET(request: Request) {
              whereClause.status = 'RFQ_In_Progress'
         } else if (isProcurementStaff) {
              whereClause.OR = [
-                // Requisitions approved and waiting for vendor notification
-                { status: 'Approved', quotations: { some: { status: { in: ['Awarded', 'Partially_Awarded'] } } } },
-                // Requisitions approved and waiting for RFQ to be sent
+                { status: 'Review_Complete' }, // New status for ready to notify
                 { status: 'Approved', currentApproverId: null, NOT: { quotations: { some: { status: { in: ['Awarded', 'Partially_Awarded'] } } } } },
-                // Requisitions currently accepting quotes
                 { status: 'RFQ_In_Progress' },
-                // Requisitions in any review state
                 { status: { startsWith: 'Pending_' } }
             ]
         } else {
-             // If user is a requester, only show their own requisitions in this queue
             if (userPayload.role === 'Requester') {
                 whereClause.requesterId = userPayload.user.id;
                 whereClause.OR = [
                     { status: 'Approved' },
+                    { status: 'Review_Complete' },
                     { status: 'RFQ_In_Progress' },
                     { status: { startsWith: 'Pending_' } }
                 ]
             } else {
-                return NextResponse.json([]); // Other roles don't see this queue by default
+                return NextResponse.json([]); 
             }
         }
     }
@@ -159,18 +119,16 @@ export async function GET(request: Request) {
         
         whereClause.status = 'RFQ_In_Progress';
         whereClause.OR = [
-          { allowedVendorIds: { isEmpty: true } }, // 'all' vendors
+          { allowedVendorIds: { isEmpty: true } }, 
           { allowedVendorIds: { has: userPayload.user.vendorId } },
         ];
     }
     
     if (approverId) {
         whereClause.currentApproverId = approverId;
-        // Only get items pending departmental approval for this approver.
         whereClause.status = 'Pending_Approval';
     }
     
-    // If a regular user is fetching, only show their own unless other flags are set
     if (userPayload && userPayload.role === 'Requester' && !forQuoting && !statusParam && !approverId && !forReview) {
       whereClause.requesterId = userPayload.user.id;
     }
@@ -342,7 +300,6 @@ export async function PATCH(
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
 
-    // WORKFLOW 1: SUBMITTING A DRAFT OR RE-SUBMITTING A REJECTED REQ
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
         const isRequester = requisition.requesterId === userId;
         
@@ -350,28 +307,26 @@ export async function PATCH(
             return NextResponse.json({ error: 'You are not authorized to submit this requisition for approval.' }, { status: 403 });
         }
 
-        const department = await prisma.department.findUnique({ where: { id: requisition.departmentId } });
+        const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
         if (department?.headId) {
             dataToUpdate.currentApproverId = department.headId;
             dataToUpdate.status = 'Pending_Approval';
             auditAction = 'SUBMIT_FOR_APPROVAL';
             auditDetails = `Requisition ${id} submitted for departmental approval.`;
         } else {
-            // Auto-approve if no department head is set
             dataToUpdate.status = 'Approved';
             dataToUpdate.currentApproverId = null;
             auditAction = 'SUBMIT_FOR_APPROVAL';
             auditDetails = `Requisition ${id} submitted and auto-approved as no department head is set.`;
         }
         
-    // WORKFLOW 2: DEPARTMENTAL HEAD APPROVAL/REJECTION
     } else if (requisition.status === 'Pending_Approval') {
         if (requisition.currentApproverId !== userId) {
             return NextResponse.json({ error: 'You are not the designated approver for this requisition.' }, { status: 403 });
         }
         if (newStatus === 'Approved') {
             dataToUpdate.status = 'Approved';
-            dataToUpdate.currentApproverId = null; // Clean hand-off to procurement
+            dataToUpdate.currentApproverId = null; 
             auditAction = 'APPROVE_REQUISITION';
             auditDetails = `Requisition ${id} was approved by department head. Comment: "${comment}".`;
         } else if (newStatus === 'Rejected') {
@@ -383,7 +338,6 @@ export async function PATCH(
             return NextResponse.json({ error: 'Invalid action for this requisition state.' }, { status: 400 });
         }
     
-    // WORKFLOW 3: POST-AWARD HIERARCHICAL APPROVAL
     } else if (requisition.status.startsWith('Pending_')) {
         const isCommitteeMember = user.role === 'Committee_A_Member' || user.role === 'Committee_B_Member';
         const isCorrectCommittee = (requisition.status === 'Pending_Committee_A_Recommendation' && user.role === 'Committee_A_Member') || (requisition.status === 'Pending_Committee_B_Review' && user.role === 'Committee_B_Member');
@@ -442,7 +396,7 @@ export async function PATCH(
                 }
                 auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
             } else {
-                dataToUpdate.status = 'Approved';
+                dataToUpdate.status = 'Review_Complete';
                 dataToUpdate.currentApproverId = null;
                 auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
             }
@@ -471,7 +425,6 @@ export async function PATCH(
         return NextResponse.json({ error: 'Invalid operation. The requisition is not in a state that can be updated this way.' }, { status: 400 });
     }
     
-    // EXECUTE THE UPDATE
     const updatedRequisition = await prisma.purchaseRequisition.update({
       where: { id },
       data: dataToUpdate,
@@ -521,7 +474,6 @@ export async function DELETE(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    // Allow deletion by requester OR procurement officer/admin if it's a draft
     const canDelete = (requisition.requesterId === userId) || (user.role === 'Procurement_Officer' || user.role === 'Admin');
 
     if (!canDelete) {
@@ -569,3 +521,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
