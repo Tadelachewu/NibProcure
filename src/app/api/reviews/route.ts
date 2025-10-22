@@ -22,7 +22,6 @@ export async function GET(request: Request) {
     const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
     const userId = userPayload.user.id;
 
-    // This is the key change: we are adding the specific managerial status to the list.
     const reviewStatuses = [
       'Pending_Committee_A_Member',
       'Pending_Committee_B_Member',
@@ -47,8 +46,6 @@ export async function GET(request: Request) {
       userRole === 'VP_Resources_and_Facilities' || 
       userRole === 'President'
     ) {
-      // Hierarchical reviewers should only see items explicitly assigned to them
-      // AND the status must be one of the post-award review statuses.
       whereClause = { 
         currentApproverId: userId,
         status: {
@@ -56,14 +53,12 @@ export async function GET(request: Request) {
         }
       };
     } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-       // Admins/Officers can see all items currently in any review stage
        whereClause = { 
          status: { 
            in: reviewStatuses
          }
       };
     } else {
-      // If user doesn't have a specific review role, return empty
       return NextResponse.json([]);
     }
 
@@ -91,3 +86,4 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+

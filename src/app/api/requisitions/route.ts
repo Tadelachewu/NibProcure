@@ -41,18 +41,19 @@ export async function GET(request: Request) {
 
         // Define the specific post-award review statuses.
         const reviewStatuses = [
-          'Pending_Committee_A_Member',
-          'Pending_Committee_B_Member',
+          'Pending_Committee_A_Recommendation',
+          'Pending_Committee_B_Review',
           'Pending_Managerial_Review',
           'Pending_Director_Approval',
           'Pending_VP_Approval',
-          'Pending_President_Approval'
+          'Pending_President_Approval',
+          'Pending_Managerial_Approval'
         ];
 
         if (userRole === 'Committee_A_Member') {
-          whereClause = { status: 'Pending_Committee_A_Member' };
+          whereClause = { status: 'Pending_Committee_A_Recommendation' };
         } else if (userRole === 'Committee_B_Member') {
-          whereClause = { status: 'Pending_Committee_B_Member' };
+          whereClause = { status: 'Pending_Committee_B_Review' };
         } else if (
           userRole === 'Manager_Procurement_Division' || 
           userRole === 'Director_Supply_Chain_and_Property_Management' || 
