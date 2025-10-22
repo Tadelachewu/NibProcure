@@ -67,7 +67,8 @@ export function ApprovalsTable() {
     if (!user) return;
     try {
       setLoading(true);
-      let apiUrl = `/api/requisitions?status=Pending_Approval&approverId=${user.id}`;
+      // This is now highly specific: only get items pending departmental approval for this specific user.
+      const apiUrl = `/api/requisitions?status=Pending_Approval&approverId=${user.id}`;
       
       const response = await fetch(apiUrl);
       if (!response.ok) {

@@ -46,6 +46,9 @@ import { Label } from './ui/label';
 import { RequisitionDetailsDialog } from './requisition-details-dialog';
 import { Badge } from './ui/badge';
 import Link from 'next/link';
+import { ScrollArea } from './ui/scroll-area';
+import { Checkbox } from './ui/checkbox';
+
 
 const PAGE_SIZE = 10;
 
@@ -59,10 +62,25 @@ export function ManagerialApprovalsTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
   const [justification, setJustification] = useState('');
+  const [attendees, setAttendees] = useState<string[]>([]);
   const [isActionDialogOpen, setActionDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
+  
+
+  const potentialAttendees = useMemo(() => {
+    if (!selectedRequisition || !user) return [];
+    
+    // For managerial roles, attendees are likely just the individual approver
+    return [user];
+  }, [selectedRequisition, user]);
+
+  useEffect(() => {
+    if(selectedRequisition && user) {
+        setAttendees(potentialAttendees.map(u => u.id));
+    }
+  }, [selectedRequisition, user, potentialAttendees]);
 
   const fetchRequisitions = async () => {
     if (!user || !token) {
@@ -71,7 +89,8 @@ export function ManagerialApprovalsTable() {
     }
     try {
       setLoading(true);
-      const response = await fetch(`/api/requisitions?currentApproverId=${user.id}`, {
+      // Corrected API Call: Use forReview=true to fetch only post-award requisitions.
+      const response = await fetch(`/api/requisitions?forReview=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for approval');
@@ -108,7 +127,7 @@ export function ManagerialApprovalsTable() {
     const minute = {
         decisionBody: user.role.replace(/_/g, ' '),
         justification,
-        attendeeIds: [user.id],
+        attendeeIds: attendees,
     }
 
     try {
@@ -141,6 +160,7 @@ export function ManagerialApprovalsTable() {
         setJustification('');
         setSelectedRequisition(null);
         setActionType(null);
+        setAttendees([]);
     }
   }
 
@@ -241,24 +261,44 @@ export function ManagerialApprovalsTable() {
         )}
       </CardContent>
        <Dialog open={isActionDialogOpen} onOpenChange={setActionDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {actionType === 'approve' ? 'Approve Award' : 'Reject Award'} for {selectedRequisition?.id}
+              Record Minute for {actionType === 'approve' ? 'Approval' : 'Rejection'}
             </DialogTitle>
             <DialogDescription>
-                You are about to {actionType} this award recommendation. Please provide a comment for your decision. This will be formally recorded.
+                Record the official minute for the decision on the award for {selectedRequisition?.id}. This is a formal record for auditing purposes.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="grid gap-2">
-              <Label htmlFor="comment">Justification / Minute</Label>
+              <Label htmlFor="justification">Justification / Remarks</Label>
               <Textarea 
-                id="comment" 
+                id="justification" 
                 value={justification}
                 onChange={(e) => setJustification(e.target.value)}
-                placeholder="Type your justification here..."
+                placeholder="Provide a detailed rationale for the committee's decision..."
+                rows={6}
               />
+            </div>
+            <div className="grid gap-2">
+                <Label>Attendees</Label>
+                <ScrollArea className="h-40 w-full rounded-md border p-2">
+                    <div className="space-y-2">
+                    {potentialAttendees.map(attendee => (
+                        <div key={attendee.id} className="flex items-center space-x-2">
+                            <Checkbox 
+                                id={`attendee-${attendee.id}`} 
+                                checked={attendees.includes(attendee.id)}
+                                onCheckedChange={(checked) => {
+                                    setAttendees(prev => checked ? [...prev, attendee.id] : prev.filter(id => id !== attendee.id))
+                                }}
+                            />
+                            <Label htmlFor={`attendee-${attendee.id}`} className="font-normal">{attendee.name}</Label>
+                        </div>
+                    ))}
+                    </div>
+                </ScrollArea>
             </div>
           </div>
           <DialogFooter>
