@@ -88,7 +88,7 @@ export async function POST(
             totalWeightedScore += finalScore;
 
             if (!itemScoreData.quoteItemId) {
-              throw new Error(`quoteItemId is missing for an item score. Data: ${JSON.stringify(itemScoreData)}`);
+              throw new Error(`Critical error: quoteItemId is missing for an item score. This should not happen.`);
             }
             
             await tx.itemScore.create({

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -1369,26 +1370,24 @@ const ScoringDialog = ({
         if (quote && requisition && user) {
             const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
             
+            // Rebuild the structure from scratch to ensure quoteItemId is always present
             const initialItemScores = quote.items.map(item => {
                 const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
+                
+                const financialScores = requisition.evaluationCriteria?.financialCriteria.map(c => {
+                    const existingScore = existingItemScore?.scores.find(s => s.criterionId === c.id);
+                    return { criterionId: c.id, score: existingScore?.score || 0, comment: existingScore?.comment || "" };
+                }) || [];
+
+                const technicalScores = requisition.evaluationCriteria?.technicalCriteria.map(c => {
+                    const existingScore = existingItemScore?.scores.find(s => s.criterionId === c.id);
+                    return { criterionId: c.id, score: existingScore?.score || 0, comment: existingScore?.comment || "" };
+                }) || [];
+
                 return {
-                    quoteItemId: item.id, // Ensure this is always set from the source of truth: the quote item
-                    financialScores: requisition.evaluationCriteria?.financialCriteria.map(c => {
-                        const existingScore = existingItemScore?.scores.find(s => s.criterionId === c.id);
-                        return { 
-                            criterionId: c.id, 
-                            score: existingScore?.score || 0, 
-                            comment: existingScore?.comment || "" 
-                        };
-                    }) || [],
-                    technicalScores: requisition.evaluationCriteria?.technicalCriteria.map(c => {
-                        const existingScore = existingItemScore?.scores.find(s => s.criterionId === c.id);
-                        return { 
-                            criterionId: c.id, 
-                            score: existingScore?.score || 0, 
-                            comment: existingScore?.comment || "" 
-                        };
-                    }) || [],
+                    quoteItemId: item.id, // This is the crucial part
+                    financialScores,
+                    technicalScores,
                 };
             });
 
@@ -2482,12 +2481,11 @@ export default function QuotationDetailsPage() {
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
     if (role === 'Admin') return true;
-
-    if (rfqSenderSetting.type === 'all' && role === 'Procurement_Officer') {
-      return true;
+    if (rfqSenderSetting.type === 'all') {
+      return role === 'Procurement_Officer';
     }
-    if (rfqSenderSetting.type === 'specific' && user.id === rfqSenderSetting.userId) {
-      return true;
+    if (rfqSenderSetting.type === 'specific') {
+      return user.id === rfqSenderSetting.userId;
     }
     return false;
   }, [user, role, rfqSenderSetting]);
