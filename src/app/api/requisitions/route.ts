@@ -16,6 +16,37 @@ async function findApproverId(role: UserRole): Promise<string | null> {
     return user?.id || null;
 }
 
+const validTransitions: Record<string, { from: string[], to: string, role?: UserRole[] }> = {
+    submit: { from: ['Draft', 'Rejected'], to: 'Pending_Approval', role: ['Requester', 'Procurement_Officer', 'Admin'] },
+    approve_departmental: { from: ['Pending_Approval'], to: 'Approved', role: ['Approver', 'Admin'] },
+    reject_departmental: { from: ['Pending_Approval'], to: 'Rejected', role: ['Approver', 'Admin'] },
+    approve_review: { 
+        from: [
+            'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review', 
+            'Pending_Managerial_Approval', 'Pending_Director_Approval', 
+            'Pending_VP_Approval', 'Pending_President_Approval'
+        ], 
+        to: 'Approved', // This is a generic 'to', the logic will determine the *actual* next state
+        role: [
+            'Committee_A_Member', 'Committee_B_Member', 'Manager_Procurement_Division',
+            'Director_Supply_Chain_and_Property_Management', 'VP_Resources_and_Facilities', 'President', 'Admin'
+        ]
+    },
+    reject_review: {
+        from: [
+            'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review', 
+            'Pending_Managerial_Approval', 'Pending_Director_Approval', 
+            'Pending_VP_Approval', 'Pending_President_Approval'
+        ], 
+        to: 'Rejected',
+        role: [
+            'Committee_A_Member', 'Committee_B_Member', 'Manager_Procurement_Division',
+            'Director_Supply_Chain_and_Property_Management', 'VP_Resources_and_Facilities', 'President', 'Admin'
+        ]
+    }
+};
+
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const statusParam = searchParams.get('status');
@@ -43,11 +74,10 @@ export async function GET(request: Request) {
         const reviewStatuses = [
           'Pending_Committee_A_Recommendation',
           'Pending_Committee_B_Review',
-          'Pending_Managerial_Review',
+          'Pending_Managerial_Approval',
           'Pending_Director_Approval',
           'Pending_VP_Approval',
-          'Pending_President_Approval',
-          'Pending_Managerial_Approval'
+          'Pending_President_Approval'
         ];
 
         if (userRole === 'Committee_A_Member') {
@@ -86,7 +116,7 @@ export async function GET(request: Request) {
     }
     
      if (forQuoting === 'true' && userPayload) {
-        const isProcurementStaff = userPayload.role === 'Procurement_Officer' || userPayload.role === 'Admin';
+        const isProcurementStaff = userPayload.role === 'Procurement_Officer' || userPayload.role === 'Admin' || userPayload.role === 'Committee';
         
         if (userPayload.role === 'Committee_Member') {
             const assignedReqs = await prisma.committeeAssignment.findMany({
@@ -293,7 +323,8 @@ export async function PATCH(
   try {
     const body = await request.json();
     const { id, status, userId, comment, minute } = body;
-    
+    const newStatus = status ? status.replace(/ /g, '_') : null;
+
     const user = await prisma.user.findUnique({where: {id: userId}});
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -312,7 +343,7 @@ export async function PATCH(
     let auditDetails = `Updated requisition ${id}.`;
 
     // WORKFLOW 1: SUBMITTING A DRAFT OR RE-SUBMITTING A REJECTED REQ
-    if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && status === 'Pending_Approval') {
+    if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
         const isRequester = requisition.requesterId === userId;
         const isProcurementStaff = user.role === 'Procurement_Officer' || user.role === 'Admin';
         
@@ -339,12 +370,12 @@ export async function PATCH(
         if (requisition.currentApproverId !== userId) {
             return NextResponse.json({ error: 'You are not the designated approver for this requisition.' }, { status: 403 });
         }
-        if (status === 'Approved') {
+        if (newStatus === 'Approved') {
             dataToUpdate.status = 'Approved';
             dataToUpdate.currentApproverId = null; // Clean hand-off to procurement
             auditAction = 'APPROVE_REQUISITION';
             auditDetails = `Requisition ${id} was approved by department head. Comment: "${comment}".`;
-        } else if (status === 'Rejected') {
+        } else if (newStatus === 'Rejected') {
             dataToUpdate.status = 'Rejected';
             dataToUpdate.currentApproverId = null;
             auditAction = 'REJECT_REQUISITION';
@@ -363,12 +394,12 @@ export async function PATCH(
             return NextResponse.json({ error: 'You are not the designated reviewer for this award.' }, { status: 403 });
         }
         
-        if (status === 'Rejected') {
+        if (newStatus === 'Rejected') {
              dataToUpdate.currentApproverId = null;
              dataToUpdate.status = 'Rejected';
              auditAction = 'REJECT_AWARD';
              auditDetails = `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. Reason: "${comment}".`;
-        } else if (status === 'Approved') {
+        } else if (newStatus === 'Approved') {
             const approvalMatrix = await prisma.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
             const totalValue = requisition.totalPrice;
             const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
@@ -377,11 +408,15 @@ export async function PATCH(
                  return NextResponse.json({ error: 'No approval tier configured for this award value.' }, { status: 400 });
             }
             
-            const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === `Pending_${step.role}`);
+            const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === `Pending_${step.role}` || requisition.status === 'Pending_Managerial_Approval' && step.role === 'Manager_Procurement_Division');
             
             if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
                 const nextStep = relevantTier.steps[currentStepIndex + 1];
-                dataToUpdate.status = `Pending_${nextStep.role}`;
+                if (nextStep.role === 'Manager_Procurement_Division') {
+                    dataToUpdate.status = 'Pending_Managerial_Approval';
+                } else {
+                    dataToUpdate.status = `Pending_${nextStep.role}`;
+                }
                 if (!nextStep.role.includes('Committee')) {
                     dataToUpdate.currentApproverId = await findApproverId(nextStep.role as UserRole);
                 } else {

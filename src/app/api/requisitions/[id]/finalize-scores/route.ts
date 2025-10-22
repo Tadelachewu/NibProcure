@@ -82,7 +82,14 @@ export async function POST(
 
             if (relevantTier.steps.length > 0) {
                 const firstStep = relevantTier.steps[0];
-                nextStatus = `Pending_${firstStep.role}`;
+                
+                // **FIX**: Use a standardized status name instead of dynamically generating it
+                if (firstStep.role === 'Manager_Procurement_Division') {
+                    nextStatus = 'Pending_Managerial_Approval';
+                } else {
+                    nextStatus = `Pending_${firstStep.role}`;
+                }
+
                 if (!firstStep.role.includes('Committee')) {
                     nextApproverId = await findApproverId(firstStep.role as UserRole);
                     if (!nextApproverId) {
@@ -115,7 +122,8 @@ export async function POST(
                     action: 'FINALIZE_AWARD',
                     entity: 'Requisition',
                     entityId: requisitionId,
-                    details: auditDetails
+                    details: auditDetails,
+                    transactionId: requisitionId,
                 }
             });
             
