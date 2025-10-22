@@ -89,12 +89,11 @@ export async function POST(
             }
             const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
             totalWeightedScore += finalScore;
-
             
             await tx.itemScore.create({
                 data: {
-                    scoreSet: { connect: { id: scoreSet.id } },
-                    quoteItem: { connect: { id: itemScoreData.quoteItemId } },
+                    scoreSetId: scoreSet.id,
+                    quoteItemId: itemScoreData.quoteItemId,
                     finalScore: finalScore,
                     scores: {
                         create: allScores.map((s: any) => ({
