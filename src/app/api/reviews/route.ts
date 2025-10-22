@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserByToken } from '@/lib/auth';
+import { UserRole } from '@/lib/types';
 
 export async function GET(request: Request) {
   try {
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
     }
     
     let whereClause: any = {};
-    const userRole = userPayload.role.replace(/ /g, '_');
+    const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
     const userId = userPayload.user.id;
 
     if (userRole === 'Committee_A_Member') {
@@ -29,9 +30,21 @@ export async function GET(request: Request) {
       whereClause = {
         status: 'Pending_Committee_B_Member',
       };
-    } else if (userRole === 'Manager_Procurement_Division' || userRole === 'Director_Supply_Chain_and_Property_Management' || userRole === 'VP_Resources_and_Facilities' || userRole === 'President') {
-      whereClause = { currentApproverId: userId };
+    } else if (
+      userRole === 'Manager_Procurement_Division' || 
+      userRole === 'Director_Supply_Chain_and_Property_Management' || 
+      userRole === 'VP_Resources_and_Facilities' || 
+      userRole === 'President'
+    ) {
+      // Hierarchical reviewers should only see items explicitly assigned to them
+      whereClause = { 
+        currentApproverId: userId,
+        status: {
+          startsWith: 'Pending_' // And the status must be a pending review status
+        }
+      };
     } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
+       // Admins/Officers can see all items currently in any review stage
        whereClause = { 
          status: { 
            in: [
