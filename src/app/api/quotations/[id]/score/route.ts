@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -90,20 +89,26 @@ export async function POST(
             const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
             totalWeightedScore += finalScore;
             
-            await tx.itemScore.create({
+            const createdItemScore = await tx.itemScore.create({
                 data: {
                     scoreSetId: scoreSet.id,
                     quoteItemId: itemScoreData.quoteItemId,
                     finalScore: finalScore,
-                    scores: {
-                        create: allScores.map((s: any) => ({
-                            criterionId: s.criterionId,
-                            score: s.score,
-                            comment: s.comment,
-                            type: requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId) ? 'FINANCIAL' : 'TECHNICAL'
-                        }))
-                    }
                 }
+            });
+
+            await tx.score.createMany({
+              data: allScores.map((s: any) => {
+                const isFinancial = requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId);
+                return {
+                  itemScoreId: createdItemScore.id,
+                  score: s.score,
+                  comment: s.comment,
+                  type: isFinancial ? 'FINANCIAL' : 'TECHNICAL',
+                  financialCriterionId: isFinancial ? s.criterionId : null,
+                  technicalCriterionId: !isFinancial ? s.criterionId : null,
+                };
+              })
             });
         }
         
