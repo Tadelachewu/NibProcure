@@ -15,7 +15,7 @@ async function findApproverId(role: UserRole): Promise<string | null> {
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: { id:string } }
 ) {
     const requisitionId = params.id;
     try {
@@ -83,11 +83,29 @@ export async function POST(
             if (relevantTier.steps.length > 0) {
                 const firstStep = relevantTier.steps[0];
                 
-                // **FIX**: Use a standardized status name instead of dynamically generating it
-                if (firstStep.role === 'Manager_Procurement_Division') {
-                    nextStatus = 'Pending_Managerial_Approval';
-                } else {
-                    nextStatus = `Pending_${firstStep.role}`;
+                // **FIX**: Use a standardized, non-dynamic status name based on the role.
+                switch (firstStep.role) {
+                    case 'Manager_Procurement_Division':
+                        nextStatus = 'Pending_Managerial_Approval';
+                        break;
+                    case 'Director_Supply_Chain_and_Property_Management':
+                        nextStatus = 'Pending_Director_Approval';
+                        break;
+                    case 'VP_Resources_and_Facilities':
+                        nextStatus = 'Pending_VP_Approval';
+                        break;
+                    case 'President':
+                        nextStatus = 'Pending_President_Approval';
+                        break;
+                    case 'Committee_A_Member':
+                        nextStatus = 'Pending_Committee_A_Recommendation';
+                        break;
+                    case 'Committee_B_Member':
+                        nextStatus = 'Pending_Committee_B_Review';
+                        break;
+                    default:
+                        // Fallback, though should ideally not be reached with proper config
+                        nextStatus = `Pending_${firstStep.role}`;
                 }
 
                 if (!firstStep.role.includes('Committee')) {

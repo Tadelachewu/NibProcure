@@ -133,7 +133,7 @@ export async function GET(request: Request) {
                 { status: 'Approved', currentApproverId: null, NOT: { quotations: { some: { status: { in: ['Awarded', 'Partially_Awarded'] } } } } },
                 // Requisitions currently accepting quotes
                 { status: 'RFQ_In_Progress' },
-                // Requisitions in any review/approval state
+                // Requisitions in any review state
                 { status: { startsWith: 'Pending_' } }
             ]
         } else {
@@ -345,9 +345,8 @@ export async function PATCH(
     // WORKFLOW 1: SUBMITTING A DRAFT OR RE-SUBMITTING A REJECTED REQ
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
         const isRequester = requisition.requesterId === userId;
-        const isProcurementStaff = user.role === 'Procurement_Officer' || user.role === 'Admin';
         
-        if (!isRequester && !isProcurementStaff) {
+        if (!isRequester) {
             return NextResponse.json({ error: 'You are not authorized to submit this requisition for approval.' }, { status: 403 });
         }
 
@@ -387,7 +386,7 @@ export async function PATCH(
     // WORKFLOW 3: POST-AWARD HIERARCHICAL APPROVAL
     } else if (requisition.status.startsWith('Pending_')) {
         const isCommitteeMember = user.role === 'Committee_A_Member' || user.role === 'Committee_B_Member';
-        const isCorrectCommittee = (requisition.status === 'Pending_Committee_A_Member' && user.role === 'Committee_A_Member') || (requisition.status === 'Pending_Committee_B_Member' && user.role === 'Committee_B_Member');
+        const isCorrectCommittee = (requisition.status === 'Pending_Committee_A_Recommendation' && user.role === 'Committee_A_Member') || (requisition.status === 'Pending_Committee_B_Review' && user.role === 'Committee_B_Member');
         const isDesignatedApprover = requisition.currentApproverId === userId;
         
         if (!isDesignatedApprover && !(isCommitteeMember && isCorrectCommittee)) {
@@ -408,15 +407,34 @@ export async function PATCH(
                  return NextResponse.json({ error: 'No approval tier configured for this award value.' }, { status: 400 });
             }
             
-            const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === `Pending_${step.role}` || requisition.status === 'Pending_Managerial_Approval' && step.role === 'Manager_Procurement_Division');
+            const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status.endsWith(step.role));
             
             if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
                 const nextStep = relevantTier.steps[currentStepIndex + 1];
-                if (nextStep.role === 'Manager_Procurement_Division') {
-                    dataToUpdate.status = 'Pending_Managerial_Approval';
-                } else {
-                    dataToUpdate.status = `Pending_${nextStep.role}`;
+
+                switch (nextStep.role) {
+                    case 'Manager_Procurement_Division':
+                        dataToUpdate.status = 'Pending_Managerial_Approval';
+                        break;
+                    case 'Director_Supply_Chain_and_Property_Management':
+                        dataToUpdate.status = 'Pending_Director_Approval';
+                        break;
+                    case 'VP_Resources_and_Facilities':
+                        dataToUpdate.status = 'Pending_VP_Approval';
+                        break;
+                    case 'President':
+                        dataToUpdate.status = 'Pending_President_Approval';
+                        break;
+                    case 'Committee_A_Member':
+                        dataToUpdate.status = 'Pending_Committee_A_Recommendation';
+                        break;
+                    case 'Committee_B_Member':
+                        dataToUpdate.status = 'Pending_Committee_B_Review';
+                        break;
+                    default:
+                        dataToUpdate.status = `Pending_${nextStep.role}`;
                 }
+
                 if (!nextStep.role.includes('Committee')) {
                     dataToUpdate.currentApproverId = await findApproverId(nextStep.role as UserRole);
                 } else {
