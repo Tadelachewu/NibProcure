@@ -335,9 +335,17 @@ async function main() {
    // Seed Quotations
    for (const quote of seedData.quotations) {
        const { items, answers, scores, requisitionId, vendorId, ...quoteData } = quote;
+       
+       const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
+       if (!requisition) {
+           console.warn(`Skipping quote ${quote.id} because its requisition ${requisitionId} was not found.`);
+           continue;
+       }
+
        const createdQuote = await prisma.quotation.create({
            data: {
                ...quoteData,
+               transactionId: requisition.transactionId, // Add the transactionId from the requisition
                status: quoteData.status.replace(/_/g, '_') as any,
                deliveryDate: new Date(quoteData.deliveryDate),
                createdAt: new Date(quoteData.createdAt),
