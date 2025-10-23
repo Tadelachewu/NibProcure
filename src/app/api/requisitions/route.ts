@@ -76,7 +76,7 @@ export async function GET(request: Request) {
         }
         
         whereClause.AND = [
-          { status: 'PreApproved' }, 
+          { status: 'RFQ_In_Progress' }, 
           { deadline: { not: null } },
           { deadline: { gt: new Date() } },
           {
