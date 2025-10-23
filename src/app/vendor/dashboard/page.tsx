@@ -99,9 +99,8 @@ export default function VendorDashboardPage() {
                     if (vendorQuote && awardStatuses.includes(vendorQuote.status)) {
                         vendorAwards.push(req);
                     }
-                    // This is the main display logic fix. A requisition is "open for quoting" if it's PreApproved and its deadline hasn't passed.
-                    else if (
-                        req.status === 'PreApproved' && 
+                     else if (
+                        req.status === 'RFQ_In_Progress' && 
                         req.deadline && !isPast(new Date(req.deadline)) &&
                         !vendorQuote
                     ) {
@@ -316,5 +315,4 @@ export default function VendorDashboardPage() {
         </div>
     )
 }
-
     

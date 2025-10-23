@@ -57,23 +57,22 @@ export async function POST(
         
         finalVendorIds = verifiedVendors.map(v => v.id);
     } else if (Array.isArray(vendorIds) && vendorIds.length > 0) {
-        // This is the existing check for selected vendors.
+        // This is the check for selected vendors.
         if (vendorIds.length < rfqQuorum) {
              return NextResponse.json({ error: `Quorum not met. At least ${rfqQuorum} vendors must be selected.` }, { status: 400 });
         }
     }
 
 
-    if (requisition.status === 'Closed' || requisition.status === 'Fulfilled') {
-        return NextResponse.json({ error: `Cannot start RFQ for a requisition that is already ${requisition.status}.` }, { status: 400 });
+    if (requisition.status !== 'PreApproved') {
+        return NextResponse.json({ error: `Cannot start RFQ for a requisition that is not in PreApproved state.` }, { status: 400 });
     }
     
 
     const updatedRequisition = await prisma.purchaseRequisition.update({
         where: { id },
         data: {
-            // Do NOT change the status. It should remain PreApproved.
-            // The combination of PreApproved + a deadline makes it an active RFQ.
+            status: 'RFQ_In_Progress',
             allowedVendorIds: finalVendorIds,
             deadline: deadline ? new Date(deadline) : undefined,
             cpoAmount: cpoAmount,
@@ -89,7 +88,7 @@ export async function POST(
             action: 'SEND_RFQ',
             entity: 'Requisition',
             entityId: id,
-            details: `Sent RFQ to ${vendorIds.length === 0 ? 'all verified vendors' : `${finalVendorIds.length} selected vendors`}.`,
+            details: `Sent RFQ to ${finalVendorIds.length === 0 ? 'all verified vendors' : `${finalVendorIds.length} selected vendors`}.`,
         }
     });
 
@@ -136,5 +135,4 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
     

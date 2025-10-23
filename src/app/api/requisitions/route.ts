@@ -76,8 +76,7 @@ export async function GET(request: Request) {
         }
         
         whereClause.AND = [
-          // This is the critical fix: An RFQ is "open" if it's PreApproved AND the deadline has not passed.
-          { status: 'PreApproved' }, 
+          { status: 'RFQ_In_Progress' }, 
           { deadline: { not: null } },
           { deadline: { gt: new Date() } },
           {
@@ -102,7 +101,9 @@ export async function GET(request: Request) {
          whereClause.OR = [
             { status: 'PreApproved' },
             { status: 'PostApproved' },
-            { status: { startsWith: 'Pending_' } }
+            { status: { startsWith: 'Pending_' } },
+            { status: 'RFQ_In_Progress'},
+            { status: 'Review_Complete' }
         ];
     } else {
       if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
