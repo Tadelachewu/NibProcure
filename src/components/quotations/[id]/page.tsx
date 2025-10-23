@@ -858,7 +858,7 @@ const RFQActionDialog = ({
                     <DialogDescription>
                         {action === 'update' 
                             ? "Provide a reason and set a new deadline for this RFQ. Vendors will be notified."
-                            : "Provide a reason for cancelling this RFQ. This will revert the requisition to 'Approved' status and reject all submitted quotes."
+                            : "Provide a reason for cancelling this RFQ. This will revert the requisition to 'PreApproved' status and reject all submitted quotes."
                         }
                     </DialogDescription>
                 </DialogHeader>
@@ -2679,11 +2679,11 @@ export default function QuotationDetailsPage() {
 
   const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
       if (!requisition) return 'rfq';
-      if (requisition.status === 'Approved' && !isAwarded) return 'rfq';
+      if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
       if (requisition.status === 'RFQ_In_Progress' && !isDeadlinePassed) return 'rfq';
       if (isDeadlinePassed && !isAwarded && !isScoringComplete) return 'committee';
       if (isDeadlinePassed && isScoringComplete && !isAwarded) return 'award';
-      if (requisition.status.startsWith('Pending') || requisition.status === 'Review_Complete') return 'award';
+      if (requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved') return 'award';
       if (isAccepted) return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
       if (isAwarded) return 'award';
       return 'rfq'; // Default fallback
@@ -2723,7 +2723,7 @@ export default function QuotationDetailsPage() {
   }
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
-  const isReadyForFinalAction = requisition.status === 'Review_Complete';
+  const isReadyForFinalAction = requisition.status === 'PostApproved';
 
   return (
     <div className="space-y-6">
@@ -2996,6 +2996,7 @@ export default function QuotationDetailsPage() {
     
 
     
+
 
 
 

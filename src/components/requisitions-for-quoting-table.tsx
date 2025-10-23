@@ -75,15 +75,15 @@ export function RequisitionsForQuotingTable() {
   const getStatusBadge = (req: PurchaseRequisition) => {
     const hasAwardedQuote = req.quotations?.some(q => ['Awarded', 'Partially_Awarded', 'Standby', 'Declined', 'Accepted', 'Failed'].includes(q.status));
     
-    if (req.status === 'Approved' && hasAwardedQuote) {
+    if (req.status === 'PostApproved') {
         return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
     }
     
-    if (req.status === 'Approved') {
+    if (req.status === 'PreApproved') {
         return <Badge variant="default" className="bg-blue-500 text-white">Ready for RFQ</Badge>;
     }
     
-    if (req.status === 'RFQ In Progress') {
+    if (req.status === 'RFQ_In_Progress') {
         const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
         if (!deadlinePassed) {
             return <Badge variant="outline">Accepting Quotes</Badge>;
@@ -106,11 +106,11 @@ export function RequisitionsForQuotingTable() {
     }
     
     // For pending review statuses
-    if (req.status.startsWith('Pending ')) {
-        return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status}</Badge>;
+    if (req.status.startsWith('Pending_')) {
+        return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status.replace(/_/g, ' ')}</Badge>;
     }
     
-    return <Badge variant="outline">{req.status}</Badge>;
+    return <Badge variant="outline">{req.status.replace(/_/g, ' ')}</Badge>;
   }
 
   if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;

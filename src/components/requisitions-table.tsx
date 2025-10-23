@@ -179,7 +179,9 @@ export function RequisitionsTable() {
 
   const getStatusVariant = (status: string) => {
     switch (status.replace(/_/g, ' ')) {
-      case 'Approved':
+      case 'PreApproved':
+        return 'default';
+      case 'PostApproved':
         return 'default';
       case 'Pending Approval':
         return 'secondary';
@@ -238,7 +240,8 @@ export function RequisitionsTable() {
               <SelectItem value="Draft">Draft</SelectItem>
               <SelectItem value="Pending_Approval">Pending Approval</SelectItem>
               <SelectItem value="Pending_Managerial_Approval">Pending Managerial Approval</SelectItem>
-              <SelectItem value="Approved">Approved</SelectItem>
+              <SelectItem value="PreApproved">Pre-Approved</SelectItem>
+              <SelectItem value="PostApproved">Post-Approved</SelectItem>
               <SelectItem value="Rejected">Rejected</SelectItem>
               <SelectItem value="PO_Created">PO Created</SelectItem>
             </SelectContent>

@@ -25,7 +25,6 @@ function getNextStatusFromRole(role: string): string {
         case 'Committee_B_Member':
             return 'Pending_Committee_B_Review';
         default:
-            // Fallback for any other roles, though the primary ones should be covered.
             return `Pending_${role}`;
     }
 }
@@ -91,9 +90,8 @@ export async function GET(request: Request) {
 
     } else if (forQuoting) {
          whereClause.OR = [
-            { status: 'Approved' },
-            { status: 'Review_Complete'},
-            { status: 'Ready_to_Notify'},
+            { status: 'PreApproved' },
+            { status: 'PostApproved' },
             { status: 'RFQ_In_Progress' },
             { status: { startsWith: 'Pending_' } }
         ];
@@ -101,7 +99,6 @@ export async function GET(request: Request) {
       if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
       if (approverId) whereClause.currentApproverId = approverId;
       
-      // If no other filters, requester sees only their own
       if (userPayload && userPayload.role === 'Requester' && !statusParam && !approverId) {
         whereClause.requesterId = userPayload.user.id;
       }
@@ -173,17 +170,29 @@ export async function PATCH(
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
 
-    // --- Logic for Hierarchical Post-Award Approvals ---
-    if (requisition.status.startsWith('Pending_')) {
+    if (requisition.status === 'Pending_Approval') {
+        console.log(`[PATCH] Handling standard departmental approval.`);
+        if (requisition.currentApproverId !== userId) {
+            return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
+        }
+        if (newStatus === 'Rejected') {
+            dataToUpdate.status = 'Rejected';
+            dataToUpdate.currentApproverId = null;
+            auditAction = 'REJECT_REQUISITION';
+            auditDetails = `Requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
+        } else { // Department head approves
+             dataToUpdate.status = 'PreApproved';
+             dataToUpdate.currentApproverId = null; 
+             auditAction = 'PRE_APPROVE_REQUISITION';
+             auditDetails = `Requisition ${id} was pre-approved by ${user.role.replace(/_/g, ' ')} with comment: "${comment}". Ready for RFQ.`;
+        }
+    } else if (requisition.status.startsWith('Pending_')) {
         console.log(`[PATCH] Handling hierarchical approval.`);
         
-        const isCommitteeA = requisition.status === 'Pending_Committee_A_Recommendation';
-        const isCommitteeB = requisition.status === 'Pending_Committee_B_Review';
-        
         let isDesignatedApprover = false;
-        if (isCommitteeA) {
+        if (requisition.status === 'Pending_Committee_A_Recommendation') {
             isDesignatedApprover = user.role === 'Committee_A_Member';
-        } else if (isCommitteeB) {
+        } else if (requisition.status === 'Pending_Committee_B_Review') {
             isDesignatedApprover = user.role === 'Committee_B_Member';
         } else {
             isDesignatedApprover = requisition.currentApproverId === userId;
@@ -200,7 +209,7 @@ export async function PATCH(
              auditAction = 'REJECT_AWARD';
              auditDetails = `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. Reason: "${comment}".`;
              console.log(`[PATCH] Award rejected. New status: Rejected.`);
-        } else if (newStatus === 'Approved') {
+        } else if (newStatus === 'Approved') { // Using "Approved" as the action from the frontend
             const approvalMatrix = await prisma.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
             const totalValue = requisition.totalPrice;
             const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
@@ -213,7 +222,6 @@ export async function PATCH(
             const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getNextStatusFromRole(step.role));
             console.log(`[PATCH] Current step index in tier: ${currentStepIndex}`);
             
-            // Check if there is a next step
             if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
                 const nextStep = relevantTier.steps[currentStepIndex + 1];
                 console.log(`[PATCH] Found next step: ${nextStep.role}`);
@@ -228,11 +236,10 @@ export async function PATCH(
                 console.log(`[PATCH] Advancing to next step. New Status: ${dataToUpdate.status}, Next Approver: ${dataToUpdate.currentApproverId}`);
                 auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
             } else {
-                // This is the final approval step in the chain
                 console.log(`[PATCH] This is the final approval step.`);
-                dataToUpdate.status = 'Review_Complete'; 
+                dataToUpdate.status = 'PostApproved'; 
                 dataToUpdate.currentApproverId = null;
-                console.log(`[PATCH] Setting status to Review_Complete.`);
+                console.log(`[PATCH] Setting status to PostApproved.`);
                 auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
             }
             auditAction = 'APPROVE_AWARD_STEP';
@@ -256,23 +263,6 @@ export async function PATCH(
             auditDetails += ` Minute recorded.`;
         }
 
-    // --- Logic for Initial Departmental Approvals ---
-    } else if (requisition.status === 'Pending_Approval') {
-        console.log(`[PATCH] Handling standard departmental approval.`);
-        if (requisition.currentApproverId !== userId) {
-            return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
-        }
-        if (newStatus === 'Rejected') {
-            dataToUpdate.status = 'Rejected';
-            dataToUpdate.currentApproverId = null;
-            auditAction = 'REJECT_REQUISITION';
-            auditDetails = `Requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
-        } else { // Department head approves
-             dataToUpdate.status = 'Approved';
-             dataToUpdate.currentApproverId = null; 
-             auditAction = 'APPROVE_REQUISITION';
-             auditDetails = `Requisition ${id} was approved by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
-        }
     } else if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
         const isRequester = requisition.requesterId === userId;
         if (!isRequester) return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
@@ -281,7 +271,7 @@ export async function PATCH(
             dataToUpdate.currentApproverId = department.headId;
             dataToUpdate.status = 'Pending_Approval';
         } else { // No department head, auto-approve
-            dataToUpdate.status = 'Approved';
+            dataToUpdate.status = 'PreApproved';
             dataToUpdate.currentApproverId = null;
         }
          auditDetails = `Requisition ${id} submitted for approval.`;

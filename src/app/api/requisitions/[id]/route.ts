@@ -33,7 +33,7 @@ export async function GET(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
     
-    // Formatting data to match client-side expectations
+    // Formatting data to match client-side expectations, but sending raw status
     const formatted = {
         ...requisition,
         requesterName: requisition.requester.name || 'Unknown',

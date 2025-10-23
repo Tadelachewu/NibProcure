@@ -47,16 +47,17 @@ export type Department = {
 
 export type RequisitionStatus =
   | 'Draft'
-  | 'Pending Approval'
-  | 'Approved'
+  | 'Pending_Approval'
+  | 'PreApproved' // Department head approved, ready for RFQ
+  | 'PostApproved' // All hierarchical reviews complete, ready for vendor notification
   | 'Rejected'
-  | 'RFQ In Progress'
-  | 'PO Created'
+  | 'RFQ_In_Progress'
+  | 'PO_Created'
   | 'Fulfilled'
   | 'Closed'
   | 'Pending_Committee_B_Review'
-  | 'Pending_Committee_A_Member'
-  | 'Pending_Managerial_Review'
+  | 'Pending_Committee_A_Recommendation'
+  | 'Pending_Managerial_Approval'
   | 'Pending_Director_Approval'
   | 'Pending_VP_Approval'
   | 'Pending_President_Approval';
