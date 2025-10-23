@@ -929,7 +929,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const { user } = useAuth();
     const { toast } = useToast();
     
-    const isSent = requisition.status === 'RFQ_In_Progress';
+    const isSent = requisition.status === 'Accepting_Quotes' || requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
 
 
      useEffect(() => {
@@ -1236,7 +1236,7 @@ const ManageRFQ = ({
     isAuthorized: boolean,
 }) => {
     const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel'}>({isOpen: false, type: 'update'});
-    const canManageRfq = isAuthorized && requisition.status === 'RFQ_In_Progress' && !isPast(new Date(requisition.deadline!));
+    const canManageRfq = isAuthorized && requisition.status === 'Accepting_Quotes' && !isPast(new Date(requisition.deadline!));
     
     if (!canManageRfq) return null;
 
@@ -2678,14 +2678,21 @@ export default function QuotationDetailsPage() {
 
   const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
       if (!requisition) return 'rfq';
-      if (requisition.status === 'Approved' && !isAwarded) return 'rfq';
-      if (requisition.status === 'RFQ_In_Progress' && !isDeadlinePassed) return 'rfq';
-      if (isDeadlinePassed && !isAwarded && !isScoringComplete) return 'committee';
-      if (isDeadlinePassed && isScoringComplete && !isAwarded) return 'award';
-      if (requisition.status.startsWith('Pending')) return 'award';
-      if (requisition.status === 'PostApproved' && isAwarded) return 'award';
-      if (isAccepted) return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
-      if (isAwarded) return 'award';
+      if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
+      if (requisition.status === 'Accepting_Quotes') return 'rfq';
+      
+      if (['Scoring_In_Progress', 'Scoring_Complete'].includes(requisition.status) && !isAwarded) {
+          return isScoringComplete ? 'award' : 'committee';
+      }
+
+      if (requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded') {
+        return 'award';
+      }
+
+      if (isAccepted) {
+        return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
+      }
+      
       return 'rfq'; // Default fallback
   };
   const currentStep = getCurrentStep();
@@ -2723,7 +2730,7 @@ export default function QuotationDetailsPage() {
   }
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
-  const isReadyForNotification = requisition.status === 'PostApproved' && isAwarded;
+  const isReadyForNotification = requisition.status === 'PostApproved';
 
   return (
     <div className="space-y-6">
@@ -2995,14 +3002,3 @@ export default function QuotationDetailsPage() {
     
 
     
-
-
-
-
-
-
-
-
-
-
-
