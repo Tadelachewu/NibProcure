@@ -37,8 +37,33 @@ export async function POST(
       },
     });
 
+    // Check if all assigned members have now submitted scores
+    const requisition = await prisma.purchaseRequisition.findUnique({
+      where: { id: requisitionId },
+      include: { committeeAssignments: true, financialCommitteeMembers: true, technicalCommitteeMembers: true }
+    });
+
+    if (requisition) {
+        const assignedMemberIds = new Set([
+            ...requisition.financialCommitteeMemberIds.map(m => m.id),
+            ...requisition.technicalCommitteeMemberIds.map(m => m.id)
+        ]);
+
+        const submittedMemberIds = new Set(requisition.committeeAssignments.filter(a => a.scoresSubmitted).map(a => a.userId));
+        const allHaveScored = [...assignedMemberIds].every(id => submittedMemberIds.has(id));
+
+        if (allHaveScored) {
+            await prisma.purchaseRequisition.update({
+                where: { id: requisitionId },
+                data: { status: 'Scoring_Complete' }
+            });
+        }
+    }
+
+
     await prisma.auditLog.create({
         data: {
+            transactionId: requisitionId,
             timestamp: new Date(),
             user: { connect: { id: user.id } },
             action: 'SUBMIT_SCORES',

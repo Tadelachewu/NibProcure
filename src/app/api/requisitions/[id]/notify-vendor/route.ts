@@ -50,7 +50,7 @@ export async function POST(
         const updatedRequisition = await tx.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
-                status: 'RFQ_In_Progress',
+                status: 'Awarded',
                 awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
             }
         });
@@ -76,6 +76,7 @@ export async function POST(
         
         await tx.auditLog.create({
             data: {
+                transactionId: requisition.transactionId,
                 user: { connect: { id: userId } },
                 action: 'NOTIFY_VENDOR',
                 entity: 'Requisition',

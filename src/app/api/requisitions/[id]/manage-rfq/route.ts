@@ -34,7 +34,8 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    if (requisition.status !== 'RFQ_In_Progress') {
+    const validStatusesForAction: string[] = ['Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete'];
+    if (!validStatusesForAction.includes(requisition.status)) {
         return NextResponse.json({ error: 'This action is only available for requisitions with an active RFQ.' }, { status: 400 });
     }
 
@@ -58,7 +59,7 @@ export async function POST(
         await prisma.quotation.updateMany({ where: { requisitionId }, data: { status: 'Rejected' }});
         updatedRequisition = await prisma.purchaseRequisition.update({
             where: { id: requisitionId },
-            data: { status: 'Approved', deadline: null }
+            data: { status: 'PreApproved', deadline: null }
         });
         auditAction = 'CANCEL_RFQ';
         auditDetails = `Cancelled RFQ for requisition ${requisitionId}. Reason: ${reason}`;
@@ -69,6 +70,7 @@ export async function POST(
 
     await prisma.auditLog.create({
         data: {
+            transactionId: requisition.transactionId,
             timestamp: new Date(),
             user: { connect: { id: user.id } },
             action: auditAction,

@@ -108,7 +108,7 @@ export async function POST(
                 console.log(`[FINALIZE-SCORES] Next Approver ID: ${nextApproverId}`);
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.replace(/_/g, ' ')} for approval.`;
             } else {
-                nextStatus = 'Review_Complete';
+                nextStatus = 'PostApproved';
                  console.log(`[FINALIZE-SCORES] No approval steps for this tier. Setting status to: ${nextStatus}`);
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier, which has no approval steps. Approved for vendor notification.`;
             }

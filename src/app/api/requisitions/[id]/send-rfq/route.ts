@@ -44,7 +44,6 @@ export async function POST(
 
     let finalVendorIds = vendorIds;
 
-    // If vendorIds is an empty array, it means "send to all".
     if (Array.isArray(vendorIds) && vendorIds.length === 0) {
         const verifiedVendors = await prisma.vendor.findMany({
             where: { kycStatus: 'Verified' },
@@ -57,22 +56,19 @@ export async function POST(
         
         finalVendorIds = verifiedVendors.map(v => v.id);
     } else if (Array.isArray(vendorIds) && vendorIds.length > 0) {
-        // This is the check for selected vendors.
         if (vendorIds.length < rfqQuorum) {
              return NextResponse.json({ error: `Quorum not met. At least ${rfqQuorum} vendors must be selected.` }, { status: 400 });
         }
     }
 
-
     if (requisition.status !== 'PreApproved') {
         return NextResponse.json({ error: `Cannot start RFQ for a requisition that is not in PreApproved state.` }, { status: 400 });
     }
     
-
     const updatedRequisition = await prisma.purchaseRequisition.update({
         where: { id },
         data: {
-            status: 'RFQ_In_Progress',
+            status: 'Accepting_Quotes',
             allowedVendorIds: finalVendorIds,
             deadline: deadline ? new Date(deadline) : undefined,
             cpoAmount: cpoAmount,
@@ -92,7 +88,6 @@ export async function POST(
         }
     });
 
-    // --- Send Email Notifications ---
     const vendorsToNotify = await prisma.vendor.findMany({
         where: {
             id: { in: finalVendorIds }
@@ -124,9 +119,7 @@ export async function POST(
         }
     }
 
-
     return NextResponse.json(updatedRequisition);
-
   } catch (error) {
     console.error('Failed to send RFQ:', error);
     if (error instanceof Error) {
@@ -135,4 +128,3 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-    

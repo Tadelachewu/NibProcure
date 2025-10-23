@@ -1,14 +1,15 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { users, auditLogs } from '@/lib/data-store'; // auditLogs still in-memory
+import { User } from '@/lib/types';
+
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { requisitionId, userId } = body;
 
-    const user = users.find(u => u.id === userId);
+    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
 
     const newPO = await prisma.purchaseOrder.create({
         data: {
+            transactionId: requisition.transactionId,
             requisition: { connect: { id: requisition.id } },
             requisitionTitle: requisition.title,
             vendor: { connect: { id: vendor.id } },
@@ -62,17 +64,17 @@ export async function POST(request: Request) {
         }
     });
 
-    auditLogs.unshift({
-        id: `log-${Date.now()}-${Math.random()}`,
-        timestamp: new Date(),
-        user: user.name,
-        role: user.role,
-        action: 'CREATE_PO',
-        entity: 'PurchaseOrder',
-        entityId: newPO.id,
-        details: `Created Purchase Order for requisition ${requisitionId} after vendor acceptance.`,
+    await prisma.auditLog.create({
+        data: {
+            transactionId: requisition.transactionId,
+            timestamp: new Date(),
+            user: { connect: { id: user.id } },
+            action: 'CREATE_PO',
+            entity: 'PurchaseOrder',
+            entityId: newPO.id,
+            details: `Created Purchase Order for requisition ${requisitionId} after vendor acceptance.`,
+        }
     });
-
 
     return NextResponse.json(newPO, { status: 201 });
   } catch (error) {

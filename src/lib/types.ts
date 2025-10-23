@@ -48,10 +48,13 @@ export type Department = {
 export type RequisitionStatus =
   | 'Draft'
   | 'Pending_Approval'
-  | 'PreApproved' // Department head approved, ready for RFQ
-  | 'PostApproved' // All hierarchical reviews complete, ready for vendor notification
   | 'Rejected'
-  | 'RFQ_In_Progress'
+  | 'PreApproved' // Department head approved, ready for RFQ
+  | 'Accepting_Quotes' // RFQ sent, vendors can submit quotes
+  | 'Scoring_In_Progress' // Deadline passed, committee is scoring
+  | 'Scoring_Complete' // All scores are in, ready to finalize award
+  | 'Awarded' // Award has been sent to vendor(s) and is pending response
+  | 'PostApproved' // All hierarchical reviews complete, ready for vendor notification
   | 'PO_Created'
   | 'Fulfilled'
   | 'Closed'
@@ -283,7 +286,7 @@ export type POItem = {
     requisitionItemId: string;
 };
 
-export type PurchaseOrderStatus = 'Issued' | 'Acknowledged' | 'Shipped' | 'Partially Delivered' | 'Delivered' | 'Cancelled' | 'Matched' | 'Mismatched' | 'On Hold';
+export type PurchaseOrderStatus = 'Issued' | 'Acknowledged' | 'Shipped' | 'Partially_Delivered' | 'Delivered' | 'Cancelled' | 'Matched' | 'Mismatched' | 'On_Hold' | 'Closed';
 
 export type PurchaseOrder = {
     id: string;
