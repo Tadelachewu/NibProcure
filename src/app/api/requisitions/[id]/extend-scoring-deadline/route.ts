@@ -54,6 +54,7 @@ export async function POST(
 
     await prisma.auditLog.create({
         data: {
+            transactionId: requisition.transactionId,
             user: { connect: { id: userId } },
             action: 'EXTEND_SCORING_DEADLINE',
             entity: 'Requisition',
