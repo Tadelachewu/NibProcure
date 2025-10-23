@@ -76,7 +76,7 @@ export async function GET(request: Request) {
         }
         
         whereClause.AND = [
-          { status: 'RFQ_In_Progress' }, 
+          { status: 'PreApproved' }, 
           { deadline: { not: null } },
           { deadline: { gt: new Date() } },
           {
@@ -103,7 +103,6 @@ export async function GET(request: Request) {
             { status: 'PostApproved' },
             { status: { startsWith: 'Pending_' } },
             { status: 'RFQ_In_Progress'},
-            { status: 'Review_Complete' }
         ];
     } else {
       if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
