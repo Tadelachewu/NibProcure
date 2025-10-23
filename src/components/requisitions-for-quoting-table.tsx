@@ -84,6 +84,9 @@ export function RequisitionsForQuotingTable() {
     if (req.status === 'PostApproved') {
         return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
     }
+     if (req.status === 'Awarded') {
+        return <Badge variant="default" className="bg-green-600">Awarded</Badge>;
+    }
     if (req.status === 'PreApproved') {
         return <Badge variant="default" className="bg-blue-500 text-white">Ready for RFQ</Badge>;
     }
@@ -94,7 +97,7 @@ export function RequisitionsForQuotingTable() {
     }
 
     // Logic for after bidding deadline has passed
-    if (deadlinePassed) {
+    if ((req.status === 'Accepting_Quotes' && deadlinePassed) || ['Scoring_In_Progress', 'Scoring_Complete'].includes(req.status)) {
         const hasCommittee = (req.financialCommitteeMemberIds?.length || 0) > 0 || (req.technicalCommitteeMemberIds?.length || 0) > 0;
 
         if (!hasCommittee) {
