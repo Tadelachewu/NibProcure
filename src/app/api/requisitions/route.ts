@@ -16,6 +16,26 @@ async function findApproverId(role: UserRole): Promise<string | null> {
     return user?.id || null;
 }
 
+function getNextStatusFromRole(role: string): string {
+    switch (role) {
+        case 'Manager_Procurement_Division':
+            return 'Pending_Managerial_Approval';
+        case 'Director_Supply_Chain_and_Property_Management':
+            return 'Pending_Director_Approval';
+        case 'VP_Resources_and_Facilities':
+            return 'Pending_VP_Approval';
+        case 'President':
+            return 'Pending_President_Approval';
+        case 'Committee_A_Member':
+            return 'Pending_Committee_A_Recommendation';
+        case 'Committee_B_Member':
+            return 'Pending_Committee_B_Review';
+        default:
+            return `Pending_${role}`;
+    }
+}
+
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const statusParam = searchParams.get('status');
@@ -91,10 +111,17 @@ export async function GET(request: Request) {
              whereClause.status = 'RFQ_In_Progress'
         } else if (isProcurementStaff) {
              whereClause.OR = [
-                { status: 'Review_Complete' }, // New status for ready to notify
+                { status: 'Review_Complete' },
                 { status: 'Approved', currentApproverId: null, NOT: { quotations: { some: { status: { in: ['Awarded', 'Partially_Awarded'] } } } } },
                 { status: 'RFQ_In_Progress' },
-                { status: { startsWith: 'Pending_' } }
+                { status: { in: [
+                    'Pending_Committee_A_Recommendation',
+                    'Pending_Committee_B_Review',
+                    'Pending_Managerial_Approval',
+                    'Pending_Director_Approval',
+                    'Pending_VP_Approval',
+                    'Pending_President_Approval'
+                ] } }
             ]
         } else {
             if (userPayload.role === 'Requester') {
@@ -339,11 +366,13 @@ export async function PATCH(
         }
     
     } else if (requisition.status.startsWith('Pending_')) {
-        const isCommitteeMember = user.role === 'Committee_A_Member' || user.role === 'Committee_B_Member';
-        const isCorrectCommittee = (requisition.status === 'Pending_Committee_A_Recommendation' && user.role === 'Committee_A_Member') || (requisition.status === 'Pending_Committee_B_Review' && user.role === 'Committee_B_Member');
-        const isDesignatedApprover = requisition.currentApproverId === userId;
+        const isCommitteeMember = user.role.endsWith('Committee_Member');
         
-        if (!isDesignatedApprover && !(isCommitteeMember && isCorrectCommittee)) {
+        const isDesignatedApprover = isCommitteeMember 
+            ? true // For committee decisions, any member can act
+            : requisition.currentApproverId === userId;
+        
+        if (!isDesignatedApprover) {
             return NextResponse.json({ error: 'You are not the designated reviewer for this award.' }, { status: 403 });
         }
         
@@ -361,33 +390,11 @@ export async function PATCH(
                  return NextResponse.json({ error: 'No approval tier configured for this award value.' }, { status: 400 });
             }
             
-            const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status.endsWith(step.role));
+            const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getNextStatusFromRole(step.role));
             
             if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
                 const nextStep = relevantTier.steps[currentStepIndex + 1];
-
-                switch (nextStep.role) {
-                    case 'Manager_Procurement_Division':
-                        dataToUpdate.status = 'Pending_Managerial_Approval';
-                        break;
-                    case 'Director_Supply_Chain_and_Property_Management':
-                        dataToUpdate.status = 'Pending_Director_Approval';
-                        break;
-                    case 'VP_Resources_and_Facilities':
-                        dataToUpdate.status = 'Pending_VP_Approval';
-                        break;
-                    case 'President':
-                        dataToUpdate.status = 'Pending_President_Approval';
-                        break;
-                    case 'Committee_A_Member':
-                        dataToUpdate.status = 'Pending_Committee_A_Recommendation';
-                        break;
-                    case 'Committee_B_Member':
-                        dataToUpdate.status = 'Pending_Committee_B_Review';
-                        break;
-                    default:
-                        dataToUpdate.status = `Pending_${nextStep.role}`;
-                }
+                dataToUpdate.status = getNextStatusFromRole(nextStep.role);
 
                 if (!nextStep.role.includes('Committee')) {
                     dataToUpdate.currentApproverId = await findApproverId(nextStep.role as UserRole);
@@ -521,5 +528,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    

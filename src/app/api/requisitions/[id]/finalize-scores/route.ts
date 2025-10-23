@@ -13,6 +13,26 @@ async function findApproverId(role: UserRole): Promise<string | null> {
     return user?.id || null;
 }
 
+function getNextStatusFromRole(role: string): string {
+    switch (role) {
+        case 'Manager_Procurement_Division':
+            return 'Pending_Managerial_Approval';
+        case 'Director_Supply_Chain_and_Property_Management':
+            return 'Pending_Director_Approval';
+        case 'VP_Resources_and_Facilities':
+            return 'Pending_VP_Approval';
+        case 'President':
+            return 'Pending_President_Approval';
+        case 'Committee_A_Member':
+            return 'Pending_Committee_A_Recommendation';
+        case 'Committee_B_Member':
+            return 'Pending_Committee_B_Review';
+        default:
+            return `Pending_${role}`;
+    }
+}
+
+
 export async function POST(
   request: Request,
   { params }: { params: { id:string } }
@@ -27,7 +47,6 @@ export async function POST(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
         
-        // Start transaction
         const result = await prisma.$transaction(async (tx) => {
             
             const allQuotes = await tx.quotation.findMany({ 
@@ -50,19 +69,17 @@ export async function POST(
             const winnerQuotes = allQuotes.filter(q => awardedVendorIds.includes(q.vendorId));
             const otherQuotes = allQuotes.filter(q => !awardedVendorIds.includes(q.vendorId));
 
-            // 1. Update winning quotes
             for (const quote of winnerQuotes) {
                 const award = awards[quote.vendorId];
                  await tx.quotation.update({
                     where: { id: quote.id },
                     data: {
                         status: award.items.length > 0 ? (awardStrategy === 'all' ? 'Awarded' : 'Partially_Awarded') : 'Rejected',
-                        rank: 1 // All winners get rank 1
+                        rank: 1
                     }
                 });
             }
             
-            // 2. Update standby quotes
             const standbyQuotes = otherQuotes.slice(0, 2);
             if (standbyQuotes.length > 0) {
                 for (let i = 0; i < standbyQuotes.length; i++) {
@@ -70,7 +87,6 @@ export async function POST(
                 }
             }
             
-            // 3. Reject all other quotes
             const rejectedQuoteIds = otherQuotes.slice(2).map(q => q.id);
             if (rejectedQuoteIds.length > 0) {
                 await tx.quotation.updateMany({ where: { id: { in: rejectedQuoteIds } }, data: { status: 'Rejected', rank: null } });
@@ -82,31 +98,7 @@ export async function POST(
 
             if (relevantTier.steps.length > 0) {
                 const firstStep = relevantTier.steps[0];
-                
-                // Standardize the status based on the role.
-                switch (firstStep.role) {
-                    case 'Manager_Procurement_Division':
-                        nextStatus = 'Pending_Managerial_Approval';
-                        break;
-                    case 'Director_Supply_Chain_and_Property_Management':
-                        nextStatus = 'Pending_Director_Approval';
-                        break;
-                    case 'VP_Resources_and_Facilities':
-                        nextStatus = 'Pending_VP_Approval';
-                        break;
-                    case 'President':
-                        nextStatus = 'Pending_President_Approval';
-                        break;
-                    case 'Committee_A_Member':
-                        nextStatus = 'Pending_Committee_A_Recommendation';
-                        break;
-                    case 'Committee_B_Member':
-                        nextStatus = 'Pending_Committee_B_Review';
-                        break;
-                    default:
-                        // Fallback, should not be hit with proper config
-                        nextStatus = `Pending_${firstStep.role}`;
-                }
+                nextStatus = getNextStatusFromRole(firstStep.role);
 
                 if (!firstStep.role.includes('Committee')) {
                     nextApproverId = await findApproverId(firstStep.role as UserRole);
@@ -116,8 +108,7 @@ export async function POST(
                 }
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.replace(/_/g, ' ')} for approval.`;
             } else {
-                // If a tier has no steps, it is considered approved and ready for vendor notification
-                nextStatus = 'Approved';
+                nextStatus = 'Review_Complete';
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier, which has no approval steps. Approved for vendor notification.`;
             }
             
