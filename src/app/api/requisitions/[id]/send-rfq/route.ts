@@ -72,7 +72,8 @@ export async function POST(
     const updatedRequisition = await prisma.purchaseRequisition.update({
         where: { id },
         data: {
-            status: 'RFQ_In_Progress',
+            // Do NOT change the status. It should remain PreApproved.
+            // The combination of PreApproved + a deadline makes it an active RFQ.
             allowedVendorIds: finalVendorIds,
             deadline: deadline ? new Date(deadline) : undefined,
             cpoAmount: cpoAmount,
@@ -135,3 +136,5 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    

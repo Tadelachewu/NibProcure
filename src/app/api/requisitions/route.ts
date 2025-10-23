@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { getUserByToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
-import { differenceInMinutes, format } from 'date-fns';
+import { differenceInMinutes, format, isPast } from 'date-fns';
 
 
 function getNextStatusFromRole(role: string): string {
@@ -76,12 +76,25 @@ export async function GET(request: Request) {
         }
         
         whereClause.AND = [
-          { status: 'RFQ_In_Progress' },
+          // This is the critical fix: An RFQ is "open" if it's PreApproved AND the deadline has not passed.
+          { status: 'PreApproved' }, 
+          { deadline: { not: null } },
+          { deadline: { gt: new Date() } },
           {
             OR: [
               { allowedVendorIds: { isEmpty: true } },
               { allowedVendorIds: { has: userPayload.user.vendorId } },
             ],
+          },
+           {
+            // Also, ensure the vendor has not already submitted a quote
+            NOT: {
+              quotations: {
+                some: {
+                  vendorId: userPayload.user.vendorId,
+                },
+              },
+            },
           },
         ];
 
@@ -89,7 +102,6 @@ export async function GET(request: Request) {
          whereClause.OR = [
             { status: 'PreApproved' },
             { status: 'PostApproved' },
-            { status: 'RFQ_In_Progress' },
             { status: { startsWith: 'Pending_' } }
         ];
     } else {
@@ -178,7 +190,7 @@ export async function PATCH(
             auditAction = 'REJECT_REQUISITION';
             auditDetails = `Requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
         } else { // Department head approves
-             dataToUpdate.status = 'PreApproved';
+             dataToUpdate.status = 'PreApproved'; // This is the fix. The status is now distinct.
              dataToUpdate.currentApproverId = null; 
              auditAction = 'PRE_APPROVE_REQUISITION';
              auditDetails = `Requisition ${id} was pre-approved by ${user.role.replace(/_/g, ' ')} with comment: "${comment}". Ready for RFQ.`;
@@ -235,7 +247,7 @@ export async function PATCH(
                 auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
             } else {
                 console.log(`[PATCH] This is the final approval step.`);
-                dataToUpdate.status = 'PostApproved'; 
+                dataToUpdate.status = 'PostApproved'; // This is the fix. The final status is distinct.
                 dataToUpdate.currentApproverId = null;
                 console.log(`[PATCH] Setting status to PostApproved.`);
                 auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
@@ -460,3 +472,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
