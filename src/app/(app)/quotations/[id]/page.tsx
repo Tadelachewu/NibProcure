@@ -2132,7 +2132,7 @@ const AwardCenterDialog = ({
                         <AlertDialogTitle>Confirm Award Decision</AlertDialogTitle>
                         <AlertDialogDescription>
                             You are about to finalize the award based on the <strong>{awardStrategy === 'item' ? 'Best Offer Per Item' : 'Single Best Vendor'}</strong> strategy.
-                            This will notify the selected vendor(s) and cannot be undone.
+                            This will initiate the final approval workflow.
                         </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -2683,7 +2683,7 @@ export default function QuotationDetailsPage() {
       if (isDeadlinePassed && !isAwarded && !isScoringComplete) return 'committee';
       if (isDeadlinePassed && isScoringComplete && !isAwarded) return 'award';
       if (requisition.status.startsWith('Pending')) return 'award';
-      if (requisition.status === 'Approved' && isAwarded) return 'award';
+      if (requisition.status === 'PostApproved' && isAwarded) return 'award';
       if (isAccepted) return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
       if (isAwarded) return 'award';
       return 'rfq'; // Default fallback
@@ -2723,7 +2723,7 @@ export default function QuotationDetailsPage() {
   }
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
-  const isReadyForNotification = requisition.status === 'Approved' && isAwarded;
+  const isReadyForNotification = requisition.status === 'PostApproved' && isAwarded;
 
   return (
     <div className="space-y-6">
@@ -2948,7 +2948,7 @@ export default function QuotationDetailsPage() {
             <Card className="mt-6 border-amber-500">
                  <CardHeader>
                     <CardTitle>Action Required: Notify Vendor</CardTitle>
-                    <CardDescription>The award has passed committee review. You may now notify the winning vendor.</CardDescription>
+                    <CardDescription>The award has passed all reviews. You may now notify the winning vendor.</CardDescription>
                 </CardHeader>
                 <CardFooter>
                      <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
@@ -2995,6 +2995,7 @@ export default function QuotationDetailsPage() {
     
 
     
+
 
 
 
