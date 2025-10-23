@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -2676,18 +2677,18 @@ export default function QuotationDetailsPage() {
 
   const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
       if (!requisition) return 'rfq';
+      const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+
       if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
-      
-      const inBiddingProcess = requisition.status === 'Accepting_Quotes';
+      if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
+      if (requisition.status === 'Accepting_Quotes' && deadlinePassed) return 'committee';
+
       const inScoringProcess = requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
-      const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
-
-      if (inBiddingProcess) return 'rfq';
-
       if (inScoringProcess) {
           return isScoringComplete ? 'award' : 'committee';
       }
       
+      const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
       if (inReviewProcess) return 'award';
 
       if (isAccepted) {
@@ -3005,3 +3006,4 @@ export default function QuotationDetailsPage() {
     
 
     
+

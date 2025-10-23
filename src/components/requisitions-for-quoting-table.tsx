@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -73,8 +74,8 @@ export function RequisitionsForQuotingTable() {
   }
 
   const getStatusBadge = (req: PurchaseRequisition) => {
-    const hasAwardedQuote = req.quotations?.some(q => ['Awarded', 'Partially_Awarded', 'Standby', 'Declined', 'Accepted', 'Failed'].includes(q.status));
-    
+    const quoteCount = req.quotations?.length || 0;
+
     if (req.status === 'PostApproved') {
         return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
     }
@@ -83,10 +84,10 @@ export function RequisitionsForQuotingTable() {
         return <Badge variant="default" className="bg-blue-500 text-white">Ready for RFQ</Badge>;
     }
     
-    if (req.status === 'RFQ_In_Progress') {
+    if (req.status === 'Accepting_Quotes') {
         const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
         if (!deadlinePassed) {
-            return <Badge variant="outline">Accepting Quotes</Badge>;
+            return <Badge variant="outline">Accepting Quotes ({quoteCount} submitted)</Badge>;
         }
 
         const hasCommittee = (req.financialCommitteeMemberIds?.length || 0) > 0 || (req.technicalCommitteeMemberIds?.length || 0) > 0;
@@ -103,6 +104,14 @@ export function RequisitionsForQuotingTable() {
         }
 
         return <Badge variant="secondary">Scoring in Progress</Badge>;
+    }
+
+    if(req.status === 'Scoring_In_Progress') {
+        return <Badge variant="secondary">Scoring in Progress</Badge>
+    }
+
+     if(req.status === 'Scoring_Complete') {
+        return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>
     }
     
     // For pending review statuses
