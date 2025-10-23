@@ -45,8 +45,8 @@ export async function POST(
 
     if (requisition) {
         const assignedMemberIds = new Set([
-            ...requisition.financialCommitteeMemberIds.map(m => m.id),
-            ...requisition.technicalCommitteeMemberIds.map(m => m.id)
+            ...(requisition.financialCommitteeMembers || []).map(m => m.id),
+            ...(requisition.technicalCommitteeMembers || []).map(m => m.id)
         ]);
 
         const submittedMemberIds = new Set(requisition.committeeAssignments.filter(a => a.scoresSubmitted).map(a => a.userId));
