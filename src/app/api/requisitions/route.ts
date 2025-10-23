@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -33,29 +34,23 @@ function getNextStatusFromRole(role: string): string {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const statusParam = searchParams.get('status');
+  const forVendor = searchParams.get('forVendor');
+  const approverId = searchParams.get('approverId');
   const forQuoting = searchParams.get('forQuoting');
   const forReview = searchParams.get('forReview');
-  const approverId = searchParams.get('approverId');
-  console.log(`--- REQUISITIONS GET Request ---`);
-  console.log(`[GET] searchParams:`, searchParams.toString());
-
 
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.split(' ')[1];
   let userPayload: { user: User, role: UserRole } | null = null;
   if(token) {
     userPayload = await getUserByToken(token);
-    console.log(`[GET] Authenticated user: ${userPayload?.user.name}, Role: ${userPayload?.role}`);
   }
 
   try {
-    let whereClause: any = {};
+    const whereClause: any = {};
     
     if (forReview === 'true' && userPayload) {
-        console.log(`[GET] 'forReview' flag is true. Constructing review query.`);
-        const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
-        const userId = userPayload.user.id;
-
+        const userRole = userPayload.role;
         const reviewStatuses = [
             'Pending_Committee_A_Recommendation',
             'Pending_Committee_B_Review',
@@ -64,30 +59,28 @@ export async function GET(request: Request) {
             'Pending_VP_Approval',
             'Pending_President_Approval'
         ];
-        console.log(`[GET] Base review statuses being checked:`, reviewStatuses);
 
         if (userRole === 'Committee_A_Member') {
-          whereClause = { status: 'Pending_Committee_A_Recommendation' };
+             whereClause.status = 'Pending_Committee_A_Recommendation';
         } else if (userRole === 'Committee_B_Member') {
-          whereClause = { status: 'Pending_Committee_B_Review' };
-        } else if (
-          userRole === 'Manager_Procurement_Division' || 
-          userRole === 'Director_Supply_Chain_and_Property_Management' || 
-          userRole === 'VP_Resources_and_Facilities' || 
-          userRole === 'President'
-        ) {
-          whereClause = { 
-            currentApproverId: userId,
-            status: { in: reviewStatuses }
-          };
+            whereClause.status = 'Pending_Committee_B_Review';
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-           whereClause = { status: { in: reviewStatuses } };
+             whereClause.status = { in: reviewStatuses };
         } else {
-          console.log(`[GET] User role ${userRole} has no specific review logic. Returning empty.`);
-          return NextResponse.json([]);
+            // For hierarchical approvers
+            whereClause.currentApproverId = userPayload.user.id;
         }
-        console.log(`[GET] Final whereClause for review:`, JSON.stringify(whereClause, null, 2));
 
+    } else if (forVendor === 'true') {
+        if (!userPayload || !userPayload.user.vendorId) {
+             return NextResponse.json({ error: 'Unauthorized: No valid vendor found for this user.' }, { status: 403 });
+        }
+        
+        whereClause.status = 'RFQ_In_Progress';
+        whereClause.OR = [
+          { allowedVendorIds: { isEmpty: true } }, // 'all' vendors
+          { allowedVendorIds: { has: userPayload.user.vendorId } },
+        ];
     } else if (forQuoting) {
          whereClause.OR = [
             { status: 'PreApproved' },
@@ -103,15 +96,16 @@ export async function GET(request: Request) {
         whereClause.requesterId = userPayload.user.id;
       }
     }
-    console.log(`[GET] Final whereClause for non-review query:`, JSON.stringify(whereClause, null, 2));
 
 
     const requisitions = await prisma.purchaseRequisition.findMany({
       where: whereClause,
       include: {
         requester: true,
+        department: true,
         quotations: {
           select: {
+            vendorId: true,
             status: true
           }
         },
@@ -123,17 +117,16 @@ export async function GET(request: Request) {
         createdAt: 'desc',
       },
     });
-    console.log(`[GET] Found ${requisitions.length} requisitions from database.`);
 
     const formattedRequisitions = requisitions.map(req => ({
         ...req,
         requesterName: req.requester.name,
+        department: req.department?.name || 'N/A'
     }));
     
-    console.log(`--- REQUISITIONS GET Request END ---`);
     return NextResponse.json(formattedRequisitions);
   } catch (error) {
-    console.error('[GET] Failed to fetch requisitions:', error);
+    console.error('Failed to fetch requisitions:', error);
     if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to fetch requisitions', details: error.message }, { status: 500 });
     }
@@ -190,6 +183,7 @@ export async function PATCH(
         console.log(`[PATCH] Handling hierarchical approval.`);
         
         let isDesignatedApprover = false;
+        
         if (requisition.status === 'Pending_Committee_A_Recommendation') {
             isDesignatedApprover = user.role === 'Committee_A_Member';
         } else if (requisition.status === 'Pending_Committee_B_Review') {
@@ -253,7 +247,7 @@ export async function PATCH(
                     requisition: { connect: { id: id } },
                     author: { connect: { id: userId } },
                     decision: status === 'Approved' ? 'APPROVED' : 'REJECTED',
-                    decisionBody: minute.decisionBody,
+                    decisionBody: user.role.replace(/_/g, ' '),
                     justification: minute.justification,
                     attendees: {
                         connect: minute.attendeeIds.map((id: string) => ({ id }))
