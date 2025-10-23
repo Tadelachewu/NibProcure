@@ -74,50 +74,49 @@ export function RequisitionsForQuotingTable() {
 
   const getStatusBadge = (req: PurchaseRequisition) => {
     const quoteCount = req.quotations?.length || 0;
+    const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
+    const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
 
+    // Handle final review and notification states first
+    if (req.status.startsWith('Pending_')) {
+      return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status.replace(/_/g, ' ')}</Badge>;
+    }
     if (req.status === 'PostApproved') {
         return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
     }
-    
     if (req.status === 'PreApproved') {
         return <Badge variant="default" className="bg-blue-500 text-white">Ready for RFQ</Badge>;
     }
     
-    if (req.status === 'Accepting_Quotes') {
-        const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
-        if (!deadlinePassed) {
-            return <Badge variant="outline">Accepting Quotes ({quoteCount} submitted)</Badge>;
+    // Logic for when bidding is active
+    if (req.status === 'Accepting_Quotes' && !deadlinePassed) {
+        return <Badge variant="outline">Accepting Quotes ({quoteCount} submitted)</Badge>;
+    }
+
+    // Logic for after bidding deadline has passed
+    if (deadlinePassed) {
+        const hasCommittee = (req.financialCommitteeMemberIds?.length || 0) > 0 || (req.technicalCommitteeMemberIds?.length || 0) > 0;
+
+        if (!hasCommittee) {
+             return <Badge variant="destructive">Ready for Committee Assignment</Badge>;
         }
 
-        const hasCommittee = (req.financialCommitteeMemberIds?.length || 0) > 0 || (req.technicalCommitteeMemberIds?.length || 0) > 0;
-        if (!hasCommittee) {
-            return <Badge variant="destructive">Ready for Committee Assignment</Badge>;
-        }
-        
         const assignedMemberIds = new Set([...(req.financialCommitteeMemberIds || []), ...(req.technicalCommitteeMemberIds || [])]);
         const submittedMemberIds = new Set(req.committeeAssignments?.filter(a => a.scoresSubmitted).map(a => a.userId));
         const allHaveScored = assignedMemberIds.size > 0 && [...assignedMemberIds].every(id => submittedMemberIds.has(id));
 
         if (allHaveScored) {
-             return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
+            return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
+        }
+        
+        if (scoringDeadlinePassed) {
+            return <Badge variant="destructive" className="animate-pulse">Scoring Overdue</Badge>
         }
 
         return <Badge variant="secondary">Scoring in Progress</Badge>;
     }
-
-    if(req.status === 'Scoring_In_Progress') {
-        return <Badge variant="secondary">Scoring in Progress</Badge>
-    }
-
-     if(req.status === 'Scoring_Complete') {
-        return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>
-    }
     
-    // For pending review statuses
-    if (req.status.startsWith('Pending_')) {
-        return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status.replace(/_/g, ' ')}</Badge>;
-    }
-    
+    // Default fallback badge
     return <Badge variant="outline">{req.status.replace(/_/g, ' ')}</Badge>;
   }
 
