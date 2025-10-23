@@ -5,14 +5,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User, UserRole } from '@/lib/types';
 
-
-async function findApproverId(role: UserRole): Promise<string | null> {
-    const user = await prisma.user.findFirst({
-        where: { role: role.replace(/ /g, '_') }
-    });
-    return user?.id || null;
-}
-
 function getNextStatusFromRole(role: string): string {
     switch (role) {
         case 'Manager_Procurement_Division':
@@ -28,6 +20,7 @@ function getNextStatusFromRole(role: string): string {
         case 'Committee_B_Member':
             return 'Pending_Committee_B_Review';
         default:
+            // Fallback for any other roles, though the primary ones should be covered.
             return `Pending_${role}`;
     }
 }
@@ -38,9 +31,11 @@ export async function POST(
   { params }: { params: { id:string } }
 ) {
     const requisitionId = params.id;
+    console.log(`--- FINALIZE-SCORES START for REQ: ${requisitionId} ---`);
     try {
         const body = await request.json();
         const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue } = body;
+        console.log(`[FINALIZE-SCORES] Award Value: ${totalAwardValue}`);
 
         const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
         if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Admin' && user.role !== 'Committee')) {
@@ -60,6 +55,7 @@ export async function POST(
             
             const approvalMatrix = await tx.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
             const relevantTier = approvalMatrix.find(tier => totalAwardValue >= tier.min && (tier.max === null || totalAwardValue <= tier.max));
+            console.log(`[FINALIZE-SCORES] Matched Tier: ${relevantTier?.name || 'NONE'}`);
 
             if (!relevantTier) {
                 throw new Error(`No approval tier found for an award value of ${totalAwardValue.toLocaleString()} ETB. Please configure the Approval Matrix.`);
@@ -98,17 +94,22 @@ export async function POST(
 
             if (relevantTier.steps.length > 0) {
                 const firstStep = relevantTier.steps[0];
+                console.log(`[FINALIZE-SCORES] First approval step role: ${firstStep.role}`);
                 nextStatus = getNextStatusFromRole(firstStep.role);
+                console.log(`[FINALIZE-SCORES] Generated initial status: ${nextStatus}`);
 
                 if (!firstStep.role.includes('Committee')) {
-                    nextApproverId = await findApproverId(firstStep.role as UserRole);
+                    const approverUser = await tx.user.findFirst({ where: { role: firstStep.role }});
+                    nextApproverId = approverUser?.id || null;
                     if (!nextApproverId) {
                         throw new Error(`Could not find a user for the role: ${firstStep.role.replace(/_/g, ' ')}`);
                     }
                 }
+                console.log(`[FINALIZE-SCORES] Next Approver ID: ${nextApproverId}`);
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.replace(/_/g, ' ')} for approval.`;
             } else {
                 nextStatus = 'Review_Complete';
+                 console.log(`[FINALIZE-SCORES] No approval steps for this tier. Setting status to: ${nextStatus}`);
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier, which has no approval steps. Approved for vendor notification.`;
             }
             
@@ -124,6 +125,7 @@ export async function POST(
                     totalPrice: totalAwardValue
                 }
             });
+            console.log(`[FINALIZE-SCORES] Requisition ${requisitionId} updated. New status: ${updatedRequisition.status}, Approver: ${updatedRequisition.currentApproverId}`);
 
             await tx.auditLog.create({
                 data: {
@@ -141,11 +143,12 @@ export async function POST(
             maxWait: 10000,
             timeout: 20000,
         });
-
+        
+        console.log(`--- FINALIZE-SCORES END for REQ: ${requisitionId} ---`);
         return NextResponse.json({ message: 'Award process finalized and routed for review.', requisition: result });
 
     } catch (error) {
-        console.error("Failed to finalize scores and award:", error);
+        console.error("[FINALIZE-SCORES] Failed to finalize scores and award:", error);
         if (error instanceof Error) {
             return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
         }
