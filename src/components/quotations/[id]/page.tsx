@@ -2723,7 +2723,7 @@ export default function QuotationDetailsPage() {
   }
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
-  const isReadyForFinalAction = requisition.status === 'Ready_to_Notify';
+  const isReadyForFinalAction = requisition.status === 'Review_Complete';
 
   return (
     <div className="space-y-6">
@@ -2996,6 +2996,7 @@ export default function QuotationDetailsPage() {
     
 
     
+
 
 
 
