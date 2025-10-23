@@ -36,8 +36,6 @@ export async function GET(
     // Formatting data to match client-side expectations
     const formatted = {
         ...requisition,
-        // DO NOT format status here. Let the client handle it.
-        // status: requisition.status.replace(/_/g, ' '),
         requesterName: requisition.requester.name || 'Unknown',
         financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
         technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),

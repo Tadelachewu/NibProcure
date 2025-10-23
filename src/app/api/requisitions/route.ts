@@ -130,7 +130,6 @@ export async function GET(request: Request) {
 
     const formattedRequisitions = requisitions.map(req => ({
         ...req,
-        status: req.status.replace(/_/g, ' '),
         requesterName: req.requester.name,
     }));
     
@@ -258,37 +257,37 @@ export async function PATCH(
         }
 
     // --- Logic for Initial Departmental Approvals ---
-    } else {
-        console.log(`[PATCH] Handling standard status change.`);
-         if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
-            const isRequester = requisition.requesterId === userId;
-            if (!isRequester) return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
-            const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
-            if (department?.headId) {
-                dataToUpdate.currentApproverId = department.headId;
-                dataToUpdate.status = 'Pending_Approval';
-            } else { // No department head, auto-approve
-                dataToUpdate.status = 'Approved';
-                dataToUpdate.currentApproverId = null;
-            }
-             auditDetails = `Requisition ${id} submitted for approval.`;
-             auditAction = 'SUBMIT_FOR_APPROVAL';
-        } else if (requisition.status === 'Pending_Approval') {
-            if (requisition.currentApproverId !== userId) return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
-            if (newStatus === 'Rejected') {
-                dataToUpdate.status = 'Rejected';
-                dataToUpdate.currentApproverId = null;
-                auditAction = 'REJECT_REQUISITION';
-                auditDetails = `Requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
-            } else { // Department head approves
-                 dataToUpdate.status = 'Approved';
-                 dataToUpdate.currentApproverId = null; 
-                 auditAction = 'APPROVE_REQUISITION';
-                 auditDetails = `Requisition ${id} was approved by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
-            }
-        } else {
-            return NextResponse.json({ error: 'Invalid operation for current status.' }, { status: 400 });
+    } else if (requisition.status === 'Pending_Approval') {
+        console.log(`[PATCH] Handling standard departmental approval.`);
+        if (requisition.currentApproverId !== userId) {
+            return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
         }
+        if (newStatus === 'Rejected') {
+            dataToUpdate.status = 'Rejected';
+            dataToUpdate.currentApproverId = null;
+            auditAction = 'REJECT_REQUISITION';
+            auditDetails = `Requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
+        } else { // Department head approves
+             dataToUpdate.status = 'Approved';
+             dataToUpdate.currentApproverId = null; 
+             auditAction = 'APPROVE_REQUISITION';
+             auditDetails = `Requisition ${id} was approved by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
+        }
+    } else if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
+        const isRequester = requisition.requesterId === userId;
+        if (!isRequester) return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
+        const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
+        if (department?.headId) {
+            dataToUpdate.currentApproverId = department.headId;
+            dataToUpdate.status = 'Pending_Approval';
+        } else { // No department head, auto-approve
+            dataToUpdate.status = 'Approved';
+            dataToUpdate.currentApproverId = null;
+        }
+         auditDetails = `Requisition ${id} submitted for approval.`;
+         auditAction = 'SUBMIT_FOR_APPROVAL';
+    } else {
+        return NextResponse.json({ error: 'Invalid operation for current status.' }, { status: 400 });
     }
     
     const updatedRequisition = await prisma.purchaseRequisition.update({

@@ -2683,7 +2683,7 @@ export default function QuotationDetailsPage() {
       if (requisition.status === 'RFQ_In_Progress' && !isDeadlinePassed) return 'rfq';
       if (isDeadlinePassed && !isAwarded && !isScoringComplete) return 'committee';
       if (isDeadlinePassed && isScoringComplete && !isAwarded) return 'award';
-      if (requisition.status.startsWith('Pending') || requisition.status === 'Review_Complete' || requisition.status === 'Ready_to_Notify') return 'award';
+      if (requisition.status.startsWith('Pending') || requisition.status === 'Review_Complete') return 'award';
       if (isAccepted) return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
       if (isAwarded) return 'award';
       return 'rfq'; // Default fallback
@@ -2996,6 +2996,7 @@ export default function QuotationDetailsPage() {
     
 
     
+
 
 
 
