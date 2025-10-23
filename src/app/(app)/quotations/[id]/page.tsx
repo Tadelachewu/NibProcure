@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -651,7 +652,6 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         </Button>
     );
 
-
     return (
         <Card className="border-dashed">
             <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
@@ -674,8 +674,9 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                                     <TooltipContent>
                                         <p>You are not authorized to manage committees.</p>
                                     </TooltipContent>
-                                </TooltipProvider>
-                            )}
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl flex flex-col max-h-[90vh]">
                          <Form {...form}>
@@ -1705,9 +1706,9 @@ const ScoringProgressTracker = ({
                                 ) : member.isOverdue ? (
                                     <>
                                      <Badge variant="destructive" className="mr-auto"><AlertCircle className="mr-1 h-3 w-3" />Overdue</Badge>
-                                     <Button size="sm" variant="secondary" onClick={()={() => { setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
+                                     <Button size="sm" variant="secondary" onClick={()=>{ setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
                                      <Button size="sm" variant="secondary" onClick={() => onCommitteeUpdate(true)}>Replace</Button>
-                                     <Button size="sm" variant="outline" onClick={()={() => { setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
+                                     <Button size="sm" variant="outline" onClick={()=>{ setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
                                     </>
                                 ) : (
                                      <Badge variant="secondary">Pending</Badge>
@@ -2676,20 +2677,25 @@ export default function QuotationDetailsPage() {
   const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
       if (!requisition) return 'rfq';
       if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
-      if (requisition.status === 'Accepting_Quotes') return 'rfq';
       
-      if (['Scoring_In_Progress', 'Scoring_Complete'].includes(requisition.status) && !isAwarded) {
+      const inBiddingProcess = requisition.status === 'Accepting_Quotes';
+      const inScoringProcess = requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
+      const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
+
+      if (inBiddingProcess) return 'rfq';
+
+      if (inScoringProcess) {
           return isScoringComplete ? 'award' : 'committee';
       }
-
-      if (requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded') {
-        return 'award';
-      }
+      
+      if (inReviewProcess) return 'award';
 
       if (isAccepted) {
         return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
       }
       
+      if (isAwarded) return 'award';
+
       return 'rfq'; // Default fallback
   };
   const currentStep = getCurrentStep();
