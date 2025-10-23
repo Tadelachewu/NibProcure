@@ -56,6 +56,7 @@ export async function POST(
 
             const newPO = await tx.purchaseOrder.create({
                 data: {
+                    transactionId: requisition.transactionId,
                     requisition: { connect: { id: requisition.id } },
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
