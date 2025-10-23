@@ -2,12 +2,13 @@
 'use server';
 
 import { NextResponse } from 'next/server';
-import type { PurchaseRequisition, User, UserRole, Vendor, Minute } from '@/lib/types';
+import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
 import { getUserByToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { differenceInMinutes, format } from 'date-fns';
+
 
 function getNextStatusFromRole(role: string): string {
     switch (role) {
@@ -24,13 +25,18 @@ function getNextStatusFromRole(role: string): string {
         case 'Committee_B_Member':
             return 'Pending_Committee_B_Review';
         default:
+            // Fallback for any other roles, though the primary ones should be covered.
             return `Pending_${role}`;
     }
 }
 
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const statusParam = searchParams.get('status');
+  const forQuoting = searchParams.get('forQuoting');
   const forReview = searchParams.get('forReview');
+  const approverId = searchParams.get('approverId');
   console.log(`--- REQUISITIONS GET Request ---`);
   console.log(`[GET] searchParams:`, searchParams.toString());
 
@@ -52,12 +58,12 @@ export async function GET(request: Request) {
         const userId = userPayload.user.id;
 
         const reviewStatuses = [
-          'Pending_Committee_A_Recommendation',
-          'Pending_Committee_B_Review',
-          'Pending_Managerial_Approval',
-          'Pending_Director_Approval',
-          'Pending_VP_Approval',
-          'Pending_President_Approval'
+            'Pending_Committee_A_Recommendation',
+            'Pending_Committee_B_Review',
+            'Pending_Managerial_Approval',
+            'Pending_Director_Approval',
+            'Pending_VP_Approval',
+            'Pending_President_Approval'
         ];
         console.log(`[GET] Base review statuses being checked:`, reviewStatuses);
 
@@ -83,32 +89,37 @@ export async function GET(request: Request) {
         }
         console.log(`[GET] Final whereClause for review:`, JSON.stringify(whereClause, null, 2));
 
+    } else if (forQuoting) {
+         whereClause.OR = [
+            { status: 'Approved' },
+            { status: 'Review_Complete'},
+            { status: 'RFQ_In_Progress' },
+            { status: { startsWith: 'Pending_' } }
+        ];
     } else {
-        const statusParam = searchParams.get('status');
-        const forQuoting = searchParams.get('forQuoting');
-        const approverId = searchParams.get('approverId');
-        
-        if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
-        if (forQuoting) {
-            whereClause.OR = [
-                { status: 'Review_Complete' },
-                { status: 'Approved', currentApproverId: null, NOT: { quotations: { some: { status: { in: ['Awarded', 'Partially_Awarded'] } } } } },
-                { status: 'RFQ_In_Progress' },
-                { status: { startsWith: 'Pending_' } }
-            ]
-        }
-        if (approverId) whereClause.currentApproverId = approverId;
-        if (userPayload && userPayload.role === 'Requester' && !forQuoting && !statusParam && !approverId && !forReview) {
-          whereClause.requesterId = userPayload.user.id;
-        }
-        console.log(`[GET] Final whereClause for non-review query:`, JSON.stringify(whereClause, null, 2));
+      if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
+      if (approverId) whereClause.currentApproverId = approverId;
+      
+      // If no other filters, requester sees only their own
+      if (userPayload && userPayload.role === 'Requester' && !statusParam && !approverId) {
+        whereClause.requesterId = userPayload.user.id;
+      }
     }
+    console.log(`[GET] Final whereClause for non-review query:`, JSON.stringify(whereClause, null, 2));
 
 
     const requisitions = await prisma.purchaseRequisition.findMany({
       where: whereClause,
       include: {
         requester: true,
+        quotations: {
+          select: {
+            status: true
+          }
+        },
+        financialCommitteeMembers: { select: { id: true } },
+        technicalCommitteeMembers: { select: { id: true } },
+        committeeAssignments: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -162,6 +173,7 @@ export async function PATCH(
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
 
+    // --- Logic for Hierarchical Post-Award Approvals ---
     if (requisition.status.startsWith('Pending_')) {
         console.log(`[PATCH] Handling hierarchical approval.`);
         
@@ -201,6 +213,7 @@ export async function PATCH(
             const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getNextStatusFromRole(step.role));
             console.log(`[PATCH] Current step index in tier: ${currentStepIndex}`);
             
+            // Check if there is a next step
             if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
                 const nextStep = relevantTier.steps[currentStepIndex + 1];
                 console.log(`[PATCH] Found next step: ${nextStep.role}`);
@@ -215,8 +228,9 @@ export async function PATCH(
                 console.log(`[PATCH] Advancing to next step. New Status: ${dataToUpdate.status}, Next Approver: ${dataToUpdate.currentApproverId}`);
                 auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
             } else {
+                // This is the final approval step in the chain
                 console.log(`[PATCH] This is the final approval step.`);
-                dataToUpdate.status = 'Review_Complete';
+                dataToUpdate.status = 'Review_Complete'; // ** THE FIX **
                 dataToUpdate.currentApproverId = null;
                 console.log(`[PATCH] Setting status to Review_Complete.`);
                 auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
@@ -242,6 +256,7 @@ export async function PATCH(
             auditDetails += ` Minute recorded.`;
         }
 
+    // --- Logic for Initial Departmental Approvals ---
     } else {
         console.log(`[PATCH] Handling standard status change.`);
          if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
@@ -251,14 +266,19 @@ export async function PATCH(
             if (department?.headId) {
                 dataToUpdate.currentApproverId = department.headId;
                 dataToUpdate.status = 'Pending_Approval';
-            } else {
+            } else { // No department head, auto-approve
                 dataToUpdate.status = 'Approved';
                 dataToUpdate.currentApproverId = null;
             }
         } else if (requisition.status === 'Pending_Approval') {
             if (requisition.currentApproverId !== userId) return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
-            dataToUpdate.status = newStatus;
-            dataToUpdate.currentApproverId = null; 
+            if (newStatus === 'Rejected') {
+                dataToUpdate.status = 'Rejected';
+                dataToUpdate.currentApproverId = null;
+            } else {
+                 dataToUpdate.status = 'Approved'; // ** THE FIX ** - Departmental approval is just 'Approved'
+                 dataToUpdate.currentApproverId = null; 
+            }
         } else {
             return NextResponse.json({ error: 'Invalid operation for current status.' }, { status: 400 });
         }

@@ -2686,7 +2686,7 @@ export default function QuotationDetailsPage() {
       if (requisition.status.startsWith('Pending') || requisition.status === 'Review_Complete') return 'award';
       if (isAccepted) return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
       if (isAwarded) return 'award';
-      return 'rfq';
+      return 'rfq'; // Default fallback
   };
   const currentStep = getCurrentStep();
   
@@ -2992,19 +2992,3 @@ export default function QuotationDetailsPage() {
     </div>
   );
 }
-    
-
-    
-
-
-
-
-
-
-
-
-
-
-
-    
-
