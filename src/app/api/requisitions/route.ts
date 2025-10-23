@@ -71,13 +71,11 @@ export async function GET(request: Request) {
           userRole === 'VP_Resources_and_Facilities' || 
           userRole === 'President'
         ) {
-          // This logic fetches requisitions where the current user is the designated next approver
           whereClause = { 
             currentApproverId: userId,
             status: { in: reviewStatuses }
           };
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-           // Admin/PO can see all items currently in any review state
            whereClause = { status: { in: reviewStatuses } };
         } else {
           console.log(`[GET] User role ${userRole} has no specific review logic. Returning empty.`);
@@ -86,7 +84,6 @@ export async function GET(request: Request) {
         console.log(`[GET] Final whereClause for review:`, JSON.stringify(whereClause, null, 2));
 
     } else {
-        // Fallback to original logic if not for review
         const statusParam = searchParams.get('status');
         const forQuoting = searchParams.get('forQuoting');
         const approverId = searchParams.get('approverId');
@@ -165,17 +162,23 @@ export async function PATCH(
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
 
-    // --- LOGIC FOR HIERARCHICAL, POST-AWARD APPROVALS ---
     if (requisition.status.startsWith('Pending_')) {
         console.log(`[PATCH] Handling hierarchical approval.`);
-        const isCommitteeApproval = requisition.status.includes('Committee');
         
-        const isDesignatedApprover = isCommitteeApproval 
-            ? user.role.replace(/ /g, '_') === requisition.status.replace('Pending_', '')
-            : requisition.currentApproverId === userId;
+        let isDesignatedApprover = false;
+        const currentStatus = requisition.status;
+        const userRole = user.role.replace(/ /g, '_') as UserRole;
         
+        if (currentStatus === 'Pending_Committee_A_Recommendation') {
+            isDesignatedApprover = userRole === 'Committee_A_Member';
+        } else if (currentStatus === 'Pending_Committee_B_Review') {
+            isDesignatedApprover = userRole === 'Committee_B_Member';
+        } else {
+            isDesignatedApprover = requisition.currentApproverId === userId;
+        }
+
         if (!isDesignatedApprover) {
-            console.error(`[PATCH] Unauthorized. User ${userId} is not the designated approver.`);
+            console.error(`[PATCH] Unauthorized. User ${userId} (${userRole}) is not the designated approver for status ${currentStatus}.`);
             return NextResponse.json({ error: 'You are not the designated approver for this item.' }, { status: 403 });
         }
         
@@ -239,7 +242,6 @@ export async function PATCH(
             auditDetails += ` Minute recorded.`;
         }
 
-    // --- LOGIC FOR INITIAL DEPARTMENTAL APPROVAL ---
     } else {
         console.log(`[PATCH] Handling standard status change.`);
          if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
@@ -284,14 +286,11 @@ export async function PATCH(
   } catch (error) {
     console.error('[PATCH] Failed to update requisition:', error);
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-// Keep other handlers like POST and DELETE as they are
-// ... POST and DELETE functions from the original file ...
 
 export async function POST(request: Request) {
   try {
