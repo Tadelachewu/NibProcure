@@ -93,6 +93,7 @@ export async function GET(request: Request) {
          whereClause.OR = [
             { status: 'Approved' },
             { status: 'Review_Complete'},
+            { status: 'Ready_to_Notify'},
             { status: 'RFQ_In_Progress' },
             { status: { startsWith: 'Pending_' } }
         ];
@@ -177,20 +178,20 @@ export async function PATCH(
     if (requisition.status.startsWith('Pending_')) {
         console.log(`[PATCH] Handling hierarchical approval.`);
         
-        let isDesignatedApprover = false;
-        const currentStatus = requisition.status;
-        const userRole = user.role.replace(/ /g, '_') as UserRole;
+        const isCommitteeA = requisition.status === 'Pending_Committee_A_Recommendation';
+        const isCommitteeB = requisition.status === 'Pending_Committee_B_Review';
         
-        if (currentStatus === 'Pending_Committee_A_Recommendation') {
-            isDesignatedApprover = userRole === 'Committee_A_Member';
-        } else if (currentStatus === 'Pending_Committee_B_Review') {
-            isDesignatedApprover = userRole === 'Committee_B_Member';
+        let isDesignatedApprover = false;
+        if (isCommitteeA) {
+            isDesignatedApprover = user.role === 'Committee_A_Member';
+        } else if (isCommitteeB) {
+            isDesignatedApprover = user.role === 'Committee_B_Member';
         } else {
             isDesignatedApprover = requisition.currentApproverId === userId;
         }
 
         if (!isDesignatedApprover) {
-            console.error(`[PATCH] Unauthorized. User ${userId} (${userRole}) is not the designated approver for status ${currentStatus}.`);
+            console.error(`[PATCH] Unauthorized. User ${userId} (${user.role}) is not the designated approver for status ${requisition.status}.`);
             return NextResponse.json({ error: 'You are not the designated approver for this item.' }, { status: 403 });
         }
         
@@ -230,7 +231,7 @@ export async function PATCH(
             } else {
                 // This is the final approval step in the chain
                 console.log(`[PATCH] This is the final approval step.`);
-                dataToUpdate.status = 'Review_Complete'; // ** THE FIX **
+                dataToUpdate.status = 'Review_Complete'; 
                 dataToUpdate.currentApproverId = null;
                 console.log(`[PATCH] Setting status to Review_Complete.`);
                 auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
@@ -270,14 +271,20 @@ export async function PATCH(
                 dataToUpdate.status = 'Approved';
                 dataToUpdate.currentApproverId = null;
             }
+             auditDetails = `Requisition ${id} submitted for approval.`;
+             auditAction = 'SUBMIT_FOR_APPROVAL';
         } else if (requisition.status === 'Pending_Approval') {
             if (requisition.currentApproverId !== userId) return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
             if (newStatus === 'Rejected') {
                 dataToUpdate.status = 'Rejected';
                 dataToUpdate.currentApproverId = null;
-            } else {
-                 dataToUpdate.status = 'Approved'; // ** THE FIX ** - Departmental approval is just 'Approved'
+                auditAction = 'REJECT_REQUISITION';
+                auditDetails = `Requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
+            } else { // Department head approves
+                 dataToUpdate.status = 'Approved';
                  dataToUpdate.currentApproverId = null; 
+                 auditAction = 'APPROVE_REQUISITION';
+                 auditDetails = `Requisition ${id} was approved by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
             }
         } else {
             return NextResponse.json({ error: 'Invalid operation for current status.' }, { status: 400 });
