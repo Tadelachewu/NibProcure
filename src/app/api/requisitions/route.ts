@@ -75,11 +75,16 @@ export async function GET(request: Request) {
              return NextResponse.json({ error: 'Unauthorized: No valid vendor found for this user.' }, { status: 403 });
         }
         
-        whereClause.status = 'RFQ_In_Progress';
-        whereClause.OR = [
-          { allowedVendorIds: { isEmpty: true } }, // 'all' vendors
-          { allowedVendorIds: { has: userPayload.user.vendorId } },
+        whereClause.AND = [
+          { status: 'RFQ_In_Progress' },
+          {
+            OR: [
+              { allowedVendorIds: { isEmpty: true } },
+              { allowedVendorIds: { has: userPayload.user.vendorId } },
+            ],
+          },
         ];
+
     } else if (forQuoting) {
          whereClause.OR = [
             { status: 'PreApproved' },
