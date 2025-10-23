@@ -36,7 +36,8 @@ export async function GET(
     // Formatting data to match client-side expectations
     const formatted = {
         ...requisition,
-        status: requisition.status.replace(/_/g, ' '),
+        // DO NOT format status here. Let the client handle it.
+        // status: requisition.status.replace(/_/g, ' '),
         requesterName: requisition.requester.name || 'Unknown',
         financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
         technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
@@ -108,3 +109,4 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
