@@ -51,7 +51,6 @@ export async function POST(
             select: { id: true }
         });
         
-        // **FIX:** Validate that the number of all verified vendors meets the quorum.
         if (verifiedVendors.length < rfqQuorum) {
             return NextResponse.json({ error: `Quorum not met. There are only ${verifiedVendors.length} verified vendors available, but the minimum required is ${rfqQuorum}.` }, { status: 400 });
         }
