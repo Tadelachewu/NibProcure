@@ -46,7 +46,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const whereClause: any = {};
+    let whereClause: any = {};
     
     if (forReview === 'true' && userPayload) {
         const userRole = userPayload.role;
@@ -75,26 +75,39 @@ export async function GET(request: Request) {
              return NextResponse.json({ error: 'Unauthorized: No valid vendor found for this user.' }, { status: 403 });
         }
         
-        whereClause.AND = [
-          { status: 'RFQ_In_Progress' }, 
-          { deadline: { not: null } },
-          { deadline: { gt: new Date() } },
-          {
-            OR: [
-              { allowedVendorIds: { isEmpty: true } },
-              { allowedVendorIds: { has: userPayload.user.vendorId } },
-            ],
-          },
-           {
-            // Also, ensure the vendor has not already submitted a quote
-            NOT: {
-              quotations: {
-                some: {
-                  vendorId: userPayload.user.vendorId,
-                },
-              },
+        whereClause.OR = [
+            // Condition A: Open for bidding
+            {
+                AND: [
+                    { status: 'RFQ_In_Progress' }, 
+                    { deadline: { not: null } },
+                    { deadline: { gt: new Date() } },
+                    {
+                        OR: [
+                        { allowedVendorIds: { isEmpty: true } },
+                        { allowedVendorIds: { has: userPayload.user.vendorId } },
+                        ],
+                    },
+                    {
+                        NOT: {
+                        quotations: {
+                            some: {
+                            vendorId: userPayload.user.vendorId,
+                            },
+                        },
+                        },
+                    },
+                ]
             },
-          },
+            // Condition B: Awarded to this vendor
+            {
+                quotations: {
+                    some: {
+                        vendorId: userPayload.user.vendorId,
+                        status: { in: ['Awarded', 'Partially_Awarded', 'Accepted', 'Invoice_Submitted'] }
+                    }
+                }
+            }
         ];
 
     } else if (forQuoting) {
