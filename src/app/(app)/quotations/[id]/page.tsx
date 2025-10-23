@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -676,9 +674,8 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                                     <TooltipContent>
                                         <p>You are not authorized to manage committees.</p>
                                     </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        )}
+                                </TooltipProvider>
+                            )}
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl flex flex-col max-h-[90vh]">
                          <Form {...form}>
@@ -1666,8 +1663,7 @@ const ScoringProgressTracker = ({
         });
     }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id]);
     
-    const overdueMembers = scoringStatus.filter(s => s.isOverdue);
-    const allHaveScored = scoringStatus.every(s => s.hasSubmittedFinalScores);
+    const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
     const getButtonState = () => {
         if (isAwarded) return { text: "Award Process Complete", disabled: true };
@@ -1709,9 +1705,9 @@ const ScoringProgressTracker = ({
                                 ) : member.isOverdue ? (
                                     <>
                                      <Badge variant="destructive" className="mr-auto"><AlertCircle className="mr-1 h-3 w-3" />Overdue</Badge>
-                                     <Button size="sm" variant="secondary" onClick={() => { setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
+                                     <Button size="sm" variant="secondary" onClick={()={() => { setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
                                      <Button size="sm" variant="secondary" onClick={() => onCommitteeUpdate(true)}>Replace</Button>
-                                     <Button size="sm" variant="outline" onClick={() => { setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
+                                     <Button size="sm" variant="outline" onClick={()={() => { setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
                                     </>
                                 ) : (
                                      <Badge variant="secondary">Pending</Badge>
@@ -2940,7 +2936,7 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-        {currentStep === 'award' && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && quotations.length > 0 && (role === 'Procurement_Officer' || role === 'Admin') && (
+        {((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && (
              <ScoringProgressTracker 
                 requisition={requisition}
                 quotations={quotations}
@@ -3003,4 +2999,3 @@ export default function QuotationDetailsPage() {
     
 
     
-
