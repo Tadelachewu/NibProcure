@@ -79,7 +79,7 @@ export async function GET(request: Request) {
             // Condition A: Open for bidding
             {
                 AND: [
-                    { status: 'RFQ_In_Progress' }, 
+                    { status: 'Accepting_Quotes' }, 
                     { deadline: { not: null } },
                     { deadline: { gt: new Date() } },
                     {
@@ -115,7 +115,10 @@ export async function GET(request: Request) {
             { status: 'PreApproved' },
             { status: 'PostApproved' },
             { status: { startsWith: 'Pending_' } },
-            { status: 'RFQ_In_Progress'},
+            { status: 'Accepting_Quotes' },
+            { status: 'Scoring_In_Progress' },
+            { status: 'Scoring_Complete' },
+            { status: 'Awarded' },
         ];
     } else {
       if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
@@ -485,5 +488,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    

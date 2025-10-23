@@ -98,18 +98,8 @@ export default function VendorDashboardPage() {
 
                     if (vendorQuote && awardStatuses.includes(vendorQuote.status)) {
                         vendorAwards.push(req);
-                    }
-                     else if (
-                        req.status === 'RFQ_In_Progress' && 
-                        req.deadline && !isPast(new Date(req.deadline)) &&
-                        !vendorQuote
-                    ) {
-                        const isPublic = !req.allowedVendorIds || req.allowedVendorIds.length === 0;
-                        const isPrivateAndAllowed = req.allowedVendorIds && req.allowedVendorIds.includes(user.vendorId!);
-
-                        if (isPublic || isPrivateAndAllowed) {
-                           availableForQuoting.push(req);
-                        }
+                    } else if (req.status === 'Accepting_Quotes') {
+                        availableForQuoting.push(req);
                     }
                 });
 
@@ -139,7 +129,7 @@ export default function VendorDashboardPage() {
           if (vendorQuote.status === 'Submitted') return 'Submitted';
         }
         
-        const anAwardedQuote = req.quotations?.find(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Partially_Awarded');
+        const anAwardedQuote = req.quotations?.find(q => ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status));
         if (anAwardedQuote && (!vendorQuote || vendorQuote.status === 'Rejected')) {
             return 'Not Awarded';
         }
@@ -315,4 +305,3 @@ export default function VendorDashboardPage() {
         </div>
     )
 }
-    
