@@ -77,8 +77,6 @@ export function RequisitionsForQuotingTable() {
     const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
 
-    // --- Start New Hierarchical Logic ---
-
     // 1. Handle terminal or high-priority statuses first
     if (req.status === 'PO_Created') {
         return <Badge variant="default" className="bg-green-700">PO Created</Badge>;
@@ -103,18 +101,18 @@ export function RequisitionsForQuotingTable() {
         return <Badge variant="outline">Accepting Quotes ({quoteCount} submitted)</Badge>;
     }
 
-    // 4. Handle all post-bidding-deadline states (scoring, awarding etc.)
-    if ((req.status === 'Accepting_Quotes' && deadlinePassed) || ['Scoring_In_Progress', 'Scoring_Complete'].includes(req.status)) {
-        
-        const hasCommittee = (req.financialCommitteeMemberIds?.length || 0) > 0 || (req.technicalCommitteeMemberIds?.length || 0) > 0;
-        
-        // 4a. No committee assigned yet
+    // 4. Handle all post-bidding-deadline states
+    if (deadlinePassed) {
+        const hasCommittee = !!req.committeeName;
+
         if (!hasCommittee) {
              return <Badge variant="destructive">Ready for Committee Assignment</Badge>;
         }
 
-        // 4b. Committee is assigned, check scoring progress
-        const assignedMemberIds = new Set([...(req.financialCommitteeMemberIds || []), ...(req.technicalCommitteeMemberIds || [])]);
+        const assignedMemberIds = new Set([
+            ...(req.financialCommitteeMemberIds || []).map(m => m.id), 
+            ...(req.technicalCommitteeMemberIds || []).map(m => m.id)
+        ]);
         const submittedMemberIds = new Set(req.committeeAssignments?.filter(a => a.scoresSubmitted).map(a => a.userId));
         const allHaveScored = assignedMemberIds.size > 0 && [...assignedMemberIds].every(id => submittedMemberIds.has(id));
 
@@ -122,12 +120,10 @@ export function RequisitionsForQuotingTable() {
             return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
         }
         
-        // 4c. Not all have scored, check for deadline
         if (scoringDeadlinePassed) {
             return <Badge variant="destructive" className="animate-pulse">Scoring Overdue</Badge>;
         }
         
-        // 4d. Default state if committee is assigned and not overdue
         return <Badge variant="secondary">Scoring in Progress</Badge>;
     }
     
