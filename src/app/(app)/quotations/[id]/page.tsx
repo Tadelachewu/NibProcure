@@ -1787,7 +1787,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             let width = pdfWidth - 20; // with margin
             let height = width / ratio;
 
-            if (height > pdfHeight - 20) {
+             if (height > pdfHeight - 20) {
                  height = pdfHeight - 20;
                  width = height * ratio;
             }
@@ -2270,7 +2270,12 @@ const CommitteeActions = ({
     
     const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
     const allQuotesScored = quotations.length > 0 && userScoredQuotesCount === quotations.length;
-    const scoresAlreadyFinalized = user.committeeAssignments?.some(a => a.requisitionId === requisition.id && a.scoresSubmitted) || false;
+    
+    // Corrected logic: Check the live assignment status from the user object
+    const scoresAlreadyFinalized = useMemo(() => {
+        return user.committeeAssignments?.find(a => a.requisitionId === requisition.id)?.scoresSubmitted || false;
+    }, [user.committeeAssignments, requisition.id]);
+
 
     const handleSubmitScores = async () => {
         setIsSubmitting(true);
@@ -3006,4 +3011,18 @@ export default function QuotationDetailsPage() {
     
 
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

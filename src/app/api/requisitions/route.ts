@@ -177,8 +177,6 @@ export async function PATCH(
   try {
     const body = await request.json();
     const { id, status, userId, comment, minute } = body;
-    console.log(`--- REQUISITIONS PATCH Request for REQ: ${id} ---`);
-    console.log(`[PATCH] Received action: status=${status}, userId=${userId}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
 
@@ -194,14 +192,12 @@ export async function PATCH(
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
-    console.log(`[PATCH] Current requisition status: ${requisition.status}`);
 
     let dataToUpdate: any = {};
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
 
     if (requisition.status === 'Pending_Approval') {
-        console.log(`[PATCH] Handling standard departmental approval.`);
         if (requisition.currentApproverId !== userId) {
             return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
         }
@@ -221,8 +217,6 @@ export async function PATCH(
         dataToUpdate.approverComment = comment;
 
     } else if (requisition.status.startsWith('Pending_')) {
-        console.log(`[PATCH] Handling hierarchical approval.`);
-        
         const isCommitteeA = requisition.status === 'Pending_Committee_A_Recommendation';
         const isCommitteeB = requisition.status === 'Pending_Committee_B_Review';
         let isDesignatedApprover = false;
@@ -236,7 +230,6 @@ export async function PATCH(
         }
 
         if (!isDesignatedApprover) {
-            console.error(`[PATCH] Unauthorized. User ${userId} (${user.role}) is not the designated approver for status ${requisition.status}.`);
             return NextResponse.json({ error: 'You are not the designated approver for this item.' }, { status: 403 });
         }
         
@@ -262,8 +255,15 @@ export async function PATCH(
                     await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
                 }
                 await tx.quotation.deleteMany({ where: { requisitionId: id } });
+                
+                // Step 3: Reset committee assignments
+                await tx.committeeAssignment.updateMany({
+                    where: { requisitionId: id },
+                    data: { scoresSubmitted: false }
+                });
 
-                // Step 3: Update the requisition to reset its state
+
+                // Step 4: Update the requisition to reset its state
                 const updatedReq = await tx.purchaseRequisition.update({
                     where: { id: id },
                     data: {
@@ -280,7 +280,7 @@ export async function PATCH(
                     }
                 });
 
-                // Step 4: Log the action
+                // Step 5: Log the action
                 await tx.auditLog.create({
                     data: {
                         transactionId: requisition.transactionId,
@@ -292,8 +292,6 @@ export async function PATCH(
                         details: `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. All quotes and scores have been reset. Reason: "${comment}".`,
                     }
                 });
-
-                console.log(`[PATCH] Award rejected and all related data purged. New status: Rejected.`);
                 return NextResponse.json(updatedReq);
              });
         } else if (newStatus === 'Approved') { // Using "Approved" as the action from the frontend
@@ -304,14 +302,11 @@ export async function PATCH(
             if (!relevantTier) {
                  return NextResponse.json({ error: 'No approval tier configured for this award value.' }, { status: 400 });
             }
-            console.log(`[PATCH] Found relevant tier: ${relevantTier.name}`);
             
             const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getNextStatusFromRole(step.role));
-            console.log(`[PATCH] Current step index in tier: ${currentStepIndex}`);
             
             if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
                 const nextStep = relevantTier.steps[currentStepIndex + 1];
-                console.log(`[PATCH] Found next step: ${nextStep.role}`);
                 dataToUpdate.status = getNextStatusFromRole(nextStep.role);
 
                 if (!nextStep.role.includes('Committee')) {
@@ -324,13 +319,10 @@ export async function PATCH(
                 } else {
                      dataToUpdate.currentApprover = { disconnect: true };
                 }
-                console.log(`[PATCH] Advancing to next step. New Status: ${dataToUpdate.status}`);
                 auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
             } else {
-                console.log(`[PATCH] This is the final approval step.`);
                 dataToUpdate.status = 'PostApproved'; // This is the fix. The final status is distinct.
                 dataToUpdate.currentApprover = { disconnect: true };
-                console.log(`[PATCH] Setting status to PostApproved.`);
                 auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
             }
             auditAction = 'APPROVE_AWARD_STEP';
@@ -388,7 +380,6 @@ export async function PATCH(
         }
     });
 
-    console.log(`--- REQUISITIONS PATCH Request END for REQ: ${id} ---`);
     return NextResponse.json(updatedRequisition);
   } catch (error) {
     console.error('[PATCH] Failed to update requisition:', error);
