@@ -67,7 +67,6 @@ export function ApprovalsTable() {
     if (!user) return;
     try {
       setLoading(true);
-      // Fetch all requisitions assigned to this user for departmental approval, regardless of current status
       const apiUrl = `/api/requisitions?status=Pending_Approval,PreApproved,Rejected&approverId=${user.id}`;
       
       const response = await fetch(apiUrl);
