@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, AlertTriangle } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -2281,10 +2281,11 @@ const CommitteeActions = ({
     const allQuotesScored = quotations.length > 0 && userScoredQuotesCount === quotations.length;
     
     // Corrected logic: Check the live assignment status from the user object
-    const scoresAlreadyFinalized = useMemo(() => {
-        return user.committeeAssignments?.find(a => a.requisitionId === requisition.id)?.scoresSubmitted || false;
+    const assignment = useMemo(() => {
+        return user.committeeAssignments?.find(a => a.requisitionId === requisition.id);
     }, [user.committeeAssignments, requisition.id]);
-
+    
+    const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
 
     const handleSubmitScores = async () => {
         setIsSubmitting(true);
@@ -2316,6 +2317,23 @@ const CommitteeActions = ({
         return null;
     }
 
+    if (scoresAlreadyFinalized) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Committee Actions</CardTitle>
+                    <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button variant="outline" disabled>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Scores Submitted
+                    </Button>
+                </CardContent>
+            </Card>
+        )
+    }
+
     return (
         <Card>
             <CardHeader>
@@ -2326,33 +2344,26 @@ const CommitteeActions = ({
                 <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {quotations.length} quotes.</p>
             </CardContent>
             <CardFooter>
-                 {scoresAlreadyFinalized ? (
-                    <Button variant="outline" disabled>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Scores Submitted
-                    </Button>
-                ) : (
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button disabled={!allQuotesScored || isSubmitting}>
-                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Submit Final Scores
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Are you sure you want to submit?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This will finalize your scores for this requisition. You will not be able to make further changes.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                )}
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button disabled={!allQuotesScored || isSubmitting}>
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Submit Final Scores
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure you want to submit?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will finalize your scores for this requisition. You will not be able to make further changes.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </CardFooter>
         </Card>
     );
@@ -2430,7 +2441,7 @@ export default function QuotationDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const { user, allUsers, role, rfqSenderSetting, login } = useAuth();
+  const { user, allUsers, role, rfqSenderSetting, committeeQuorum } = useAuth();
   const id = params.id as string;
   
   const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
@@ -2751,6 +2762,9 @@ export default function QuotationDetailsPage() {
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
   const isReadyForNotification = requisition.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
+  const quorumMet = quotations.length >= committeeQuorum;
+  const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && quorumMet;
+
 
   return (
     <div className="space-y-6">
@@ -2816,7 +2830,7 @@ export default function QuotationDetailsPage() {
                     onRfqSent={fetchRequisitionAndQuotes}
                     isAuthorized={isAuthorized}
                 />
-                 <Card className="border-dashed h-full">
+                <Card className="border-dashed h-full">
                     <CardHeader>
                         <CardTitle>Evaluation Committee</CardTitle>
                         <CardDescription>Committee assignment will be available after the quotation deadline has passed.</CardDescription>
@@ -2835,21 +2849,41 @@ export default function QuotationDetailsPage() {
             isAuthorized={isAuthorized}
         />
         
-        {currentStep === 'committee' && canManageCommittees && quotations.length > 0 && (
-            <EvaluationCommitteeManagement
-                requisition={requisition} 
-                onCommitteeUpdated={fetchRequisitionAndQuotes}
-                open={isCommitteeDialogOpen}
-                onOpenChange={setCommitteeDialogOpen}
-                isAuthorized={isAuthorized}
-            />
+        {currentStep === 'committee' && canManageCommittees && (
+            readyForCommitteeAssignment ? (
+                <EvaluationCommitteeManagement
+                    requisition={requisition}
+                    onCommitteeUpdated={fetchRequisitionAndQuotes}
+                    open={isCommitteeDialogOpen}
+                    onOpenChange={setCommitteeDialogOpen}
+                    isAuthorized={isAuthorized}
+                />
+            ) : (
+                isDeadlinePassed && !quorumMet && (
+                    <Card className="border-dashed">
+                        <CardHeader>
+                            <CardTitle>Evaluation Committee</CardTitle>
+                            <CardDescription>Assign scorers to evaluate vendor quotations.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-center py-10">
+                            <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                            <p className="font-semibold">Quorum Not Met</p>
+                            <p className="text-sm text-muted-foreground">
+                                Only {quotations.length} of the required {committeeQuorum} quotes have been submitted.
+                                <br />
+                                Committee assignment is not yet possible.
+                            </p>
+                        </CardContent>
+                    </Card>
+                )
+            )
         )}
 
 
         {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
             <>
                 {/* Always render committee management when in award step so dialog can open */}
-                {canManageCommittees && currentStep !== 'committee' && quotations.length > 0 && (
+                {canManageCommittees && currentStep !== 'committee' && readyForCommitteeAssignment && (
                      <div className="hidden">
                         <EvaluationCommitteeManagement
                             requisition={requisition}
@@ -3046,6 +3080,7 @@ export default function QuotationDetailsPage() {
     
 
     
+
 
 
 
