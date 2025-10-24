@@ -207,12 +207,12 @@ export async function PATCH(
         }
         if (newStatus === 'Rejected') {
             dataToUpdate.status = 'Rejected';
-            dataToUpdate.currentApproverId = null;
+            dataToUpdate.currentApprover = { disconnect: true };
             auditAction = 'REJECT_REQUISITION';
             auditDetails = `Requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
         } else { // Department head approves
-             dataToUpdate.status = 'PreApproved'; // This is the fix. The status is now distinct.
-             dataToUpdate.currentApproverId = null; 
+             dataToUpdate.status = 'PreApproved'; 
+             dataToUpdate.currentApprover = { disconnect: true };
              auditAction = 'PRE_APPROVE_REQUISITION';
              auditDetails = `Requisition ${id} was pre-approved by ${user.role.replace(/_/g, ' ')} with comment: "${comment}". Ready for RFQ.`;
         }
@@ -239,7 +239,7 @@ export async function PATCH(
         }
         
         if (newStatus === 'Rejected') {
-             dataToUpdate.currentApproverId = null;
+             dataToUpdate.currentApprover = { disconnect: true };
              dataToUpdate.status = 'Rejected';
              auditAction = 'REJECT_AWARD';
              auditDetails = `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. Reason: "${comment}".`;
@@ -264,16 +264,20 @@ export async function PATCH(
 
                 if (!nextStep.role.includes('Committee')) {
                     const nextApprover = await prisma.user.findFirst({ where: { role: nextStep.role }});
-                    dataToUpdate.currentApproverId = nextApprover?.id || null;
+                    if (nextApprover) {
+                      dataToUpdate.currentApprover = { connect: { id: nextApprover.id } };
+                    } else {
+                      dataToUpdate.currentApprover = { disconnect: true };
+                    }
                 } else {
-                     dataToUpdate.currentApproverId = null;
+                     dataToUpdate.currentApprover = { disconnect: true };
                 }
-                console.log(`[PATCH] Advancing to next step. New Status: ${dataToUpdate.status}, Next Approver: ${dataToUpdate.currentApproverId}`);
+                console.log(`[PATCH] Advancing to next step. New Status: ${dataToUpdate.status}`);
                 auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
             } else {
                 console.log(`[PATCH] This is the final approval step.`);
                 dataToUpdate.status = 'PostApproved'; // This is the fix. The final status is distinct.
-                dataToUpdate.currentApproverId = null;
+                dataToUpdate.currentApprover = { disconnect: true };
                 console.log(`[PATCH] Setting status to PostApproved.`);
                 auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
             }
@@ -303,11 +307,11 @@ export async function PATCH(
         if (!isRequester) return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
         const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
         if (department?.headId) {
-            dataToUpdate.currentApproverId = department.headId;
+            dataToUpdate.currentApprover = { connect: { id: department.headId } };
             dataToUpdate.status = 'Pending_Approval';
         } else { // No department head, auto-approve
             dataToUpdate.status = 'PreApproved';
-            dataToUpdate.currentApproverId = null;
+            dataToUpdate.currentApprover = { disconnect: true };
         }
          auditDetails = `Requisition ${id} submitted for approval.`;
          auditAction = 'SUBMIT_FOR_APPROVAL';
