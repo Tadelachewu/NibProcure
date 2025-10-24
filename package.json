@@ -15,7 +15,8 @@
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset --force",
     "postinstall": "prisma generate",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:codegen": "playwright codegen http://localhost:9002"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
