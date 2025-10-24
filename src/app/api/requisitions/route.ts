@@ -122,7 +122,12 @@ export async function GET(request: Request) {
         ];
     } else {
       if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
-      if (approverId) whereClause.currentApproverId = approverId;
+      if (approverId) {
+        whereClause.OR = [
+            { currentApproverId: approverId }, // Items currently pending this user's approval
+            { approverId: approverId }       // Items this user has already actioned
+        ];
+      }
       
       if (userPayload && userPayload.role === 'Requester' && !statusParam && !approverId) {
         whereClause.requesterId = userPayload.user.id;
@@ -488,3 +493,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
