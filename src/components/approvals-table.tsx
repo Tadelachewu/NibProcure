@@ -67,8 +67,8 @@ export function ApprovalsTable() {
     if (!user) return;
     try {
       setLoading(true);
-      // This is now highly specific: only get items pending departmental approval for this specific user.
-      const apiUrl = `/api/requisitions?status=Pending_Approval&approverId=${user.id}`;
+      // Fetch all requisitions assigned to this user for departmental approval, regardless of current status
+      const apiUrl = `/api/requisitions?status=Pending_Approval,PreApproved,Rejected&approverId=${user.id}`;
       
       const response = await fetch(apiUrl);
       if (!response.ok) {
@@ -166,6 +166,15 @@ export function ApprovalsTable() {
     }
   }
 
+  const getStatusVariant = (status: string) => {
+    switch (status.replace(/_/g, ' ')) {
+      case 'PreApproved': return 'default';
+      case 'Pending Approval': return 'secondary';
+      case 'Rejected': return 'destructive';
+      default: return 'outline';
+    }
+  };
+
 
   if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (error) return <div className="text-destructive">Error: {error}</div>;
@@ -174,9 +183,9 @@ export function ApprovalsTable() {
     <>
     <Card>
       <CardHeader>
-        <CardTitle>Pending Departmental Approvals</CardTitle>
+        <CardTitle>Departmental Approvals</CardTitle>
         <CardDescription>
-          Review and act on items waiting for your approval from your department.
+          Review and act on items from your department.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -189,7 +198,7 @@ export function ApprovalsTable() {
                 <TableHead>Title</TableHead>
                 <TableHead>Requester</TableHead>
                 <TableHead>Urgency</TableHead>
-                <TableHead>Created At</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -204,16 +213,18 @@ export function ApprovalsTable() {
                        <TableCell>
                         <Badge variant={getUrgencyVariant(req.urgency)}>{req.urgency}</Badge>
                       </TableCell>
-                      <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
+                       <TableCell>
+                        <Badge variant={getStatusVariant(req.status)}>{req.status.replace(/_/g, ' ')}</Badge>
+                      </TableCell>
                       <TableCell>
                       <div className="flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
-                              <Eye className="mr-2 h-4 w-4" /> View Details
+                              <Eye className="mr-2 h-4 w-4" /> Details
                           </Button>
-                          <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')}>
+                          <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={req.status !== 'Pending_Approval'}>
                               <Check className="mr-2 h-4 w-4" /> Approve
                           </Button>
-                          <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')}>
+                          <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={req.status !== 'Pending_Approval'}>
                               <X className="mr-2 h-4 w-4" /> Reject
                           </Button>
                       </div>
@@ -227,7 +238,7 @@ export function ApprovalsTable() {
                       <Inbox className="h-16 w-16 text-muted-foreground/50" />
                       <div className="space-y-1">
                         <p className="font-semibold">All caught up!</p>
-                        <p className="text-muted-foreground">No items are currently pending your approval.</p>
+                        <p className="text-muted-foreground">No items from your department require your attention.</p>
                       </div>
                     </div>
                   </TableCell>
