@@ -177,7 +177,7 @@ export function ApprovalsTable() {
 
 
   if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (error) return <div className="text-destructive">Error: {error}</div>;
+  if (error) return <div className="text-destructive">{error}</div>;
 
   return (
     <>

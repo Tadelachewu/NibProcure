@@ -216,6 +216,10 @@ export async function PATCH(
              auditAction = 'PRE_APPROVE_REQUISITION';
              auditDetails = `Requisition ${id} was pre-approved by ${user.role.replace(/_/g, ' ')} with comment: "${comment}". Ready for RFQ.`;
         }
+        // Set the approver who took the action
+        dataToUpdate.approver = { connect: { id: userId } };
+        dataToUpdate.approverComment = comment;
+
     } else if (requisition.status.startsWith('Pending_')) {
         console.log(`[PATCH] Handling hierarchical approval.`);
         
