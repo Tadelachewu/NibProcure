@@ -111,8 +111,9 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: isEditMode ? {
+        ...existingRequisition,
         requesterId: existingRequisition.requesterId,
-        department: existingRequisition.department,
+        department: user?.department || existingRequisition.department, // Prioritize current user's department
         title: existingRequisition.title,
         urgency: existingRequisition.urgency || 'Low',
         justification: existingRequisition.justification,
@@ -149,11 +150,12 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   });
 
   useEffect(() => {
-    if (user && !isEditMode) {
-      form.setValue('department', user.department || '');
-      form.setValue('requesterId', user.id || '');
+    // If user data loads after form initialization, update the fields
+    if (user) {
+        form.setValue('department', user.department || '');
+        form.setValue('requesterId', user.id || '');
     }
-  }, [user, isEditMode, form]);
+  }, [user, form]);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -186,7 +188,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
       };
       
       const body = isEditMode ? 
-        { ...formattedValues, id: existingRequisition.id, status: 'Pending Approval', userId: user?.id } : 
+        { ...formattedValues, id: existingRequisition.id, status: 'Pending_Approval', userId: user?.id } : 
         formattedValues;
       
       const response = await fetch('/api/requisitions', {
