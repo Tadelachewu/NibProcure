@@ -793,7 +793,7 @@ const RFQActionDialog = ({
     onClose,
     onSuccess,
 }: {
-    action: 'update' | 'cancel',
+    action: 'update' | 'cancel' | 'restart',
     requisition: PurchaseRequisition,
     isOpen: boolean,
     onClose: () => void,
@@ -814,7 +814,7 @@ const RFQActionDialog = ({
     
     const handleSubmit = async () => {
         if (!user) return;
-        if (!reason.trim()) {
+        if (action !== 'update' && !reason.trim()) {
             toast({ variant: 'destructive', title: 'Error', description: 'A reason must be provided.'});
             return;
         }
@@ -839,7 +839,7 @@ const RFQActionDialog = ({
                  const errorData = await response.json();
                 throw new Error(errorData.error || `Failed to ${action} RFQ.`);
             }
-            toast({ title: 'Success', description: `The RFQ has been successfully ${action === 'update' ? 'updated' : 'cancelled'}.`});
+            toast({ title: 'Success', description: `The RFQ has been successfully ${action === 'update' ? 'updated' : 'managed'}.`});
             onSuccess();
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
@@ -849,17 +849,24 @@ const RFQActionDialog = ({
         }
     };
 
+    const titles = {
+        update: 'Update RFQ Deadline',
+        cancel: 'Cancel RFQ',
+        restart: 'Restart RFQ (No Bids)'
+    };
+
+    const descriptions = {
+        update: "Provide a reason and set a new deadline for this RFQ. Vendors will be notified.",
+        cancel: "Provide a reason for cancelling this RFQ. This will revert the requisition to 'PreApproved' status and reject all submitted quotes.",
+        restart: "No bids were received for this RFQ. You can restart the process to send it out again, or cancel it entirely."
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
                 <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>{action === 'update' ? 'Update RFQ Deadline' : 'Cancel RFQ'}</DialogTitle>
-                    <DialogDescription>
-                        {action === 'update' 
-                            ? "Provide a reason and set a new deadline for this RFQ. Vendors will be notified."
-                            : "Provide a reason for cancelling this RFQ. This will revert the requisition to 'Approved' status and reject all submitted quotes."
-                        }
-                    </DialogDescription>
+                    <DialogTitle>{titles[action]}</DialogTitle>
+                    <DialogDescription>{descriptions[action]}</DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
                     {action === 'update' && (
@@ -898,16 +905,18 @@ const RFQActionDialog = ({
                             </div>
                         </div>
                     )}
+                     {action !== 'update' && (
                         <div>
-                        <Label htmlFor="reason">Reason for {action === 'update' ? 'Update' : 'Cancellation'}</Label>
+                        <Label htmlFor="reason">Reason for Action</Label>
                         <Textarea id="reason" value={reason} onChange={e => setReason(e.target.value)} className="mt-2" />
                     </div>
+                     )}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Close</Button></DialogClose>
-                    <Button onClick={handleSubmit} disabled={isSubmitting} variant={action === 'cancel' ? 'destructive' : 'default'}>
+                    <Button onClick={handleSubmit} disabled={isSubmitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                        Confirm {action === 'update' ? 'Update' : 'Cancellation'}
+                        Confirm {action.charAt(0).toUpperCase() + action.slice(1)}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -2440,6 +2449,7 @@ export default function QuotationDetailsPage() {
   const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isReportOpen, setReportOpen] = useState(false);
+  const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'update'});
 
   const isAwarded = useMemo(() => quotations.some(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Declined' || q.status === 'Failed' || q.status === 'Partially_Awarded' || q.status === 'Standby'), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
@@ -2740,6 +2750,7 @@ export default function QuotationDetailsPage() {
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
   const isReadyForNotification = requisition.status === 'PostApproved';
+  const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
 
   return (
     <div className="space-y-6">
@@ -2779,8 +2790,25 @@ export default function QuotationDetailsPage() {
                 </CardContent>
             </Card>
         )}
+        
+        {noBidsAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
+            <Card className="border-amber-500">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> RFQ Closed: No Bids Received</CardTitle>
+                    <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardDescription>
+                </CardHeader>
+                <CardFooter className="gap-2">
+                    <Button onClick={() => setActionDialog({isOpen: true, type: 'restart'})}>
+                        <RefreshCw className="mr-2 h-4 w-4" /> Restart RFQ
+                    </Button>
+                    <Button variant="destructive" onClick={() => setActionDialog({isOpen: true, type: 'cancel'})}>
+                        <XCircle className="mr-2 h-4 w-4" /> Cancel RFQ
+                    </Button>
+                </CardFooter>
+            </Card>
+        )}
 
-        {currentStep === 'rfq' && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && (
+        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && (
             <div className="grid md:grid-cols-2 gap-6 items-start">
                 <RFQDistribution 
                     requisition={requisition} 
@@ -2983,7 +3011,7 @@ export default function QuotationDetailsPage() {
                             }}
                         />
                     </Dialog>
-                </CardFooter>
+                </DialogFooter>
             </Card>
         )}
         
@@ -3005,6 +3033,13 @@ export default function QuotationDetailsPage() {
                 onClose={() => setReportOpen(false)}
             />
         )}
+        <RFQActionDialog 
+            action={actionDialog.type}
+            requisition={requisition}
+            isOpen={actionDialog.isOpen}
+            onClose={() => setActionDialog({isOpen: false, type: 'update'})}
+            onSuccess={fetchRequisitionAndQuotes}
+        />
     </div>
   );
 }

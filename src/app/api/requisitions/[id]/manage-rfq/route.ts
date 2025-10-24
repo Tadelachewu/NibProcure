@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { User } from '@/lib/types';
 
 
-type RFQAction = 'update' | 'cancel';
+type RFQAction = 'update' | 'cancel' | 'restart';
 
 export async function POST(
   request: Request,
@@ -35,7 +35,7 @@ export async function POST(
     }
 
     const validStatusesForAction: string[] = ['Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete'];
-    if (!validStatusesForAction.includes(requisition.status)) {
+    if (!validStatusesForAction.includes(requisition.status) && action !== 'restart') {
         return NextResponse.json({ error: 'This action is only available for requisitions with an active RFQ.' }, { status: 400 });
     }
 
@@ -56,13 +56,14 @@ export async function POST(
         auditDetails = `Updated RFQ deadline for requisition ${requisitionId} to ${new Date(newDeadline).toLocaleDateString()}. Reason: ${reason}`;
         break;
       case 'cancel':
-        await prisma.quotation.updateMany({ where: { requisitionId }, data: { status: 'Rejected' }});
+      case 'restart':
+        await prisma.quotation.deleteMany({ where: { requisitionId }});
         updatedRequisition = await prisma.purchaseRequisition.update({
             where: { id: requisitionId },
             data: { status: 'PreApproved', deadline: null }
         });
-        auditAction = 'CANCEL_RFQ';
-        auditDetails = `Cancelled RFQ for requisition ${requisitionId}. Reason: ${reason}`;
+        auditAction = action === 'cancel' ? 'CANCEL_RFQ' : 'RESTART_RFQ';
+        auditDetails = `${action === 'cancel' ? 'Cancelled' : 'Restarted'} RFQ for requisition ${requisitionId}. Reason: ${reason}`;
         break;
       default:
         return NextResponse.json({ error: 'Invalid action specified.' }, { status: 400 });
