@@ -109,19 +109,18 @@ export function RequisitionsForQuotingTable() {
              return <Badge variant="destructive">Ready for Committee Assignment</Badge>;
         }
 
-        const assignedMemberIds = new Set([
-            ...(req.financialCommitteeMemberIds || []).map(m => m.id), 
-            ...(req.technicalCommitteeMemberIds || []).map(m => m.id)
-        ]);
-        const submittedMemberIds = new Set(req.committeeAssignments?.filter(a => a.scoresSubmitted).map(a => a.userId));
-        const allHaveScored = assignedMemberIds.size > 0 && [...assignedMemberIds].every(id => submittedMemberIds.has(id));
-
-        if (allHaveScored) {
+        // IMPORTANT: Prioritize the explicit status from the DB if available
+        if (req.status === 'Scoring_Complete') {
             return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
         }
-        
+
         if (scoringDeadlinePassed) {
-            return <Badge variant="destructive" className="animate-pulse">Scoring Overdue</Badge>;
+             const allHaveScored = (req.financialCommitteeMemberIds || []).length > 0 && 
+                                  [...(req.financialCommitteeMemberIds || []), ...(req.technicalCommitteeMemberIds || [])]
+                                  .every(id => req.committeeAssignments?.some(a => a.userId === id && a.scoresSubmitted));
+            if (!allHaveScored) {
+                 return <Badge variant="destructive" className="animate-pulse">Scoring Overdue</Badge>;
+            }
         }
         
         return <Badge variant="secondary">Scoring in Progress</Badge>;
