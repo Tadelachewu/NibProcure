@@ -223,11 +223,13 @@ export async function PATCH(
     } else if (requisition.status.startsWith('Pending_')) {
         console.log(`[PATCH] Handling hierarchical approval.`);
         
+        const isCommitteeA = requisition.status === 'Pending_Committee_A_Recommendation';
+        const isCommitteeB = requisition.status === 'Pending_Committee_B_Review';
         let isDesignatedApprover = false;
         
-        if (requisition.status === 'Pending_Committee_A_Recommendation') {
+        if (isCommitteeA) {
             isDesignatedApprover = user.role === 'Committee_A_Member';
-        } else if (requisition.status === 'Pending_Committee_B_Review') {
+        } else if (isCommitteeB) {
             isDesignatedApprover = user.role === 'Committee_B_Member';
         } else {
             isDesignatedApprover = requisition.currentApproverId === userId;
@@ -239,11 +241,61 @@ export async function PATCH(
         }
         
         if (newStatus === 'Rejected') {
-             dataToUpdate.currentApprover = { disconnect: true };
-             dataToUpdate.status = 'Rejected';
-             auditAction = 'REJECT_AWARD';
-             auditDetails = `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. Reason: "${comment}".`;
-             console.log(`[PATCH] Award rejected. New status: Rejected.`);
+             return await prisma.$transaction(async (tx) => {
+                // Step 1: Find all related quotations and their descendants
+                const quotationsToDelete = await tx.quotation.findMany({
+                    where: { requisitionId: id },
+                    include: { scores: { include: { itemScores: { include: { scores: true } } } } }
+                });
+
+                const scoreSetIds = quotationsToDelete.flatMap(q => q.scores.map(s => s.id));
+                const itemScoreIds = quotationsToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
+
+                // Step 2: Delete in the correct order
+                if (itemScoreIds.length > 0) {
+                    await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
+                }
+                if (scoreSetIds.length > 0) {
+                    await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
+                }
+                if (scoreSetIds.length > 0) {
+                    await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
+                }
+                await tx.quotation.deleteMany({ where: { requisitionId: id } });
+
+                // Step 3: Update the requisition to reset its state
+                const updatedReq = await tx.purchaseRequisition.update({
+                    where: { id: id },
+                    data: {
+                        status: 'Rejected',
+                        currentApproverId: null,
+                        committeeName: null,
+                        committeePurpose: null,
+                        scoringDeadline: null,
+                        awardedQuoteItemIds: [],
+                        awardResponseDeadline: null,
+                        // Disconnect all committee members
+                        financialCommitteeMembers: { set: [] },
+                        technicalCommitteeMembers: { set: [] },
+                    }
+                });
+
+                // Step 4: Log the action
+                await tx.auditLog.create({
+                    data: {
+                        transactionId: requisition.transactionId,
+                        user: { connect: { id: user.id } },
+                        timestamp: new Date(),
+                        action: 'REJECT_AWARD',
+                        entity: 'Requisition',
+                        entityId: id,
+                        details: `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. All quotes and scores have been reset. Reason: "${comment}".`,
+                    }
+                });
+
+                console.log(`[PATCH] Award rejected and all related data purged. New status: Rejected.`);
+                return NextResponse.json(updatedReq);
+             });
         } else if (newStatus === 'Approved') { // Using "Approved" as the action from the frontend
             const approvalMatrix = await prisma.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
             const totalValue = requisition.totalPrice;
@@ -341,6 +393,9 @@ export async function PATCH(
   } catch (error) {
     console.error('[PATCH] Failed to update requisition:', error);
     if (error instanceof Error) {
+        if ((error as any).code === 'P2003') {
+            return NextResponse.json({ error: 'A foreign key constraint was violated. This may be due to attempting to delete a record that is still referenced elsewhere.', details: (error as any).meta }, { status: 409 });
+        }
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
