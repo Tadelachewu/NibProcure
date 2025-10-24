@@ -2449,7 +2449,7 @@ export default function QuotationDetailsPage() {
   const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isReportOpen, setReportOpen] = useState(false);
-  const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'update'});
+  const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
   const isAwarded = useMemo(() => quotations.some(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Declined' || q.status === 'Failed' || q.status === 'Partially_Awarded' || q.status === 'Standby'), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
@@ -2835,7 +2835,7 @@ export default function QuotationDetailsPage() {
             isAuthorized={isAuthorized}
         />
         
-        {currentStep === 'committee' && canManageCommittees && (
+        {currentStep === 'committee' && canManageCommittees && quotations.length > 0 && (
             <EvaluationCommitteeManagement
                 requisition={requisition} 
                 onCommitteeUpdated={fetchRequisitionAndQuotes}
@@ -2849,7 +2849,7 @@ export default function QuotationDetailsPage() {
         {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
             <>
                 {/* Always render committee management when in award step so dialog can open */}
-                {canManageCommittees && currentStep !== 'committee' && (
+                {canManageCommittees && currentStep !== 'committee' && quotations.length > 0 && (
                      <div className="hidden">
                         <EvaluationCommitteeManagement
                             requisition={requisition}
@@ -3037,7 +3037,7 @@ export default function QuotationDetailsPage() {
             action={actionDialog.type}
             requisition={requisition}
             isOpen={actionDialog.isOpen}
-            onClose={() => setActionDialog({isOpen: false, type: 'update'})}
+            onClose={() => setActionDialog({isOpen: false, type: 'restart'})}
             onSuccess={fetchRequisitionAndQuotes}
         />
     </div>
@@ -3046,6 +3046,7 @@ export default function QuotationDetailsPage() {
     
 
     
+
 
 
 

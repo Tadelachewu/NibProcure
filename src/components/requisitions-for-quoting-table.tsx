@@ -22,7 +22,7 @@ import { PurchaseRequisition } from '@/lib/types';
 import { format, isPast } from 'date-fns';
 import { Badge } from './ui/badge';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FileX2, Loader2 } from 'lucide-react';
+import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FileX2, Loader2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 
 const PAGE_SIZE = 10;
@@ -77,7 +77,7 @@ export function RequisitionsForQuotingTable() {
     const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
 
-    // 1. Handle terminal or high-priority statuses first
+    // Handle terminal or high-priority statuses first
     if (req.status === 'PO_Created') {
         return <Badge variant="default" className="bg-green-700">PO Created</Badge>;
     }
@@ -91,17 +91,21 @@ export function RequisitionsForQuotingTable() {
         return <Badge variant="default" className="bg-green-600">Awarded</Badge>;
     }
 
-    // 2. Handle pre-bidding state
+    // Handle pre-bidding state
     if (req.status === 'PreApproved') {
         return <Badge variant="default" className="bg-blue-500 text-white">Ready for RFQ</Badge>;
     }
     
-    // 3. Handle active bidding state
+    // Handle active bidding state
     if (req.status === 'Accepting_Quotes' && !deadlinePassed) {
         return <Badge variant="outline">Accepting Quotes ({quoteCount} submitted)</Badge>;
     }
 
-    // 4. Handle all post-bidding-deadline states
+    if (req.status === 'Accepting_Quotes' && deadlinePassed && quoteCount === 0) {
+        return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No Bids Received</Badge>;
+    }
+
+    // Handle all post-bidding-deadline states
     if (deadlinePassed) {
         const hasCommittee = !!req.committeeName;
 
@@ -126,7 +130,7 @@ export function RequisitionsForQuotingTable() {
         return <Badge variant="secondary">Scoring in Progress</Badge>;
     }
     
-    // 5. Default fallback badge
+    // Default fallback badge
     return <Badge variant="outline">{req.status.replace(/_/g, ' ')}</Badge>;
   }
 
