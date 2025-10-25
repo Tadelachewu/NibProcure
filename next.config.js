@@ -7,6 +7,9 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  experimental: {
+    optimizeFonts: false,
+  },
   images: {
     remotePatterns: [
       {
