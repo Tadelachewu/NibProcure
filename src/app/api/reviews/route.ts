@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { getUserByToken } from '@/lib/auth';
 import { UserRole } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('Authorization');
@@ -23,8 +25,8 @@ export async function GET(request: Request) {
     const userId = userPayload.user.id;
 
     const reviewStatuses = [
-      'Pending_Committee_A_Member',
-      'Pending_Committee_B_Member',
+      'Pending_Committee_A_Recommendation',
+      'Pending_Committee_B_Review',
       'Pending_Managerial_Review',
       'Pending_Director_Approval',
       'Pending_VP_Approval',
@@ -34,11 +36,11 @@ export async function GET(request: Request) {
 
     if (userRole === 'Committee_A_Member') {
       whereClause = {
-        status: 'Pending_Committee_A_Member',
+        status: 'Pending_Committee_A_Recommendation',
       };
     } else if (userRole === 'Committee_B_Member') {
       whereClause = {
-        status: 'Pending_Committee_B_Member',
+        status: 'Pending_Committee_B_Review',
       };
     } else if (
       userRole === 'Manager_Procurement_Division' || 
@@ -86,4 +88,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
