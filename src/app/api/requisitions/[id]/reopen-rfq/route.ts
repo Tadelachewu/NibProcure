@@ -1,10 +1,10 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
+import { format } from 'date-fns';
 
 export async function POST(
   request: Request,
@@ -37,17 +37,17 @@ export async function POST(
     });
 
     const newVendorsToNotify = allVerifiedVendors.filter(v => !existingVendorIds.has(v.id));
-    const newVendorIds = newVendorsToNotify.map(v => v.id);
     
-    if (newVendorIds.length === 0) {
+    if (newVendorsToNotify.length === 0) {
         return NextResponse.json({ error: 'No new vendors available to re-open the RFQ to.' }, { status: 400 });
     }
 
+    // Set allowedVendorIds to [] to signify it's open to all verified vendors
     const updatedRequisition = await prisma.purchaseRequisition.update({
       where: { id: requisitionId },
       data: {
         deadline: new Date(newDeadline),
-        allowedVendorIds: newVendorIds, // Target only the new vendors
+        allowedVendorIds: [],
         status: 'Accepting_Quotes',
       },
     });
@@ -57,7 +57,7 @@ export async function POST(
             const emailHtml = `
                 <h1>Request for Quotation Re-Opened</h1>
                 <p>Hello ${vendor.name},</p>
-                <p>A Request for Quotation (RFQ) you were previously invited to has been re-opened for new submissions.</p>
+                <p>A Request for Quotation (RFQ) has been re-opened for new submissions.</p>
                 <ul>
                     <li><strong>Requisition Title:</strong> ${requisition.title}</li>
                     <li><strong>Requisition ID:</strong> ${requisition.id}</li>
@@ -85,7 +85,7 @@ export async function POST(
         action: 'REOPEN_RFQ',
         entity: 'Requisition',
         entityId: requisitionId,
-        details: `RFQ re-opened due to unmet quorum. New deadline: ${format(new Date(newDeadline), 'PPp')}. Notified ${newVendorIds.length} new vendors.`,
+        details: `RFQ re-opened due to unmet quorum. New deadline: ${format(new Date(newDeadline), 'PPp')}. Notified ${newVendorsToNotify.length} new vendors.`,
       },
     });
 
