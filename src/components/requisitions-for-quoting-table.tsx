@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -33,7 +34,7 @@ export function RequisitionsForQuotingTable() {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const router = useRouter();
-  const { user, allUsers, role, token } = useAuth();
+  const { user, allUsers, role, token, committeeQuorum } = useAuth();
 
 
   useEffect(() => {
@@ -103,6 +104,10 @@ export function RequisitionsForQuotingTable() {
 
     if (req.status === 'Accepting_Quotes' && deadlinePassed && quoteCount === 0) {
         return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No Bids Received</Badge>;
+    }
+
+    if (req.status === 'Accepting_Quotes' && deadlinePassed && quoteCount > 0 && quoteCount < committeeQuorum) {
+        return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> Quorum Not Met</Badge>;
     }
 
     // Handle all post-bidding-deadline states

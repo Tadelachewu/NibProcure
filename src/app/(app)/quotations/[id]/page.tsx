@@ -1244,7 +1244,7 @@ const ManageRFQ = ({
     onSuccess: () => void,
     isAuthorized: boolean,
 }) => {
-    const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel'}>({isOpen: false, type: 'update'});
+    const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'update'});
     const canManageRfq = isAuthorized && requisition.status === 'Accepting_Quotes' && !isPast(new Date(requisition.deadline!));
     
     if (!canManageRfq) return null;
@@ -2763,6 +2763,7 @@ export default function QuotationDetailsPage() {
   const isReadyForNotification = requisition.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumMet = quotations.length >= committeeQuorum;
+  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !quorumMet;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && quorumMet;
 
 
@@ -2821,6 +2822,22 @@ export default function QuotationDetailsPage() {
                 </CardFooter>
             </Card>
         )}
+        
+        {quorumNotMetAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
+            <Card className="border-amber-500">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> Quorum Not Met</CardTitle>
+                    <CardDescription>
+                        The submission deadline has passed, but only {quotations.length} of the required {committeeQuorum} quotes were submitted. You can re-open the RFQ to additional vendors.
+                    </CardDescription>
+                </CardHeader>
+                <CardFooter className="gap-2">
+                    <Button onClick={() => { /* Implement re-open logic */ }}>
+                        <RefreshCw className="mr-2 h-4 w-4" /> Re-open RFQ
+                    </Button>
+                </CardFooter>
+            </Card>
+        )}
 
         {currentStep === 'rfq' && !noBidsAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && (
             <div className="grid md:grid-cols-2 gap-6 items-start">
@@ -2859,7 +2876,7 @@ export default function QuotationDetailsPage() {
                     isAuthorized={isAuthorized}
                 />
             ) : (
-                isDeadlinePassed && !quorumMet && (
+                isDeadlinePassed && !quorumMet && quotations.length > 0 && (
                     <Card className="border-dashed">
                         <CardHeader>
                             <CardTitle>Evaluation Committee</CardTitle>
@@ -3080,21 +3097,3 @@ export default function QuotationDetailsPage() {
     
 
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
