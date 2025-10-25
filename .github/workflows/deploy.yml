@@ -1,3 +1,4 @@
+
 # This workflow builds and deploys the Next.js application to a remote IIS server.
 # It is triggered on every push to the 'main' branch.
 
@@ -43,13 +44,21 @@ jobs:
       run: npm run build
 
     # 5. Run Prisma migrations and seeding
-    # This step ensures the database schema is up-to-date and seeded with initial data.
+    # THIS IS THE MOST CRITICAL STEP TO FIX YOUR DATABASE ERRORS.
+    # It ensures the database schema on your IIS server is perfectly in sync
+    # with the schema defined in your code (prisma/schema.prisma).
     - name: Prisma Migrations & Seed
       run: |
+        # This command applies any pending database schema changes.
+        # It is the solution to errors like "The column does not exist".
         echo "Applying Prisma migrations..."
         npx prisma migrate deploy
+
+        # This regenerates the Prisma client to match the updated schema.
         echo "Generating Prisma client..."
         npx prisma generate
+
+        # This clears and repopulates the database with fresh test data.
         echo "Seeding database..."
         npm run db:seed
       shell: pwsh
@@ -122,3 +131,4 @@ jobs:
           Send-MailMessage -To "tade2024bdu@gmail.com" -From "ci-cd@company.com" -Subject "Deployment Failed" -Body "Next.js app deployment failed!" -SmtpServer "smtp.yourserver.com"
           exit 1 
         }
+
