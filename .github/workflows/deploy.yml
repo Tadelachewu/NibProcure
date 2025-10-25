@@ -13,10 +13,10 @@ jobs:
     runs-on: windows-latest
     env:
       # These environment variables pull secrets from the GitHub repository settings.
-      # Ensure these secrets (IIS_SERVER, IIS_USER, IIS_PASSWORD) are configured
-      # in your repository's settings under "Secrets and variables" > "Actions".
-      SERVER: ${{ secrets.IIS_SERVER }}
-      USER: ${{ secrets.IIS_USER }}
+      # You MUST configure these secrets in your repository's settings under:
+      # "Settings" > "Secrets and variables" > "Actions" > "New repository secret"
+      SERVER: ${{ secrets.IIS_SERVER }} # e.g., your_server_ip_address
+      USER: ${{ secrets.IIS_USER }}     # e.g., your_windows_username
       PASSWORD: ${{ secrets.IIS_PASSWORD }}
 
     steps:
@@ -71,10 +71,10 @@ jobs:
             param($sourcePath, $destinationPath, $appPool, $siteName)
 
             Write-Host "Stopping IIS App Pool and Website..."
-            try { Stop-WebAppPool -Name $appPool -ErrorAction Stop; Write-Host "App Pool stopped." } catch { Write-Host $_ }
-            try { Stop-Website -Name $siteName -ErrorAction Stop; Write-Host "Website stopped." } catch { Write-Host $_ }
+            try { Stop-WebAppPool -Name $appPool -ErrorAction Stop; Write-Host "App Pool '$appPool' stopped." } catch { Write-Host "Could not stop App Pool '$appPool'. It may not exist or is already stopped." }
+            try { Stop-Website -Name $siteName -ErrorAction Stop; Write-Host "Website '$siteName' stopped." } catch { Write-Host "Could not stop Website '$siteName'. It may not exist or is already stopped." }
 
-            Write-Host "Copying files to IIS..."
+            Write-Host "Copying files to IIS at '$destinationPath'..."
             # Use robocopy for efficient and mirrored file transfers.
             robocopy $sourcePath "$destinationPath\.next" /E /MIR
             robocopy $sourcePath\public "$destinationPath\public" /E /MIR
@@ -86,17 +86,20 @@ jobs:
             Write-Host "Files copied successfully."
 
             Write-Host "Starting IIS App Pool and Website..."
-            try { Start-WebAppPool -Name $appPool -ErrorAction Stop; Write-Host "App Pool started." } catch { throw }
-            try { Start-Website -Name $siteName -ErrorAction Stop; Write-Host "Website started." } catch { throw }
+            try { Start-WebAppPool -Name $appPool -ErrorAction Stop; Write-Host "App Pool '$appPool' started." } catch { throw "Failed to start App Pool '$appPool'." }
+            try { Start-Website -Name $siteName -ErrorAction Stop; Write-Host "Website '$siteName' started." } catch { throw "Failed to start Website '$siteName'." }
         }
 
-        # --- IMPORTANT CONFIGURATION ---
-        # These parameters define where and how the application is deployed.
-        # You MUST update these values to match your server's configuration.
-        $sourcePath = "${{ github.workspace }}"  # The path of the code on the GitHub runner.
+        # ===================================================================
+        # === IMPORTANT: UPDATE THESE VALUES TO MATCH YOUR IIS SERVER     ===
+        # ===================================================================
+        $sourcePath = "${{ github.workspace }}"  # The path of the code on the GitHub runner (do not change this).
+        
+        # --- (REQUIRED) UPDATE THE 3 VARIABLES BELOW ---
         $destinationPath = "C:\inetpub\wwwroot\YourAppName" # The physical path on the IIS server where the app will be deployed.
         $appPool = "YourAppPoolName" # The name of the IIS Application Pool for your site.
         $siteName = "YourSiteName" # The name of the IIS Website.
+        # -----------------------------------------------
 
         # Execute the script block on the remote server.
         Invoke-Command -ComputerName $env:SERVER -Credential $cred -ScriptBlock $scriptBlock -ArgumentList $sourcePath, $destinationPath, $appPool, $siteName
