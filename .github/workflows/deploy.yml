@@ -1,3 +1,6 @@
+# This workflow builds and deploys the Next.js application to a remote IIS server.
+# It is triggered on every push to the 'main' branch.
+
 name: Deploy Next.js to IIS Remotely
 
 on:
@@ -9,30 +12,38 @@ jobs:
   build-and-deploy:
     runs-on: windows-latest
     env:
+      # These environment variables pull secrets from the GitHub repository settings.
+      # Ensure these secrets (IIS_SERVER, IIS_USER, IIS_PASSWORD) are configured
+      # in your repository's settings under "Secrets and variables" > "Actions".
       SERVER: ${{ secrets.IIS_SERVER }}
       USER: ${{ secrets.IIS_USER }}
       PASSWORD: ${{ secrets.IIS_PASSWORD }}
 
     steps:
     # 1. Checkout repository
+    # This step checks out a copy of your repository on the GitHub runner.
     - name: Checkout repository
       uses: actions/checkout@v4
 
     # 2. Setup Node.js
+    # This step installs the specified version of Node.js on the runner.
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
 
-    # 3. Install dependencies (including Prisma)
+    # 3. Install dependencies
+    # This step installs all the npm packages defined in package.json.
     - name: Install dependencies
       run: npm install
 
     # 4. Build Next.js app
+    # This step runs the 'npm run build' command to create a production-ready build.
     - name: Build Next.js app
       run: npm run build
 
     # 5. Run Prisma migrations and seeding
+    # This step ensures the database schema is up-to-date and seeded with initial data.
     - name: Prisma Migrations & Seed
       run: |
         echo "Applying Prisma migrations..."
@@ -44,16 +55,18 @@ jobs:
       shell: pwsh
 
     # 6. Deploy to IIS remotely via PowerShell Remoting
+    # This is the core deployment step. It uses PowerShell to connect to the remote
+    # IIS server and copy the built application files.
     - name: Deploy to IIS via PowerShell Remoting
       shell: pwsh
       run: |
         $ErrorActionPreference = "Stop"
 
-        # Convert password to secure string and create credential object
+        # Convert the password from a plain text secret to a secure string for PowerShell Remoting.
         $secPassword = ConvertTo-SecureString $env:PASSWORD -AsPlainText -Force
         $cred = New-Object System.Management.Automation.PSCredential ($env:USER, $secPassword)
 
-        # Remote script block
+        # This script block runs on the remote IIS server.
         $scriptBlock = {
             param($sourcePath, $destinationPath, $appPool, $siteName)
 
@@ -62,11 +75,13 @@ jobs:
             try { Stop-Website -Name $siteName -ErrorAction Stop; Write-Host "Website stopped." } catch { Write-Host $_ }
 
             Write-Host "Copying files to IIS..."
+            # Use robocopy for efficient and mirrored file transfers.
             robocopy $sourcePath "$destinationPath\.next" /E /MIR
             robocopy $sourcePath\public "$destinationPath\public" /E /MIR
             robocopy $sourcePath\node_modules "$destinationPath\node_modules" /E /MIR
             Copy-Item "$sourcePath\package.json" "$destinationPath\package.json" -Force
 
+            # Check if robocopy was successful. Exit codes >= 8 indicate failure.
             if ($LASTEXITCODE -ge 8) { throw "File copy failed with exit code $LASTEXITCODE" }
             Write-Host "Files copied successfully."
 
@@ -75,27 +90,32 @@ jobs:
             try { Start-Website -Name $siteName -ErrorAction Stop; Write-Host "Website started." } catch { throw }
         }
 
-        # Define parameters for remote execution
-        $sourcePath = "${{ github.workspace }}"  # workspace of GitHub runner
-        $destinationPath = "C:\inetpub\wwwroot\YourAppName"
-        $appPool = "YourAppPoolName"
-        $siteName = "YourSiteName"
+        # --- IMPORTANT CONFIGURATION ---
+        # These parameters define where and how the application is deployed.
+        # You MUST update these values to match your server's configuration.
+        $sourcePath = "${{ github.workspace }}"  # The path of the code on the GitHub runner.
+        $destinationPath = "C:\inetpub\wwwroot\YourAppName" # The physical path on the IIS server where the app will be deployed.
+        $appPool = "YourAppPoolName" # The name of the IIS Application Pool for your site.
+        $siteName = "YourSiteName" # The name of the IIS Website.
 
-        # Execute remotely on IIS server
+        # Execute the script block on the remote server.
         Invoke-Command -ComputerName $env:SERVER -Credential $cred -ScriptBlock $scriptBlock -ArgumentList $sourcePath, $destinationPath, $appPool, $siteName
 
     # 7. Post-deployment notifications
+    # This step sends an email notification about the deployment status.
     - name: Post-deployment status
-      if: always()
+      if: always() # This ensures the step runs even if the deployment fails.
       shell: pwsh
       run: |
         if (${{ job.status }} -eq 'success') { 
           Write-Host "Deployment succeeded ✅"
-          # Example: send email notification
+          # Example: send email notification for success.
+          # You will need to configure your own SMTP server details.
           Send-MailMessage -To "tade2024bdu@gmail.com" -From "ci-cd@company.com" -Subject "Deployment Success" -Body "Next.js app deployed successfully." -SmtpServer "smtp.yourserver.com"
         } 
         else { 
           Write-Host "Deployment failed ❌"; 
+          # Example: send email notification for failure.
           Send-MailMessage -To "tade2024bdu@gmail.com" -From "ci-cd@company.com" -Subject "Deployment Failed" -Body "Next.js app deployment failed!" -SmtpServer "smtp.yourserver.com"
           exit 1 
         }
