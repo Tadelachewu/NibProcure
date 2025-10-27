@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, AlertTriangle } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -2221,6 +2221,7 @@ export default function QuotationDetailsPage() {
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
+  const hasBeenRejected = useMemo(() => quotations.some(q => q.status === 'Declined'), [quotations]);
   const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   
@@ -2235,23 +2236,20 @@ export default function QuotationDetailsPage() {
   }, [requisition]);
 
   const isScoringComplete = useMemo(() => {
-    if (!requisition || requisition.status !== 'Scoring_Complete') return false;
-
-    const allMemberIds = new Set([
+    if (!requisition) return false;
+    const allMemberIds = [
         ...(requisition.financialCommitteeMemberIds || []),
         ...(requisition.technicalCommitteeMemberIds || [])
-    ]);
+    ];
+    if (allMemberIds.length === 0) return false;
+    if (quotations.length === 0) return false;
 
-    if (allMemberIds.size === 0) return false; // If no committee assigned, scoring can't be complete.
-
-    const submittedMemberIds = new Set(
-        requisition.committeeAssignments
-            ?.filter(a => a.scoresSubmitted)
-            .map(a => a.userId)
-    );
-    
-    return Array.from(allMemberIds).every(id => submittedMemberIds.has(id));
-  }, [requisition]);
+    // Check if every assigned member has finalized their scores.
+    return allMemberIds.every(memberId => {
+        const member = allUsers.find(u => u.id === memberId);
+        return member?.committeeAssignments?.some(a => a.requisitionId === requisition.id && a.scoresSubmitted) || false;
+    });
+  }, [requisition, quotations, allUsers]);
 
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
@@ -2280,9 +2278,26 @@ export default function QuotationDetailsPage() {
             const quoData = await quoResponse.json();
 
             if (currentReq) {
-                // The vendor response is now automated on the backend via handleAwardRejection service
-                setRequisition(currentReq);
-                setQuotations(quoData);
+                const awardedQuote = quoData.find((q: Quotation) => q.status === 'Awarded');
+                if (awardedQuote && currentReq.awardResponseDeadline && isPast(new Date(currentReq.awardResponseDeadline))) {
+                    toast({
+                        title: 'Deadline Missed',
+                        description: `Vendor ${awardedQuote.vendorName} missed the response deadline. Action required.`,
+                        variant: 'destructive',
+                    });
+                    // This now just reverts the state, does not auto-promote.
+                    await handleAwardChange();
+                    // Refetch after the change
+                    const [refetchedReqRes, refetchedQuoRes] = await Promise.all([
+                        fetch(`/api/requisitions/${id}`),
+                        fetch(`/api/quotations?requisitionId=${id}`)
+                    ]);
+                    setRequisition(await refetchedReqRes.json());
+                    setQuotations(await refetchedQuoRes.json());
+                } else {
+                    setRequisition(currentReq);
+                    setQuotations(quoData);
+                }
             } else {
                 toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
             }
@@ -2868,6 +2883,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
