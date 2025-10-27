@@ -1,3 +1,4 @@
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -5,11 +6,12 @@ import { UserRole } from '@/lib/types';
 
 /**
  * Finds the correct initial status and approver for a given value tier.
+ * This is now an exported function to be reusable.
  * @param tx - Prisma transaction client.
  * @param totalAwardValue - The value of the award.
  * @returns An object with the next status and approver ID.
  */
-async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue: number) {
+export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue: number) {
     const approvalMatrix = await tx.approvalThreshold.findMany({ 
         include: { steps: { orderBy: { order: 'asc' } } }, 
         orderBy: { min: 'asc' }
@@ -100,21 +102,32 @@ export async function handleAwardRejection(
 
     if (nextQuote) {
         // 3a. If a standby exists, promote them and re-trigger approval workflow
-        const newTotalAwardValue = nextQuote.items.reduce((acc: number, item: any) => acc + (item.unitPrice * item.quantity), 0);
+        
+        // ** THE FIX **: Recalculate total value based only on the specific items this vendor won.
+        // The awardedQuoteItemIds on the requisition still holds the item IDs from the original evaluation.
+        // We find which of those items belong to our newly promoted vendor.
+        const originalWinningItemIds = new Set(requisition.awardedQuoteItemIds);
+        const newVendorAwardedItems = nextQuote.items.filter((item: any) => originalWinningItemIds.has(item.id));
+        
+        // If the original award was for all items, newVendorAwardedItems might be empty.
+        // In that case, we use all items from the nextQuote.
+        const itemsToCalculate = newVendorAwardedItems.length > 0 ? newVendorAwardedItems : nextQuote.items;
+        const newTotalAwardValue = itemsToCalculate.reduce((acc: number, item: any) => acc + (item.unitPrice * item.quantity), 0);
         
         const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalAwardValue);
 
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: {
-                totalPrice: newTotalAwardValue,
+                totalPrice: newTotalAwardValue, // Use the CORRECTED value
                 status: nextStatus as any,
                 currentApproverId: nextApproverId,
-                // Do NOT change awardedQuoteItemIds until this new award is accepted
+                // Do NOT change awardedQuoteItemIds. It's the source of truth for the award structure.
             }
         });
         
-        // Update ranks and statuses for the promotion
+        // Update statuses: Promote standby to Awarded, and fail the original rejector.
+        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
         await tx.quotation.update({ where: { id: nextQuote.id }, data: { rank: 1, status: 'Awarded' } });
         
         await tx.auditLog.create({
@@ -123,7 +136,7 @@ export async function handleAwardRejection(
                 action: 'PROMOTE_STANDBY',
                 entity: 'Quotation',
                 entityId: nextQuote.id,
-                details: `Promoted standby vendor ${nextQuote.vendorName} to Awarded. Re-initiating approval workflow. ${auditDetails}`,
+                details: `Promoted standby vendor ${nextQuote.vendorName} to Awarded. Re-initiating approval workflow with new value ${newTotalAwardValue.toLocaleString()} ETB. ${auditDetails}`,
                 transactionId: requisition.transactionId,
             }
         });
@@ -141,11 +154,27 @@ export async function handleAwardRejection(
                 awardResponseDeadline: null,
                 committeeName: null,
                 committeePurpose: null,
+                awardedQuoteItemIds: [],
             }
         });
         
-        // Clear all quote statuses and scores
-        await tx.quotation.deleteMany({ where: { requisitionId: requisition.id } });
+        // Delete all data related to the failed RFQ process
+        const quotationsToDelete = await tx.quotation.findMany({ where: { requisitionId: requisition.id }, select: { id: true } });
+        const quoteIds = quotationsToDelete.map(q => q.id);
+        if (quoteIds.length > 0) {
+            const scoreSets = await tx.committeeScoreSet.findMany({ where: { quotationId: { in: quoteIds } }, select: { id: true } });
+            const scoreSetIds = scoreSets.map(s => s.id);
+            if (scoreSetIds.length > 0) {
+                const itemScores = await tx.itemScore.findMany({ where: { scoreSetId: { in: scoreSetIds } }, select: { id: true } });
+                const itemScoreIds = itemScores.map(i => i.id);
+                if (itemScoreIds.length > 0) {
+                    await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
+                }
+                await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
+            }
+            await tx.committeeScoreSet.deleteMany({ where: { quotationId: { in: quoteIds } } });
+            await tx.quotation.deleteMany({ where: { id: { in: quoteIds } } });
+        }
         
         await tx.auditLog.create({
             data: {

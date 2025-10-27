@@ -46,13 +46,17 @@ export async function POST(
                 data: { status: 'Accepted' }
             });
             
+            // This logic now correctly uses the awardedQuoteItemIds from the requisition
+            // to ensure only the items that were actually awarded are included in the PO.
             const awardedQuoteItems = quote.items.filter(item => 
                 requisition.awardedQuoteItemIds.includes(item.id)
             );
 
-            const thisVendorAwardedItems = awardedQuoteItems.length > 0 ? awardedQuoteItems : quote.items;
+            // If awardedQuoteItemIds is empty (e.g., in a simple 'award all' scenario),
+            // it defaults to using all items from the accepted quote.
+            const itemsForPO = awardedQuoteItems.length > 0 ? awardedQuoteItems : quote.items;
 
-            const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
+            const totalPriceForThisPO = itemsForPO.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
 
             const newPO = await tx.purchaseOrder.create({
                 data: {
@@ -61,7 +65,7 @@ export async function POST(
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
                     items: {
-                        create: thisVendorAwardedItems.map((item: any) => ({
+                        create: itemsForPO.map((item: any) => ({
                             requisitionItemId: item.requisitionItemId,
                             name: item.name,
                             quantity: item.quantity,
@@ -75,6 +79,8 @@ export async function POST(
                 }
             });
 
+            // Check if there are any other outstanding awards for this requisition.
+            // If not, the main requisition status can be moved to PO_Created.
             const allAwardedQuotes = await tx.quotation.findMany({
                 where: {
                     requisitionId: requisition.id,
@@ -104,7 +110,7 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            // Refactored logic is now in the award service
+            // The improved logic is now in the award service
             return await handleAwardRejection(tx, quote, requisition, user);
         }
         
