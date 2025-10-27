@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User } from '@/lib/types';
+import { handleAwardRejection } from '@/services/award-service';
 
 
 export async function POST(
@@ -23,7 +24,7 @@ export async function POST(
     const transactionResult = await prisma.$transaction(async (tx) => {
         const quote = await tx.quotation.findUnique({ 
             where: { id: quoteId },
-            include: { items: true, requisition: { include: { quotations: { include: { items: true } } } } }
+            include: { items: true, requisition: true }
         });
 
         if (!quote || quote.vendorId !== user.vendorId) {
@@ -45,14 +46,13 @@ export async function POST(
                 data: { status: 'Accepted' }
             });
             
-            // Logic to handle both full and partial awards when creating a PO
             const awardedQuoteItems = quote.items.filter(item => 
                 requisition.awardedQuoteItemIds.includes(item.id)
             );
 
             const thisVendorAwardedItems = awardedQuoteItems.length > 0 ? awardedQuoteItems : quote.items;
 
-            const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+            const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
 
             const newPO = await tx.purchaseOrder.create({
                 data: {
@@ -61,7 +61,7 @@ export async function POST(
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
                     items: {
-                        create: thisVendorAwardedItems.map(item => ({
+                        create: thisVendorAwardedItems.map((item: any) => ({
                             requisitionItemId: item.requisitionItemId,
                             name: item.name,
                             quantity: item.quantity,
@@ -75,7 +75,6 @@ export async function POST(
                 }
             });
 
-            // Check if all awards are accepted to update the main requisition status
             const allAwardedQuotes = await tx.quotation.findMany({
                 where: {
                     requisitionId: requisition.id,
@@ -86,9 +85,7 @@ export async function POST(
             if (allAwardedQuotes.length === 0) {
                  await tx.purchaseRequisition.update({
                     where: { id: requisition.id },
-                    data: {
-                        status: 'PO_Created',
-                    }
+                    data: { status: 'PO_Created' }
                 });
             }
             
@@ -100,64 +97,17 @@ export async function POST(
                     entity: 'Quotation',
                     entityId: quoteId,
                     details: `Vendor accepted award. PO ${newPO.id} auto-generated.`,
+                    transactionId: requisition.transactionId,
                 }
             });
             
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Declined' }});
-
-            await tx.auditLog.create({
-                data: {
-                    timestamp: new Date(),
-                    user: { connect: { id: user.id } },
-                    action: 'REJECT_AWARD',
-                    entity: 'Quotation',
-                    entityId: quoteId,
-                    details: `Vendor declined award.`,
-                }
-            });
-
-            const nextRank = (quote.rank || 0) + 1;
-            const nextQuote = await tx.quotation.findFirst({
-                where: { requisitionId: quote.requisitionId, rank: nextRank }
-            });
-
-            if (nextQuote) {
-                await tx.quotation.update({ where: { id: nextQuote.id }, data: { status: 'Awarded' } });
-                
-                await tx.auditLog.create({
-                    data: {
-                        timestamp: new Date(),
-                        action: 'PROMOTE_STANDBY',
-                        entity: 'Quotation',
-                        entityId: nextQuote.id,
-                        details: `Promoted standby vendor ${nextQuote.vendorName} to Awarded.`,
-                    }
-                });
-                return { message: `Award declined. Next vendor (${nextQuote.vendorName}) has been notified.` };
-            } else {
-                 await tx.purchaseRequisition.update({
-                    where: { id: requisition.id },
-                    data: { status: 'Approved', deadline: null }
-                });
-                 await tx.quotation.updateMany({
-                    where: { requisitionId: requisition.id },
-                    data: { status: 'Submitted', rank: null }
-                });
-                 await tx.auditLog.create({
-                    data: {
-                        timestamp: new Date(),
-                        action: 'RESTART_RFQ',
-                        entity: 'Requisition',
-                        entityId: requisition.id,
-                        details: `All vendors declined award. RFQ process has been reset.`,
-                    }
-                });
-                return { message: 'Award declined. No more standby vendors. Requisition has been reset for new RFQ process.' };
-            }
+            // Refactored logic is now in the award service
+            return await handleAwardRejection(tx, quote, requisition, user);
         }
+        
         throw new Error('Invalid action.');
     });
     

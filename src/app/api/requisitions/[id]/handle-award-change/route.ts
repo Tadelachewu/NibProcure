@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { handleAwardRejection } from '@/services/award-service';
 
 type AwardAction = 'promote_second' | 'promote_third' | 'restart_rfq';
 
@@ -20,60 +21,30 @@ export async function POST(
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const transaction = await prisma.$transaction(async (tx) => {
+    // The logic is complex and state-dependent, so we wrap it in a transaction
+    // and use our dedicated service.
+    const transactionResult = await prisma.$transaction(async (tx) => {
         const requisition = await tx.purchaseRequisition.findUnique({ where: { id: requisitionId }});
         if (!requisition) {
           throw new Error('Requisition not found');
         }
 
-        const reqQuotes = await tx.quotation.findMany({ where: { requisitionId }});
-        const currentAwarded = reqQuotes.find(q => q.status === 'Awarded');
-        const secondStandby = reqQuotes.find(q => q.rank === 2);
-        const thirdStandby = reqQuotes.find(q => q.rank === 3);
-        
-        let newDeadline: Date | null = null;
-        if (requisition.awardResponseDurationMinutes) {
-            newDeadline = new Date(Date.now() + requisition.awardResponseDurationMinutes * 60 * 1000);
-        }
-
-        switch (action) {
-        case 'promote_second':
-            if (!currentAwarded || !secondStandby) {
-                throw new Error('Invalid state for promoting second vendor.');
+        const currentAwardedQuote = await tx.quotation.findFirst({
+            where: {
+                requisitionId: requisitionId,
+                status: 'Awarded'
             }
-            await tx.quotation.update({ where: { id: currentAwarded.id }, data: { status: 'Failed' } });
-            await tx.quotation.update({ where: { id: secondStandby.id }, data: { status: 'Awarded', rank: 1 } });
-            if (thirdStandby) {
-                await tx.quotation.update({ where: { id: thirdStandby.id }, data: { rank: 2 } });
-            }
-            break;
-        case 'promote_third':
-             if (!currentAwarded || !thirdStandby) {
-                throw new Error('Invalid state for promoting third vendor.');
-            }
-            await tx.quotation.update({ where: { id: currentAwarded.id }, data: { status: 'Failed' } });
-            await tx.quotation.update({ where: { id: thirdStandby.id }, data: { status: 'Awarded', rank: 1 } });
-            if(secondStandby) {
-                await tx.quotation.update({ where: { id: secondStandby.id }, data: { status: 'Rejected' } });
-            }
-            break;
-        case 'restart_rfq':
-            await tx.quotation.deleteMany({ where: { requisitionId }});
-            return await tx.purchaseRequisition.update({
-                where: { id: requisitionId },
-                data: { status: 'Approved', deadline: null, awardResponseDeadline: null }
-            });
-        default:
-            throw new Error('Invalid action specified.');
-        }
-
-        return await tx.purchaseRequisition.update({
-            where: { id: requisitionId },
-            data: { awardResponseDeadline: newDeadline }
         });
+        
+        if (!currentAwardedQuote) {
+             throw new Error('No currently awarded quote found to change.');
+        }
+
+        // We can reuse the rejection logic, as promoting is a consequence of the current winner "failing"
+        return await handleAwardRejection(tx, currentAwardedQuote, requisition, user);
     });
 
-    return NextResponse.json({ message: 'Award change handled successfully.', requisition: transaction });
+    return NextResponse.json({ message: 'Award change handled successfully.', details: transactionResult });
   } catch (error) {
     console.error('Failed to handle award change:', error);
     if (error instanceof Error) {
