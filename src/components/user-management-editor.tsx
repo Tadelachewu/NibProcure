@@ -57,8 +57,6 @@ const userFormSchema = z.object({
   role: z.string().min(1, "Role is required."),
   departmentId: z.string().min(1, "Department is required."),
   password: z.string().optional(),
-  approvalLimit: z.coerce.number().min(0, "Approval limit must be a positive number.").optional(),
-  managerId: z.string().optional(),
 });
 
 const userEditFormSchema = userFormSchema.extend({
@@ -84,28 +82,11 @@ export function UserManagementEditor() {
       role: '',
       departmentId: '',
       password: '',
-      approvalLimit: 0,
-      managerId: '',
     },
   });
   
   const availableRoles = Object.keys(rolePermissions).filter(role => role !== 'Vendor') as UserRole[];
   
-  const selectedRole = form.watch('role');
-  const currentApprovalLimit = form.watch('approvalLimit');
-  
-  const managerRoles: UserRole[] = ['Approver', 'Procurement_Officer', 'Admin', 'Finance'];
-  const approvalRoles: UserRole[] = ['Approver', 'Procurement_Officer', 'Admin', 'Finance', 'Committee_Member'];
-  const showApprovalFields = approvalRoles.includes(selectedRole as UserRole);
-
-  const potentialManagers = users.filter(
-    (u) => 
-      u.id !== userToEdit?.id && 
-      managerRoles.includes(u.role) &&
-      (u.approvalLimit || 0) > (currentApprovalLimit || 0)
-  );
-
-
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -135,10 +116,8 @@ export function UserManagementEditor() {
     try {
       const isEditing = !!userToEdit;
       
-       const apiValues = {
+       const apiValues: any = {
         ...values,
-        managerId: values.managerId === 'null' ? null : values.managerId,
-        approvalLimit: showApprovalFields ? values.approvalLimit || 0 : 0
       };
 
       if (isEditing && !values.password) {
@@ -166,7 +145,7 @@ export function UserManagementEditor() {
       });
       setDialogOpen(false);
       setUserToEdit(null);
-      form.reset({ name: '', email: '', role: '', departmentId: '', password: '', approvalLimit: 0, managerId: '' });
+      form.reset({ name: '', email: '', role: '', departmentId: '', password: '' });
       fetchData();
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
@@ -209,12 +188,10 @@ export function UserManagementEditor() {
         role: user.role,
         departmentId: user.departmentId || '',
         password: '',
-        approvalLimit: user.approvalLimit || 0,
-        managerId: user.managerId || 'null',
       });
     } else {
       setUserToEdit(null);
-      form.reset({ name: '', email: '', role: '', departmentId: '', password: '', approvalLimit: 0, managerId: 'null' });
+      form.reset({ name: '', email: '', role: '', departmentId: '', password: '' });
     }
     setDialogOpen(true);
   };
@@ -322,36 +299,6 @@ export function UserManagementEditor() {
                 <FormField control={form.control} name="role" render={({ field }) => ( <FormItem><FormLabel>Role</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger></FormControl><SelectContent>{availableRoles.map(role => <SelectItem key={role} value={role}>{role.replace(/_/g, ' ')}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="departmentId" render={({ field }) => ( <FormItem><FormLabel>Department</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a department" /></SelectTrigger></FormControl><SelectContent>{departments.map(dept => <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                 
-                {showApprovalFields && (
-                    <>
-                        <FormField control={form.control} name="approvalLimit" render={({ field }) => ( <FormItem><FormLabel>Approval Limit (ETB)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem> )} />
-                        <FormField
-                        control={form.control}
-                        name="managerId"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>Reports To / Manager</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || 'null'}>
-                                <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a manager" />
-                                </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    <SelectItem value="null">None</SelectItem>
-                                    {potentialManagers.map((u) => (
-                                    <SelectItem key={u.id} value={u.id}>
-                                        {u.name} ({u.approvalLimit?.toLocaleString()} ETB)
-                                    </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
-                    </>
-                )}
               </div>
               <DialogFooter>
                   <DialogClose asChild><Button type="button" variant="ghost">Cancel</Button></DialogClose>
