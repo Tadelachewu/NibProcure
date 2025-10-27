@@ -12,7 +12,6 @@ import {
 import { Button } from './ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Trash2, Edit } from 'lucide-react';
-import { UserRole } from '@/lib/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +30,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
 import { Input } from './ui/input';
@@ -46,21 +44,32 @@ interface Role {
 }
 
 export function RoleManagementEditor() {
+  const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [roleToEdit, setRoleToEdit] = useState<Role | null>(null);
   const [roleName, setRoleName] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
   const { toast } = useToast();
-  const { user, fetchAllSettings, settings } = useAuth();
+  const { user, fetchAllSettings } = useAuth();
   
-  const roles = settings.find(s => s.key === 'rolePermissions')?.value 
-    ? Object.keys(settings.find(s => s.key === 'rolePermissions')!.value).map(key => ({ 
-        id: key, // Using key as a temporary ID, real ID comes from DB on proper fetch
-        name: key, 
-        description: `Description for ${key.replace(/_/g, ' ')}` 
-    })) 
-    : [];
+  const fetchRoles = async () => {
+    setIsLoading(true);
+    try {
+        const response = await fetch('/api/roles');
+        if (!response.ok) throw new Error('Failed to fetch roles');
+        const data = await response.json();
+        setRoles(data);
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not load roles.' });
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRoles();
+  }, []);
 
   const handleFormSubmit = async () => {
     if (!roleName.trim()) {
@@ -97,7 +106,8 @@ export function RoleManagementEditor() {
         });
         
         setDialogOpen(false);
-        await fetchAllSettings();
+        await fetchRoles(); // Re-fetch the list of roles
+        await fetchAllSettings(); // Re-fetch settings to update permissions context
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
@@ -110,8 +120,10 @@ export function RoleManagementEditor() {
     if (!user) return;
     setIsLoading(true);
     try {
-         const response = await fetch(`/api/roles?id=${roleId}&actorUserId=${user.id}`, {
+         const response = await fetch(`/api/roles`, {
             method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: roleId, actorUserId: user.id }),
         });
          if (!response.ok) {
             const errorData = await response.json();
@@ -121,7 +133,8 @@ export function RoleManagementEditor() {
             title: 'Role Deleted',
             description: `The role has been deleted.`,
         });
-        await fetchAllSettings();
+        await fetchRoles(); // Re-fetch the list of roles
+        await fetchAllSettings(); // Re-fetch settings to update permissions context
     } catch (error) {
          toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
@@ -143,22 +156,22 @@ export function RoleManagementEditor() {
   }
 
   const coreRoles: string[] = [
-    'Admin', 
-    'Procurement_Officer', 
-    'Requester', 
-    'Approver', 
-    'Vendor',
-    'Finance',
-    'Receiving',
-    'Committee',
-    'Committee_A_Member',
-    'Committee_B_Member',
-    'Committee_Member',
-    'Manager_Procurement_Division',
-    'Director_Supply_Chain_and_Property_Management',
-    'VP_Resources_and_Facilities',
-    'President'
-  ];
+    'ADMIN', 
+    'PROCUREMENT_OFFICER', 
+    'REQUESTER', 
+    'APPROVER', 
+    'VENDOR',
+    'FINANCE',
+    'RECEIVING',
+    'COMMITTEE',
+    'COMMITTEE_A_MEMBER',
+    'COMMITTEE_B_MEMBER',
+    'COMMITTEE_MEMBER',
+    'MANAGER_PROCUREMENT_DIVISION',
+    'DIRECTOR_SUPPLY_CHAIN_AND_PROPERTY_MANAGEMENT',
+    'VP_RESOURCES_AND_FACILITIES',
+    'PRESIDENT'
+  ].map(r => r.toUpperCase());
 
 
   return (
@@ -225,7 +238,7 @@ export function RoleManagementEditor() {
                                     </Button>
                                     <AlertDialog>
                                         <AlertDialogTrigger asChild>
-                                            <Button variant="destructive" size="sm" disabled={coreRoles.includes(role.name)}>
+                                            <Button variant="destructive" size="sm" disabled={coreRoles.includes(role.name.toUpperCase())}>
                                                 <Trash2 className="mr-2 h-4 w-4" />
                                                 Delete
                                             </Button>

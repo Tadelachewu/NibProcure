@@ -114,11 +114,10 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
    try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
-    const actorUserId = searchParams.get('actorUserId');
+    const body = await request.json();
+    const { id, actorUserId } = body;
 
-    const actor = await prisma.user.findUnique({where: { id: actorUserId! }});
+    const actor = await prisma.user.findUnique({where: { id: actorUserId }});
     if (!actor || actor.role !== 'Admin') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
