@@ -82,6 +82,7 @@ interface AuthContextType {
   updateApprovalThresholds: (newThresholds: ApprovalThreshold[]) => void;
   updateCommitteeConfig: (newConfig: any) => Promise<void>;
   updateSetting: (key: string, value: any) => Promise<void>;
+  fetchAllSettings: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -116,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
   
-  const fetchSettings = useCallback(async () => {
+  const fetchAllSettings = useCallback(async () => {
     try {
       const settingsRes = await fetch('/api/settings');
       if (settingsRes.ok) {
@@ -153,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
-      await fetchSettings();
+      await fetchAllSettings();
       const users = await fetchAllUsers();
       try {
           const storedToken = localStorage.getItem('authToken');
@@ -176,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     };
     initializeAuth();
-  }, [fetchAllUsers, fetchSettings]);
+  }, [fetchAllUsers, fetchAllSettings]);
 
   const login = (newToken: string, loggedInUser: User, loggedInRole: UserRole) => {
     localStorage.setItem('authToken', newToken);
@@ -220,7 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             body: JSON.stringify({ key, value }),
         });
         if (!response.ok) throw new Error('Failed to save setting');
-        await fetchSettings();
+        await fetchAllSettings();
     } catch(e) {
         console.error(e);
         throw e;
@@ -295,7 +296,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateApprovalThresholds,
       updateCommitteeConfig,
       updateSetting,
-  }), [user, token, role, loading, allUsers, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchSettings]);
+      fetchAllSettings,
+  }), [user, token, role, loading, allUsers, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings]);
 
 
   return (
@@ -312,5 +314,3 @@ export function useAuth() {
   }
   return context;
 }
-
-    

@@ -39,14 +39,34 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'A role with this name already exists' }, { status: 409 });
     }
 
-    const newRole = await prisma.role.create({
-      data: {
-        name: formattedName,
-        description,
-      },
+    const result = await prisma.$transaction(async (tx) => {
+        const newRole = await tx.role.create({
+          data: {
+            name: formattedName,
+            description,
+          },
+        });
+
+        // Add the new role to the rolePermissions setting
+        const permissionsSetting = await tx.setting.findUnique({
+            where: { key: 'rolePermissions' }
+        });
+
+        if (permissionsSetting) {
+            const currentPermissions = permissionsSetting.value as any;
+            currentPermissions[formattedName] = []; // Add new role with no permissions
+            
+            await tx.setting.update({
+                where: { key: 'rolePermissions' },
+                data: { value: currentPermissions }
+            });
+        }
+        
+        return newRole;
     });
 
-    return NextResponse.json(newRole, { status: 201 });
+
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error('Failed to create role:', error);
     if (error instanceof Error) {
@@ -111,11 +131,45 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ error: 'Role not found' }, { status: 404 });
     }
     
-    if (['Admin', 'Procurement_Officer', 'Requester', 'Approver', 'Vendor'].includes(roleToDelete.name)) {
-        return NextResponse.json({ error: `Cannot delete core system role: ${roleToDelete.name}` }, { status: 403 });
+    const coreRoles: string[] = [
+        'Admin', 
+        'Procurement_Officer', 
+        'Requester', 
+        'Approver', 
+        'Vendor',
+        'Finance',
+        'Receiving',
+        'Committee',
+        'Committee_A_Member',
+        'Committee_B_Member',
+        'Committee_Member',
+        'Manager_Procurement_Division',
+        'Director_Supply_Chain_and_Property_Management',
+        'VP_Resources_and_Facilities',
+        'President'
+    ];
+    if (coreRoles.includes(roleToDelete.name)) {
+        return NextResponse.json({ error: `Cannot delete core system role: ${roleToDelete.name.replace(/_/g, ' ')}` }, { status: 403 });
     }
+    
+    await prisma.$transaction(async (tx) => {
+        // Remove from rolePermissions setting
+        const permissionsSetting = await tx.setting.findUnique({
+            where: { key: 'rolePermissions' }
+        });
 
-    await prisma.role.delete({ where: { id } });
+        if (permissionsSetting) {
+            const currentPermissions = permissionsSetting.value as any;
+            delete currentPermissions[roleToDelete.name];
+            await tx.setting.update({
+                where: { key: 'rolePermissions' },
+                data: { value: currentPermissions }
+            });
+        }
+        
+        await tx.role.delete({ where: { id } });
+    });
+
 
     return NextResponse.json({ message: 'Role deleted successfully' });
   } catch (error) {

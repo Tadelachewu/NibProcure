@@ -53,7 +53,7 @@ export function RoleManagementEditor() {
   const [roleName, setRoleName] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, fetchAllSettings } = useAuth();
 
   const fetchRoles = async () => {
       setIsLoading(true);
@@ -108,7 +108,8 @@ export function RoleManagementEditor() {
         });
         
         setDialogOpen(false);
-        fetchRoles();
+        await fetchRoles();
+        await fetchAllSettings(); // Re-fetch settings to get updated permissions
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
@@ -132,7 +133,8 @@ export function RoleManagementEditor() {
             title: 'Role Deleted',
             description: `The role has been deleted.`,
         });
-        fetchRoles();
+        await fetchRoles();
+        await fetchAllSettings();
     } catch (error) {
          toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
@@ -152,6 +154,24 @@ export function RoleManagementEditor() {
     }
     setDialogOpen(true);
   }
+
+  const coreRoles: string[] = [
+    'Admin', 
+    'Procurement_Officer', 
+    'Requester', 
+    'Approver', 
+    'Vendor',
+    'Finance',
+    'Receiving',
+    'Committee',
+    'Committee_A_Member',
+    'Committee_B_Member',
+    'Committee_Member',
+    'Manager_Procurement_Division',
+    'Director_Supply_Chain_and_Property_Management',
+    'VP_Resources_and_Facilities',
+    'President'
+  ];
 
 
   return (
@@ -218,7 +238,7 @@ export function RoleManagementEditor() {
                                     </Button>
                                     <AlertDialog>
                                         <AlertDialogTrigger asChild>
-                                            <Button variant="destructive" size="sm" disabled={['Admin', 'Procurement_Officer', 'Requester', 'Approver', 'Vendor'].includes(role.name)}>
+                                            <Button variant="destructive" size="sm" disabled={coreRoles.includes(role.name)}>
                                                 <Trash2 className="mr-2 h-4 w-4" />
                                                 Delete
                                             </Button>
