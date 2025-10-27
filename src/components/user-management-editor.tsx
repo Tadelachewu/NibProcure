@@ -48,7 +48,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
-import { rolePermissions } from '@/lib/roles';
 import { useAuth } from '@/contexts/auth-context';
 
 const userFormSchema = z.object({
@@ -66,13 +65,12 @@ const userEditFormSchema = userFormSchema.extend({
 type UserFormValues = z.infer<typeof userFormSchema>;
 
 export function UserManagementEditor() {
-  const [users, setUsers] = useState<User[]>([]);
+  const { allUsers, fetchAllUsers, user: actor, rolePermissions } = useAuth();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
   const { toast } = useToast();
-  const { user: actor } = useAuth();
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userToEdit ? userEditFormSchema : userFormSchema),
@@ -85,22 +83,18 @@ export function UserManagementEditor() {
     },
   });
   
-  const availableRoles = Object.keys(rolePermissions).filter(role => role !== 'Vendor') as UserRole[];
+  const availableRoles = Object.keys(rolePermissions || {}).filter(role => role !== 'Vendor') as UserRole[];
   
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [usersResponse, deptsResponse] = await Promise.all([
-        fetch('/api/users'),
-        fetch('/api/departments'),
-      ]);
-      if (!usersResponse.ok || !deptsResponse.ok) throw new Error('Failed to fetch data');
-      const usersData = await usersResponse.json();
+      await fetchAllUsers();
+      const deptsResponse = await fetch('/api/departments');
+      if (!deptsResponse.ok) throw new Error('Failed to fetch departments');
       const deptsData = await deptsResponse.json();
-      setUsers(usersData);
       setDepartments(deptsData);
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not load user data.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not load initial data.' });
     } finally {
       setIsLoading(false);
     }
@@ -223,14 +217,14 @@ export function UserManagementEditor() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {isLoading && users.length === 0 ? (
+                    {isLoading && allUsers.length === 0 ? (
                          <TableRow>
                             <TableCell colSpan={6} className="h-24 text-center">
                                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto" />
                             </TableCell>
                         </TableRow>
-                    ) : users.length > 0 ? (
-                        users.map((user, index) => (
+                    ) : allUsers.length > 0 ? (
+                        allUsers.map((user, index) => (
                             <TableRow key={user.id}>
                                 <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                                 <TableCell className="font-semibold">{user.name}</TableCell>

@@ -46,32 +46,21 @@ interface Role {
 }
 
 export function RoleManagementEditor() {
-  const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [roleToEdit, setRoleToEdit] = useState<Role | null>(null);
   const [roleName, setRoleName] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
   const { toast } = useToast();
-  const { user, fetchAllSettings } = useAuth();
-
-  const fetchRoles = async () => {
-      setIsLoading(true);
-      try {
-          const response = await fetch('/api/roles');
-          if (!response.ok) throw new Error('Failed to fetch roles');
-          const data = await response.json();
-          setRoles(data);
-      } catch (error) {
-          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch roles.'});
-      } finally {
-          setIsLoading(false);
-      }
-  };
-
-  useEffect(() => {
-    fetchRoles();
-  }, []);
+  const { user, fetchAllSettings, settings } = useAuth();
+  
+  const roles = settings.find(s => s.key === 'rolePermissions')?.value 
+    ? Object.keys(settings.find(s => s.key === 'rolePermissions')!.value).map(key => ({ 
+        id: key, // Using key as a temporary ID, real ID comes from DB on proper fetch
+        name: key, 
+        description: `Description for ${key.replace(/_/g, ' ')}` 
+    })) 
+    : [];
 
   const handleFormSubmit = async () => {
     if (!roleName.trim()) {
@@ -108,8 +97,7 @@ export function RoleManagementEditor() {
         });
         
         setDialogOpen(false);
-        await fetchRoles();
-        await fetchAllSettings(); // Re-fetch settings to get updated permissions
+        await fetchAllSettings();
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
@@ -133,7 +121,6 @@ export function RoleManagementEditor() {
             title: 'Role Deleted',
             description: `The role has been deleted.`,
         });
-        await fetchRoles();
         await fetchAllSettings();
     } catch (error) {
          toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});

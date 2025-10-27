@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -24,12 +23,14 @@ type PermissionsState = Record<UserRole, string[]>;
 
 export function RolePermissionsEditor() {
   const { rolePermissions, updateRolePermissions } = useAuth();
-  const [permissions, setPermissions] = useState<PermissionsState>(rolePermissions);
+  const [permissions, setPermissions] = useState<PermissionsState>({});
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    setPermissions(rolePermissions);
+    if (rolePermissions) {
+      setPermissions(rolePermissions);
+    }
   }, [rolePermissions]);
 
   const editableRoles = Object.keys(permissions).filter(
@@ -50,18 +51,23 @@ export function RolePermissionsEditor() {
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
-    // In a real app, you would make an API call to save the new permissions.
-    console.log('Saving new permissions:', permissions);
-    updateRolePermissions(permissions);
-    setTimeout(() => {
-      toast({
-        title: 'Permissions Saved',
-        description: 'User role permissions have been updated.',
-      });
-      setIsSaving(false);
-    }, 1000);
+    try {
+        await updateRolePermissions(permissions);
+        toast({
+            title: 'Permissions Saved',
+            description: 'User role permissions have been updated.',
+        });
+    } catch(e) {
+        toast({
+            variant: 'destructive',
+            title: 'Error Saving Permissions',
+            description: 'Could not update permissions in the database.'
+        });
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   return (
