@@ -45,8 +45,11 @@ export const AwardCenterDialog = ({
         return requisition.items.map(reqItem => {
             let bestScore = -1;
             let winner: { vendorId: string; vendorName: string; quoteItemId: string; } | null = null;
+            
+            // Only consider quotes that haven't been declined
+            const eligibleQuotes = quotations.filter(q => q.status !== 'Declined');
 
-            quotations.forEach(quote => {
+            eligibleQuotes.forEach(quote => {
                 const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
 
                 proposalsForItem.forEach(proposal => {
