@@ -1615,6 +1615,7 @@ const ScoringProgressTracker = ({
   onCommitteeUpdate,
   isFinalizing,
   isAwarded,
+  hasBeenRejected,
 }: {
   requisition: PurchaseRequisition;
   quotations: Quotation[];
@@ -1623,6 +1624,7 @@ const ScoringProgressTracker = ({
   onCommitteeUpdate: (open: boolean) => void;
   isFinalizing: boolean;
   isAwarded: boolean;
+  hasBeenRejected: boolean;
 }) => {
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
@@ -1631,8 +1633,6 @@ const ScoringProgressTracker = ({
     
     const { toast } = useToast();
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
-    
-    const hasBeenRejected = quotations.some(q => q.status === 'Declined');
 
     const assignedCommitteeMembers = useMemo(() => {
         const allIds = [
@@ -2997,6 +2997,7 @@ export default function QuotationDetailsPage() {
                 onCommitteeUpdate={setCommitteeDialogOpen}
                 isFinalizing={isFinalizing}
                 isAwarded={isAwarded}
+                hasBeenRejected={hasBeenRejected}
             />
         )}
 
@@ -3135,6 +3136,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
