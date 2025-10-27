@@ -27,16 +27,19 @@ export async function POST(
     
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    if (user.role === 'Admin') {
-        isAuthorized = true;
-    } else if (rfqSenderSetting?.value?.type === 'all' && user.role === 'Procurement_Officer') {
-        isAuthorized = true;
-    } else if (rfqSenderSetting?.value?.type === 'specific' && rfqSenderSetting.value.userId === userId) {
-        isAuthorized = true;
+
+    // Corrected Authorization Logic
+    if (rfqSenderSetting?.value?.type === 'specific') {
+        // If a specific user is set, ONLY that user is authorized.
+        isAuthorized = rfqSenderSetting.value.userId === userId;
+    } else { // This handles the 'all' case
+        // If set to 'all', any Procurement Officer or Admin can send.
+        isAuthorized = user.role === 'Procurement_Officer' || user.role === 'Admin';
     }
 
+
     if (!isAuthorized) {
-        return NextResponse.json({ error: 'Unauthorized: You do not have permission to send RFQs.' }, { status: 403 });
+        return NextResponse.json({ error: 'Unauthorized: You do not have permission to send RFQs based on the current system settings.' }, { status: 403 });
     }
 
     const rfqQuorumSetting = await prisma.setting.findUnique({ where: { key: 'rfqQuorum' } });
