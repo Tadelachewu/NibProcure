@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -12,7 +12,6 @@ import {
 import { Button } from './ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Trash2, Edit } from 'lucide-react';
-import { rolePermissions } from '@/lib/roles';
 import { UserRole } from '@/lib/types';
 import {
   AlertDialog,
@@ -38,82 +37,120 @@ import {
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { useAuth } from '@/contexts/auth-context';
+
+interface Role {
+    id: string;
+    name: string;
+    description: string;
+}
 
 export function RoleManagementEditor() {
-  const [roles, setRoles] = useState<UserRole[]>(Object.keys(rolePermissions) as UserRole[]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isAddDialogOpen, setAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setEditDialogOpen] = useState(false);
-  const [newRoleName, setNewRoleName] = useState('');
-  const [roleToEdit, setRoleToEdit] = useState<UserRole | null>(null);
-  const [editedRoleName, setEditedRoleName] = useState('');
+  const [isDialogOpen, setDialogOpen] = useState(false);
+  const [roleToEdit, setRoleToEdit] = useState<Role | null>(null);
+  const [roleName, setRoleName] = useState('');
+  const [roleDescription, setRoleDescription] = useState('');
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  const handleAddNewRole = () => {
-    if (!newRoleName.trim()) {
+  const fetchRoles = async () => {
+      setIsLoading(true);
+      try {
+          const response = await fetch('/api/roles');
+          if (!response.ok) throw new Error('Failed to fetch roles');
+          const data = await response.json();
+          setRoles(data);
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch roles.'});
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
+  useEffect(() => {
+    fetchRoles();
+  }, []);
+
+  const handleFormSubmit = async () => {
+    if (!roleName.trim()) {
         toast({ variant: 'destructive', title: 'Error', description: 'Role name cannot be empty.' });
         return;
     }
-    if (roles.includes(newRoleName as UserRole)) {
-         toast({ variant: 'destructive', title: 'Error', description: 'This role already exists.' });
-        return;
-    }
+    if (!user) return;
     
-    // This is a simulation. In a real app, this would make an API call.
     setIsLoading(true);
-    setTimeout(() => {
-        setRoles([...roles, newRoleName as UserRole]);
-        toast({
-            title: 'Role Added',
-            description: `The role "${newRoleName}" has been successfully added.`,
+
+    const isEditing = !!roleToEdit;
+    const url = '/api/roles';
+    const method = isEditing ? 'PATCH' : 'POST';
+    const body = {
+      id: isEditing ? roleToEdit.id : undefined,
+      name: roleName,
+      description: roleDescription,
+      actorUserId: user.id,
+    };
+    
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
         });
-        setNewRoleName('');
-        setAddDialogOpen(false);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Failed to ${isEditing ? 'update' : 'create'} role.`);
+        }
+        toast({
+            title: `Role ${isEditing ? 'Updated' : 'Added'}`,
+            description: `The role "${roleName}" has been successfully ${isEditing ? 'updated' : 'added'}.`,
+        });
+        
+        setDialogOpen(false);
+        fetchRoles();
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
+    } finally {
         setIsLoading(false);
-    }, 500);
+    }
   };
 
-  const handleEditRole = () => {
-    if (!roleToEdit || !editedRoleName.trim()) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Role name cannot be empty.' });
-      return;
-    }
-     if (roles.includes(editedRoleName as UserRole) && editedRoleName !== roleToEdit) {
-         toast({ variant: 'destructive', title: 'Error', description: 'This role name already exists.' });
-        return;
-    }
 
+  const handleDeleteRole = async (roleId: string) => {
+    if (!user) return;
     setIsLoading(true);
-    setTimeout(() => {
-        setRoles(roles.map(role => role === roleToEdit ? editedRoleName as UserRole : role));
-        toast({
-            title: 'Role Updated',
-            description: `The role "${roleToEdit}" has been renamed to "${editedRoleName}".`,
+    try {
+         const response = await fetch(`/api/roles?id=${roleId}&actorUserId=${user.id}`, {
+            method: 'DELETE',
         });
-        setRoleToEdit(null);
-        setEditedRoleName('');
-        setEditDialogOpen(false);
-        setIsLoading(false);
-    }, 500);
-  };
-
-  const handleDeleteRole = (roleToDelete: UserRole) => {
-    setIsLoading(true);
-    // This is a simulation. In a real app, you'd make an API call.
-    setTimeout(() => {
-        setRoles(roles.filter(role => role !== roleToDelete));
+         if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to delete role.');
+        }
         toast({
             title: 'Role Deleted',
-            description: `The role "${roleToDelete}" has been deleted.`,
+            description: `The role has been deleted.`,
         });
+        fetchRoles();
+    } catch (error) {
+         toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
+    } finally {
         setIsLoading(false);
-    }, 500);
+    }
   };
 
-  const openEditDialog = (role: UserRole) => {
-    setRoleToEdit(role);
-    setEditedRoleName(role);
-    setEditDialogOpen(true);
+  const openDialog = (role?: Role) => {
+    if (role) {
+        setRoleToEdit(role);
+        setRoleName(role.name.replace(/_/g, ' '));
+        setRoleDescription(role.description);
+    } else {
+        setRoleToEdit(null);
+        setRoleName('');
+        setRoleDescription('');
+    }
+    setDialogOpen(true);
   }
 
 
@@ -127,26 +164,29 @@ export function RoleManagementEditor() {
                 Define, edit, and delete user roles in the application.
                 </CardDescription>
             </div>
-             <Dialog open={isAddDialogOpen} onOpenChange={setAddDialogOpen}>
+             <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) setRoleToEdit(null); setDialogOpen(open);}}>
                 <DialogTrigger asChild>
-                    <Button><PlusCircle className="mr-2"/> Add New Role</Button>
+                    <Button onClick={() => openDialog()}><PlusCircle className="mr-2"/> Add New Role</Button>
                 </DialogTrigger>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Add New Role</DialogTitle>
-                        <DialogDescription>
-                            Define a name for the new role. You can set its permissions in the "Role Permissions" tab.
-                        </DialogDescription>
+                        <DialogTitle>{roleToEdit ? 'Edit Role' : 'Add New Role'}</DialogTitle>
                     </DialogHeader>
-                    <div className="py-4">
-                        <Label htmlFor="role-name">Role Name</Label>
-                        <Input id="role-name" placeholder="e.g., Quality Assurance" value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} />
+                    <div className="py-4 space-y-4">
+                        <div>
+                            <Label htmlFor="role-name">Role Name</Label>
+                            <Input id="role-name" placeholder="e.g., Quality Assurance" value={roleName} onChange={(e) => setRoleName(e.target.value)} />
+                        </div>
+                        <div>
+                            <Label htmlFor="role-desc">Description</Label>
+                            <Input id="role-desc" placeholder="A brief description of the role's purpose." value={roleDescription} onChange={(e) => setRoleDescription(e.target.value)} />
+                        </div>
                     </div>
                     <DialogFooter>
                         <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                        <Button onClick={handleAddNewRole} disabled={isLoading}>
+                        <Button onClick={handleFormSubmit} disabled={isLoading}>
                              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                            Create Role
+                            {roleToEdit ? 'Save Changes' : 'Create Role'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -158,25 +198,27 @@ export function RoleManagementEditor() {
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead className="w-16">#</TableHead>
                         <TableHead>Role Name</TableHead>
+                        <TableHead>Description</TableHead>
                         <TableHead className="text-right w-40">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {roles.length > 0 ? roles.map((role, index) => (
-                        <TableRow key={role}>
-                            <TableCell className="text-muted-foreground">{index + 1}</TableCell>
-                            <TableCell className="font-semibold">{role}</TableCell>
+                    {isLoading && roles.length === 0 ? (
+                        <TableRow><TableCell colSpan={3} className="h-24 text-center"><Loader2 className="animate-spin"/></TableCell></TableRow>
+                    ) : roles.length > 0 ? roles.map((role) => (
+                        <TableRow key={role.id}>
+                            <TableCell className="font-semibold">{role.name.replace(/_/g, ' ')}</TableCell>
+                            <TableCell className="text-muted-foreground">{role.description}</TableCell>
                             <TableCell className="text-right">
                                 <div className="flex gap-2 justify-end">
-                                    <Button variant="outline" size="sm" onClick={() => openEditDialog(role)}>
+                                    <Button variant="outline" size="sm" onClick={() => openDialog(role)}>
                                         <Edit className="mr-2 h-4 w-4"/>
                                         Edit
                                     </Button>
                                     <AlertDialog>
                                         <AlertDialogTrigger asChild>
-                                            <Button variant="destructive" size="sm" disabled={role === 'Admin' || role === 'Procurement Officer'}>
+                                            <Button variant="destructive" size="sm" disabled={['Admin', 'Procurement_Officer', 'Requester', 'Approver', 'Vendor'].includes(role.name)}>
                                                 <Trash2 className="mr-2 h-4 w-4" />
                                                 Delete
                                             </Button>
@@ -185,13 +227,13 @@ export function RoleManagementEditor() {
                                             <AlertDialogHeader>
                                                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                                 <AlertDialogDescription>
-                                                    This action cannot be undone. This will permanently delete the <strong>{role}</strong> role.
+                                                    This action cannot be undone. This will permanently delete the <strong>{role.name.replace(/_/g, ' ')}</strong> role.
                                                     Any users with this role will lose their assigned permissions.
                                                 </AlertDialogDescription>
                                             </AlertDialogHeader>
                                             <AlertDialogFooter>
                                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                <AlertDialogAction onClick={() => handleDeleteRole(role)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                                                <AlertDialogAction onClick={() => handleDeleteRole(role.id)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
                                                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                                                     Yes, delete role
                                                 </AlertDialogAction>
@@ -204,7 +246,7 @@ export function RoleManagementEditor() {
                     )) : (
                          <TableRow>
                             <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                                No roles found.
+                                No custom roles found.
                             </TableCell>
                         </TableRow>
                     )}
@@ -212,24 +254,6 @@ export function RoleManagementEditor() {
             </Table>
         </div>
       </CardContent>
-       <Dialog open={isEditDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Edit Role: {roleToEdit}</DialogTitle>
-            </DialogHeader>
-            <div className="py-4">
-                <Label htmlFor="edit-role-name">New Role Name</Label>
-                <Input id="edit-role-name" value={editedRoleName} onChange={(e) => setEditedRoleName(e.target.value)} />
-            </div>
-            <DialogFooter>
-                <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                <Button onClick={handleEditRole} disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                    Save Changes
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
   );
 }
