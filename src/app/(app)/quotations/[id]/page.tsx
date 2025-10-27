@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -1614,7 +1615,6 @@ const ScoringProgressTracker = ({
   onFinalize,
   onCommitteeUpdate,
   isFinalizing,
-  hasBeenRejected,
 }: {
   requisition: PurchaseRequisition;
   quotations: Quotation[];
@@ -1622,7 +1622,6 @@ const ScoringProgressTracker = ({
   onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
   onCommitteeUpdate: (open: boolean) => void;
   isFinalizing: boolean;
-  hasBeenRejected: boolean;
 }) => {
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
@@ -1676,15 +1675,6 @@ const ScoringProgressTracker = ({
     
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
-    const getButtonState = () => {
-        if (hasBeenRejected) return { text: "Award Standby", disabled: false };
-        if (isFinalizing) return { text: "Finalizing...", disabled: true };
-        if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
-        return { text: "Finalize Scores & Award", disabled: false };
-    }
-    const buttonState = getButtonState();
-
-
     return (
         <Card className="mt-6">
             <CardHeader>
@@ -1731,9 +1721,9 @@ const ScoringProgressTracker = ({
             <CardFooter>
                  <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
                     <DialogTrigger asChild>
-                         <Button disabled={buttonState.disabled}>
+                         <Button disabled={!allHaveScored || isFinalizing}>
                             {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {buttonState.text}
+                            {allHaveScored ? "Finalize Scores & Award" : "Waiting for All Scores..."}
                         </Button>
                     </DialogTrigger>
                     <AwardCenterDialog 
@@ -2231,7 +2221,6 @@ export default function QuotationDetailsPage() {
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
-  const hasBeenRejected = useMemo(() => quotations.some(q => q.status === 'Declined'), [quotations]);
   const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   
@@ -2246,20 +2235,23 @@ export default function QuotationDetailsPage() {
   }, [requisition]);
 
   const isScoringComplete = useMemo(() => {
-    if (!requisition) return false;
-    const allMemberIds = [
+    if (!requisition || requisition.status !== 'Scoring_Complete') return false;
+
+    const allMemberIds = new Set([
         ...(requisition.financialCommitteeMemberIds || []),
         ...(requisition.technicalCommitteeMemberIds || [])
-    ];
-    if (allMemberIds.length === 0) return false;
-    if (quotations.length === 0) return false;
+    ]);
 
-    // Check if every assigned member has finalized their scores.
-    return allMemberIds.every(memberId => {
-        const member = allUsers.find(u => u.id === memberId);
-        return member?.committeeAssignments?.some(a => a.requisitionId === requisition.id && a.scoresSubmitted) || false;
-    });
-  }, [requisition, quotations, allUsers]);
+    if (allMemberIds.size === 0) return false; // If no committee assigned, scoring can't be complete.
+
+    const submittedMemberIds = new Set(
+        requisition.committeeAssignments
+            ?.filter(a => a.scoresSubmitted)
+            .map(a => a.userId)
+    );
+    
+    return Array.from(allMemberIds).every(id => submittedMemberIds.has(id));
+  }, [requisition]);
 
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
@@ -2288,26 +2280,9 @@ export default function QuotationDetailsPage() {
             const quoData = await quoResponse.json();
 
             if (currentReq) {
-                const awardedQuote = quoData.find((q: Quotation) => q.status === 'Awarded');
-                if (awardedQuote && currentReq.awardResponseDeadline && isPast(new Date(currentReq.awardResponseDeadline))) {
-                    toast({
-                        title: 'Deadline Missed',
-                        description: `Vendor ${awardedQuote.vendorName} missed the response deadline. Action required.`,
-                        variant: 'destructive',
-                    });
-                    // This now just reverts the state, does not auto-promote.
-                    await handleAwardChange();
-                    // Refetch after the change
-                    const [refetchedReqRes, refetchedQuoRes] = await Promise.all([
-                        fetch(`/api/requisitions/${id}`),
-                        fetch(`/api/quotations?requisitionId=${id}`)
-                    ]);
-                    setRequisition(await refetchedReqRes.json());
-                    setQuotations(await refetchedQuoRes.json());
-                } else {
-                    setRequisition(currentReq);
-                    setQuotations(quoData);
-                }
+                // The vendor response is now automated on the backend via handleAwardRejection service
+                setRequisition(currentReq);
+                setQuotations(quoData);
             } else {
                 toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
             }
@@ -2735,7 +2710,7 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-         {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
+        {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
             requisition.status !== 'PreApproved') &&
             requisition.status !== 'Scoring_Complete' && (
@@ -2746,11 +2721,10 @@ export default function QuotationDetailsPage() {
                 onFinalize={handleFinalizeScores}
                 onCommitteeUpdate={setCommitteeDialogOpen}
                 isFinalizing={isFinalizing}
-                hasBeenRejected={hasBeenRejected}
             />
         )}
         
-        {(hasBeenRejected || requisition.status === 'Scoring_Complete') && (role === 'Procurement_Officer' || role === 'Admin') && (
+        {requisition.status === 'Scoring_Complete' && (role === 'Procurement_Officer' || role === 'Admin') && (
              <AwardStandbyButton 
                 requisition={requisition}
                 quotations={quotations}
@@ -2894,5 +2868,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 

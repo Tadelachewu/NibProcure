@@ -5,8 +5,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleAwardRejection } from '@/services/award-service';
 
-type AwardAction = 'promote_second' | 'promote_third' | 'restart_rfq';
-
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
@@ -14,7 +12,7 @@ export async function POST(
   const requisitionId = params.id;
   try {
     const body = await request.json();
-    const { userId, action } = body as { userId: string; action: AwardAction };
+    const { userId } = body as { userId: string; };
 
     const user = await prisma.user.findUnique({where: {id: userId}});
     if (!user) {

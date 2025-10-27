@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User } from '@/lib/types';
+import { handleAwardRejection } from '@/services/award-service';
 
 
 export async function POST(
@@ -23,7 +24,7 @@ export async function POST(
     const transactionResult = await prisma.$transaction(async (tx) => {
         const quote = await tx.quotation.findUnique({ 
             where: { id: quoteId },
-            include: { items: true, requisition: true }
+            include: { items: true, requisition: { include: { quotations: { include: { items: true } } } } }
         });
 
         if (!quote || quote.vendorId !== user.vendorId) {
@@ -45,13 +46,14 @@ export async function POST(
                 data: { status: 'Accepted' }
             });
             
+            // Logic to handle both full and partial awards when creating a PO
             const awardedQuoteItems = quote.items.filter(item => 
                 requisition.awardedQuoteItemIds.includes(item.id)
             );
 
             const thisVendorAwardedItems = awardedQuoteItems.length > 0 ? awardedQuoteItems : quote.items;
 
-            const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
+            const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
 
             const newPO = await tx.purchaseOrder.create({
                 data: {
@@ -60,7 +62,7 @@ export async function POST(
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
                     items: {
-                        create: thisVendorAwardedItems.map((item: any) => ({
+                        create: thisVendorAwardedItems.map(item => ({
                             requisitionItemId: item.requisitionItemId,
                             name: item.name,
                             quantity: item.quantity,
@@ -74,6 +76,7 @@ export async function POST(
                 }
             });
 
+            // Check if all awards are accepted to update the main requisition status
             const allAwardedQuotes = await tx.quotation.findMany({
                 where: {
                     requisitionId: requisition.id,
@@ -84,7 +87,9 @@ export async function POST(
             if (allAwardedQuotes.length === 0) {
                  await tx.purchaseRequisition.update({
                     where: { id: requisition.id },
-                    data: { status: 'PO_Created' }
+                    data: {
+                        status: 'PO_Created',
+                    }
                 });
             }
             
@@ -103,30 +108,9 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-             // Mark the current quote as Declined
-            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Declined' } });
-
-            // Revert the requisition status to Scoring_Complete to allow the PO to re-award
-            await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'Scoring_Complete' }
-            });
-
-            await tx.auditLog.create({
-                data: {
-                    timestamp: new Date(),
-                    user: { connect: { id: user.id } },
-                    action: 'REJECT_AWARD',
-                    entity: 'Quotation',
-                    entityId: quoteId,
-                    details: `Vendor declined award. Requisition returned to Procurement Officer for action.`,
-                    transactionId: requisition.transactionId,
-                }
-            });
-
-            return { message: 'Award declined. The procurement team has been notified to re-initiate the award process.' };
+            // The logic for rejection and promotion is now handled by a dedicated service.
+            return await handleAwardRejection(tx, quote, requisition, user);
         }
-        
         throw new Error('Invalid action.');
     });
     
