@@ -1679,8 +1679,8 @@ const ScoringProgressTracker = ({
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
     const getButtonState = () => {
-        if (isAwarded && !hasBeenRejected) return { text: "Award Process Complete", disabled: true };
-        if (hasBeenRejected) return { text: "Award Standby", disabled: false }; // Always enable if a rejection happened.
+        if (hasBeenRejected) return { text: "Award Standby", disabled: false };
+        if (isAwarded) return { text: "Award Process Complete", disabled: true };
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
         if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
         return { text: "Finalize Scores & Award", disabled: false };
@@ -2988,7 +2988,7 @@ export default function QuotationDetailsPage() {
         
         {(role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             (requisition.status === 'Scoring_Complete' || (
-                ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0)
+                (requisition.financialCommitteeMemberIds?.length > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0)
                 && requisition.status !== 'PreApproved'
             )) &&
             (
@@ -3140,6 +3140,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
