@@ -2469,7 +2469,7 @@ export default function QuotationDetailsPage() {
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
   const hasBeenRejected = useMemo(() => quotations.some(q => q.status === 'Declined'), [quotations]);
-  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
+  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   const secondStandby = useMemo(() => quotations.find(q => q.rank === 2), [quotations]);
   const thirdStandby = useMemo(() => quotations.find(q => q.rank === 3), [quotations]);
@@ -2986,24 +2986,24 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-        {(role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
-            (requisition.status === 'Scoring_Complete' || (
-                (requisition.financialCommitteeMemberIds?.length > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0)
-                && requisition.status !== 'PreApproved'
-            )) &&
-            (
-                <ScoringProgressTracker
-                    requisition={requisition}
-                    quotations={quotations}
-                    allUsers={allUsers}
-                    onFinalize={handleFinalizeScores}
-                    onCommitteeUpdate={setCommitteeDialogOpen}
-                    isFinalizing={isFinalizing}
-                    isAwarded={isAwarded}
-                    hasBeenRejected={hasBeenRejected}
-                />
-            )
-        }
+        {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
+        (requisition.status === 'Scoring_Complete' || 
+         hasBeenRejected ||
+         (requisition.financialCommitteeMemberIds?.length || 0) > 0 || 
+         (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
+         requisition.status !== 'PreApproved') && (
+            <ScoringProgressTracker
+                requisition={requisition}
+                quotations={quotations}
+                allUsers={allUsers}
+                onFinalize={handleFinalizeScores}
+                onCommitteeUpdate={setCommitteeDialogOpen}
+                isFinalizing={isFinalizing}
+                isAwarded={isAwarded}
+                hasBeenRejected={hasBeenRejected}
+            />
+        )}
+
 
         {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
             <Card className="mt-6 border-amber-500">
@@ -3140,6 +3140,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
