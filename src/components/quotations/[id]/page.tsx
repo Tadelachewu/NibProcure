@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -1613,6 +1614,7 @@ const ScoringProgressTracker = ({
   onFinalize,
   onCommitteeUpdate,
   isFinalizing,
+  isAwarded,
 }: {
   requisition: PurchaseRequisition;
   quotations: Quotation[];
@@ -1620,6 +1622,7 @@ const ScoringProgressTracker = ({
   onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
   onCommitteeUpdate: (open: boolean) => void;
   isFinalizing: boolean;
+  isAwarded: boolean;
 }) => {
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
@@ -1630,12 +1633,6 @@ const ScoringProgressTracker = ({
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
     
     const hasBeenRejected = quotations.some(q => q.status === 'Declined');
-    const isAwarded = quotations.some(q => 
-        q.status === 'Awarded' || 
-        q.status === 'Accepted' || 
-        q.status === 'Partially_Awarded' || 
-        q.status === 'Standby'
-    );
 
     const assignedCommitteeMembers = useMemo(() => {
         const allIds = [
@@ -1683,9 +1680,9 @@ const ScoringProgressTracker = ({
 
     const getButtonState = () => {
         if (isAwarded && !hasBeenRejected) return { text: "Award Process Complete", disabled: true };
+        if (hasBeenRejected) return { text: "Award Standby", disabled: !allHaveScored };
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
         if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
-        if (hasBeenRejected) return { text: "Award Standby", disabled: false };
         return { text: "Finalize Scores & Award", disabled: false };
     }
     const buttonState = getButtonState();
@@ -2996,6 +2993,7 @@ export default function QuotationDetailsPage() {
                 onFinalize={handleFinalizeScores}
                 onCommitteeUpdate={setCommitteeDialogOpen}
                 isFinalizing={isFinalizing}
+                isAwarded={isAwarded}
             />
         )}
 
@@ -3134,6 +3132,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
