@@ -8,7 +8,6 @@ import { Button } from '../ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, PlusCircle, Trash2, ArrowDown, ArrowUp, GripVertical } from 'lucide-react';
 import { ApprovalStep, ApprovalThreshold, UserRole } from '@/lib/types';
-import { rolePermissions } from '@/lib/roles';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -16,12 +15,13 @@ import { Reorder } from 'framer-motion';
 import { produce } from 'immer';
 
 export function ApprovalMatrixEditor() {
-    const { approvalThresholds, updateApprovalThresholds, committeeConfig } = useAuth();
+    const { approvalThresholds, updateApprovalThresholds, committeeConfig, rolePermissions } = useAuth();
     const [localThresholds, setLocalThresholds] = useState<ApprovalThreshold[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
+        // Deep copy to avoid direct state mutation
         setLocalThresholds(JSON.parse(JSON.stringify(approvalThresholds)));
     }, [approvalThresholds]);
 
@@ -113,7 +113,7 @@ export function ApprovalMatrixEditor() {
     const addThreshold = () => {
         const newId = `tier-${Date.now()}`;
         setLocalThresholds(produce(draft => {
-            const highestMax = Math.max(...draft.filter(t => t.max !== null).map(t => t.max as number), 0);
+            const highestMax = Math.max(...draft.filter(t => t.max !== null).map(t => t.max as number), -1);
             draft.push({ id: newId, name: 'New Tier', min: highestMax + 1, max: null, steps: [] });
         }));
     };
