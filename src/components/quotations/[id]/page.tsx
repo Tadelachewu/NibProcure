@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -62,6 +60,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AwardStandbyButton } from '@/components/award-standby-button';
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -1614,8 +1613,6 @@ const ScoringProgressTracker = ({
   onFinalize,
   onCommitteeUpdate,
   isFinalizing,
-  isAwarded,
-  hasBeenRejected
 }: {
   requisition: PurchaseRequisition;
   quotations: Quotation[];
@@ -1623,8 +1620,6 @@ const ScoringProgressTracker = ({
   onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
   onCommitteeUpdate: (open: boolean) => void;
   isFinalizing: boolean;
-  isAwarded: boolean;
-  hasBeenRejected: boolean;
 }) => {
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
@@ -1679,8 +1674,6 @@ const ScoringProgressTracker = ({
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
     const getButtonState = () => {
-        if (hasBeenRejected) return { text: "Award Standby", disabled: false };
-        if (isAwarded) return { text: "Award Process Complete", disabled: true };
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
         if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
         return { text: "Finalize Scores & Award", disabled: false };
@@ -2471,9 +2464,6 @@ export default function QuotationDetailsPage() {
   const hasBeenRejected = useMemo(() => quotations.some(q => q.status === 'Declined'), [quotations]);
   const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
-  const secondStandby = useMemo(() => quotations.find(q => q.rank === 2), [quotations]);
-  const thirdStandby = useMemo(() => quotations.find(q => q.rank === 3), [quotations]);
-  const prevAwardedFailed = useMemo(() => quotations.some(q => q.status === 'Failed'), [quotations]);
   
   const isDeadlinePassed = useMemo(() => {
     if (!requisition) return false;
@@ -2784,16 +2774,6 @@ export default function QuotationDetailsPage() {
             <WorkflowStepper step={currentStep} />
         </Card>
         
-        {prevAwardedFailed && (
-             <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Award Failover</AlertTitle>
-                <AlertDescription>
-                    A previously awarded vendor failed to respond or declined the award. The award has been automatically passed to the next standby vendor.
-                </AlertDescription>
-            </Alert>
-        )}
-        
         {requisition.evaluationCriteria && (
             <Card>
                  <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -2891,7 +2871,6 @@ export default function QuotationDetailsPage() {
 
         {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
             <>
-                {/* Always render committee management when in award step so dialog can open */}
                 {canManageCommittees && currentStep !== 'committee' && readyForCommitteeAssignment && (
                      <div className="hidden">
                         <EvaluationCommitteeManagement
@@ -2987,10 +2966,7 @@ export default function QuotationDetailsPage() {
         )}
         
         {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
-        (requisition.status === 'Scoring_Complete' || 
-         hasBeenRejected ||
-         (requisition.financialCommitteeMemberIds?.length || 0) > 0 || 
-         (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
+         (requisition.status === 'Scoring_Complete' || (requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
          requisition.status !== 'PreApproved') && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2999,11 +2975,17 @@ export default function QuotationDetailsPage() {
                 onFinalize={handleFinalizeScores}
                 onCommitteeUpdate={setCommitteeDialogOpen}
                 isFinalizing={isFinalizing}
-                isAwarded={isAwarded}
-                hasBeenRejected={hasBeenRejected}
             />
         )}
-
+        
+        {hasBeenRejected && requisition.status === 'Scoring_Complete' && (role === 'Procurement_Officer' || role === 'Admin') && (
+             <AwardStandbyButton 
+                requisition={requisition}
+                quotations={quotations}
+                onFinalize={handleFinalizeScores}
+                isFinalizing={isFinalizing}
+            />
+        )}
 
         {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
             <Card className="mt-6 border-amber-500">
@@ -3137,15 +3119,3 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         </Card>
     );
 };
-    
-
-    
-
-
-
-
-
-
-
-
-
