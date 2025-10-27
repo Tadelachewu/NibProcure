@@ -64,9 +64,8 @@ const userEditFormSchema = userFormSchema.extend({
 type UserFormValues = z.infer<typeof userFormSchema>;
 
 export function UserManagementEditor() {
-  const { allUsers, fetchAllUsers, user: actor } = useAuth();
+  const { allUsers, fetchAllUsers, user: actor, departments, fetchAllDepartments } = useAuth();
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
@@ -86,17 +85,13 @@ export function UserManagementEditor() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      await fetchAllUsers();
-      const [deptsResponse, rolesResponse] = await Promise.all([
-          fetch('/api/departments'),
-          fetch('/api/roles')
-      ]);
-      if (!deptsResponse.ok) throw new Error('Failed to fetch departments');
+      await Promise.all([fetchAllUsers(), fetchAllDepartments()]);
+      
+      const rolesResponse = await fetch('/api/roles');
       if (!rolesResponse.ok) throw new Error('Failed to fetch roles');
-      const deptsData = await deptsResponse.json();
       const rolesData = await rolesResponse.json();
-      setDepartments(deptsData);
       setRoles(rolesData.filter((r: any) => r.name !== 'VENDOR'));
+
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not load initial data.' });
     } finally {

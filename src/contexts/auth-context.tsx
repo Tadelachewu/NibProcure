@@ -2,7 +2,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
-import { User, UserRole } from '@/lib/types';
+import { Department, User, UserRole } from '@/lib/types';
 import { rolePermissions as defaultRolePermissions } from '@/lib/roles';
 
 // Custom JWT decoding function to avoid dependency issues
@@ -65,6 +65,7 @@ interface AuthContextType {
   token: string | null;
   role: UserRole | null;
   allUsers: User[];
+  departments: Department[];
   rolePermissions: Record<UserRole, string[]>;
   rfqSenderSetting: RfqSenderSetting;
   approvalThresholds: ApprovalThreshold[];
@@ -82,7 +83,9 @@ interface AuthContextType {
   updateApprovalThresholds: (newThresholds: ApprovalThreshold[]) => void;
   updateCommitteeConfig: (newConfig: any) => Promise<void>;
   updateSetting: (key: string, value: any) => Promise<void>;
+  fetchAllUsers: () => Promise<User[]>;
   fetchAllSettings: () => Promise<void>;
+  fetchAllDepartments: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -92,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [rolePermissions, setRolePermissions] = useState<Record<UserRole, string[]>>(defaultRolePermissions);
   const [rfqSenderSetting, setRfqSenderSetting] = useState<RfqSenderSetting>({ type: 'all' });
@@ -114,6 +118,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
         console.error("Failed to fetch all users", error);
         return [];
+    }
+  }, []);
+
+  const fetchAllDepartments = useCallback(async () => {
+    try {
+      const response = await fetch('/api/departments');
+      if (response.ok) {
+        const deptsData = await response.json();
+        setDepartments(deptsData);
+      }
+    } catch (error) {
+      console.error("Failed to fetch departments", error);
     }
   }, []);
   
@@ -154,10 +170,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
-      await fetchAllSettings();
-      const users = await fetchAllUsers();
+      await Promise.all([
+        fetchAllSettings(),
+        fetchAllUsers(),
+        fetchAllDepartments()
+      ]);
       try {
           const storedToken = localStorage.getItem('authToken');
+          const users = await fetchAllUsers(); // re-fetch to ensure we have the latest list
           
           if (storedToken) {
               const decoded = jwtDecode<{ exp: number, iat: number } & User>(storedToken);
@@ -177,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     };
     initializeAuth();
-  }, [fetchAllUsers, fetchAllSettings]);
+  }, [fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
 
   const login = (newToken: string, loggedInUser: User, loggedInRole: UserRole) => {
     localStorage.setItem('authToken', newToken);
@@ -279,6 +299,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
       role,
       allUsers,
+      departments,
       rolePermissions,
       rfqSenderSetting,
       approvalThresholds,
@@ -296,8 +317,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateApprovalThresholds,
       updateCommitteeConfig,
       updateSetting,
+      fetchAllUsers,
       fetchAllSettings,
-  }), [user, token, role, loading, allUsers, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings]);
+      fetchAllDepartments
+  }), [user, token, role, loading, allUsers, departments, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
 
 
   return (
