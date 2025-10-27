@@ -1615,7 +1615,7 @@ const ScoringProgressTracker = ({
   onCommitteeUpdate,
   isFinalizing,
   isAwarded,
-  hasBeenRejected,
+  hasBeenRejected
 }: {
   requisition: PurchaseRequisition;
   quotations: Quotation[];
@@ -1680,7 +1680,7 @@ const ScoringProgressTracker = ({
 
     const getButtonState = () => {
         if (isAwarded && !hasBeenRejected) return { text: "Award Process Complete", disabled: true };
-        if (hasBeenRejected) return { text: "Award Standby", disabled: !allHaveScored };
+        if (hasBeenRejected) return { text: "Award Standby", disabled: false }; // Always enable if a rejection happened.
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
         if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
         return { text: "Finalize Scores & Award", disabled: false };
@@ -2986,20 +2986,24 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-        {(role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') &&
-         (requisition.status === 'Scoring_Complete' ||
-         ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0)) && (
-             <ScoringProgressTracker 
-                requisition={requisition}
-                quotations={quotations}
-                allUsers={allUsers}
-                onFinalize={handleFinalizeScores}
-                onCommitteeUpdate={setCommitteeDialogOpen}
-                isFinalizing={isFinalizing}
-                isAwarded={isAwarded}
-                hasBeenRejected={hasBeenRejected}
-            />
-        )}
+        {(role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
+            (requisition.status === 'Scoring_Complete' || (
+                ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0)
+                && requisition.status !== 'PreApproved'
+            )) &&
+            (
+                <ScoringProgressTracker
+                    requisition={requisition}
+                    quotations={quotations}
+                    allUsers={allUsers}
+                    onFinalize={handleFinalizeScores}
+                    onCommitteeUpdate={setCommitteeDialogOpen}
+                    isFinalizing={isFinalizing}
+                    isAwarded={isAwarded}
+                    hasBeenRejected={hasBeenRejected}
+                />
+            )
+        }
 
         {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
             <Card className="mt-6 border-amber-500">
@@ -3136,6 +3140,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
