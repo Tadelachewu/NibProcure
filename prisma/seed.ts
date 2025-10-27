@@ -37,7 +37,6 @@ async function main() {
   await prisma.setting.deleteMany({});
   
   // Manually manage order of user/vendor deletion to avoid foreign key issues
-  await prisma.user.updateMany({ data: { managerId: null } });
   await prisma.department.updateMany({data: { headId: null }});
   await prisma.vendor.deleteMany({});
   await prisma.user.deleteMany({});
@@ -171,17 +170,6 @@ async function main() {
   }
   console.log('Seeded non-vendor users.');
   
-  // Second pass to link managers
-  for (const user of seedData.users.filter(u => u.role !== 'Vendor' && u.managerId)) {
-      await prisma.user.update({
-          where: { id: user.id },
-          data: {
-              manager: { connect: { id: user.managerId } }
-          }
-      });
-  }
-  console.log('Linked managers to users.');
-  
   // Third pass to link department heads
   for (const dept of seedData.departments) {
     if (dept.headId) {
@@ -213,7 +201,6 @@ async function main() {
               name: vendorUser.name,
               email: vendorUser.email,
               password: hashedPassword,
-              approvalLimit: vendorUser.approvalLimit,
               role: vendorUser.role.replace(/ /g, '_'),
           }
       });

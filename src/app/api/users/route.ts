@@ -27,7 +27,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email, password, role, departmentId, actorUserId, approvalLimit, managerId } = body;
+    const { name, email, password, role, departmentId, actorUserId } = body;
     
     const actor = await prisma.user.findUnique({where: { id: actorUserId }});
     if (!actor) {
@@ -52,8 +52,6 @@ export async function POST(request: Request) {
             password: hashedPassword,
             role: role.replace(/ /g, '_'),
             department: { connect: { id: departmentId } },
-            approvalLimit,
-            manager: managerId && managerId !== 'null' ? { connect: { id: managerId } } : undefined,
         }
     });
     
@@ -81,7 +79,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
    try {
     const body = await request.json();
-    const { id, name, email, role, departmentId, password, actorUserId, approvalLimit, managerId } = body;
+    const { id, name, email, role, departmentId, password, actorUserId } = body;
 
     const actor = await prisma.user.findUnique({where: { id: actorUserId }});
     if (!actor) {
@@ -102,15 +100,8 @@ export async function PATCH(request: Request) {
         email,
         role: role.replace(/ /g, '_'),
         department: { connect: { id: departmentId } },
-        approvalLimit: approvalLimit,
     };
     
-    if (managerId && managerId !== 'null') {
-      updateData.manager = { connect: { id: managerId } };
-    } else {
-      updateData.manager = { disconnect: true };
-    }
-
     if (password) {
         updateData.password = await bcrypt.hash(password, 10);
     }
@@ -164,15 +155,6 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ error: 'Cannot delete an Admin user.' }, { status: 403 });
     }
     
-    // Check if user is a manager to other users and reassign them
-    const subordinates = await prisma.user.findMany({ where: { managerId: id } });
-    for (const subordinate of subordinates) {
-        await prisma.user.update({
-            where: { id: subordinate.id },
-            data: { managerId: userToDelete.managerId }, // Reassign to the deleted user's manager
-        });
-    }
-
     await prisma.user.delete({ where: { id } });
     
     await prisma.auditLog.create({

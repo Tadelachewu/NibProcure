@@ -31,8 +31,6 @@ export type User = {
   vendorId?: string;
   departmentId?: string;
   committeeAssignments?: CommitteeAssignment[];
-  approvalLimit?: number;
-  managerId?: string;
 };
 
 export type Department = {
