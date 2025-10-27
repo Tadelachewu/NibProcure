@@ -1629,15 +1629,13 @@ const ScoringProgressTracker = ({
     const { toast } = useToast();
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
     
-    // Check if any quote is in a state that indicates the awarding process has started or finished
+    const hasBeenRejected = quotations.some(q => q.status === 'Declined');
     const isAwarded = quotations.some(q => 
         q.status === 'Awarded' || 
         q.status === 'Accepted' || 
-        q.status === 'Declined' || 
         q.status === 'Partially_Awarded' || 
         q.status === 'Standby'
     );
-    const hasBeenRejected = quotations.some(q => q.status === 'Declined');
 
     const assignedCommitteeMembers = useMemo(() => {
         const allIds = [
@@ -1687,6 +1685,7 @@ const ScoringProgressTracker = ({
         if (isAwarded && !hasBeenRejected) return { text: "Award Process Complete", disabled: true };
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
         if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
+        if (hasBeenRejected) return { text: "Award Standby", disabled: false };
         return { text: "Finalize Scores & Award", disabled: false };
     }
     const buttonState = getButtonState();
@@ -2472,7 +2471,7 @@ export default function QuotationDetailsPage() {
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
-  const isAwarded = useMemo(() => quotations.some(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Partially_Awarded' || q.status === 'Standby'), [quotations]);
+  const isAwarded = useMemo(() => quotations.some(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Declined' || q.status === 'Failed' || q.status === 'Partially_Awarded' || q.status === 'Standby'), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   const secondStandby = useMemo(() => quotations.find(q => q.rank === 2), [quotations]);
   const thirdStandby = useMemo(() => quotations.find(q => q.rank === 3), [quotations]);
@@ -2531,16 +2530,15 @@ export default function QuotationDetailsPage() {
             const quoData = await quoResponse.json();
 
             if (currentReq) {
-                // Check for expired award and auto-promote if necessary
                 const awardedQuote = quoData.find((q: Quotation) => q.status === 'Awarded');
                 if (awardedQuote && currentReq.awardResponseDeadline && isPast(new Date(currentReq.awardResponseDeadline))) {
                     toast({
                         title: 'Deadline Missed',
-                        description: `Vendor ${awardedQuote.vendorName} missed the response deadline. Promoting next vendor.`,
+                        description: `Vendor ${awardedQuote.vendorName} missed the response deadline. Action required.`,
                         variant: 'destructive',
                     });
                     // This now just reverts the state, does not auto-promote.
-                    await handleAwardChange('promote_second');
+                    await handleAwardChange();
                     // Refetch after the change
                     const [refetchedReqRes, refetchedQuoRes] = await Promise.all([
                         fetch(`/api/requisitions/${id}`),
@@ -2637,7 +2635,7 @@ export default function QuotationDetailsPage() {
     }
 
 
-  const handleAwardChange = async (action: 'promote_second' | 'promote_third' | 'restart_rfq') => {
+  const handleAwardChange = async () => {
     if (!user || !id || !requisition) return;
     
     setIsChangingAward(true);
@@ -2645,7 +2643,7 @@ export default function QuotationDetailsPage() {
         const response = await fetch(`/api/requisitions/${id}/handle-award-change`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id, action }),
+            body: JSON.stringify({ userId: user.id }),
         });
 
         if (!response.ok) {
@@ -3136,5 +3134,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
