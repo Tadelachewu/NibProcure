@@ -29,31 +29,60 @@ export function ApprovalMatrixEditor() {
         setIsSaving(true);
         
         // --- START VALIDATION LOGIC ---
-        for (const threshold of localThresholds) {
+        const sortedThresholds = [...localThresholds].sort((a, b) => a.min - b.min);
+
+        for (let i = 0; i < sortedThresholds.length; i++) {
+            const tier = sortedThresholds[i];
+
             // Basic range validation
-            if (threshold.min > (threshold.max ?? Infinity)) {
-                toast({ variant: 'destructive', title: 'Invalid Range', description: `In "${threshold.name}", the minimum value cannot be greater than the maximum.`});
+            if (tier.max !== null && tier.min > tier.max) {
+                toast({ variant: 'destructive', title: 'Invalid Range', description: `In tier "${tier.name}", the minimum value cannot be greater than the maximum.`});
                 setIsSaving(false);
                 return;
             }
 
+            // Check for overlaps and gaps with the previous tier
+            if (i > 0) {
+                const prevTier = sortedThresholds[i - 1];
+                if (prevTier.max === null) {
+                    toast({ variant: 'destructive', title: 'Invalid Configuration', description: `Tier "${prevTier.name}" has no maximum value but is not the last tier.`});
+                    setIsSaving(false);
+                    return;
+                }
+                if (tier.min <= prevTier.max) {
+                    toast({ variant: 'destructive', title: 'Overlapping Tiers', description: `Tier "${tier.name}" (starts at ${tier.min.toLocaleString()}) overlaps with tier "${prevTier.name}" (ends at ${prevTier.max.toLocaleString()}).`});
+                    setIsSaving(false);
+                    return;
+                }
+                 if (tier.min !== prevTier.max + 1) {
+                    toast({ variant: 'destructive', title: 'Gap Detected', description: `There is a gap between tier "${prevTier.name}" (ends at ${prevTier.max.toLocaleString()}) and tier "${tier.name}" (starts at ${tier.min.toLocaleString()}). Tiers must be continuous.`});
+                    setIsSaving(false);
+                    return;
+                }
+            } else {
+                 if (tier.min !== 0) {
+                    toast({ variant: 'destructive', title: 'Invalid Start', description: `The first tier ("${tier.name}") must start at 0.`});
+                    setIsSaving(false);
+                    return;
+                }
+            }
+
+
             // Committee range validation
-            for (const step of threshold.steps) {
+            for (const step of tier.steps) {
                 let committeeKey: 'A' | 'B' | null = null;
                 if (step.role === 'Committee_A_Member') committeeKey = 'A';
                 if (step.role === 'Committee_B_Member') committeeKey = 'B';
 
                 if (committeeKey && committeeConfig[committeeKey]) {
                     const committeeRange = committeeConfig[committeeKey];
-                    const tierMax = threshold.max ?? Infinity;
+                    const tierMax = tier.max ?? Infinity;
 
-                    // A tier is invalid IF its max value is less than the committee's minimum value.
-                    // This prevents assigning a high-value committee to a low-value tier.
                     if (tierMax < committeeRange.min) {
                          toast({ 
                             variant: 'destructive', 
                             title: 'Configuration Conflict', 
-                            description: `Tier "${threshold.name}" (max value: ${tierMax.toLocaleString()}) is too low for Committee ${committeeKey}, which reviews items starting at ${committeeRange.min.toLocaleString()} ETB.`,
+                            description: `Tier "${tier.name}" (max value: ${tierMax.toLocaleString()}) is too low for Committee ${committeeKey}, which reviews items starting at ${committeeRange.min.toLocaleString()} ETB.`,
                             duration: 10000,
                         });
                         setIsSaving(false);
@@ -84,7 +113,8 @@ export function ApprovalMatrixEditor() {
     const addThreshold = () => {
         const newId = `tier-${Date.now()}`;
         setLocalThresholds(produce(draft => {
-            draft.push({ id: newId, name: 'New Tier', min: 0, max: null, steps: [] });
+            const highestMax = Math.max(...draft.filter(t => t.max !== null).map(t => t.max as number), 0);
+            draft.push({ id: newId, name: 'New Tier', min: highestMax + 1, max: null, steps: [] });
         }));
     };
 
