@@ -71,7 +71,6 @@ export function ManagerialApprovalsTable() {
 
   const potentialAttendees = useMemo(() => {
     if (!selectedRequisition || !user) return [];
-    
     // For managerial roles, attendees are likely just the individual approver
     return [user];
   }, [selectedRequisition, user]);
@@ -89,8 +88,7 @@ export function ManagerialApprovalsTable() {
     }
     try {
       setLoading(true);
-      // Corrected API Call: Use forReview=true to fetch only post-award requisitions.
-      const response = await fetch(`/api/requisitions?forReview=true`, {
+      const response = await fetch(`/api/approving`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for approval');
@@ -142,10 +140,10 @@ export function ManagerialApprovalsTable() {
             minute,
         }),
       });
-      if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
+      if (!response.ok) throw new Error(`Failed to ${actionType} requisition award`);
       toast({
         title: "Success",
-        description: `Requisition award for ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
+        description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       fetchRequisitions();
     } catch (error) {

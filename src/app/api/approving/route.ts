@@ -22,20 +22,36 @@ export async function GET(request: Request) {
     
     let whereClause: any = {};
     const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
+    const userId = userPayload.user.id;
 
-    // This page is now ONLY for Committee A and B members.
-    // Admins and Procurement Officers can also see this queue.
-    const committeeReviewStatuses = [
-      'Pending_Committee_A_Recommendation',
-      'Pending_Committee_B_Review',
+    // These are statuses for hierarchical/managerial roles, excluding committees.
+    const managerialReviewStatuses = [
+      'Pending_Managerial_Approval',
+      'Pending_Director_Approval',
+      'Pending_VP_Approval',
+      'Pending_President_Approval'
     ];
 
-    if (userRole === 'Committee_A_Member') {
-      whereClause = { status: 'Pending_Committee_A_Recommendation' };
-    } else if (userRole === 'Committee_B_Member') {
-      whereClause = { status: 'Pending_Committee_B_Review' };
+    if (
+      userRole === 'Manager_Procurement_Division' || 
+      userRole === 'Director_Supply_Chain_and_Property_Management' || 
+      userRole === 'VP_Resources_and_Facilities' || 
+      userRole === 'President'
+    ) {
+      // These roles only see items directly assigned to them.
+      whereClause = { 
+        currentApproverId: userId,
+        status: {
+          in: managerialReviewStatuses
+        }
+      };
     } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-       whereClause = { status: { in: committeeReviewStatuses } };
+       // Admins and POs can see all items in any managerial review queue.
+       whereClause = { 
+         status: { 
+           in: managerialReviewStatuses
+         }
+      };
     } else {
       // Other roles should not see anything on this page.
       return NextResponse.json([]);
@@ -58,9 +74,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json(formattedRequisitions);
   } catch (error) {
-    console.error('Failed to fetch requisitions for committee review:', error);
+    console.error('Failed to fetch requisitions for managerial approval:', error);
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to fetch reviews', details: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to fetch approvals', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
