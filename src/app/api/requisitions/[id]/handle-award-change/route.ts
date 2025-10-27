@@ -36,8 +36,13 @@ export async function POST(
             }
         });
         
+        // This handles the case where the PO is trying to re-award after a rejection
         if (!currentAwardedQuote) {
-             throw new Error('No currently awarded quote found to change.');
+             await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: { status: 'Scoring_Complete' }
+            });
+            return { message: 'Requisition is ready for a new award decision.'};
         }
 
         // We can reuse the rejection logic, as promoting is a consequence of the current winner "failing"

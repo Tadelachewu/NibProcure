@@ -652,7 +652,6 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         </Button>
     );
 
-
     return (
         <Card className="border-dashed">
             <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
@@ -793,7 +792,7 @@ const RFQActionDialog = ({
     onClose,
     onSuccess,
 }: {
-    action: 'update' | 'cancel',
+    action: 'update' | 'cancel' | 'restart',
     requisition: PurchaseRequisition,
     isOpen: boolean,
     onClose: () => void,
@@ -814,7 +813,7 @@ const RFQActionDialog = ({
     
     const handleSubmit = async () => {
         if (!user) return;
-        if (!reason.trim()) {
+        if (action !== 'update' && !reason.trim()) {
             toast({ variant: 'destructive', title: 'Error', description: 'A reason must be provided.'});
             return;
         }
@@ -839,7 +838,7 @@ const RFQActionDialog = ({
                  const errorData = await response.json();
                 throw new Error(errorData.error || `Failed to ${action} RFQ.`);
             }
-            toast({ title: 'Success', description: `The RFQ has been successfully ${action === 'update' ? 'updated' : 'cancelled'}.`});
+            toast({ title: 'Success', description: `The RFQ has been successfully ${action === 'update' ? 'updated' : 'managed'}.`});
             onSuccess();
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
@@ -849,17 +848,24 @@ const RFQActionDialog = ({
         }
     };
 
+    const titles = {
+        update: 'Update RFQ Deadline',
+        cancel: 'Cancel RFQ',
+        restart: 'Restart RFQ (No Bids)'
+    };
+
+    const descriptions = {
+        update: "Provide a reason and set a new deadline for this RFQ. Vendors will be notified.",
+        cancel: "Provide a reason for cancelling this RFQ. This will revert the requisition to 'PreApproved' status and reject all submitted quotes.",
+        restart: "No bids were received for this RFQ. You can restart the process to send it out again, or cancel it entirely."
+    };
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
                 <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>{action === 'update' ? 'Update RFQ Deadline' : 'Cancel RFQ'}</DialogTitle>
-                    <DialogDescription>
-                        {action === 'update' 
-                            ? "Provide a reason and set a new deadline for this RFQ. Vendors will be notified."
-                            : "Provide a reason for cancelling this RFQ. This will revert the requisition to 'PreApproved' status and reject all submitted quotes."
-                        }
-                    </DialogDescription>
+                    <DialogTitle>{titles[action]}</DialogTitle>
+                    <DialogDescription>{descriptions[action]}</DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
                     {action === 'update' && (
@@ -898,16 +904,18 @@ const RFQActionDialog = ({
                             </div>
                         </div>
                     )}
+                     {action !== 'update' && (
                         <div>
-                        <Label htmlFor="reason">Reason for {action === 'update' ? 'Update' : 'Cancellation'}</Label>
+                        <Label htmlFor="reason">Reason for Action</Label>
                         <Textarea id="reason" value={reason} onChange={e => setReason(e.target.value)} className="mt-2" />
                     </div>
+                     )}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Close</Button></DialogClose>
-                    <Button onClick={handleSubmit} disabled={isSubmitting} variant={action === 'cancel' ? 'destructive' : 'default'}>
+                    <Button onClick={handleSubmit} disabled={isSubmitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                        Confirm {action === 'update' ? 'Update' : 'Cancellation'}
+                        Confirm {action.charAt(0).toUpperCase() + action.slice(1)}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -929,7 +937,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const { user } = useAuth();
     const { toast } = useToast();
     
-    const isSent = requisition.status === 'RFQ_In_Progress';
+    const isSent = requisition.status === 'Accepting_Quotes' || requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
 
 
      useEffect(() => {
@@ -1235,8 +1243,8 @@ const ManageRFQ = ({
     onSuccess: () => void,
     isAuthorized: boolean,
 }) => {
-    const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel'}>({isOpen: false, type: 'update'});
-    const canManageRfq = isAuthorized && requisition.status === 'RFQ_In_Progress' && !isPast(new Date(requisition.deadline!));
+    const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'update'});
+    const canManageRfq = isAuthorized && requisition.status === 'Accepting_Quotes' && !isPast(new Date(requisition.deadline!));
     
     if (!canManageRfq) return null;
 
@@ -1605,7 +1613,6 @@ const ScoringProgressTracker = ({
   onFinalize,
   onCommitteeUpdate,
   isFinalizing,
-  isAwarded,
 }: {
   requisition: PurchaseRequisition;
   quotations: Quotation[];
@@ -1613,7 +1620,6 @@ const ScoringProgressTracker = ({
   onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
   onCommitteeUpdate: (open: boolean) => void;
   isFinalizing: boolean;
-  isAwarded: boolean;
 }) => {
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
@@ -1622,6 +1628,16 @@ const ScoringProgressTracker = ({
     
     const { toast } = useToast();
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
+    
+    // Check if any quote is in a state that indicates the awarding process has started or finished
+    const isAwarded = quotations.some(q => 
+        q.status === 'Awarded' || 
+        q.status === 'Accepted' || 
+        q.status === 'Declined' || 
+        q.status === 'Partially_Awarded' || 
+        q.status === 'Standby'
+    );
+    const hasBeenRejected = quotations.some(q => q.status === 'Declined');
 
     const assignedCommitteeMembers = useMemo(() => {
         const allIds = [
@@ -1665,14 +1681,13 @@ const ScoringProgressTracker = ({
         });
     }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id]);
     
-    const overdueMembers = scoringStatus.filter(s => s.isOverdue);
-    const allHaveScored = scoringStatus.every(s => s.hasSubmittedFinalScores);
+    const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
     const getButtonState = () => {
-        if (isAwarded) return { text: "Award Process Complete", disabled: true };
+        if (isAwarded && !hasBeenRejected) return { text: "Award Process Complete", disabled: true };
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
-        if (!allHaveScored) return { text: "Waiting for Scores...", disabled: true };
-        return { text: "Finalize Scores and Award", disabled: false };
+        if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
+        return { text: "Finalize Scores & Award", disabled: false };
     }
     const buttonState = getButtonState();
 
@@ -1708,9 +1723,9 @@ const ScoringProgressTracker = ({
                                 ) : member.isOverdue ? (
                                     <>
                                      <Badge variant="destructive" className="mr-auto"><AlertCircle className="mr-1 h-3 w-3" />Overdue</Badge>
-                                     <Button size="sm" variant="secondary" onClick={() => { setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
+                                     <Button size="sm" variant="secondary" onClick={()=>{ setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
                                      <Button size="sm" variant="secondary" onClick={() => onCommitteeUpdate(true)}>Replace</Button>
-                                     <Button size="sm" variant="outline" onClick={() => { setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
+                                     <Button size="sm" variant="outline" onClick={()=>{ setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
                                     </>
                                 ) : (
                                      <Badge variant="secondary">Pending</Badge>
@@ -1788,7 +1803,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             let width = pdfWidth - 20; // with margin
             let height = width / ratio;
 
-            if (height > pdfHeight - 20) {
+             if (height > pdfHeight - 20) {
                  height = pdfHeight - 20;
                  width = height * ratio;
             }
@@ -1985,10 +2000,13 @@ const AwardCenterDialog = ({
     
     // Single vendor award logic
     const overallWinner = useMemo(() => {
+        // Filter out vendors who have already declined
+        const eligibleQuotes = quotations.filter(q => q.status !== 'Declined');
+
         let bestOverallScore = -1;
         let overallWinner: { vendorId: string; vendorName: string; items: { requisitionItemId: string, quoteItemId: string }[] } | null = null;
         
-        quotations.forEach(quote => {
+        eligibleQuotes.forEach(quote => {
             if (quote.finalAverageScore && quote.finalAverageScore > bestOverallScore) {
                 bestOverallScore = quote.finalAverageScore;
                 overallWinner = {
@@ -2271,7 +2289,13 @@ const CommitteeActions = ({
     
     const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
     const allQuotesScored = quotations.length > 0 && userScoredQuotesCount === quotations.length;
-    const scoresAlreadyFinalized = user.committeeAssignments?.some(a => a.requisitionId === requisition.id && a.scoresSubmitted) || false;
+    
+    // Corrected logic: Check the live assignment status from the user object
+    const assignment = useMemo(() => {
+        return user.committeeAssignments?.find(a => a.requisitionId === requisition.id);
+    }, [user.committeeAssignments, requisition.id]);
+    
+    const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
 
     const handleSubmitScores = async () => {
         setIsSubmitting(true);
@@ -2303,6 +2327,23 @@ const CommitteeActions = ({
         return null;
     }
 
+    if (scoresAlreadyFinalized) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Committee Actions</CardTitle>
+                    <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button variant="outline" disabled>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Scores Submitted
+                    </Button>
+                </CardContent>
+            </Card>
+        )
+    }
+
     return (
         <Card>
             <CardHeader>
@@ -2313,33 +2354,26 @@ const CommitteeActions = ({
                 <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {quotations.length} quotes.</p>
             </CardContent>
             <CardFooter>
-                 {scoresAlreadyFinalized ? (
-                    <Button variant="outline" disabled>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Scores Submitted
-                    </Button>
-                ) : (
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button disabled={!allQuotesScored || isSubmitting}>
-                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Submit Final Scores
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Are you sure you want to submit?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This will finalize your scores for this requisition. You will not be able to make further changes.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                )}
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button disabled={!allQuotesScored || isSubmitting}>
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Submit Final Scores
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure you want to submit?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will finalize your scores for this requisition. You will not be able to make further changes.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </CardFooter>
         </Card>
     );
@@ -2417,7 +2451,7 @@ export default function QuotationDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const { user, allUsers, role, rfqSenderSetting, login } = useAuth();
+  const { user, allUsers, role, rfqSenderSetting, committeeQuorum } = useAuth();
   const id = params.id as string;
   
   const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
@@ -2436,8 +2470,9 @@ export default function QuotationDetailsPage() {
   const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isReportOpen, setReportOpen] = useState(false);
+  const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
-  const isAwarded = useMemo(() => quotations.some(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Declined' || q.status === 'Failed' || q.status === 'Partially_Awarded' || q.status === 'Standby'), [quotations]);
+  const isAwarded = useMemo(() => quotations.some(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Partially_Awarded' || q.status === 'Standby'), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   const secondStandby = useMemo(() => quotations.find(q => q.rank === 2), [quotations]);
   const thirdStandby = useMemo(() => quotations.find(q => q.rank === 3), [quotations]);
@@ -2504,7 +2539,8 @@ export default function QuotationDetailsPage() {
                         description: `Vendor ${awardedQuote.vendorName} missed the response deadline. Promoting next vendor.`,
                         variant: 'destructive',
                     });
-                    await handleAwardChange(secondStandby ? 'promote_second' : 'restart_rfq');
+                    // This now just reverts the state, does not auto-promote.
+                    await handleAwardChange('promote_second');
                     // Refetch after the change
                     const [refetchedReqRes, refetchedQuoRes] = await Promise.all([
                         fetch(`/api/requisitions/${id}`),
@@ -2678,13 +2714,26 @@ export default function QuotationDetailsPage() {
 
   const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
       if (!requisition) return 'rfq';
+      const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+
       if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
-      if (requisition.status === 'RFQ_In_Progress' && !isDeadlinePassed) return 'rfq';
-      if (isDeadlinePassed && !isAwarded && !isScoringComplete) return 'committee';
-      if (isDeadlinePassed && isScoringComplete && !isAwarded) return 'award';
-      if (requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved') return 'award';
-      if (isAccepted) return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
+      if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
+      if (requisition.status === 'Accepting_Quotes' && deadlinePassed) return 'committee';
+
+      const inScoringProcess = requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
+      if (inScoringProcess) {
+          return isScoringComplete ? 'award' : 'committee';
+      }
+      
+      const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
+      if (inReviewProcess) return 'award';
+
+      if (isAccepted) {
+        return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
+      }
+      
       if (isAwarded) return 'award';
+
       return 'rfq'; // Default fallback
   };
   const currentStep = getCurrentStep();
@@ -2722,7 +2771,11 @@ export default function QuotationDetailsPage() {
   }
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
-  const isReadyForFinalAction = requisition.status === 'PostApproved';
+  const isReadyForNotification = requisition.status === 'PostApproved';
+  const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
+  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
+  const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
+
 
   return (
     <div className="space-y-6">
@@ -2762,8 +2815,29 @@ export default function QuotationDetailsPage() {
                 </CardContent>
             </Card>
         )}
+        
+        {noBidsAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
+            <Card className="border-amber-500">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> RFQ Closed: No Bids Received</CardTitle>
+                    <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardDescription>
+                </CardHeader>
+                <CardFooter className="gap-2">
+                    <Button onClick={() => setActionDialog({isOpen: true, type: 'restart'})}>
+                        <RefreshCw className="mr-2 h-4 w-4" /> Restart RFQ
+                    </Button>
+                    <Button variant="destructive" onClick={() => setActionDialog({isOpen: true, type: 'cancel'})}>
+                        <XCircle className="mr-2 h-4 w-4" /> Cancel RFQ
+                    </Button>
+                </CardFooter>
+            </Card>
+        )}
+        
+        {quorumNotMetAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
+            <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
+        )}
 
-        {currentStep === 'rfq' && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && (
+        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && (
             <div className="grid md:grid-cols-2 gap-6 items-start">
                 <RFQDistribution 
                     requisition={requisition} 
@@ -2771,7 +2845,7 @@ export default function QuotationDetailsPage() {
                     onRfqSent={fetchRequisitionAndQuotes}
                     isAuthorized={isAuthorized}
                 />
-                 <Card className="border-dashed h-full">
+                <Card className="border-dashed h-full">
                     <CardHeader>
                         <CardTitle>Evaluation Committee</CardTitle>
                         <CardDescription>Committee assignment will be available after the quotation deadline has passed.</CardDescription>
@@ -2791,20 +2865,38 @@ export default function QuotationDetailsPage() {
         />
         
         {currentStep === 'committee' && canManageCommittees && (
-            <EvaluationCommitteeManagement
-                requisition={requisition} 
-                onCommitteeUpdated={fetchRequisitionAndQuotes}
-                open={isCommitteeDialogOpen}
-                onOpenChange={setCommitteeDialogOpen}
-                isAuthorized={isAuthorized}
-            />
+            readyForCommitteeAssignment ? (
+                <EvaluationCommitteeManagement
+                    requisition={requisition}
+                    onCommitteeUpdated={fetchRequisitionAndQuotes}
+                    open={isCommitteeDialogOpen}
+                    onOpenChange={setCommitteeDialogOpen}
+                    isAuthorized={isAuthorized}
+                />
+            ) : (
+                <Card className="border-dashed">
+                    <CardHeader>
+                        <CardTitle>Evaluation Committee</CardTitle>
+                        <CardDescription>Assign scorers to evaluate vendor quotations.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-center py-10">
+                        <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                        <p className="font-semibold">Quorum Not Met</p>
+                        <p className="text-sm text-muted-foreground">
+                            Only {quotations.length} of the required {committeeQuorum} quotes have been submitted.
+                            <br />
+                            Committee assignment is not yet possible.
+                        </p>
+                    </CardContent>
+                </Card>
+            )
         )}
 
 
         {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
             <>
                 {/* Always render committee management when in award step so dialog can open */}
-                {canManageCommittees && currentStep !== 'committee' && (
+                {canManageCommittees && currentStep !== 'committee' && readyForCommitteeAssignment && (
                      <div className="hidden">
                         <EvaluationCommitteeManagement
                             requisition={requisition}
@@ -2842,39 +2934,6 @@ export default function QuotationDetailsPage() {
                                 <Button variant="secondary" onClick={() => setReportOpen(true)}>
                                     <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
                                 </Button>
-                            )}
-                            {isAwarded && requisition.status !== 'PO_Created' && (role === 'Procurement_Officer' || role === 'Admin') && (
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="outline" disabled={isChangingAward} className="w-full">
-                                            {isChangingAward ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Undo className="mr-2 h-4 w-4"/>}
-                                            Change Award Decision
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Change Award Decision</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                The primary awarded vendor may have failed to deliver. Choose how to proceed. This action cannot be undone.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <div className="flex flex-col gap-4 py-4">
-                                            <Button onClick={() => handleAwardChange('promote_second')} disabled={!secondStandby}>
-                                                Award to 2nd Vendor ({secondStandby?.vendorName})
-                                            </Button>
-                                            <Button onClick={() => handleAwardChange('promote_third')} disabled={!thirdStandby}>
-                                                Award to 3rd Vendor ({thirdStandby?.vendorName})
-                                            </Button>
-                                            <Button onClick={() => handleAwardChange('restart_rfq')} variant="destructive">
-                                                <RefreshCw className="mr-2 h-4 w-4"/>
-                                                Restart RFQ Process
-                                            </Button>
-                                        </div>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
                             )}
                         </div>
                     </CardHeader>
@@ -2931,7 +2990,7 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-        {currentStep === 'award' && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && quotations.length > 0 && (role === 'Procurement_Officer' || role === 'Admin') && (
+        {((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && (
              <ScoringProgressTracker 
                 requisition={requisition}
                 quotations={quotations}
@@ -2939,11 +2998,10 @@ export default function QuotationDetailsPage() {
                 onFinalize={handleFinalizeScores}
                 onCommitteeUpdate={setCommitteeDialogOpen}
                 isFinalizing={isFinalizing}
-                isAwarded={isAwarded}
             />
         )}
 
-        {isReadyForFinalAction && (role === 'Procurement_Officer' || role === 'Admin') && (
+        {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
             <Card className="mt-6 border-amber-500">
                  <CardHeader>
                     <CardTitle>Action Required: Notify Vendor</CardTitle>
@@ -2988,23 +3046,95 @@ export default function QuotationDetailsPage() {
                 onClose={() => setReportOpen(false)}
             />
         )}
+        <RFQActionDialog 
+            action={actionDialog.type}
+            requisition={requisition}
+            isOpen={actionDialog.isOpen}
+            onClose={() => setActionDialog({isOpen: false, type: 'restart'})}
+            onSuccess={fetchRequisitionAndQuotes}
+        />
     </div>
   );
 }
+
+const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
+    const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
+    
+    const finalNewDeadline = useMemo(() => {
+        if (!newDeadlineDate) return undefined;
+        const [hours, minutes] = newDeadlineTime.split(':').map(Number);
+        return setMinutes(setHours(newDeadlineDate, hours), minutes);
+    }, [newDeadlineDate, newDeadlineTime]);
+
+    const handleReopen = async () => {
+        if (!user) return;
+        if (!finalNewDeadline || isBefore(finalNewDeadline, new Date())) {
+            toast({ variant: 'destructive', title: 'Error', description: 'A new deadline in the future must be set.' });
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, newDeadline: finalNewDeadline }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Failed to re-open RFQ.`);
+            }
+            toast({ title: 'Success', description: `The RFQ has been re-opened to new vendors.` });
+            onRfqReopened();
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+         <Card className="border-amber-500">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> Quorum Not Met</CardTitle>
+                <CardDescription>
+                    The submission deadline has passed, but not enough quotes were submitted. You can re-open the RFQ to all other verified vendors.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                 <div className="space-y-2">
+                    <Label>New Quotation Submission Deadline</Label>
+                    <div className="flex gap-2">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal",!newDeadlineDate && "text-muted-foreground")}>
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {newDeadlineDate ? format(newDeadlineDate, "PPP") : <span>Pick a new date</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                                <Calendar mode="single" selected={newDeadlineDate} onSelect={setNewDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
+                            </PopoverContent>
+                        </Popover>
+                        <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
+                    </div>
+                </div>
+            </CardContent>
+            <CardFooter>
+                <Button onClick={handleReopen} disabled={isSubmitting || !finalNewDeadline}>
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} 
+                    Re-open RFQ
+                </Button>
+            </CardFooter>
+        </Card>
+    );
+};
     
 
     
-
-
-
-
-
-
-
-
-
-
-
-
 
 

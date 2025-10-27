@@ -4,7 +4,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User } from '@/lib/types';
-import { handleAwardRejection } from '@/services/award-service';
 
 
 export async function POST(
@@ -104,8 +103,28 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            // Refactored logic is now in the award service
-            return await handleAwardRejection(tx, quote, requisition, user);
+             // Mark the current quote as Declined
+            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Declined' } });
+
+            // Revert the requisition status to Scoring_Complete to allow the PO to re-award
+            await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: { status: 'Scoring_Complete' }
+            });
+
+            await tx.auditLog.create({
+                data: {
+                    timestamp: new Date(),
+                    user: { connect: { id: user.id } },
+                    action: 'REJECT_AWARD',
+                    entity: 'Quotation',
+                    entityId: quoteId,
+                    details: `Vendor declined award. Requisition returned to Procurement Officer for action.`,
+                    transactionId: requisition.transactionId,
+                }
+            });
+
+            return { message: 'Award declined. The procurement team has been notified to re-initiate the award process.' };
         }
         
         throw new Error('Invalid action.');
