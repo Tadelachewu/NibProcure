@@ -33,8 +33,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Role name is required' }, { status: 400 });
     }
     
-    const formattedName = name.replace(/ /g, '_');
-    const existingRole = await prisma.role.findUnique({ where: { name: formattedName } });
+    const formattedName = name.replace(/ /g, '_').toUpperCase();
+    const existingRole = await prisma.role.findFirst({ where: { name: { equals: formattedName, mode: 'insensitive' } } });
+
     if (existingRole) {
         return NextResponse.json({ error: 'A role with this name already exists' }, { status: 409 });
     }
@@ -90,8 +91,8 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Role ID and name are required' }, { status: 400 });
     }
     
-    const formattedName = name.replace(/ /g, '_');
-    const existingRole = await prisma.role.findFirst({ where: { name: formattedName, NOT: { id } } });
+    const formattedName = name.replace(/ /g, '_').toUpperCase();
+    const existingRole = await prisma.role.findFirst({ where: { name: { equals: formattedName, mode: 'insensitive' }, NOT: { id } } });
     if (existingRole) {
         return NextResponse.json({ error: 'Another role with this name already exists' }, { status: 409 });
     }
@@ -132,21 +133,21 @@ export async function DELETE(request: Request) {
     }
     
     const coreRoles: string[] = [
-        'Admin', 
-        'Procurement_Officer', 
-        'Requester', 
-        'Approver', 
-        'Vendor',
-        'Finance',
-        'Receiving',
-        'Committee',
-        'Committee_A_Member',
-        'Committee_B_Member',
-        'Committee_Member',
-        'Manager_Procurement_Division',
-        'Director_Supply_Chain_and_Property_Management',
-        'VP_Resources_and_Facilities',
-        'President'
+        'ADMIN', 
+        'PROCUREMENT_OFFICER', 
+        'REQUESTER', 
+        'APPROVER', 
+        'VENDOR',
+        'FINANCE',
+        'RECEIVING',
+        'COMMITTEE',
+        'COMMITTEE_A_MEMBER',
+        'COMMITTEE_B_MEMBER',
+        'COMMITTEE_MEMBER',
+        'MANAGER_PROCUREMENT_DIVISION',
+        'DIRECTOR_SUPPLY_CHAIN_AND_PROPERTY_MANAGEMENT',
+        'VP_RESOURCES_AND_FACILITIES',
+        'PRESIDENT'
     ];
     if (coreRoles.includes(roleToDelete.name)) {
         return NextResponse.json({ error: `Cannot delete core system role: ${roleToDelete.name.replace(/_/g, ' ')}` }, { status: 403 });
