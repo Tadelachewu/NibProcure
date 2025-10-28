@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -30,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, AlertTriangle } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -226,6 +227,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             case 'Failed': return 'destructive';
             case 'Invoice_Submitted': return 'outline';
             case 'Partially_Awarded': return 'default';
+            case 'Pending_Award': return 'secondary';
         }
     }
 
@@ -1673,8 +1675,12 @@ const ScoringProgressTracker = ({
     
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
+    const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
+
     const getButtonState = () => {
-        if (requisition.status === 'Award_Declined') return { text: "Award Standby Vendor", disabled: false };
+        if (requisition.status === 'Award_Declined') {
+            return { text: "Award Standby Vendor", disabled: isFinalizing || !hasStandbyVendors };
+        }
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
         if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
         return { text: "Finalize Scores & Award", disabled: false };
@@ -2229,11 +2235,8 @@ export default function QuotationDetailsPage() {
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
-  const isAwarded = useMemo(() => quotations.some(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Declined' || q.status === 'Failed' || q.status === 'Partially_Awarded' || q.status === 'Standby'), [quotations]);
+  const isAwarded = useMemo(() => quotations.some(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Declined' || q.status === 'Failed' || q.status === 'Partially_Awarded' || q.status === 'Standby' || q.status === 'Pending_Award'), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
-  const secondStandby = useMemo(() => quotations.find(q => q.rank === 2), [quotations]);
-  const thirdStandby = useMemo(() => quotations.find(q => q.rank === 3), [quotations]);
-  const prevAwardedFailed = useMemo(() => quotations.some(q => q.status === 'Failed'), [quotations]);
   
   const isDeadlinePassed = useMemo(() => {
     if (!requisition) return false;
@@ -2297,7 +2300,7 @@ export default function QuotationDetailsPage() {
                     });
                     
                     // Only update statuses, don't auto-promote
-                    await handleAwardChange('fail_current');
+                    await handleAwardChange();
 
                     const [refetchedReqRes, refetchedQuoRes] = await Promise.all([
                         fetch(`/api/requisitions/${id}`),
@@ -2394,7 +2397,7 @@ export default function QuotationDetailsPage() {
     }
 
 
-  const handleAwardChange = async (action: 'promote_second' | 'promote_third' | 'restart_rfq' | 'fail_current') => {
+  const handleAwardChange = async () => {
     if (!user || !id || !requisition) return;
     
     setIsChangingAward(true);
@@ -2402,7 +2405,7 @@ export default function QuotationDetailsPage() {
         const response = await fetch(`/api/requisitions/${id}/handle-award-change`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id, action }),
+            body: JSON.stringify({ userId: user.id }),
         });
 
         if (!response.ok) {
@@ -2545,12 +2548,12 @@ export default function QuotationDetailsPage() {
             <WorkflowStepper step={currentStep} />
         </Card>
         
-        {requisition.status === 'Award_Declined' && (
+        {requisition.status === 'Award_Declined' && (role === 'Procurement_Officer' || role === 'Admin') && (
              <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Action Required: Award Declined</AlertTitle>
                 <AlertDescription>
-                    The previously awarded vendor has declined the award. Please use the "Award Standby" button to promote the next vendor.
+                    The previously awarded vendor has declined the award. Use the "Award Standby" button in the Scoring Progress card to promote the next vendor.
                 </AlertDescription>
             </Alert>
         )}
@@ -2746,8 +2749,12 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-        {((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && (
-             <ScoringProgressTracker 
+        {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
+        ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
+        !isScoringComplete &&
+        requisition.status !== 'PreApproved'
+        ) && (
+            <ScoringProgressTracker
                 requisition={requisition}
                 quotations={quotations}
                 allUsers={allUsers}
@@ -2756,6 +2763,18 @@ export default function QuotationDetailsPage() {
                 isFinalizing={isFinalizing}
             />
         )}
+        
+        {(isScoringComplete || requisition.status === 'Award_Declined') && (role === 'Procurement_Officer' || role === 'Admin') && (
+             <ScoringProgressTracker
+                requisition={requisition}
+                quotations={quotations}
+                allUsers={allUsers}
+                onFinalize={handleFinalizeScores}
+                onCommitteeUpdate={setCommitteeDialogOpen}
+                isFinalizing={isFinalizing}
+            />
+        )}
+
 
         {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
             <Card className="mt-6 border-amber-500">
@@ -2892,5 +2911,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
