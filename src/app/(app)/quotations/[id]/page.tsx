@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, AlertTriangle } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -2554,13 +2554,14 @@ export default function QuotationDetailsPage() {
         </Card>
         
         {requisition.status === 'Award_Declined' && (role === 'Procurement_Officer' || role === 'Admin') && (
-            <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Action Required: Award Declined</AlertTitle>
-                <AlertDescription>
-                    The previously awarded vendor has declined. Use the "Award Standby" button to promote the next vendor.
-                </AlertDescription>
-            </Alert>
+            <ScoringProgressTracker
+                requisition={requisition}
+                quotations={quotations}
+                allUsers={allUsers}
+                onFinalize={handleFinalizeScores}
+                onCommitteeUpdate={setCommitteeDialogOpen}
+                isFinalizing={isFinalizing}
+            />
         )}
         
         {requisition.evaluationCriteria && (
@@ -2916,6 +2917,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
