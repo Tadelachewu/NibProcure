@@ -8,7 +8,6 @@ import { Button } from '../ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, PlusCircle, Trash2, ArrowDown, ArrowUp, GripVertical } from 'lucide-react';
 import { ApprovalStep, ApprovalThreshold, UserRole } from '@/lib/types';
-import { rolePermissions } from '@/lib/roles';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -16,7 +15,7 @@ import { Reorder } from 'framer-motion';
 import { produce } from 'immer';
 
 export function ApprovalMatrixEditor() {
-    const { approvalThresholds, updateApprovalThresholds, committeeConfig } = useAuth();
+    const { approvalThresholds, updateApprovalThresholds, committeeConfig, rolePermissions } = useAuth();
     const [localThresholds, setLocalThresholds] = useState<ApprovalThreshold[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
