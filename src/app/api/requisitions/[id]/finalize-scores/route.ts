@@ -63,7 +63,15 @@ export async function POST(
 
             const awardedVendorIds = Object.keys(awards);
             const winnerQuotes = allQuotes.filter(q => awardedVendorIds.includes(q.vendorId));
-            const otherQuotes = allQuotes.filter(q => !awardedVendorIds.includes(q.vendorId));
+
+            // *** FIX STARTS HERE ***
+            // Create an exclusion list of vendors who have already declined.
+            const declinedVendorIds = new Set(allQuotes.filter(q => q.status === 'Declined').map(q => q.vendorId));
+
+            // The pool of "other" quotes now EXCLUDES winners and any previously declined vendors.
+            const otherQuotes = allQuotes.filter(q => !awardedVendorIds.includes(q.vendorId) && !declinedVendorIds.has(q.vendorId));
+            // *** FIX ENDS HERE ***
+
 
             for (const quote of winnerQuotes) {
                 const award = awards[quote.vendorId];
