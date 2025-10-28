@@ -32,7 +32,7 @@ interface CommitteeConfig {
 }
 
 export function CommitteeSettings() {
-    const { allUsers, updateUserRole, committeeConfig, updateCommitteeConfig, fetchAllUsers } = useAuth();
+    const { allUsers, updateUserRole, committeeConfig, updateCommitteeConfig, fetchAllUsers, fetchAllSettings } = useAuth();
     const { toast } = useToast();
     const [isSaving, setIsSaving] = useState(false);
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -41,6 +41,8 @@ export function CommitteeSettings() {
     const [localConfig, setLocalConfig] = useState<CommitteeConfig>(committeeConfig);
     const [isAddCommitteeOpen, setAddCommitteeOpen] = useState(false);
     const [newCommitteeName, setNewCommitteeName] = useState('');
+    const { user: actor } = useAuth();
+
 
     useEffect(() => {
         setLocalConfig(committeeConfig);
@@ -92,12 +94,14 @@ export function CommitteeSettings() {
             toast({variant: 'destructive', title: 'Error', description: 'Committee name is required.'});
             return;
         }
+        if (!actor) return;
+
         setIsSaving(true);
         try {
             const response = await fetch('/api/roles', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: `Committee_${newCommitteeName.toUpperCase()}_Member`, description: `Member of the ${newCommitteeName} review committee.` })
+                body: JSON.stringify({ name: `Committee ${newCommitteeName.toUpperCase()} Member`, description: `Member of the ${newCommitteeName} review committee.`, actorUserId: actor.id })
             });
 
             if (!response.ok) {
@@ -107,7 +111,7 @@ export function CommitteeSettings() {
             toast({title: 'Committee Role Created', description: `Successfully created the ${newCommitteeName} committee member role.`});
             setNewCommitteeName('');
             setAddCommitteeOpen(false);
-            // Optionally, you might want to refresh roles in your auth context here
+            await fetchAllSettings();
         } catch (error) {
             toast({variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
