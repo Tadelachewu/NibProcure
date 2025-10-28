@@ -111,7 +111,7 @@ export function CommitteeSettings() {
             toast({title: 'Committee Role Created', description: `Successfully created the ${newCommitteeName} committee member role.`});
             setNewCommitteeName('');
             setAddCommitteeOpen(false);
-            await fetchAllSettings();
+            await fetchAllSettings(); // Re-fetch settings to update roles across the app
         } catch (error) {
             toast({variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
