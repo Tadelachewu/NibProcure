@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card';
 import { Button } from '../ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Users, Search, UserX, UserCheck } from 'lucide-react';
+import { Loader2, Save, Users, Search, UserX, UserCheck, PlusCircle } from 'lucide-react';
 import { User, UserRole, Department } from '@/lib/types';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -162,10 +162,14 @@ export function CommitteeSettings() {
         <div className="space-y-6">
             {renderCommitteeSection('A')}
             {renderCommitteeSection('B')}
-            <div className="flex justify-end">
+             <div className="flex justify-between items-center">
                 <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save All Changes
+                </Button>
+                <Button variant="outline" disabled>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Add New Review Committee
                 </Button>
             </div>
         </div>
