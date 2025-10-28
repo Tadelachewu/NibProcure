@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -145,8 +146,11 @@ export async function handleAwardRejection(
                 deadline: null,
                 scoringDeadline: null,
                 awardResponseDeadline: null,
+                awardedQuoteItemIds: [],
                 committeeName: null,
                 committeePurpose: null,
+                financialCommitteeMembers: { set: [] },
+                technicalCommitteeMembers: { set: [] },
             }
         });
         
@@ -160,13 +164,22 @@ export async function handleAwardRejection(
             }
         });
 
-        await tx.committeeScoreSet.deleteMany({
+        // Delete all scores associated with this requisition's quotes
+        const scoreSetsToDelete = await tx.committeeScoreSet.findMany({
             where: {
                 quotation: {
                     requisitionId: requisition.id
                 }
             }
         });
+        const scoreSetIds = scoreSetsToDelete.map(s => s.id);
+        if (scoreSetIds.length > 0) {
+            await tx.committeeScoreSet.deleteMany({
+                where: {
+                    id: { in: scoreSetIds }
+                }
+            });
+        }
         
         await tx.auditLog.create({
             data: {
