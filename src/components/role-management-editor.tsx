@@ -31,6 +31,7 @@ import {
   DialogTitle,
   DialogClose,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -81,7 +82,7 @@ export function RoleManagementEditor() {
         toast({ variant: 'destructive', title: 'Error', description: 'Role name cannot be empty.' });
         return;
     }
-    if (!actor) return;
+    if (!user) return;
     
     setIsLoading(true);
 
@@ -300,5 +301,3 @@ export function RoleManagementEditor() {
     </Card>
   );
 }
-
-    
