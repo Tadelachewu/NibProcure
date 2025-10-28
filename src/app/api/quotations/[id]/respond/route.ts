@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User } from '@/lib/types';
+import { handleAwardRejection } from '@/services/award-service';
 
 
 export async function POST(
@@ -74,19 +75,23 @@ export async function POST(
                 }
             });
 
-            const allAwardedQuotes = await tx.quotation.findMany({
+            // Set other awarded/partially awarded quotes for this req to "Failed" since this one was accepted.
+            await tx.quotation.updateMany({
                 where: {
                     requisitionId: requisition.id,
+                    id: { not: quote.id },
                     status: { in: ['Awarded', 'Partially_Awarded'] }
+                },
+                data: {
+                    status: 'Failed'
                 }
+            })
+
+            // Finalize the requisition status
+            await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: { status: 'PO_Created' }
             });
-            
-            if (allAwardedQuotes.length === 0) {
-                 await tx.purchaseRequisition.update({
-                    where: { id: requisition.id },
-                    data: { status: 'PO_Created' }
-                });
-            }
             
             await tx.auditLog.create({
                 data: {
@@ -103,31 +108,14 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-             // Mark the current quote as Declined
-            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Declined' } });
-
-            // Set the requisition to the new "Award_Declined" status to trigger manual intervention
-            await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'Award_Declined' }
-            });
-
-            await tx.auditLog.create({
-                data: {
-                    timestamp: new Date(),
-                    user: { connect: { id: user.id } },
-                    action: 'REJECT_AWARD',
-                    entity: 'Quotation',
-                    entityId: quoteId,
-                    details: `Vendor declined award. Requisition requires procurement officer review.`,
-                    transactionId: requisition.transactionId,
-                }
-            });
-
-            return { message: 'Award declined. The procurement team has been notified to take action.' };
+            // Complex rejection logic is now handled in the award service
+            return await handleAwardRejection(tx, quote, requisition, user);
         }
         
         throw new Error('Invalid action.');
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
     });
     
     return NextResponse.json(transactionResult);
