@@ -6,26 +6,31 @@ import { useAuth } from '@/contexts/auth-context';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card';
 import { Button } from '../ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Users, PlusCircle } from 'lucide-react';
+import { Loader2, Save } from 'lucide-react';
 import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { produce } from 'immer';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../ui/table';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '../ui/dialog';
-import { UserRole } from '@/lib/types';
-
+import { RoleType } from '@/lib/types';
 
 interface CommitteeConfig {
     [key: string]: {
         min: number;
         max: number | null;
-        description: string;
     }
 }
 
+interface Role {
+    id: string;
+    name: string;
+    description: string;
+    type: RoleType;
+}
+
+
 export function CommitteeSettings() {
-    const { settings, updateSetting, roles } = useAuth();
+    const { settings, updateSetting } = useAuth();
+    const [roles, setRoles] = useState<Role[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const { toast } = useToast();
     
     const [localConfig, setLocalConfig] = useState<CommitteeConfig>({});
@@ -36,6 +41,24 @@ export function CommitteeSettings() {
             setLocalConfig(committeeSetting.value || {});
         }
     }, [settings]);
+
+    useEffect(() => {
+        const fetchRoles = async () => {
+            setIsLoading(true);
+            try {
+                const response = await fetch('/api/roles');
+                if (!response.ok) throw new Error('Failed to fetch roles');
+                const data = await response.json();
+                setRoles(data);
+            } catch (error) {
+                toast({ variant: 'destructive', title: 'Error', description: 'Could not load roles.' });
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchRoles();
+    }, [toast]);
+
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -56,19 +79,17 @@ export function CommitteeSettings() {
         }
     };
     
-    const handleConfigChange = (role: string, field: 'min' | 'max' | 'description', value: string | number | null) => {
-        setLocalConfig(produce(draft => {
-            if (!draft[role]) {
-                draft[role] = { min: 0, max: null, description: '' };
-            }
-            if (field === 'max') {
-                (draft[role] as any)[field] = value === '' ? null : Number(value);
-            } else if (field === 'min') {
-                 (draft[role] as any)[field] = Number(value);
-            } else {
-                 (draft[role] as any)[field] = value;
-            }
-        }));
+    const handleConfigChange = (role: string, field: 'min' | 'max', value: string | number | null) => {
+        const newConfig = { ...localConfig };
+        if (!newConfig[role]) {
+            newConfig[role] = { min: 0, max: null };
+        }
+        if (field === 'max') {
+            (newConfig[role] as any)[field] = value === '' ? null : Number(value);
+        } else {
+             (newConfig[role] as any)[field] = Number(value);
+        }
+        setLocalConfig(newConfig);
     };
 
     const reviewCommitteeRoles = roles.filter(r => r.type === 'REVIEW_COMMITTEE');
@@ -96,34 +117,45 @@ export function CommitteeSettings() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {reviewCommitteeRoles.map(role => (
-                                <TableRow key={role.id}>
-                                    <TableCell className="font-medium">{role.name.replace(/_/g, ' ')}</TableCell>
-                                    <TableCell>
-                                        <Input 
-                                            type="number" 
-                                            value={localConfig[role.name]?.min ?? ''} 
-                                            onChange={(e) => handleConfigChange(role.name, 'min', e.target.value)} 
-                                            className="w-40"
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Input 
-                                            type="number" 
-                                            placeholder="No Limit"
-                                            value={localConfig[role.name]?.max ?? ''} 
-                                            onChange={(e) => handleConfigChange(role.name, 'max', e.target.value)}
-                                            className="w-40"
-                                        />
+                            {isLoading ? (
+                                <TableRow>
+                                    <TableCell colSpan={3} className="h-24 text-center">
+                                        <Loader2 className="mx-auto h-6 w-6 animate-spin" />
                                     </TableCell>
                                 </TableRow>
-                            ))}
+                            ) : reviewCommitteeRoles.length > 0 ? (
+                                reviewCommitteeRoles.map(role => (
+                                    <TableRow key={role.id}>
+                                        <TableCell className="font-medium">{role.name.replace(/_/g, ' ')}</TableCell>
+                                        <TableCell>
+                                            <Input 
+                                                type="number" 
+                                                value={localConfig[role.name]?.min ?? ''} 
+                                                onChange={(e) => handleConfigChange(role.name, 'min', e.target.value)} 
+                                                className="w-40"
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <Input 
+                                                type="number" 
+                                                placeholder="No Limit"
+                                                value={localConfig[role.name]?.max ?? ''} 
+                                                onChange={(e) => handleConfigChange(role.name, 'max', e.target.value)}
+                                                className="w-40"
+                                            />
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                 <TableRow>
+                                    <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                                        No "Review Committee" type roles found. Go to Role Management to create one.
+                                    </TableCell>
+                                </TableRow>
+                            )}
                         </TableBody>
                     </Table>
                 </div>
-                {reviewCommitteeRoles.length === 0 && (
-                    <p className="text-center text-muted-foreground py-8">No Review Committee roles have been created. Go to Role Management to add one.</p>
-                )}
             </CardContent>
             <CardFooter>
                  <Button onClick={handleSave} disabled={isSaving}>
@@ -134,5 +166,3 @@ export function CommitteeSettings() {
         </Card>
     );
 }
-
-    
