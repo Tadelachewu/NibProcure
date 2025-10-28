@@ -37,41 +37,25 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { useAuth } from '@/contexts/auth-context';
+import { Switch } from './ui/switch';
 
 interface Role {
     id: string;
     name: string;
     description: string;
+    isActive: boolean;
 }
 
 export function RoleManagementEditor() {
-  const [roles, setRoles] = useState<Role[]>([]);
+  const { roles, fetchAllRoles, user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [roleToEdit, setRoleToEdit] = useState<Role | null>(null);
   const [roleName, setRoleName] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
+  const [isActive, setIsActive] = useState(true);
   const { toast } = useToast();
-  const { user, fetchAllSettings } = useAuth();
   
-  const fetchRoles = async () => {
-    setIsLoading(true);
-    try {
-        const response = await fetch('/api/roles');
-        if (!response.ok) throw new Error('Failed to fetch roles');
-        const data = await response.json();
-        setRoles(data);
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not load roles.' });
-    } finally {
-        setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRoles();
-  }, []);
-
   const handleFormSubmit = async () => {
     if (!roleName.trim()) {
         toast({ variant: 'destructive', title: 'Error', description: 'Role name cannot be empty.' });
@@ -88,6 +72,7 @@ export function RoleManagementEditor() {
       id: isEditing ? roleToEdit.id : undefined,
       name: roleName,
       description: roleDescription,
+      isActive: isEditing ? isActive : true,
       actorUserId: user.id,
     };
     
@@ -107,8 +92,7 @@ export function RoleManagementEditor() {
         });
         
         setDialogOpen(false);
-        await fetchRoles(); // Re-fetch the list of roles
-        await fetchAllSettings(); // Re-fetch settings to update permissions context
+        await fetchAllRoles(); // Re-fetch the list of roles
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
@@ -131,11 +115,10 @@ export function RoleManagementEditor() {
             throw new Error(errorData.error || 'Failed to delete role.');
         }
         toast({
-            title: 'Role Deleted',
-            description: `The role has been deleted.`,
+            title: 'Role Deactivated',
+            description: `The role has been deactivated and hidden.`,
         });
-        await fetchRoles(); // Re-fetch the list of roles
-        await fetchAllSettings(); // Re-fetch settings to update permissions context
+        await fetchAllRoles(); // Re-fetch the list of roles
     } catch (error) {
          toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
@@ -148,10 +131,12 @@ export function RoleManagementEditor() {
         setRoleToEdit(role);
         setRoleName(role.name.replace(/_/g, ' '));
         setRoleDescription(role.description);
+        setIsActive(role.isActive);
     } else {
         setRoleToEdit(null);
         setRoleName('');
         setRoleDescription('');
+        setIsActive(true);
     }
     setDialogOpen(true);
   }
@@ -182,7 +167,7 @@ export function RoleManagementEditor() {
             <div>
                 <CardTitle>Role Management</CardTitle>
                 <CardDescription>
-                Define, edit, and delete user roles in the application.
+                Define, edit, and manage user roles in the application.
                 </CardDescription>
             </div>
              <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) setRoleToEdit(null); setDialogOpen(open);}}>
@@ -202,6 +187,12 @@ export function RoleManagementEditor() {
                             <Label htmlFor="role-desc">Description</Label>
                             <Input id="role-desc" placeholder="A brief description of the role's purpose." value={roleDescription} onChange={(e) => setRoleDescription(e.target.value)} />
                         </div>
+                        {roleToEdit && (
+                            <div className="flex items-center space-x-2">
+                                <Switch id="role-active" checked={isActive} onCheckedChange={setIsActive} />
+                                <Label htmlFor="role-active">Role is Active</Label>
+                            </div>
+                        )}
                     </div>
                     <DialogFooter>
                         <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
@@ -241,22 +232,22 @@ export function RoleManagementEditor() {
                                         <AlertDialogTrigger asChild>
                                             <Button variant="destructive" size="sm" disabled={coreRoles.includes(role.name.toUpperCase())}>
                                                 <Trash2 className="mr-2 h-4 w-4" />
-                                                Delete
+                                                Deactivate
                                             </Button>
                                         </AlertDialogTrigger>
                                         <AlertDialogContent>
                                             <AlertDialogHeader>
                                                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                                 <AlertDialogDescription>
-                                                    This action cannot be undone. This will permanently delete the <strong>{role.name.replace(/_/g, ' ')}</strong> role.
-                                                    Any users with this role will lose their assigned permissions.
+                                                    This will deactivate the <strong>{role.name.replace(/_/g, ' ')}</strong> role.
+                                                    Any users with this role will still have it, but it will not be assignable and may not appear in lists.
                                                 </AlertDialogDescription>
                                             </AlertDialogHeader>
                                             <AlertDialogFooter>
                                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                 <AlertDialogAction onClick={() => handleDeleteRole(role.id)} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
                                                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                                    Yes, delete role
+                                                    Yes, deactivate role
                                                 </AlertDialogAction>
                                             </AlertDialogFooter>
                                         </AlertDialogContent>

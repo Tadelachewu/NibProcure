@@ -8,15 +8,14 @@ import { Button } from '../ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save, PlusCircle, Trash2, ArrowDown, ArrowUp, GripVertical } from 'lucide-react';
 import { ApprovalStep, ApprovalThreshold, UserRole } from '@/lib/types';
-import { rolePermissions } from '@/lib/roles';
+import { Reorder } from 'framer-motion';
+import { produce } from 'immer';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Reorder } from 'framer-motion';
-import { produce } from 'immer';
 
 export function ApprovalMatrixEditor() {
-    const { approvalThresholds, updateApprovalThresholds, committeeConfig } = useAuth();
+    const { approvalThresholds, updateApprovalThresholds, committeeConfig, roles } = useAuth();
     const [localThresholds, setLocalThresholds] = useState<ApprovalThreshold[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
@@ -158,7 +157,7 @@ export function ApprovalMatrixEditor() {
         }));
     };
 
-    const availableRoles = Object.keys(rolePermissions).filter(r => r !== 'Vendor' && r !== 'Requester');
+    const availableRoles = roles.filter(r => r.name !== 'Vendor' && r.name !== 'Requester');
 
     return (
         <Card>
@@ -198,7 +197,7 @@ export function ApprovalMatrixEditor() {
                                         <Select value={step.role} onValueChange={(role: UserRole) => handleStepChange(threshold.id, index, role)}>
                                             <SelectTrigger><SelectValue/></SelectTrigger>
                                             <SelectContent>
-                                                {availableRoles.map(r => <SelectItem key={r} value={r}>{r.replace(/_/g, ' ')}</SelectItem>)}
+                                                {availableRoles.map(r => <SelectItem key={r.id} value={r.name}>{r.name.replace(/_/g, ' ')}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
                                         <Button variant="ghost" size="icon" onClick={() => removeStep(threshold.id, index)}><Trash2 className="h-4 w-4"/></Button>

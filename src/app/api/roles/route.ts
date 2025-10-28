@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/auth-context';
 export async function GET() {
   try {
     const roles = await prisma.role.findMany({
+      where: { isActive: true },
       orderBy: {
         name: 'asc',
       },
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
           data: {
             name: formattedName,
             description,
+            isActive: true, // New roles are active by default
           },
         });
 
@@ -80,7 +82,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
    try {
     const body = await request.json();
-    const { id, name, description, actorUserId } = body;
+    const { id, name, description, isActive, actorUserId } = body;
 
     const actor = await prisma.user.findUnique({where: { id: actorUserId }});
     if (!actor || actor.role !== 'Admin') {
@@ -99,7 +101,7 @@ export async function PATCH(request: Request) {
     
     const updatedRole = await prisma.role.update({
         where: { id },
-        data: { name: formattedName, description }
+        data: { name: formattedName, description, isActive }
     });
 
     return NextResponse.json(updatedRole);
@@ -152,31 +154,20 @@ export async function DELETE(request: Request) {
         return NextResponse.json({ error: `Cannot delete core system role: ${roleToDelete.name.replace(/_/g, ' ')}` }, { status: 403 });
     }
     
-    await prisma.$transaction(async (tx) => {
-        // Remove from rolePermissions setting
-        const permissionsSetting = await tx.setting.findUnique({
-            where: { key: 'rolePermissions' }
-        });
-
-        if (permissionsSetting) {
-            const currentPermissions = permissionsSetting.value as any;
-            delete currentPermissions[roleToDelete.name];
-            await tx.setting.update({
-                where: { key: 'rolePermissions' },
-                data: { value: currentPermissions }
-            });
-        }
-        
-        await tx.role.delete({ where: { id } });
+    // Instead of deleting, we set it to inactive
+    const updatedRole = await prisma.role.update({
+      where: { id },
+      data: { isActive: false }
     });
 
 
-    return NextResponse.json({ message: 'Role deleted successfully' });
+    return NextResponse.json({ message: 'Role deactivated successfully' });
   } catch (error) {
-     console.error('Failed to delete role:', error);
+     console.error('Failed to deactivate role:', error);
      if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+

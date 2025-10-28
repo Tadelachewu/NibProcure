@@ -60,12 +60,20 @@ interface Setting {
     value: any;
 }
 
+interface Role {
+    id: string;
+    name: string;
+    description: string;
+    isActive: boolean;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   role: UserRole | null;
   allUsers: User[];
   departments: Department[];
+  roles: Role[];
   rolePermissions: Record<UserRole, string[]>;
   rfqSenderSetting: RfqSenderSetting;
   approvalThresholds: ApprovalThreshold[];
@@ -86,6 +94,7 @@ interface AuthContextType {
   fetchAllUsers: () => Promise<User[]>;
   fetchAllSettings: () => Promise<void>;
   fetchAllDepartments: () => Promise<void>;
+  fetchAllRoles: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -96,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<UserRole | null>(null);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [rolePermissions, setRolePermissions] = useState<Record<UserRole, string[]>>(defaultRolePermissions);
   const [rfqSenderSetting, setRfqSenderSetting] = useState<RfqSenderSetting>({ type: 'all' });
@@ -133,8 +143,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
   
+  const fetchAllRoles = useCallback(async () => {
+    try {
+      const response = await fetch('/api/roles');
+      if (response.ok) {
+        const rolesData = await response.json();
+        setRoles(rolesData);
+      }
+    } catch (error) {
+      console.error("Failed to fetch roles", error);
+    }
+  }, []);
+
   const fetchAllSettings = useCallback(async () => {
     try {
+      await fetchAllRoles(); // Ensure roles are loaded first
       const settingsRes = await fetch('/api/settings');
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
@@ -165,7 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
         console.error("Failed to fetch settings", error);
     }
-  }, []);
+  }, [fetchAllRoles]);
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -173,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await Promise.all([
         fetchAllSettings(),
         fetchAllUsers(),
-        fetchAllDepartments()
+        fetchAllDepartments(),
       ]);
       try {
           const storedToken = localStorage.getItem('authToken');
@@ -300,6 +323,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       allUsers,
       departments,
+      roles,
       rolePermissions,
       rfqSenderSetting,
       approvalThresholds,
@@ -319,8 +343,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateSetting,
       fetchAllUsers,
       fetchAllSettings,
-      fetchAllDepartments
-  }), [user, token, role, loading, allUsers, departments, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
+      fetchAllDepartments,
+      fetchAllRoles,
+  }), [user, token, role, loading, allUsers, departments, roles, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments, fetchAllRoles]);
 
 
   return (
