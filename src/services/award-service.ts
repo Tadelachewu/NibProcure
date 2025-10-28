@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -133,6 +134,7 @@ export async function handleAwardRejection(
         await tx.auditLog.create({
             data: {
                 timestamp: new Date(),
+                user: { connect: { id: actor.id } },
                 action: 'PROMOTE_STANDBY',
                 entity: 'Quotation',
                 entityId: nextQuote.id,
@@ -197,6 +199,7 @@ export async function handleAwardRejection(
         await tx.auditLog.create({
             data: {
                 timestamp: new Date(),
+                user: { connect: { id: actor.id } },
                 action: 'RESTART_RFQ',
                 entity: 'Requisition',
                 entityId: requisition.id,
