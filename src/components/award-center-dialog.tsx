@@ -38,6 +38,11 @@ export const AwardCenterDialog = ({
         return setMinutes(setHours(awardResponseDeadlineDate, hours), minutes);
     }, [awardResponseDeadlineDate, awardResponseDeadlineTime]);
     
+    const eligibleQuotes = useMemo(() => {
+        // Exclude vendors who have explicitly declined
+        return quotations.filter(q => q.status !== 'Declined');
+    }, [quotations]);
+
     // Per-item award logic
     const itemWinners = useMemo(() => {
         if (!requisition.items) return [];
@@ -46,7 +51,7 @@ export const AwardCenterDialog = ({
             let bestScore = -1;
             let winner: { vendorId: string; vendorName: string; quoteItemId: string; } | null = null;
 
-            quotations.forEach(quote => {
+            eligibleQuotes.forEach(quote => {
                 const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
 
                 proposalsForItem.forEach(proposal => {
@@ -81,13 +86,10 @@ export const AwardCenterDialog = ({
                 bestScore,
             }
         });
-    }, [requisition, quotations]);
+    }, [requisition, eligibleQuotes]);
     
     // Single vendor award logic
     const overallWinner = useMemo(() => {
-        // Filter out vendors who have already declined
-        const eligibleQuotes = quotations.filter(q => q.status !== 'Declined');
-
         let bestOverallScore = -1;
         let overallWinner: { vendorId: string; vendorName: string; items: { requisitionItemId: string, quoteItemId: string }[] } | null = null;
         
@@ -106,7 +108,7 @@ export const AwardCenterDialog = ({
             }
         });
         return { ...overallWinner, score: bestOverallScore };
-    }, [quotations, requisition]);
+    }, [eligibleQuotes, requisition]);
 
 
     const handleConfirmAward = () => {

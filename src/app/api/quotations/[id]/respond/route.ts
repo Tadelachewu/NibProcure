@@ -106,10 +106,10 @@ export async function POST(
              // Mark the current quote as Declined
             await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Declined' } });
 
-            // Revert the requisition status to Scoring_Complete to allow the PO to re-award
+            // Set the requisition to the new "Award_Declined" status to trigger manual intervention
             await tx.purchaseRequisition.update({
                 where: { id: requisition.id },
-                data: { status: 'Scoring_Complete' }
+                data: { status: 'Award_Declined' }
             });
 
             await tx.auditLog.create({
@@ -119,12 +119,12 @@ export async function POST(
                     action: 'REJECT_AWARD',
                     entity: 'Quotation',
                     entityId: quoteId,
-                    details: `Vendor declined award. Requisition returned to Procurement Officer for action.`,
+                    details: `Vendor declined award. Requisition requires procurement officer review.`,
                     transactionId: requisition.transactionId,
                 }
             });
 
-            return { message: 'Award declined. The procurement team has been notified to re-initiate the award process.' };
+            return { message: 'Award declined. The procurement team has been notified to take action.' };
         }
         
         throw new Error('Invalid action.');

@@ -60,6 +60,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AwardCenterDialog } from '@/components/award-center-dialog';
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -1612,7 +1613,6 @@ const ScoringProgressTracker = ({
   onFinalize,
   onCommitteeUpdate,
   isFinalizing,
-  isAwarded,
 }: {
   requisition: PurchaseRequisition;
   quotations: Quotation[];
@@ -1620,7 +1620,6 @@ const ScoringProgressTracker = ({
   onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
   onCommitteeUpdate: (open: boolean) => void;
   isFinalizing: boolean;
-  isAwarded: boolean;
 }) => {
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
@@ -1675,10 +1674,10 @@ const ScoringProgressTracker = ({
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
     const getButtonState = () => {
-        if (isAwarded) return { text: "Award Process Complete", disabled: true };
+        if (requisition.status === 'Award_Declined') return { text: "Award Standby Vendor", disabled: false };
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
-        if (!allHaveScored) return { text: "Waiting for Scores...", disabled: true };
-        return { text: "Finalize Scores and Award", disabled: false };
+        if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
+        return { text: "Finalize Scores & Award", disabled: false };
     }
     const buttonState = getButtonState();
 
@@ -1921,236 +1920,6 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
         </Dialog>
     );
 };
-
-
-const AwardCenterDialog = ({
-    requisition,
-    quotations,
-    onFinalize,
-    onClose
-}: {
-    requisition: PurchaseRequisition;
-    quotations: Quotation[];
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
-    onClose: () => void;
-}) => {
-    const [awardStrategy, setAwardStrategy] = useState<'item' | 'all'>('item');
-    const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
-    const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
-
-    const awardResponseDeadline = useMemo(() => {
-        if (!awardResponseDeadlineDate) return undefined;
-        const [hours, minutes] = awardResponseDeadlineTime.split(':').map(Number);
-        return setMinutes(setHours(awardResponseDeadlineDate, hours), minutes);
-    }, [awardResponseDeadlineDate, awardResponseDeadlineTime]);
-    
-    // Per-item award logic
-    const itemWinners = useMemo(() => {
-        if (!requisition.items) return [];
-
-        return requisition.items.map(reqItem => {
-            let bestScore = -1;
-            let winner: { vendorId: string; vendorName: string; quoteItemId: string; } | null = null;
-
-            quotations.forEach(quote => {
-                const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
-
-                proposalsForItem.forEach(proposal => {
-                    if (!quote.scores) return;
-
-                    let totalItemScore = 0;
-                    let scoreCount = 0;
-                    
-                    quote.scores.forEach(scoreSet => {
-                        const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                        if (itemScore) {
-                            totalItemScore += itemScore.finalScore;
-                            scoreCount++;
-                        }
-                    });
-                    
-                    const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                    if (averageItemScore > bestScore) {
-                        bestScore = averageItemScore;
-                        winner = {
-                            vendorId: quote.vendorId,
-                            vendorName: quote.vendorName,
-                            quoteItemId: proposal.id
-                        };
-                    }
-                });
-            });
-            return {
-                requisitionItemId: reqItem.id,
-                name: reqItem.name,
-                winner,
-                bestScore,
-            }
-        });
-    }, [requisition, quotations]);
-    
-    // Single vendor award logic
-    const overallWinner = useMemo(() => {
-        let bestOverallScore = -1;
-        let overallWinner: { vendorId: string; vendorName: string; items: { requisitionItemId: string, quoteItemId: string }[] } | null = null;
-        
-        quotations.forEach(quote => {
-            if (quote.finalAverageScore && quote.finalAverageScore > bestOverallScore) {
-                bestOverallScore = quote.finalAverageScore;
-                overallWinner = {
-                    vendorId: quote.vendorId,
-                    vendorName: quote.vendorName,
-                    // Award all original items, assuming vendor quoted them
-                    items: requisition.items.map(reqItem => {
-                        const vendorItem = quote.items.find(i => i.requisitionItemId === reqItem.id);
-                        return { requisitionItemId: reqItem.id, quoteItemId: vendorItem!.id }
-                    }).filter(i => i.quoteItemId)
-                }
-            }
-        });
-        return { ...overallWinner, score: bestOverallScore };
-    }, [quotations, requisition]);
-
-
-    const handleConfirmAward = () => {
-        let awards: { [vendorId: string]: { vendorName: string, items: { requisitionItemId: string, quoteItemId: string }[] } } = {};
-        
-        if (awardStrategy === 'item') {
-             itemWinners.forEach(item => {
-                if (item.winner) {
-                    if (!awards[item.winner.vendorId]) {
-                        awards[item.winner.vendorId] = { vendorName: item.winner.vendorName, items: [] };
-                    }
-                    awards[item.winner.vendorId].items.push({ requisitionItemId: item.requisitionItemId, quoteItemId: item.winner.quoteItemId });
-                }
-            });
-        } else { // 'all'
-           if (overallWinner?.vendorId) {
-                awards[overallWinner.vendorId] = { 
-                    vendorName: overallWinner.vendorName!, 
-                    items: overallWinner.items!
-                };
-           }
-        }
-
-        onFinalize(awardStrategy, awards, awardResponseDeadline);
-        onClose();
-    }
-
-
-    return (
-        <DialogContent className="max-w-4xl">
-            <DialogHeader>
-                <DialogTitle>Award Center</DialogTitle>
-                <DialogDescription>Review scores and finalize the award for requisition {requisition.id}.</DialogDescription>
-            </DialogHeader>
-            
-            <Tabs value={awardStrategy} onValueChange={(v) => setAwardStrategy(v as any)} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="item">Award by Best Offer (Per Item)</TabsTrigger>
-                    <TabsTrigger value="all">Award All to Single Vendor</TabsTrigger>
-                </TabsList>
-                <TabsContent value="item">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Best Offer per Item</CardTitle>
-                            <CardDescription>This strategy awards each item to the vendor with the highest score for that specific item. This may result in multiple Purchase Orders.</CardDescription>
-                        </CardHeader>
-                         <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Item</TableHead>
-                                        <TableHead>Recommended Winner</TableHead>
-                                        <TableHead className="text-right">Winning Score</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {itemWinners.map(item => (
-                                        <TableRow key={item.requisitionItemId}>
-                                            <TableCell className="font-medium">{item.name}</TableCell>
-                                            <TableCell>{item.winner?.vendorName || 'N/A'}</TableCell>
-                                            <TableCell className="text-right font-mono">{item.bestScore > 0 ? item.bestScore.toFixed(2) : 'N/A'}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                 <TabsContent value="all">
-                     <Card>
-                        <CardHeader>
-                            <CardTitle>Best Overall Vendor</CardTitle>
-                            <CardDescription>This strategy awards all items to the single vendor with the highest average score across all items.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="text-center p-8">
-                            <TrophyIcon className="h-12 w-12 text-amber-400 mx-auto mb-4"/>
-                            <p className="text-muted-foreground">Recommended Overall Winner:</p>
-                            <p className="text-2xl font-bold">{overallWinner?.vendorName || 'N/A'}</p>
-                            <p className="font-mono text-primary">{overallWinner?.score > 0 ? `${overallWinner.score.toFixed(2)} average score` : 'N/A'}</p>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
-
-             <div className="pt-4 space-y-2">
-                <Label>Vendor Response Deadline (Optional)</Label>
-                <div className="flex gap-2">
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button
-                                variant={"outline"}
-                                className={cn(
-                                "flex-1 justify-start text-left font-normal",
-                                !awardResponseDeadlineDate && "text-muted-foreground"
-                                )}
-                            >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                            <Calendar
-                                mode="single"
-                                selected={awardResponseDeadlineDate}
-                                onSelect={setAwardResponseDeadlineDate}
-                                disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
-                                initialFocus
-                            />
-                        </PopoverContent>
-                    </Popover>
-                     <Input 
-                        type="time" 
-                        className="w-32"
-                        value={awardResponseDeadlineTime}
-                        onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
-                    />
-                </div>
-            </div>
-
-            <DialogFooter>
-                <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                <AlertDialog>
-                    <AlertDialogTrigger asChild><Button>Finalize &amp; Send Awards</Button></AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                        <AlertDialogTitle>Confirm Award Decision</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            You are about to finalize the award based on the <strong>{awardStrategy === 'item' ? 'Best Offer Per Item' : 'Single Best Vendor'}</strong> strategy.
-                            This will initiate the final approval workflow.
-                        </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleConfirmAward}>Confirm</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </DialogFooter>
-        </DialogContent>
-    )
-}
 
 
 const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess }: { isOpen: boolean, onClose: () => void, member: User, requisition: PurchaseRequisition, onSuccess: () => void }) => {
@@ -2519,16 +2288,17 @@ export default function QuotationDetailsPage() {
             const quoData = await quoResponse.json();
 
             if (currentReq) {
-                // Check for expired award and auto-promote if necessary
                 const awardedQuote = quoData.find((q: Quotation) => q.status === 'Awarded');
                 if (awardedQuote && currentReq.awardResponseDeadline && isPast(new Date(currentReq.awardResponseDeadline))) {
                     toast({
                         title: 'Deadline Missed',
-                        description: `Vendor ${awardedQuote.vendorName} missed the response deadline. Promoting next vendor.`,
+                        description: `Vendor ${awardedQuote.vendorName} missed the response deadline. Action required.`,
                         variant: 'destructive',
                     });
-                    await handleAwardChange(secondStandby ? 'promote_second' : 'restart_rfq');
-                    // Refetch after the change
+                    
+                    // Only update statuses, don't auto-promote
+                    await handleAwardChange('fail_current');
+
                     const [refetchedReqRes, refetchedQuoRes] = await Promise.all([
                         fetch(`/api/requisitions/${id}`),
                         fetch(`/api/quotations?requisitionId=${id}`)
@@ -2624,7 +2394,7 @@ export default function QuotationDetailsPage() {
     }
 
 
-  const handleAwardChange = async (action: 'promote_second' | 'promote_third' | 'restart_rfq') => {
+  const handleAwardChange = async (action: 'promote_second' | 'promote_third' | 'restart_rfq' | 'fail_current') => {
     if (!user || !id || !requisition) return;
     
     setIsChangingAward(true);
@@ -2707,7 +2477,7 @@ export default function QuotationDetailsPage() {
       if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
       if (requisition.status === 'Accepting_Quotes' && deadlinePassed) return 'committee';
 
-      const inScoringProcess = requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
+      const inScoringProcess = requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined';
       if (inScoringProcess) {
           return isScoringComplete ? 'award' : 'committee';
       }
@@ -2775,12 +2545,12 @@ export default function QuotationDetailsPage() {
             <WorkflowStepper step={currentStep} />
         </Card>
         
-        {prevAwardedFailed && (
+        {requisition.status === 'Award_Declined' && (
              <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Award Failover</AlertTitle>
+                <AlertTitle>Action Required: Award Declined</AlertTitle>
                 <AlertDescription>
-                    A previously awarded vendor failed to respond or declined the award. The award has been automatically passed to the next standby vendor.
+                    The previously awarded vendor has declined the award. Please use the "Award Standby" button to promote the next vendor.
                 </AlertDescription>
             </Alert>
         )}
@@ -2882,7 +2652,6 @@ export default function QuotationDetailsPage() {
 
         {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
             <>
-                {/* Always render committee management when in award step so dialog can open */}
                 {canManageCommittees && currentStep !== 'committee' && readyForCommitteeAssignment && (
                      <div className="hidden">
                         <EvaluationCommitteeManagement
@@ -2921,39 +2690,6 @@ export default function QuotationDetailsPage() {
                                 <Button variant="secondary" onClick={() => setReportOpen(true)}>
                                     <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
                                 </Button>
-                            )}
-                            {isAwarded && requisition.status !== 'PO_Created' && (role === 'Procurement_Officer' || role === 'Admin') && (
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="outline" disabled={isChangingAward} className="w-full">
-                                            {isChangingAward ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Undo className="mr-2 h-4 w-4"/>}
-                                            Change Award Decision
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Change Award Decision</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                The primary awarded vendor may have failed to deliver. Choose how to proceed. This action cannot be undone.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <div className="flex flex-col gap-4 py-4">
-                                            <Button onClick={() => handleAwardChange('promote_second')} disabled={!secondStandby}>
-                                                Award to 2nd Vendor ({secondStandby?.vendorName})
-                                            </Button>
-                                            <Button onClick={() => handleAwardChange('promote_third')} disabled={!thirdStandby}>
-                                                Award to 3rd Vendor ({thirdStandby?.vendorName})
-                                            </Button>
-                                            <Button onClick={() => handleAwardChange('restart_rfq')} variant="destructive">
-                                                <RefreshCw className="mr-2 h-4 w-4"/>
-                                                Restart RFQ Process
-                                            </Button>
-                                        </div>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
                             )}
                         </div>
                     </CardHeader>
@@ -3018,7 +2754,6 @@ export default function QuotationDetailsPage() {
                 onFinalize={handleFinalizeScores}
                 onCommitteeUpdate={setCommitteeDialogOpen}
                 isFinalizing={isFinalizing}
-                isAwarded={isAwarded}
             />
         )}
 
@@ -3157,4 +2892,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
