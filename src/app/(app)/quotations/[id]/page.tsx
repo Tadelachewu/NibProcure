@@ -1680,6 +1680,9 @@ const ScoringProgressTracker = ({
         if (requisition.status === 'Award_Declined') {
              return { text: "Award Standby", disabled: false };
         }
+        if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled'].includes(requisition.status)) {
+            return { text: "Award Sent", disabled: true };
+        }
         if (requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved') {
             return { text: "Award Approved - Pending Notification", disabled: true };
         }
@@ -2766,7 +2769,7 @@ export default function QuotationDetailsPage() {
             />
         )}
         
-        {(isScoringComplete || requisition.status === 'Award_Declined') && (role === 'Procurement_Officer' || role === 'Admin') && (
+        {isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin') && (
              <ScoringProgressTracker
                 requisition={requisition}
                 quotations={quotations}
@@ -2913,6 +2916,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
