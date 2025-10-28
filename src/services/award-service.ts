@@ -181,6 +181,12 @@ export async function handleAwardRejection(
         });
         const scoreSetIds = scoreSetsToDelete.map(s => s.id);
         if (scoreSetIds.length > 0) {
+             const itemScoresToDelete = await tx.itemScore.findMany({ where: { scoreSetId: { in: scoreSetIds } }});
+             const itemScoreIds = itemScoresToDelete.map(is => is.id);
+             if (itemScoreIds.length > 0) {
+                await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } }});
+             }
+            await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } }});
             await tx.committeeScoreSet.deleteMany({
                 where: {
                     id: { in: scoreSetIds }
