@@ -76,11 +76,13 @@ export function RequisitionsForQuotingTable() {
     const quoteCount = req.quotations?.length || 0;
     const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
-    const hasBeenRejected = req.quotations?.some(q => q.status === 'Declined');
 
     // Handle terminal or high-priority statuses first
     if (req.status === 'PO_Created') {
         return <Badge variant="default" className="bg-green-700">PO Created</Badge>;
+    }
+     if (req.status === 'Award_Declined') {
+        return <Badge variant="destructive" className="animate-pulse">Award Declined - Action Required</Badge>;
     }
     if (req.status.startsWith('Pending_')) {
       return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status.replace(/_/g, ' ')}</Badge>;
@@ -120,9 +122,6 @@ export function RequisitionsForQuotingTable() {
 
         // IMPORTANT: Prioritize the explicit status from the DB if available
         if (req.status === 'Scoring_Complete') {
-            if (hasBeenRejected) {
-                return <Badge variant="default" className="bg-orange-500 text-white animate-pulse">Ready to Award Standby</Badge>;
-            }
             return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
         }
 
