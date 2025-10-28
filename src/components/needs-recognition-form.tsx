@@ -25,7 +25,7 @@ import {
   CardTitle,
   CardDescription,
 } from './ui/card';
-import { PlusCircle, Trash2, Loader2, Send, Percent, Info } from 'lucide-react';
+import { PlusCircle, Trash2, Loader2, Send, Percent, Info, Save } from 'lucide-react';
 import { Separator } from './ui/separator';
 import {
   Select,
@@ -42,6 +42,18 @@ import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Slider } from './ui/slider';
 import { Badge } from './ui/badge';
 import { Switch } from './ui/switch';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+
 
 const evaluationCriteriaSchema = z.object({
       id: z.string(),
@@ -104,8 +116,7 @@ interface NeedsRecognitionFormProps {
 export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRecognitionFormProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
-  const [departments, setDepartments] = useState<string[]>(['Design', 'Operations', 'IT', 'Marketing']);
+  const { user, departments } = useAuth();
   const isEditMode = !!existingRequisition;
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -113,7 +124,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
     defaultValues: isEditMode ? {
         ...existingRequisition,
         requesterId: existingRequisition.requesterId,
-        department: user?.department || existingRequisition.department, // Prioritize current user's department
+        department: existingRequisition.department || user?.department,
         title: existingRequisition.title,
         urgency: existingRequisition.urgency || 'Low',
         justification: existingRequisition.justification,
@@ -176,54 +187,58 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   
   const itemsWatch = form.watch('items');
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  const onFinalSubmit = async (values: z.infer<typeof formSchema>, isDraft: boolean) => {
     setLoading(true);
     try {
-      const formattedValues = {
-        ...values,
-        customQuestions: values.customQuestions?.map(q => ({
-          ...q,
-          options: q.options?.map(opt => opt.value)
-        }))
-      };
-      
-      const body = isEditMode ? 
-        { ...formattedValues, id: existingRequisition.id, status: 'Pending_Approval', userId: user?.id } : 
-        formattedValues;
-      
-      const response = await fetch('/api/requisitions', {
-        method: isEditMode ? 'PATCH' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
+        const formattedValues = {
+            ...values,
+            customQuestions: values.customQuestions?.map(q => ({
+            ...q,
+            options: q.options?.map(opt => opt.value)
+            }))
+        };
 
-      if (!response.ok) {
-        throw new Error(`Failed to ${isEditMode ? 'update' : 'submit'} requisition`);
-      }
+        const status = isDraft ? 'Draft' : 'Pending_Approval';
+        const body = { ...formattedValues, id: existingRequisition?.id, status: status, userId: user?.id };
+        
+        const response = await fetch('/api/requisitions', {
+            method: isEditMode ? 'PATCH' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
 
-      const result = await response.json();
-      toast({
-        title: `Requisition ${isEditMode ? 'Updated' : 'Submitted'}`,
-        description: `Your purchase requisition "${result.title}" has been successfully ${isEditMode ? 'resubmitted for approval' : 'saved as a draft'}.`,
-      });
-      if (onSuccess) {
-          onSuccess();
-      } else {
-          form.reset();
-      }
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Failed to ${isEditMode ? 'update' : 'create'} requisition.`);
+        }
+
+        toast({
+            title: `Requisition ${isEditMode ? 'Updated' : (isDraft ? 'Saved' : 'Submitted')}`,
+            description: `Your purchase requisition has been successfully ${isEditMode ? 'updated' : (isDraft ? 'saved as a draft' : 'submitted for approval')}.`,
+        });
+
+        if (onSuccess) {
+            onSuccess();
+        } else {
+            form.reset();
+        }
     } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Submission Failed',
-        description:
-          error instanceof Error ? error.message : 'An unknown error occurred.',
-      });
+        toast({
+            variant: 'destructive',
+            title: 'Submission Failed',
+            description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        });
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   }
+
+  const handleSaveDraft = () => {
+    onFinalSubmit(form.getValues(), true);
+  }
+
+  const handleFormSubmit = form.handleSubmit((data) => onFinalSubmit(data, false));
+
 
   const financialWeight = form.watch('evaluationCriteria.financialWeight');
   const financialTotal = (form.watch('evaluationCriteria.financialCriteria') || []).reduce((acc, c) => acc + (Number(c.weight) || 0), 0);
@@ -245,7 +260,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
             </Alert>
          )}
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <form onSubmit={handleFormSubmit} className="space-y-8">
             <div className="grid md:grid-cols-2 gap-8">
                 <FormItem>
                   <FormLabel>Your Name</FormLabel>
@@ -253,19 +268,28 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
                     <Input placeholder="e.g. Jane Doe" value={user?.name || ''} disabled />
                   </FormControl>
                 </FormItem>
-              <FormField
-                control={form.control}
-                name="department"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Department</FormLabel>
-                    <FormControl>
-                        <Input {...field} disabled />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                 <FormField
+                    control={form.control}
+                    name="department"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Department</FormLabel>
+                         <Select onValueChange={field.onChange} value={field.value} disabled={isEditMode}>
+                            <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select your department" />
+                            </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                            {departments.map(dept => (
+                                <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
+                            ))}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
             </div>
             
             <div className="grid md:grid-cols-2 gap-8">
@@ -655,14 +679,32 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
             </div>
             
             <div className="flex justify-end items-center gap-4">
-              <Button type="submit" disabled={loading}>
-                {loading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : isEditMode ? (
-                    <Send className="mr-2 h-4 w-4" />
-                ) : null}
-                {isEditMode ? 'Resubmit for Approval' : 'Save as Draft'}
-              </Button>
+                <Button type="button" onClick={handleSaveDraft} variant="secondary" disabled={loading}>
+                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Save as Draft
+                </Button>
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button type="button" disabled={loading}>
+                             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                            Submit for Approval
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you ready to submit?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will submit the requisition to your department head for approval. You will not be able to edit it after submission unless it is rejected.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleFormSubmit}>
+                                Yes, Submit for Approval
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
           </form>
         </Form>
@@ -704,3 +746,5 @@ function QuestionOptions({ index }: { index: number }) {
     </div>
   );
 }
+
+    

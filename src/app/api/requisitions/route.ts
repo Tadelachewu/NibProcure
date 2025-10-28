@@ -373,6 +373,7 @@ export async function PATCH(
                 return NextResponse.json(updatedRequisition);
              });
         } else {
+            // This is the fix: return an error response if the action is invalid.
             return NextResponse.json({ error: 'Invalid action for this requisition state.' }, { status: 400 });
         }
         
@@ -384,35 +385,35 @@ export async function PATCH(
         if (department?.headId) {
             dataToUpdate.currentApprover = { connect: { id: department.headId } };
             dataToUpdate.status = 'Pending_Approval';
-        } else { // No department head, auto-approve
+        } else { // No department head, move to PreApproved for RFQ sender
             dataToUpdate.status = 'PreApproved';
             dataToUpdate.currentApprover = { disconnect: true };
         }
          auditDetails = `Requisition ${id} submitted for approval.`;
          auditAction = 'SUBMIT_FOR_APPROVAL';
 
-        const updatedRequisition = await prisma.purchaseRequisition.update({
-          where: { id },
-          data: dataToUpdate,
-        });
-        
-        await prisma.auditLog.create({
-            data: {
-                transactionId: updatedRequisition.transactionId,
-                user: { connect: { id: user.id } },
-                timestamp: new Date(),
-                action: auditAction,
-                entity: 'Requisition',
-                entityId: id,
-                details: auditDetails,
-            }
-        });
-
-        return NextResponse.json(updatedRequisition);
-
     } else {
         return NextResponse.json({ error: 'Invalid operation for current status.' }, { status: 400 });
     }
+    
+    const updatedRequisition = await prisma.purchaseRequisition.update({
+      where: { id },
+      data: dataToUpdate,
+    });
+    
+    await prisma.auditLog.create({
+        data: {
+            transactionId: updatedRequisition.transactionId,
+            user: { connect: { id: user.id } },
+            timestamp: new Date(),
+            action: auditAction,
+            entity: 'Requisition',
+            entityId: id,
+            details: auditDetails,
+        }
+    });
+
+    return NextResponse.json(updatedRequisition);
     
   } catch (error) {
     console.error('[PATCH] Failed to update requisition:', error);
@@ -580,3 +581,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
