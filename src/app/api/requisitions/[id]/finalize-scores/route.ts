@@ -70,7 +70,7 @@ export async function POST(
                  await tx.quotation.update({
                     where: { id: quote.id },
                     data: {
-                        status: award.items.length > 0 ? (awardStrategy === 'all' ? 'Awarded' : 'Partially_Awarded') : 'Rejected',
+                        status: 'Pending_Award', // Set to pending, not awarded yet
                         rank: 1
                     }
                 });
@@ -100,14 +100,16 @@ export async function POST(
 
                 if (!firstStep.role.includes('Committee')) {
                     const approverUser = await tx.user.findFirst({ where: { role: firstStep.role }});
-                    nextApproverId = approverUser?.id || null;
-                    if (!nextApproverId) {
+                    if (!approverUser) {
                         throw new Error(`Could not find a user for the role: ${firstStep.role.replace(/_/g, ' ')}`);
                     }
+                    nextApproverId = approverUser.id;
                 }
                 console.log(`[FINALIZE-SCORES] Next Approver ID: ${nextApproverId}`);
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.replace(/_/g, ' ')} for approval.`;
             } else {
+                // If there are no steps, it's auto-approved. We can move straight to PostApproved
+                // and the main PATCH handler will convert Pending_Award to Awarded.
                 nextStatus = 'PostApproved';
                  console.log(`[FINALIZE-SCORES] No approval steps for this tier. Setting status to: ${nextStatus}`);
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier, which has no approval steps. Approved for vendor notification.`;

@@ -228,7 +228,7 @@ export type QuoteAnswer = {
   answer: string;
 }
 
-export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'Rejected' | 'Standby' | 'Invoice Submitted' | 'Failed' | 'Accepted' | 'Declined';
+export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'Rejected' | 'Standby' | 'Invoice Submitted' | 'Failed' | 'Accepted' | 'Declined' | 'Pending_Award';
 
 export type Score = {
   id: string;

@@ -99,7 +99,7 @@ export async function GET(request: Request) {
                     },
                 ]
             },
-            // Condition B: Awarded to this vendor
+            // Condition B: Awarded to this vendor (but not pending)
             {
                 quotations: {
                     some: {
@@ -118,7 +118,6 @@ export async function GET(request: Request) {
             { status: 'Accepting_Quotes' },
             { status: 'Scoring_In_Progress' },
             { status: 'Scoring_Complete' },
-            { status: 'Awarded' },
             { status: 'Award_Declined' },
         ];
     } else {
@@ -296,56 +295,87 @@ export async function PATCH(
                 return NextResponse.json(updatedReq);
              });
         } else if (newStatus === 'Approved') { // Using "Approved" as the action from the frontend
-            const approvalMatrix = await prisma.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
-            const totalValue = requisition.totalPrice;
-            const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
+             return await prisma.$transaction(async (tx) => {
+                const approvalMatrix = await tx.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
+                const totalValue = requisition.totalPrice;
+                const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
 
-            if (!relevantTier) {
-                 return NextResponse.json({ error: 'No approval tier configured for this award value.' }, { status: 400 });
-            }
-            
-            const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getNextStatusFromRole(step.role));
-            
-            if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
-                const nextStep = relevantTier.steps[currentStepIndex + 1];
-                dataToUpdate.status = getNextStatusFromRole(nextStep.role);
-
-                if (!nextStep.role.includes('Committee')) {
-                    const nextApprover = await prisma.user.findFirst({ where: { role: nextStep.role }});
-                    if (nextApprover) {
-                      dataToUpdate.currentApprover = { connect: { id: nextApprover.id } };
-                    } else {
-                      dataToUpdate.currentApprover = { disconnect: true };
-                    }
-                } else {
-                     dataToUpdate.currentApprover = { disconnect: true };
+                if (!relevantTier) {
+                    throw new Error('No approval tier configured for this award value.');
                 }
-                auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
-            } else {
-                dataToUpdate.status = 'PostApproved'; // This is the fix. The final status is distinct.
-                dataToUpdate.currentApprover = { disconnect: true };
-                auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
-            }
-            auditAction = 'APPROVE_AWARD_STEP';
+                
+                const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getNextStatusFromRole(step.role));
+                
+                if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
+                    const nextStep = relevantTier.steps[currentStepIndex + 1];
+                    dataToUpdate.status = getNextStatusFromRole(nextStep.role);
+
+                    if (!nextStep.role.includes('Committee')) {
+                        const nextApprover = await tx.user.findFirst({ where: { role: nextStep.role }});
+                        if (nextApprover) {
+                          dataToUpdate.currentApprover = { connect: { id: nextApprover.id } };
+                        } else {
+                          dataToUpdate.currentApprover = { disconnect: true };
+                        }
+                    } else {
+                        dataToUpdate.currentApprover = { disconnect: true };
+                    }
+                    auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
+                } else {
+                    dataToUpdate.status = 'PostApproved';
+                    dataToUpdate.currentApprover = { disconnect: true };
+                    auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
+                    
+                    // This is the final approval, so we officially mark the quote as 'Awarded'
+                    await tx.quotation.updateMany({
+                        where: {
+                            requisitionId: id,
+                            status: 'Pending_Award'
+                        },
+                        data: { status: 'Awarded' }
+                    });
+                }
+                auditAction = 'APPROVE_AWARD_STEP';
+
+                const updatedRequisition = await tx.purchaseRequisition.update({
+                    where: { id },
+                    data: dataToUpdate,
+                });
+                
+                if (minute) {
+                    await tx.minute.create({
+                        data: {
+                            requisition: { connect: { id: id } },
+                            author: { connect: { id: userId } },
+                            decision: 'APPROVED',
+                            decisionBody: user.role.replace(/_/g, ' '),
+                            justification: minute.justification,
+                            attendees: {
+                                connect: minute.attendeeIds.map((id: string) => ({ id }))
+                            }
+                        }
+                    });
+                    auditDetails += ` Minute recorded.`;
+                }
+
+                 await tx.auditLog.create({
+                    data: {
+                        transactionId: updatedRequisition.transactionId,
+                        user: { connect: { id: user.id } },
+                        timestamp: new Date(),
+                        action: auditAction,
+                        entity: 'Requisition',
+                        entityId: id,
+                        details: auditDetails,
+                    }
+                });
+
+                return NextResponse.json(updatedRequisition);
+             });
         } else {
             return NextResponse.json({ error: 'Invalid action for this requisition state.' }, { status: 400 });
         }
         
-        if (minute) {
-            await prisma.minute.create({
-                data: {
-                    requisition: { connect: { id: id } },
-                    author: { connect: { id: userId } },
-                    decision: status === 'Approved' ? 'APPROVED' : 'REJECTED',
-                    decisionBody: user.role.replace(/_/g, ' '),
-                    justification: minute.justification,
-                    attendees: {
-                        connect: minute.attendeeIds.map((id: string) => ({ id }))
-                    }
-                }
-            });
-            auditDetails += ` Minute recorded.`;
-        }
 
     } else if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
         const isRequester = requisition.requesterId === userId;
@@ -360,28 +390,30 @@ export async function PATCH(
         }
          auditDetails = `Requisition ${id} submitted for approval.`;
          auditAction = 'SUBMIT_FOR_APPROVAL';
+
+        const updatedRequisition = await prisma.purchaseRequisition.update({
+          where: { id },
+          data: dataToUpdate,
+        });
+        
+        await prisma.auditLog.create({
+            data: {
+                transactionId: updatedRequisition.transactionId,
+                user: { connect: { id: user.id } },
+                timestamp: new Date(),
+                action: auditAction,
+                entity: 'Requisition',
+                entityId: id,
+                details: auditDetails,
+            }
+        });
+
+        return NextResponse.json(updatedRequisition);
+
     } else {
         return NextResponse.json({ error: 'Invalid operation for current status.' }, { status: 400 });
     }
     
-    const updatedRequisition = await prisma.purchaseRequisition.update({
-      where: { id },
-      data: dataToUpdate,
-    });
-    
-    await prisma.auditLog.create({
-        data: {
-            transactionId: updatedRequisition.transactionId,
-            user: { connect: { id: user.id } },
-            timestamp: new Date(),
-            action: auditAction,
-            entity: 'Requisition',
-            entityId: id,
-            details: auditDetails,
-        }
-    });
-
-    return NextResponse.json(updatedRequisition);
   } catch (error) {
     console.error('[PATCH] Failed to update requisition:', error);
     if (error instanceof Error) {
