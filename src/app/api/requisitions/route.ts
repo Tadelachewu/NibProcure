@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -119,6 +120,7 @@ export async function GET(request: Request) {
             { status: 'Scoring_In_Progress' },
             { status: 'Scoring_Complete' },
             { status: 'Award_Declined' },
+            { status: 'Awarded' },
         ];
     } else {
       if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
@@ -373,8 +375,7 @@ export async function PATCH(
                 return NextResponse.json(updatedRequisition);
              });
         } else {
-            // This is the fix: return an error response if the action is invalid.
-            return NextResponse.json({ error: 'Invalid action for this requisition state.' }, { status: 400 });
+             return NextResponse.json({ error: 'Invalid action for this requisition state.' }, { status: 400 });
         }
         
 

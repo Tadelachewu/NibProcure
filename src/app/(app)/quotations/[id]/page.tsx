@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -1675,11 +1676,12 @@ const ScoringProgressTracker = ({
     
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
-    const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
-
     const getButtonState = () => {
         if (requisition.status === 'Award_Declined') {
-            return { text: "Award Standby Vendor", disabled: isFinalizing || !hasStandbyVendors };
+             return { text: "Award Standby", disabled: isFinalizing };
+        }
+        if (requisition.status.startsWith('Pending')) {
+            return { text: "Pending Final Approval...", disabled: true };
         }
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
         if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
@@ -2911,6 +2913,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
