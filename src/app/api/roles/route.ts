@@ -4,6 +4,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { useAuth } from '@/contexts/auth-context';
+import { RoleType } from '@/lib/types';
+
 
 export async function GET() {
   try {
@@ -22,7 +24,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, description, actorUserId } = body;
+    const { name, description, type, actorUserId } = body as { name: string, description: string, type: RoleType, actorUserId: string };
 
     const actor = await prisma.user.findUnique({ where: { id: actorUserId } });
     if (!actor || actor.role !== 'Admin') {
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
           data: {
             name: formattedName,
             description,
+            type: type || 'STANDARD',
           },
         });
 
@@ -80,7 +83,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
    try {
     const body = await request.json();
-    const { id, name, description, actorUserId } = body;
+    const { id, name, description, type, actorUserId } = body as { id: string, name: string, description: string, type: RoleType, actorUserId: string };
 
     const actor = await prisma.user.findUnique({where: { id: actorUserId }});
     if (!actor || actor.role !== 'Admin') {
@@ -99,7 +102,7 @@ export async function PATCH(request: Request) {
     
     const updatedRole = await prisma.role.update({
         where: { id },
-        data: { name: formattedName, description }
+        data: { name: formattedName, description, type: type || 'STANDARD' }
     });
 
     return NextResponse.json(updatedRole);
@@ -180,3 +183,5 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    

@@ -1,5 +1,7 @@
 
 
+export type RoleType = 'STANDARD' | 'REVIEW_COMMITTEE';
+
 export type UserRole =
   | 'Requester'
   | 'Approver'
@@ -405,3 +407,5 @@ export interface ApprovalThreshold {
     max: number | null; // null for infinity
     steps: ApprovalStep[];
 }
+
+    

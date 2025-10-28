@@ -27,7 +27,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogClose,
@@ -37,11 +36,15 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { useAuth } from '@/contexts/auth-context';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { RoleType } from '@/lib/types';
+
 
 interface Role {
     id: string;
     name: string;
     description: string;
+    type: RoleType;
 }
 
 export function RoleManagementEditor() {
@@ -51,6 +54,7 @@ export function RoleManagementEditor() {
   const [roleToEdit, setRoleToEdit] = useState<Role | null>(null);
   const [roleName, setRoleName] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
+  const [roleType, setRoleType] = useState<RoleType>('STANDARD');
   const { toast } = useToast();
   const { user, fetchAllSettings } = useAuth();
   
@@ -77,7 +81,7 @@ export function RoleManagementEditor() {
         toast({ variant: 'destructive', title: 'Error', description: 'Role name cannot be empty.' });
         return;
     }
-    if (!user) return;
+    if (!actor) return;
     
     setIsLoading(true);
 
@@ -88,6 +92,7 @@ export function RoleManagementEditor() {
       id: isEditing ? roleToEdit.id : undefined,
       name: roleName,
       description: roleDescription,
+      type: roleType,
       actorUserId: user.id,
     };
     
@@ -148,10 +153,12 @@ export function RoleManagementEditor() {
         setRoleToEdit(role);
         setRoleName(role.name.replace(/_/g, ' '));
         setRoleDescription(role.description);
+        setRoleType(role.type || 'STANDARD');
     } else {
         setRoleToEdit(null);
         setRoleName('');
         setRoleDescription('');
+        setRoleType('STANDARD');
     }
     setDialogOpen(true);
   }
@@ -202,6 +209,19 @@ export function RoleManagementEditor() {
                             <Label htmlFor="role-desc">Description</Label>
                             <Input id="role-desc" placeholder="A brief description of the role's purpose." value={roleDescription} onChange={(e) => setRoleDescription(e.target.value)} />
                         </div>
+                        <div>
+                            <Label htmlFor="role-type">Role Type</Label>
+                            <Select value={roleType} onValueChange={(v) => setRoleType(v as RoleType)}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="STANDARD">Standard User Role</SelectItem>
+                                    <SelectItem value="REVIEW_COMMITTEE">Review Committee Role</SelectItem>
+                                </SelectContent>
+                            </Select>
+                             <p className="text-xs text-muted-foreground mt-1">"Review Committee" roles can have value thresholds assigned in Committee Settings.</p>
+                        </div>
                     </div>
                     <DialogFooter>
                         <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
@@ -221,16 +241,18 @@ export function RoleManagementEditor() {
                     <TableRow>
                         <TableHead>Role Name</TableHead>
                         <TableHead>Description</TableHead>
+                        <TableHead>Type</TableHead>
                         <TableHead className="text-right w-40">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {isLoading && roles.length === 0 ? (
-                        <TableRow><TableCell colSpan={3} className="h-24 text-center"><Loader2 className="animate-spin"/></TableCell></TableRow>
+                        <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="animate-spin"/></TableCell></TableRow>
                     ) : roles.length > 0 ? roles.map((role) => (
                         <TableRow key={role.id}>
                             <TableCell className="font-semibold">{role.name.replace(/_/g, ' ')}</TableCell>
                             <TableCell className="text-muted-foreground">{role.description}</TableCell>
+                            <TableCell className="text-muted-foreground">{role.type?.replace(/_/g, ' ') || 'STANDARD'}</TableCell>
                             <TableCell className="text-right">
                                 <div className="flex gap-2 justify-end">
                                     <Button variant="outline" size="sm" onClick={() => openDialog(role)}>
@@ -266,7 +288,7 @@ export function RoleManagementEditor() {
                         </TableRow>
                     )) : (
                          <TableRow>
-                            <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                            <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                                 No custom roles found.
                             </TableCell>
                         </TableRow>
@@ -278,3 +300,5 @@ export function RoleManagementEditor() {
     </Card>
   );
 }
+
+    

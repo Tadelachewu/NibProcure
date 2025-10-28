@@ -6,51 +6,41 @@ import { useAuth } from '@/contexts/auth-context';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card';
 import { Button } from '../ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save, Users, Search, UserX, UserCheck } from 'lucide-react';
-import { User, UserRole, Department } from '@/lib/types';
+import { Loader2, Save, Users, PlusCircle } from 'lucide-react';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { ScrollArea } from '../ui/scroll-area';
-import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { produce } from 'immer';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../ui/table';
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '../ui/dialog';
+import { UserRole } from '@/lib/types';
+
 
 interface CommitteeConfig {
     [key: string]: {
         min: number;
-        max: number;
+        max: number | null;
+        description: string;
     }
 }
 
 export function CommitteeSettings() {
-    const { allUsers, updateUserRole, committeeConfig, updateCommitteeConfig } = useAuth();
-    const { toast } = useToast();
+    const { settings, updateSetting, roles } = useAuth();
     const [isSaving, setIsSaving] = useState(false);
-    const [departments, setDepartments] = useState<Department[]>([]);
-    const [searchTerms, setSearchTerms] = useState({ a: '', b: '' });
-    const [departmentFilters, setDepartmentFilters] = useState({ a: 'all', b: 'all' });
-    const [localConfig, setLocalConfig] = useState<CommitteeConfig>(committeeConfig);
+    const { toast } = useToast();
+    
+    const [localConfig, setLocalConfig] = useState<CommitteeConfig>({});
 
     useEffect(() => {
-        setLocalConfig(committeeConfig);
-    }, [committeeConfig]);
-
-    useEffect(() => {
-        const fetchDepts = async () => {
-            try {
-                const res = await fetch('/api/departments');
-                const data = await res.json();
-                setDepartments(data);
-            } catch (e) {
-                console.error("Failed to fetch departments", e);
-            }
-        };
-        fetchDepts();
-    }, []);
+        const committeeSetting = settings.find(s => s.key === 'committeeConfig');
+        if (committeeSetting) {
+            setLocalConfig(committeeSetting.value || {});
+        }
+    }, [settings]);
 
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            await updateCommitteeConfig(localConfig);
+            await updateSetting('committeeConfig', localConfig);
             toast({
                 title: 'Settings Saved',
                 description: 'Committee configurations have been updated.',
@@ -65,109 +55,84 @@ export function CommitteeSettings() {
             setIsSaving(false);
         }
     };
+    
+    const handleConfigChange = (role: string, field: 'min' | 'max' | 'description', value: string | number | null) => {
+        setLocalConfig(produce(draft => {
+            if (!draft[role]) {
+                draft[role] = { min: 0, max: null, description: '' };
+            }
+            if (field === 'max') {
+                (draft[role] as any)[field] = value === '' ? null : Number(value);
+            } else if (field === 'min') {
+                 (draft[role] as any)[field] = Number(value);
+            } else {
+                 (draft[role] as any)[field] = value;
+            }
+        }));
+    };
 
-    const handleRoleChange = (user: User, newRole: UserRole) => {
-        updateUserRole(user.id, newRole);
-        toast({
-            title: `User Role Updated`,
-            description: `${user.name} is now a ${newRole.replace(/_/g, ' ')}.`,
-        });
-    }
-
-    const renderCommitteeSection = (committee: 'A' | 'B') => {
-        if (!localConfig || !localConfig[committee]) {
-            return <Card><CardHeader><CardTitle>Loading Committee {committee}...</CardTitle></CardHeader><CardContent><Loader2 className="animate-spin" /></CardContent></Card>;
-        }
-        
-        const role: UserRole = `Committee_${committee}_Member`;
-        const members = allUsers.filter(u => u.role === role);
-        const nonMembers = allUsers.filter(u => u.role !== role && u.role !== 'Admin' && u.role !== 'Vendor')
-            .filter(u => departmentFilters[committee.toLowerCase() as 'a'|'b'] === 'all' || u.departmentId === departmentFilters[committee.toLowerCase() as 'a'|'b'])
-            .filter(u => u.name.toLowerCase().includes(searchTerms[committee.toLowerCase() as 'a'|'b'].toLowerCase()));
-
-        return (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Procurement Committee {committee}</CardTitle>
-                    <CardDescription>
-                        {committee === 'A' ? 'Reviews and recommends on bids over the defined threshold.' : 'Reviews and recommends on bids within the defined range.'}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                             <Label>Min Amount (ETB)</Label>
-                             <Input type="number" value={localConfig[committee]?.min || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committee]: {...prev[committee], min: Number(e.target.value)}}))} />
-                        </div>
-                         <div>
-                             <Label>Max Amount (ETB)</Label>
-                             <Input type="number" value={localConfig[committee]?.max || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committee]: {...prev[committee], max: Number(e.target.value)}}))} />
-                        </div>
-                    </div>
-                    <div className="grid md:grid-cols-2 gap-6 pt-4">
-                        <div className="space-y-2">
-                             <h4 className="font-semibold flex items-center gap-2"><Users /> Current Members</h4>
-                             <ScrollArea className="h-60 border rounded-md p-2">
-                                {members.length > 0 ? members.map(user => (
-                                    <div key={user.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                                         <div className="flex items-center gap-3">
-                                            <Avatar className="h-8 w-8"><AvatarImage src={`https://picsum.photos/seed/${'user.id'}/32/32`} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                            <div>
-                                                <p className="text-sm font-medium">{user.name}</p>
-                                                <p className="text-xs text-muted-foreground">{user.department}</p>
-                                            </div>
-                                        </div>
-                                        <Button size="sm" variant="ghost" onClick={() => handleRoleChange(user, 'Committee_Member')}><UserX className="h-4 w-4" /></Button>
-                                    </div>
-                                )) : <p className="text-sm text-muted-foreground text-center py-4">No members assigned.</p>}
-                             </ScrollArea>
-                        </div>
-                        <div className="space-y-2">
-                             <h4 className="font-semibold">Add Members</h4>
-                             <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input placeholder="Search users..." className="pl-8" value={searchTerms[committee.toLowerCase() as 'a'|'b']} onChange={(e) => setSearchTerms(prev => ({...prev, [committee.toLowerCase()]: e.target.value}))}/>
-                                </div>
-                                <Select value={departmentFilters[committee.toLowerCase() as 'a'|'b']} onValueChange={(val) => setDepartmentFilters(prev => ({...prev, [committee.toLowerCase()]: val}))}>
-                                    <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Departments</SelectItem>
-                                        {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                             </div>
-                             <ScrollArea className="h-60 border rounded-md p-2">
-                                 {nonMembers.map(user => (
-                                    <div key={user.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                                        <div className="flex items-center gap-3">
-                                            <Avatar className="h-8 w-8"><AvatarImage src={`https://picsum.photos/seed/${'user.id'}/32/32`} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                            <div>
-                                                <p className="text-sm font-medium">{user.name}</p>
-                                                <p className="text-xs text-muted-foreground">{user.department}</p>
-                                            </div>
-                                        </div>
-                                        <Button size="sm" variant="outline" onClick={() => handleRoleChange(user, role)}><UserCheck className="h-4 w-4 mr-2" /> Add</Button>
-                                    </div>
-                                ))}
-                             </ScrollArea>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-        )
-    }
+    const reviewCommitteeRoles = roles.filter(r => r.type === 'REVIEW_COMMITTEE');
 
     return (
-        <div className="space-y-6">
-            {renderCommitteeSection('A')}
-            {renderCommitteeSection('B')}
-            <div className="flex justify-end">
-                <Button onClick={handleSave} disabled={isSaving}>
+        <Card>
+            <CardHeader>
+                <div className="flex justify-between items-start">
+                    <div>
+                        <CardTitle>Review Committee Configuration</CardTitle>
+                        <CardDescription>
+                            Define the value thresholds for different review committees. These roles can then be used in the Approval Matrix.
+                        </CardDescription>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent>
+                <div className="border rounded-md">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Committee Role</TableHead>
+                                <TableHead>Min Amount (ETB)</TableHead>
+                                <TableHead>Max Amount (ETB)</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {reviewCommitteeRoles.map(role => (
+                                <TableRow key={role.id}>
+                                    <TableCell className="font-medium">{role.name.replace(/_/g, ' ')}</TableCell>
+                                    <TableCell>
+                                        <Input 
+                                            type="number" 
+                                            value={localConfig[role.name]?.min ?? ''} 
+                                            onChange={(e) => handleConfigChange(role.name, 'min', e.target.value)} 
+                                            className="w-40"
+                                        />
+                                    </TableCell>
+                                    <TableCell>
+                                        <Input 
+                                            type="number" 
+                                            placeholder="No Limit"
+                                            value={localConfig[role.name]?.max ?? ''} 
+                                            onChange={(e) => handleConfigChange(role.name, 'max', e.target.value)}
+                                            className="w-40"
+                                        />
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
+                {reviewCommitteeRoles.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">No Review Committee roles have been created. Go to Role Management to add one.</p>
+                )}
+            </CardContent>
+            <CardFooter>
+                 <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Save All Changes
+                    Save Changes
                 </Button>
-            </div>
-        </div>
+            </CardFooter>
+        </Card>
     );
 }
+
+    
