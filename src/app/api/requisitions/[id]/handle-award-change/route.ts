@@ -29,24 +29,38 @@ export async function POST(
           throw new Error('Requisition not found');
         }
 
-        const currentAwardedQuote = await tx.quotation.findFirst({
+        // The "award change" is always triggered because a vendor declined or failed.
+        // We find the quote that caused the "Award_Declined" state.
+        const failedQuote = await tx.quotation.findFirst({
             where: {
                 requisitionId: requisitionId,
-                status: 'Awarded'
+                status: 'Declined'
+            },
+            orderBy: {
+                updatedAt: 'desc'
             }
         });
-        
-        // This handles the case where the PO is trying to re-award after a rejection
-        if (!currentAwardedQuote) {
+
+        if (failedQuote) {
+            // We use the rejection logic, as promoting is a consequence of the current winner "failing"
+            return await handleAwardRejection(tx, failedQuote, requisition, user);
+        } else {
+            // Fallback for cases where status is Award_Declined but no quote is marked 'Declined'
              await tx.purchaseRequisition.update({
                 where: { id: requisition.id },
                 data: { status: 'Scoring_Complete' }
             });
-            return { message: 'Requisition is ready for a new award decision.'};
+            await tx.auditLog.create({
+                data: {
+                    user: { connect: { id: user.id }},
+                    action: 'RESET_AWARD_STATE',
+                    entity: 'Requisition',
+                    entityId: requisition.id,
+                    details: 'Award status was reset to Scoring Complete due to an inconsistent state.'
+                }
+            })
+            return { message: 'Requisition award status was inconsistent and has been reset. Please re-award.'};
         }
-
-        // We can reuse the rejection logic, as promoting is a consequence of the current winner "failing"
-        return await handleAwardRejection(tx, currentAwardedQuote, requisition, user);
     });
 
     return NextResponse.json({ message: 'Award change handled successfully.', details: transactionResult });

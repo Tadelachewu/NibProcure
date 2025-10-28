@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -93,11 +92,18 @@ export async function handleAwardRejection(
         }
     });
 
-    // 2. Find the next standby vendor
+    // 2. Find the next standby vendor, EXCLUDING any vendors that have already declined.
+    const declinedVendorIds = (await tx.quotation.findMany({
+        where: { requisitionId: quote.requisitionId, status: 'Declined' },
+        select: { vendorId: true }
+    })).map(q => q.vendorId);
+
+
     const nextQuote = await tx.quotation.findFirst({
         where: { 
             requisitionId: quote.requisitionId, 
             status: 'Standby', // Only consider standby vendors
+            vendorId: { notIn: declinedVendorIds } // Exclude declined vendors
         },
         orderBy: {
             rank: 'asc' // Get the highest ranked standby (e.g., rank 2)
@@ -139,7 +145,7 @@ export async function handleAwardRejection(
 
     } else {
         // 3b. If no standby exists, reset the entire RFQ process for this requisition
-        await tx.purchaseRequisition.update({
+         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { 
                 status: 'PreApproved', // Revert to a state where RFQ can be re-initiated
@@ -149,6 +155,7 @@ export async function handleAwardRejection(
                 awardedQuoteItemIds: [],
                 committeeName: null,
                 committeePurpose: null,
+                // Disconnect all committee members
                 financialCommitteeMembers: { set: [] },
                 technicalCommitteeMembers: { set: [] },
             }
