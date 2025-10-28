@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Role name is required' }, { status: 400 });
     }
     
-    const formattedName = name.replace(/ /g, '_').toUpperCase();
+    const formattedName = name.replace(/ /g, '_');
     const existingRole = await prisma.role.findFirst({ where: { name: { equals: formattedName, mode: 'insensitive' } } });
 
     if (existingRole) {
@@ -91,7 +91,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Role ID and name are required' }, { status: 400 });
     }
     
-    const formattedName = name.replace(/ /g, '_').toUpperCase();
+    const formattedName = name.replace(/ /g, '_');
     const existingRole = await prisma.role.findFirst({ where: { name: { equals: formattedName, mode: 'insensitive' }, NOT: { id } } });
     if (existingRole) {
         return NextResponse.json({ error: 'Another role with this name already exists' }, { status: 409 });
@@ -106,7 +106,7 @@ export async function PATCH(request: Request) {
   } catch (error) {
      console.error('Failed to update role:', error);
      if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
@@ -148,7 +148,7 @@ export async function DELETE(request: Request) {
         'VP_RESOURCES_AND_FACILITIES',
         'PRESIDENT'
     ];
-    if (coreRoles.includes(roleToDelete.name)) {
+    if (coreRoles.includes(roleToDelete.name.toUpperCase())) {
         return NextResponse.json({ error: `Cannot delete core system role: ${roleToDelete.name.replace(/_/g, ' ')}` }, { status: 403 });
     }
     
