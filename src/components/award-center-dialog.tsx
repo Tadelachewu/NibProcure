@@ -41,8 +41,12 @@ export const AwardCenterDialog = ({
     }, [awardResponseDeadlineDate, awardResponseDeadlineTime]);
     
     const eligibleQuotes = useMemo(() => {
-        // Exclude vendors who have explicitly declined
-        return quotations.filter(q => q.status !== 'Declined');
+        // Create an "exclusion list" of vendors who have already declined.
+        const declinedVendorIds = new Set(
+            quotations.filter(q => q.status === 'Declined').map(q => q.vendorId)
+        );
+        // Only consider quotes from vendors who are not on the exclusion list.
+        return quotations.filter(q => !declinedVendorIds.has(q.vendorId));
     }, [quotations]);
 
     // Per-item award logic
