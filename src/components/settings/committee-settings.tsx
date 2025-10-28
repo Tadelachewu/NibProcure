@@ -13,6 +13,16 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { ScrollArea } from '../ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 interface CommitteeConfig {
     [key: string]: {
@@ -22,13 +32,15 @@ interface CommitteeConfig {
 }
 
 export function CommitteeSettings() {
-    const { allUsers, updateUserRole, committeeConfig, updateCommitteeConfig } = useAuth();
+    const { allUsers, updateUserRole, committeeConfig, updateCommitteeConfig, fetchAllUsers } = useAuth();
     const { toast } = useToast();
     const [isSaving, setIsSaving] = useState(false);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [searchTerms, setSearchTerms] = useState({ a: '', b: '' });
     const [departmentFilters, setDepartmentFilters] = useState({ a: 'all', b: 'all' });
     const [localConfig, setLocalConfig] = useState<CommitteeConfig>(committeeConfig);
+    const [isAddCommitteeOpen, setAddCommitteeOpen] = useState(false);
+    const [newCommitteeName, setNewCommitteeName] = useState('');
 
     useEffect(() => {
         setLocalConfig(committeeConfig);
@@ -66,13 +78,42 @@ export function CommitteeSettings() {
         }
     };
 
-    const handleRoleChange = (user: User, newRole: UserRole) => {
-        updateUserRole(user.id, newRole);
+    const handleRoleChange = async (user: User, newRole: UserRole) => {
+        await updateUserRole(user.id, newRole);
         toast({
             title: `User Role Updated`,
             description: `${user.name} is now a ${newRole.replace(/_/g, ' ')}.`,
         });
+        fetchAllUsers(); // Refresh the user list
     }
+    
+    const handleAddCommittee = async () => {
+        if (!newCommitteeName.trim()) {
+            toast({variant: 'destructive', title: 'Error', description: 'Committee name is required.'});
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const response = await fetch('/api/roles', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: `Committee_${newCommitteeName.toUpperCase()}_Member`, description: `Member of the ${newCommitteeName} review committee.` })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to create new committee role.');
+            }
+            toast({title: 'Committee Role Created', description: `Successfully created the ${newCommitteeName} committee member role.`});
+            setNewCommitteeName('');
+            setAddCommitteeOpen(false);
+            // Optionally, you might want to refresh roles in your auth context here
+        } catch (error) {
+            toast({variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     const renderCommitteeSection = (committee: 'A' | 'B') => {
         if (!localConfig || !localConfig[committee]) {
@@ -111,7 +152,7 @@ export function CommitteeSettings() {
                                 {members.length > 0 ? members.map(user => (
                                     <div key={user.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
                                          <div className="flex items-center gap-3">
-                                            <Avatar className="h-8 w-8"><AvatarImage src={`https://picsum.photos/seed/${'user.id'}/32/32`} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                            <Avatar className="h-8 w-8"><AvatarImage src={`https://picsum.photos/seed/${user.id}/32/32`} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
                                             <div>
                                                 <p className="text-sm font-medium">{user.name}</p>
                                                 <p className="text-xs text-muted-foreground">{user.department}</p>
@@ -141,7 +182,7 @@ export function CommitteeSettings() {
                                  {nonMembers.map(user => (
                                     <div key={user.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
                                         <div className="flex items-center gap-3">
-                                            <Avatar className="h-8 w-8"><AvatarImage src={`https://picsum.photos/seed/${'user.id'}/32/32`} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                            <Avatar className="h-8 w-8"><AvatarImage src={`https://picsum.photos/seed/${user.id}/32/32`} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
                                             <div>
                                                 <p className="text-sm font-medium">{user.name}</p>
                                                 <p className="text-xs text-muted-foreground">{user.department}</p>
@@ -167,10 +208,36 @@ export function CommitteeSettings() {
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save All Changes
                 </Button>
-                <Button variant="outline" disabled>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add New Review Committee
-                </Button>
+                <Dialog open={isAddCommitteeOpen} onOpenChange={setAddCommitteeOpen}>
+                    <DialogTrigger asChild>
+                        <Button variant="outline">
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Add New Review Committee
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Create New Review Committee</DialogTitle>
+                            <DialogDescription>This will create a new user role for the committee (e.g., "Committee C Member").</DialogDescription>
+                        </DialogHeader>
+                        <div className="py-4">
+                            <Label htmlFor="committee-name">Committee Name (e.g., "C", "D")</Label>
+                            <Input 
+                                id="committee-name"
+                                value={newCommitteeName}
+                                onChange={e => setNewCommitteeName(e.target.value)}
+                                placeholder="C"
+                            />
+                        </div>
+                        <DialogFooter>
+                            <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+                            <Button onClick={handleAddCommittee} disabled={isSaving}>
+                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                Create Committee Role
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </div>
     );
