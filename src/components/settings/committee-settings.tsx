@@ -34,35 +34,44 @@ interface CommitteeConfig {
 export function CommitteeSettings() {
     const { allUsers, updateUserRole, committeeConfig, updateCommitteeConfig, fetchAllUsers, fetchAllSettings } = useAuth();
     const { toast } = useToast();
-    const [isSaving, setIsSaving] = useState(false);
+    const [roles, setRoles] = useState<{ id: string; name: string; type: string }[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
     const [departments, setDepartments] = useState<Department[]>([]);
-    const [searchTerms, setSearchTerms] = useState({ a: '', b: '' });
-    const [departmentFilters, setDepartmentFilters] = useState({ a: 'all', b: 'all' });
+    const [searchTerms, setSearchTerms] = useState<{[key: string]: string}>({});
+    const [departmentFilters, setDepartmentFilters] = useState<{[key: string]: string}>({});
     const [localConfig, setLocalConfig] = useState<CommitteeConfig>(committeeConfig);
     const [isAddCommitteeOpen, setAddCommitteeOpen] = useState(false);
     const [newCommitteeName, setNewCommitteeName] = useState('');
     const { user: actor } = useAuth();
 
+    const fetchRolesAndDepartments = async () => {
+        setIsLoading(true);
+        try {
+            const [rolesRes, deptsRes] = await Promise.all([
+                fetch('/api/roles'),
+                fetch('/api/departments')
+            ]);
+            const rolesData = await rolesRes.json();
+            const deptsData = await deptsRes.json();
+            setRoles(rolesData);
+            setDepartments(deptsData);
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to load initial component data.'});
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     useEffect(() => {
-        setLocalConfig(committeeConfig);
-    }, [committeeConfig]);
-
-    useEffect(() => {
-        const fetchDepts = async () => {
-            try {
-                const res = await fetch('/api/departments');
-                const data = await res.json();
-                setDepartments(data);
-            } catch (e) {
-                console.error("Failed to fetch departments", e);
-            }
-        };
-        fetchDepts();
+        fetchRolesAndDepartments();
     }, []);
 
+    useEffect(() => {
+        setLocalConfig(committeeConfig || {});
+    }, [committeeConfig]);
+
     const handleSave = async () => {
-        setIsSaving(true);
+        setIsLoading(true);
         try {
             await updateCommitteeConfig(localConfig);
             toast({
@@ -96,57 +105,68 @@ export function CommitteeSettings() {
         }
         if (!actor) return;
 
-        setIsSaving(true);
+        setIsLoading(true);
+        const roleName = `Committee_${newCommitteeName.trim().toUpperCase()}_Member`;
+
         try {
             const response = await fetch('/api/roles', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: `Committee ${newCommitteeName.toUpperCase()} Member`, description: `Member of the ${newCommitteeName} review committee.`, actorUserId: actor.id })
+                body: JSON.stringify({ name: roleName, description: `Member of the ${newCommitteeName} review committee.`, actorUserId: actor.id })
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to create new committee role.');
             }
-            toast({title: 'Committee Role Created', description: `Successfully created the ${newCommitteeName} committee member role.`});
+            toast({title: 'Committee Role Created', description: `Successfully created the ${roleName.replace(/_/g, ' ')} role.`});
             setNewCommitteeName('');
             setAddCommitteeOpen(false);
-            await fetchAllSettings(); // Re-fetch settings to update roles across the app
+            await fetchRolesAndDepartments();
+            await fetchAllSettings(); 
         } catch (error) {
             toast({variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            setIsSaving(false);
+            setIsLoading(false);
         }
     };
+    
+    const reviewCommitteeRoles = roles
+        .filter(r => r.name.startsWith('Committee_') && r.name.endsWith('_Member'))
+        .sort((a, b) => a.name.localeCompare(b.name));
 
-    const renderCommitteeSection = (committee: 'A' | 'B') => {
-        if (!localConfig || !localConfig[committee]) {
-            return <Card><CardHeader><CardTitle>Loading Committee {committee}...</CardTitle></CardHeader><CardContent><Loader2 className="animate-spin" /></CardContent></Card>;
+
+    const renderCommitteeSection = (role: UserRole) => {
+        const committeeKey = role;
+        if (!localConfig) {
+            return <Card><CardHeader><CardTitle>Loading...</CardTitle></CardHeader><CardContent><Loader2 className="animate-spin" /></CardContent></Card>;
         }
         
-        const role: UserRole = `Committee_${committee}_Member`;
         const members = allUsers.filter(u => u.role === role);
+        const currentSearchTerm = searchTerms[committeeKey] || '';
+        const currentDeptFilter = departmentFilters[committeeKey] || 'all';
+
         const nonMembers = allUsers.filter(u => u.role !== role && u.role !== 'Admin' && u.role !== 'Vendor')
-            .filter(u => departmentFilters[committee.toLowerCase() as 'a'|'b'] === 'all' || u.departmentId === departmentFilters[committee.toLowerCase() as 'a'|'b'])
-            .filter(u => u.name.toLowerCase().includes(searchTerms[committee.toLowerCase() as 'a'|'b'].toLowerCase()));
+            .filter(u => currentDeptFilter === 'all' || u.departmentId === currentDeptFilter)
+            .filter(u => u.name.toLowerCase().includes(currentSearchTerm.toLowerCase()));
 
         return (
-            <Card>
+            <Card key={committeeKey}>
                 <CardHeader>
-                    <CardTitle>Procurement Committee {committee}</CardTitle>
+                    <CardTitle>{role.replace(/_/g, ' ')}</CardTitle>
                     <CardDescription>
-                        {committee === 'A' ? 'Reviews and recommends on bids over the defined threshold.' : 'Reviews and recommends on bids within the defined range.'}
+                        Configure value thresholds and members for this committee.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid md:grid-cols-2 gap-4">
                         <div>
                              <Label>Min Amount (ETB)</Label>
-                             <Input type="number" value={localConfig[committee]?.min || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committee]: {...prev[committee], min: Number(e.target.value)}}))} />
+                             <Input type="number" value={localConfig[committeeKey]?.min || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committeeKey]: {...prev[committeeKey], min: Number(e.target.value)}}))} />
                         </div>
                          <div>
                              <Label>Max Amount (ETB)</Label>
-                             <Input type="number" value={localConfig[committee]?.max || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committee]: {...prev[committee], max: Number(e.target.value)}}))} />
+                             <Input type="number" placeholder="No limit" value={localConfig[committeeKey]?.max || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committeeKey]: {...prev[committeeKey], max: e.target.value === '' ? null : Number(e.target.value)}}))} />
                         </div>
                     </div>
                     <div className="grid md:grid-cols-2 gap-6 pt-4">
@@ -172,9 +192,9 @@ export function CommitteeSettings() {
                              <div className="flex gap-2">
                                 <div className="relative flex-1">
                                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input placeholder="Search users..." className="pl-8" value={searchTerms[committee.toLowerCase() as 'a'|'b']} onChange={(e) => setSearchTerms(prev => ({...prev, [committee.toLowerCase()]: e.target.value}))}/>
+                                    <Input placeholder="Search users..." className="pl-8" value={currentSearchTerm} onChange={(e) => setSearchTerms(prev => ({...prev, [committeeKey]: e.target.value}))}/>
                                 </div>
-                                <Select value={departmentFilters[committee.toLowerCase() as 'a'|'b']} onValueChange={(val) => setDepartmentFilters(prev => ({...prev, [committee.toLowerCase()]: val}))}>
+                                <Select value={currentDeptFilter} onValueChange={(val) => setDepartmentFilters(prev => ({...prev, [committeeKey]: val}))}>
                                     <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Departments</SelectItem>
@@ -205,11 +225,10 @@ export function CommitteeSettings() {
 
     return (
         <div className="space-y-6">
-            {renderCommitteeSection('A')}
-            {renderCommitteeSection('B')}
-             <div className="flex justify-between items-center">
-                <Button onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {isLoading ? <Loader2 className="animate-spin" /> : reviewCommitteeRoles.map(role => renderCommitteeSection(role.name as UserRole))}
+            <div className="flex justify-between items-center">
+                <Button onClick={handleSave} disabled={isLoading}>
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save All Changes
                 </Button>
                 <Dialog open={isAddCommitteeOpen} onOpenChange={setAddCommitteeOpen}>
@@ -225,7 +244,7 @@ export function CommitteeSettings() {
                             <DialogDescription>This will create a new user role for the committee (e.g., "Committee C Member").</DialogDescription>
                         </DialogHeader>
                         <div className="py-4">
-                            <Label htmlFor="committee-name">Committee Name (e.g., "C", "D")</Label>
+                            <Label htmlFor="committee-name">Committee Identifier (e.g., "C", "D", "Special Project")</Label>
                             <Input 
                                 id="committee-name"
                                 value={newCommitteeName}
@@ -235,8 +254,8 @@ export function CommitteeSettings() {
                         </div>
                         <DialogFooter>
                             <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                            <Button onClick={handleAddCommittee} disabled={isSaving}>
-                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                            <Button onClick={handleAddCommittee} disabled={isLoading}>
+                                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                                 Create Committee Role
                             </Button>
                         </DialogFooter>
