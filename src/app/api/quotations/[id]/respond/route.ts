@@ -108,8 +108,26 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            // Complex rejection logic is now handled in the award service
-            return await handleAwardRejection(tx, quote, requisition, user);
+            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Declined' }});
+
+            await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: { status: 'Award_Declined' }
+            })
+
+            await tx.auditLog.create({
+                data: {
+                    timestamp: new Date(),
+                    user: { connect: { id: user.id } },
+                    action: 'REJECT_AWARD',
+                    entity: 'Quotation',
+                    entityId: quoteId,
+                    details: `Vendor declined award.`,
+                    transactionId: requisition.transactionId,
+                }
+            });
+            
+            return { message: 'Award declined. Procurement officer has been notified.' };
         }
         
         throw new Error('Invalid action.');

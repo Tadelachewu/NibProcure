@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, AlertTriangle } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -1680,11 +1680,11 @@ const ScoringProgressTracker = ({
         if (requisition.status === 'Award_Declined') {
              return { text: "Award Standby", disabled: false };
         }
-        if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled'].includes(requisition.status)) {
-            return { text: "Award Sent", disabled: true };
+        if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
+            return { text: "Award Approved", disabled: true };
         }
-        if (requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved') {
-            return { text: "Award Approved - Pending Notification", disabled: true };
+        if (requisition.status.startsWith('Pending_')) {
+            return { text: "Award Pending Final Approval", disabled: true };
         }
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
         if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
@@ -2917,6 +2917,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
