@@ -1678,10 +1678,10 @@ const ScoringProgressTracker = ({
 
     const getButtonState = () => {
         if (requisition.status === 'Award_Declined') {
-             return { text: "Award Standby", disabled: isFinalizing };
+             return { text: "Award Standby", disabled: false };
         }
-        if (requisition.status.startsWith('Pending')) {
-            return { text: "Pending Final Approval...", disabled: true };
+        if (requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved') {
+            return { text: "Award Approved - Pending Notification", disabled: true };
         }
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
         if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
@@ -2237,7 +2237,7 @@ export default function QuotationDetailsPage() {
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
-  const isAwarded = useMemo(() => quotations.some(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Declined' || q.status === 'Failed' || q.status === 'Partially_Awarded' || q.status === 'Standby' || q.status === 'Pending_Award'), [quotations]);
+  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby', 'Pending_Award'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   
   const isDeadlinePassed = useMemo(() => {
@@ -2551,11 +2551,11 @@ export default function QuotationDetailsPage() {
         </Card>
         
         {requisition.status === 'Award_Declined' && (role === 'Procurement_Officer' || role === 'Admin') && (
-             <Alert variant="destructive">
+            <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Action Required: Award Declined</AlertTitle>
                 <AlertDescription>
-                    The previously awarded vendor has declined the award. Use the "Award Standby" button in the Scoring Progress card to promote the next vendor.
+                    The previously awarded vendor has declined. Use the "Award Standby" button to promote the next vendor.
                 </AlertDescription>
             </Alert>
         )}
@@ -2913,6 +2913,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
