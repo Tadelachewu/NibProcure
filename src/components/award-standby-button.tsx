@@ -30,7 +30,7 @@ export function AwardStandbyButton({
     const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
     const isRelevantStatus = requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete';
 
-    if (!isRelevantStatus || !hasStandbyVendors) {
+    if (!isRelevantStatus || (!hasStandbyVendors && requisition.status === 'Award_Declined')) {
         return null;
     }
 

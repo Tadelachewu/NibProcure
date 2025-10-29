@@ -1685,6 +1685,9 @@ const ScoringProgressTracker = ({
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
     const getButtonState = () => {
+        if (requisition.status === 'Award_Declined') {
+            return { text: "Award Declined", disabled: true };
+        }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
         }
@@ -2212,7 +2215,7 @@ const NotifyVendorDialog = ({
                 </div>
                 <DialogFooter>
                     <Button variant="ghost" onClick={onClose}>Cancel</Button>
-                    <Button onClick={() => onConfirm(finalDeadline)}>Confirm &amp; Notify</Button>
+                    <Button onClick={() => onConfirm(finalDeadline)}>Confirm & Notify</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -2749,8 +2752,7 @@ export default function QuotationDetailsPage() {
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' &&
-            requisition.status !== 'Award_Declined'
+            requisition.status !== 'PreApproved'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
