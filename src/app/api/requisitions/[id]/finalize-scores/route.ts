@@ -7,6 +7,13 @@ import { prisma } from '@/lib/prisma';
 import { User, UserRole } from '@/lib/types';
 
 function getNextStatusFromRole(role: string): string {
+    const committeeMatch = role.match(/Committee_(\w+)_Member/);
+    if (committeeMatch) {
+        const committeeLetter = committeeMatch[1];
+        // Standardize the status format for ALL committees.
+        return `Pending_Committee_${committeeLetter}_Recommendation`;
+    }
+    
     const statusMap: { [key: string]: string } = {
         'Manager_Procurement_Division': 'Pending_Managerial_Approval',
         'Director_Supply_Chain_and_Property_Management': 'Pending_Director_Approval',
@@ -14,20 +21,7 @@ function getNextStatusFromRole(role: string): string {
         'President': 'Pending_President_Approval',
     };
 
-    if (statusMap[role]) {
-        return statusMap[role];
-    }
-    
-    // Dynamically handle any committee role, e.g., Committee_C_Member
-    const committeeMatch = role.match(/Committee_(\w+)_Member/);
-    if (committeeMatch) {
-        const committeeLetter = committeeMatch[1];
-        // Use a consistent suffix for all committee review statuses
-        return `Pending_Committee_${committeeLetter}_Recommendation`;
-    }
-
-    // Fallback for any other roles, though the primary ones should be covered.
-    return `Pending_${role}`;
+    return statusMap[role] || `Pending_${role}`;
 }
 
 

@@ -24,6 +24,9 @@ export async function GET(request: Request) {
     const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
     const userId = userPayload.user.id;
 
+    console.log(`[Reviews API] Fetching reviews for user ${userId} with role: ${userRole}`);
+
+
     const reviewStatuses = [
       'Pending_Committee_A_Recommendation',
       'Pending_Committee_B_Review',
@@ -34,16 +37,15 @@ export async function GET(request: Request) {
       'Pending_Manager_Procurement_Division'
     ];
     
-    const committeeMatch = userRole.match(/Committee_(\w+)_Member/);
+    // This regex will now correctly capture any letter for the committee.
+    const committeeMatch = userRole.match(/Committee_([A-Z])_Member/);
 
     if (committeeMatch) {
         const committeeLetter = committeeMatch[1];
-        let statusToFind = `Pending_Committee_${committeeLetter}_Recommendation`;
-        // Handle the specific case for Committee B from the original logic
-        if (committeeLetter === 'B') {
-            statusToFind = 'Pending_Committee_B_Review';
-        }
-        reviewStatuses.push(statusToFind); // Add dynamically to the list of possible statuses
+        // This is the crucial fix: The logic for Committee B was different and was breaking the generic case.
+        // By standardizing the status name, all committees (A, B, C, etc.) will now work.
+        const statusToFind = `Pending_Committee_${committeeLetter}_Recommendation`;
+        reviewStatuses.push(statusToFind); 
         whereClause = { status: statusToFind };
     } else if (
       userRole === 'Manager_Procurement_Division' || 
@@ -64,8 +66,11 @@ export async function GET(request: Request) {
          }
       };
     } else {
+      console.log(`[Reviews API] User role ${userRole} has no review permissions. Returning empty array.`);
       return NextResponse.json([]);
     }
+    
+    console.log(`[Reviews API] Constructed whereClause:`, JSON.stringify(whereClause, null, 2));
 
     const requisitions = await prisma.purchaseRequisition.findMany({
       where: whereClause,
@@ -76,6 +81,9 @@ export async function GET(request: Request) {
         createdAt: 'desc',
       },
     });
+
+    console.log(`[Reviews API] Found ${requisitions.length} requisitions for user ${userId}.`);
+
 
     const formattedRequisitions = requisitions.map(req => ({
         ...req,
