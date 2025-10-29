@@ -77,20 +77,23 @@ export function RequisitionsForQuotingTable() {
     const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
     
-    const acceptedQuotes = req.quotations?.filter(q => q.status === 'Accepted').length || 0;
-    const failedQuotes = req.quotations?.filter(q => q.status === 'Failed' || q.status === 'Declined').length || 0;
-    const awardedQuotes = req.quotations?.filter(q => ['Awarded', 'Partially_Awarded', 'Pending_Award'].includes(q.status)).length || 0;
-    const poCreatedCount = req.purchaseOrderId?.length || 0; // Simplified for now
+    // Check for mixed statuses in split awards first
+    const poCount = req.purchaseOrderId?.length || 0; // Simplified, assuming it's an array of IDs now
+    const declinedCount = req.quotations?.filter(q => q.status === 'Declined' || q.status === 'Failed').length || 0;
 
+    if (poCount > 0 && declinedCount > 0) {
+        return <Badge variant="destructive" className="animate-pulse">Partial PO / Action Required</Badge>;
+    }
+     if (poCount > 0 && req.status !== 'PO_Created') {
+        return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
+    }
+    
     // Handle terminal or high-priority statuses first
     if (req.status === 'PO_Created') {
         return <Badge variant="default" className="bg-green-700">PO Created</Badge>;
     }
     
     if (req.status === 'Award_Declined') {
-        if (poCreatedCount > 0) {
-             return <Badge variant="default" className="bg-amber-600 animate-pulse">Partial PO / Action Required</Badge>;
-        }
         return <Badge variant="destructive" className="animate-pulse">Award Declined - Action Required</Badge>;
     }
      
@@ -101,9 +104,6 @@ export function RequisitionsForQuotingTable() {
         return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
     }
     if (req.status === 'Awarded') {
-        if(acceptedQuotes > 0) {
-            return <Badge variant="default" className="bg-blue-600">Partially Accepted / Pending</Badge>;
-        }
         return <Badge variant="default" className="bg-green-600">Awarded</Badge>;
     }
 

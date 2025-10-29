@@ -8,67 +8,94 @@ import { Loader2 } from 'lucide-react';
 import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
-import { AwardCenterDialog } from './award-center-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+
 
 interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
-    isFinalizing: boolean;
+    onSuccess: () => void;
     disabled?: boolean;
 }
 
 export function AwardStandbyButton({
     requisition,
     quotations,
-    onFinalize,
-    isFinalizing,
+    onSuccess,
     disabled = false
 }: AwardStandbyButtonProps) {
-    const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [isPromoting, setIsPromoting] = useState(false);
 
-    // This button should only be visible if there are actual standby vendors to promote.
     const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
-    const isRelevantStatus = requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete';
+    const isRelevantStatus = requisition.status === 'Award_Declined';
     
-    if (!isRelevantStatus || hasStandbyVendors) { // This logic was flawed, should show if standby exists OR if scoring is complete
-        // This button is for re-awarding, so it makes sense in these states
-    } else {
+    if (!isRelevantStatus || !hasStandbyVendors) {
         return null;
     }
 
-    const buttonText = requisition.status === 'Award_Declined' 
-        ? 'Promote Standby or Re-Award'
-        : 'Finalize Scores & Award';
+    const buttonText = "Promote Standby Vendor";
+    const isDisabled = disabled || isPromoting;
     
-    const isDisabled = disabled || isFinalizing || requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
+    const handlePromote = async () => {
+        if (!user) return;
+        setIsPromoting(true);
+        try {
+            const response = await fetch(`/api/requisitions/${requisition.id}/promote-standby`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id }),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to promote standby vendor.');
+            }
+            toast({
+                title: 'Success',
+                description: result.message,
+            });
+            onSuccess();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsPromoting(false);
+        }
+    }
 
     return (
         <Card className="mt-6 border-amber-500">
              <CardHeader>
-                <CardTitle>Action Required</CardTitle>
+                <CardTitle>Action Required: Award Declined</CardTitle>
                 <CardDescription>
-                    {requisition.status === 'Award_Declined' 
-                        ? "A vendor has declined their award. You may now promote the next standby vendor or manually re-award."
-                        : "All scores are in. You may now finalize the award."
-                    }
+                    A vendor has declined their award. You may now promote the next standby vendor.
                 </CardDescription>
             </CardHeader>
             <CardFooter className="pt-0">
-                 <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
-                    <DialogTrigger asChild>
+                 <AlertDialog>
+                    <AlertDialogTrigger asChild>
                          <Button disabled={isDisabled}>
-                            {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {isPromoting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             {buttonText}
                         </Button>
-                    </DialogTrigger>
-                    <AwardCenterDialog 
-                        requisition={requisition}
-                        quotations={quotations}
-                        onFinalize={onFinalize}
-                        onClose={() => setAwardCenterOpen(false)}
-                    />
-                 </Dialog>
+                    </AlertDialogTrigger>
+                     <AlertDialogContent>
+                        <AlertDialogHeader>
+                        <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will promote the next vendor in rank to the 'Awarded' status. The requisition will then be ready for you to notify the new winner.
+                        </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handlePromote}>Confirm & Promote</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                 </AlertDialog>
             </CardFooter>
         </Card>
     );
