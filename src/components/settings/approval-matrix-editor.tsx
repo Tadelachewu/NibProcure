@@ -69,23 +69,23 @@ export function ApprovalMatrixEditor() {
 
             // Committee range validation
             for (const step of tier.steps) {
-                let committeeKey: 'A' | 'B' | null = null;
-                if (step.role === 'Committee_A_Member') committeeKey = 'A';
-                if (step.role === 'Committee_B_Member') committeeKey = 'B';
+                const match = step.role.match(/Committee_(\w+)_Member/);
+                if (match) {
+                    const committeeKey = match[1];
+                     if (committeeKey && committeeConfig[committeeKey]) {
+                        const committeeRange = committeeConfig[committeeKey];
+                        const tierMax = tier.max ?? Infinity;
 
-                if (committeeKey && committeeConfig[committeeKey]) {
-                    const committeeRange = committeeConfig[committeeKey];
-                    const tierMax = tier.max ?? Infinity;
-
-                    if (tierMax < committeeRange.min) {
-                         toast({ 
-                            variant: 'destructive', 
-                            title: 'Configuration Conflict', 
-                            description: `Tier "${tier.name}" (max value: ${tierMax.toLocaleString()}) is too low for Committee ${committeeKey}, which reviews items starting at ${committeeRange.min.toLocaleString()} ETB.`,
-                            duration: 10000,
-                        });
-                        setIsSaving(false);
-                        return;
+                        if (tierMax < committeeRange.min) {
+                            toast({ 
+                                variant: 'destructive', 
+                                title: 'Configuration Conflict', 
+                                description: `Tier "${tier.name}" (max value: ${tierMax.toLocaleString()}) is too low for Committee ${committeeKey}, which reviews items starting at ${committeeRange.min.toLocaleString()} ETB.`,
+                                duration: 10000,
+                            });
+                            setIsSaving(false);
+                            return;
+                        }
                     }
                 }
             }
@@ -112,7 +112,7 @@ export function ApprovalMatrixEditor() {
     const addThreshold = () => {
         const newId = `tier-${Date.now()}`;
         setLocalThresholds(produce(draft => {
-            const highestMax = Math.max(...draft.filter(t => t.max !== null).map(t => t.max as number), 0);
+            const highestMax = Math.max(...draft.filter(t => t.max !== null).map(t => t.max as number), -1);
             draft.push({ id: newId, name: 'New Tier', min: highestMax + 1, max: null, steps: [] });
         }));
     };

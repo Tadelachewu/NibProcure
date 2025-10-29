@@ -27,7 +27,7 @@ import {
 interface CommitteeConfig {
     [key: string]: {
         min: number;
-        max: number;
+        max: number | null;
     }
 }
 
@@ -36,8 +36,8 @@ export function CommitteeSettings() {
     const { toast } = useToast();
     const [isSaving, setIsSaving] = useState(false);
     const [departments, setDepartments] = useState<Department[]>([]);
-    const [searchTerms, setSearchTerms] = useState({ a: '', b: '' });
-    const [departmentFilters, setDepartmentFilters] = useState({ a: 'all', b: 'all' });
+    const [searchTerms, setSearchTerms] = useState<Record<string, string>>({});
+    const [departmentFilters, setDepartmentFilters] = useState<Record<string, string>>({});
     const [localConfig, setLocalConfig] = useState<CommitteeConfig>(committeeConfig);
     const [isAddCommitteeOpen, setAddCommitteeOpen] = useState(false);
     const [newCommitteeName, setNewCommitteeName] = useState('');
@@ -46,6 +46,15 @@ export function CommitteeSettings() {
 
     useEffect(() => {
         setLocalConfig(committeeConfig);
+        // Initialize search and filter states for all committees
+        const initialSearchs: Record<string, string> = {};
+        const initialFilters: Record<string, string> = {};
+        Object.keys(committeeConfig).forEach(key => {
+            initialSearchs[key] = '';
+            initialFilters[key] = 'all';
+        });
+        setSearchTerms(initialSearchs);
+        setDepartmentFilters(initialFilters);
     }, [committeeConfig]);
 
     useEffect(() => {
@@ -63,6 +72,31 @@ export function CommitteeSettings() {
 
     const handleSave = async () => {
         setIsSaving(true);
+        
+        // --- Validation Logic ---
+        const sortedCommitteeKeys = Object.keys(localConfig).sort((a,b) => localConfig[a].min - localConfig[b].min);
+        for(let i=0; i < sortedCommitteeKeys.length; i++) {
+            const key = sortedCommitteeKeys[i];
+            const committee = localConfig[key];
+
+            if (committee.max !== null && committee.min > committee.max) {
+                 toast({ variant: 'destructive', title: 'Invalid Range', description: `In Committee ${key}, the minimum value cannot be greater than the maximum.`});
+                 setIsSaving(false);
+                 return;
+            }
+
+             if (i > 0) {
+                const prevKey = sortedCommitteeKeys[i-1];
+                const prevCommittee = localConfig[prevKey];
+                 if (prevCommittee.max === null || committee.min <= prevCommittee.max) {
+                    toast({ variant: 'destructive', title: 'Overlapping Ranges', description: `Committee ${key}'s range overlaps with Committee ${prevKey}'s range.`});
+                    setIsSaving(false);
+                    return;
+                }
+            }
+        }
+        // --- End Validation ---
+
         try {
             await updateCommitteeConfig(localConfig);
             toast({
@@ -95,20 +129,29 @@ export function CommitteeSettings() {
             return;
         }
         if (!actor) return;
+        const committeeKey = newCommitteeName.toUpperCase();
+        if(committeeConfig[committeeKey]) {
+             toast({variant: 'destructive', title: 'Error', description: `Committee ${committeeKey} already exists.`});
+            return;
+        }
 
         setIsSaving(true);
         try {
             const response = await fetch('/api/roles', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: `Committee ${newCommitteeName.toUpperCase()} Member`, description: `Member of the ${newCommitteeName} review committee.`, actorUserId: actor.id })
+                body: JSON.stringify({ name: `Committee ${committeeKey} Member`, description: `Member of the ${committeeKey} review committee.`, actorUserId: actor.id })
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to create new committee role.');
             }
-            toast({title: 'Committee Role Created', description: `Successfully created the ${newCommitteeName} committee member role.`});
+            
+            const newConfig = { ...localConfig, [committeeKey]: { min: 0, max: 0 } };
+            await updateCommitteeConfig(newConfig);
+
+            toast({title: 'Committee Role Created', description: `Successfully created the ${committeeKey} committee. Please configure its financial range.`});
             setNewCommitteeName('');
             setAddCommitteeOpen(false);
             await fetchAllSettings(); // Re-fetch settings to update roles across the app
@@ -119,34 +162,33 @@ export function CommitteeSettings() {
         }
     };
 
-    const renderCommitteeSection = (committee: 'A' | 'B') => {
-        if (!localConfig || !localConfig[committee]) {
-            return <Card><CardHeader><CardTitle>Loading Committee {committee}...</CardTitle></CardHeader><CardContent><Loader2 className="animate-spin" /></CardContent></Card>;
-        }
+    const renderCommitteeSection = (committeeKey: string) => {
+        const committee = localConfig[committeeKey];
+        if (!committee) return null;
         
-        const role: UserRole = `Committee_${committee}_Member`;
+        const role: UserRole = `Committee_${committeeKey}_Member`;
         const members = allUsers.filter(u => u.role === role);
         const nonMembers = allUsers.filter(u => u.role !== role && u.role !== 'Admin' && u.role !== 'Vendor')
-            .filter(u => departmentFilters[committee.toLowerCase() as 'a'|'b'] === 'all' || u.departmentId === departmentFilters[committee.toLowerCase() as 'a'|'b'])
-            .filter(u => u.name.toLowerCase().includes(searchTerms[committee.toLowerCase() as 'a'|'b'].toLowerCase()));
+            .filter(u => departmentFilters[committeeKey] === 'all' || u.departmentId === departmentFilters[committeeKey])
+            .filter(u => u.name.toLowerCase().includes(searchTerms[committeeKey]?.toLowerCase() || ''));
 
         return (
-            <Card>
+            <Card key={committeeKey}>
                 <CardHeader>
-                    <CardTitle>Procurement Committee {committee}</CardTitle>
+                    <CardTitle>Procurement Committee {committeeKey}</CardTitle>
                     <CardDescription>
-                        {committee === 'A' ? 'Reviews and recommends on bids over the defined threshold.' : 'Reviews and recommends on bids within the defined range.'}
+                       Reviews and recommends on bids within its assigned value range.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid md:grid-cols-2 gap-4">
                         <div>
                              <Label>Min Amount (ETB)</Label>
-                             <Input type="number" value={localConfig[committee]?.min || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committee]: {...prev[committee], min: Number(e.target.value)}}))} />
+                             <Input type="number" value={committee.min || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committeeKey]: {...prev[committeeKey], min: Number(e.target.value)}}))} />
                         </div>
                          <div>
                              <Label>Max Amount (ETB)</Label>
-                             <Input type="number" value={localConfig[committee]?.max || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committee]: {...prev[committee], max: Number(e.target.value)}}))} />
+                             <Input type="number" placeholder="No Limit" value={committee.max || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committeeKey]: {...prev[committeeKey], max: e.target.value === '' ? null : Number(e.target.value)}}))} />
                         </div>
                     </div>
                     <div className="grid md:grid-cols-2 gap-6 pt-4">
@@ -172,9 +214,9 @@ export function CommitteeSettings() {
                              <div className="flex gap-2">
                                 <div className="relative flex-1">
                                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input placeholder="Search users..." className="pl-8" value={searchTerms[committee.toLowerCase() as 'a'|'b']} onChange={(e) => setSearchTerms(prev => ({...prev, [committee.toLowerCase()]: e.target.value}))}/>
+                                    <Input placeholder="Search users..." className="pl-8" value={searchTerms[committeeKey] || ''} onChange={(e) => setSearchTerms(prev => ({...prev, [committeeKey]: e.target.value}))}/>
                                 </div>
-                                <Select value={departmentFilters[committee.toLowerCase() as 'a'|'b']} onValueChange={(val) => setDepartmentFilters(prev => ({...prev, [committee.toLowerCase()]: val}))}>
+                                <Select value={departmentFilters[committeeKey] || 'all'} onValueChange={(val) => setDepartmentFilters(prev => ({...prev, [committeeKey]: val}))}>
                                     <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Departments</SelectItem>
@@ -205,8 +247,7 @@ export function CommitteeSettings() {
 
     return (
         <div className="space-y-6">
-            {renderCommitteeSection('A')}
-            {renderCommitteeSection('B')}
+            {Object.keys(localConfig).sort().map(key => renderCommitteeSection(key))}
              <div className="flex justify-between items-center">
                 <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}

@@ -64,8 +64,8 @@ const userEditFormSchema = userFormSchema.extend({
 type UserFormValues = z.infer<typeof userFormSchema>;
 
 export function UserManagementEditor() {
-  const { allUsers, fetchAllUsers, user: actor, departments, fetchAllDepartments } = useAuth();
-  const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
+  const { allUsers, fetchAllUsers, user: actor, departments, fetchAllDepartments, rolePermissions } = useAuth();
+  const [roles, setRoles] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
@@ -86,12 +86,7 @@ export function UserManagementEditor() {
     setIsLoading(true);
     try {
       await Promise.all([fetchAllUsers(), fetchAllDepartments()]);
-      
-      const rolesResponse = await fetch('/api/roles');
-      if (!rolesResponse.ok) throw new Error('Failed to fetch roles');
-      const rolesData = await rolesResponse.json();
-      setRoles(rolesData.filter((r: any) => r.name !== 'VENDOR'));
-
+      setRoles(Object.keys(rolePermissions).filter(r => r !== 'Vendor'));
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not load initial data.' });
     } finally {
@@ -101,7 +96,7 @@ export function UserManagementEditor() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [rolePermissions]); // Re-fetch if roles change
 
   const handleFormSubmit = async (values: UserFormValues) => {
     if (!actor) return;
@@ -289,7 +284,7 @@ export function UserManagementEditor() {
                 <FormField control={form.control} name="name" render={({ field }) => ( <FormItem className="col-span-2"><FormLabel>Full Name</FormLabel><FormControl><Input placeholder="e.g. John Doe" {...field} /></FormControl><FormMessage /></FormItem> )} />
                 <FormField control={form.control} name="email" render={({ field }) => ( <FormItem className="col-span-2"><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="e.g. john.doe@example.com" {...field} /></FormControl><FormMessage /></FormItem> )} />
                 <FormField control={form.control} name="password" render={({ field }) => ( <FormItem className="col-span-2"><FormLabel>Password</FormLabel><FormControl><Input type="password" placeholder={userToEdit ? "Leave blank to keep current password" : ""} {...field} /></FormControl><FormMessage /></FormItem> )} />
-                <FormField control={form.control} name="role" render={({ field }) => ( <FormItem><FormLabel>Role</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger></FormControl><SelectContent>{roles.map(role => <SelectItem key={role.id} value={role.name}>{role.name.replace(/_/g, ' ')}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="role" render={({ field }) => ( <FormItem><FormLabel>Role</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger></FormControl><SelectContent>{roles.map(role => <SelectItem key={role} value={role}>{role.replace(/_/g, ' ')}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                 <FormField control={form.control} name="departmentId" render={({ field }) => ( <FormItem><FormLabel>Department</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a department" /></SelectTrigger></FormControl><SelectContent>{departments.map(dept => <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                 
               </div>
