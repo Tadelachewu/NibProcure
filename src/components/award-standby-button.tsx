@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState } from 'react';
@@ -13,12 +14,14 @@ interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onSuccess: () => void;
+    disabled?: boolean;
 }
 
 export function AwardStandbyButton({
     requisition,
     quotations,
     onSuccess,
+    disabled = false
 }: AwardStandbyButtonProps) {
     const [isPromoting, setIsPromoting] = useState(false);
     const { user } = useAuth();
@@ -75,7 +78,7 @@ export function AwardStandbyButton({
                 </CardDescription>
             </CardHeader>
             <CardFooter className="pt-0">
-                <Button onClick={handlePromoteStandby} disabled={isPromoting}>
+                <Button onClick={handlePromoteStandby} disabled={isPromoting || disabled}>
                     {isPromoting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Promote Standby & Start Review
                 </Button>

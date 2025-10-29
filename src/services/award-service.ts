@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -133,55 +134,54 @@ export async function handleAwardRejection(
         return { message: `Award declined. Standby vendor (${nextQuote.vendorName}) is ready for promotion.` };
 
     } else {
-        // 3b. If no standby exists, reset the entire RFQ process for this requisition
-         await tx.purchaseRequisition.update({
+        // 3b. If no standby exists, perform a full reset of the RFQ process for this requisition
+        
+        // Find all related quotes and their descendants for deletion
+        const quotesToDelete = await tx.quotation.findMany({
+            where: { requisitionId: requisition.id },
+            include: { 
+                items: true, 
+                answers: true,
+                scores: { include: { itemScores: { include: { scores: true } } } } 
+            }
+        });
+
+        const scoreSetIds = quotesToDelete.flatMap(q => q.scores.map(s => s.id));
+        if (scoreSetIds.length > 0) {
+            const itemScoreIds = quotesToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
+            if (itemScoreIds.length > 0) {
+                await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
+            }
+            await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
+            await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
+        }
+
+        // Delete QuoteAnswers and QuoteItems before deleting the Quotation
+        const quoteIds = quotesToDelete.map(q => q.id);
+        if (quoteIds.length > 0) {
+            await tx.quoteAnswer.deleteMany({ where: { quotationId: { in: quoteIds } } });
+            await tx.quoteItem.deleteMany({ where: { quotationId: { in: quoteIds } } });
+            await tx.quotation.deleteMany({ where: { id: { in: quoteIds } } });
+        }
+        
+        // Disband the committee and reset assignments
+        await tx.committeeAssignment.deleteMany({ where: { requisitionId: requisition.id }});
+
+        // Reset the requisition to its PreApproved state, ready for a new RFQ
+        await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { 
-                status: 'PreApproved', // Revert to a state where RFQ can be re-initiated
+                status: 'PreApproved',
                 deadline: null,
                 scoringDeadline: null,
                 awardResponseDeadline: null,
                 awardedQuoteItemIds: [],
                 committeeName: null,
                 committeePurpose: null,
-                // Disconnect all committee members
                 financialCommitteeMembers: { set: [] },
                 technicalCommitteeMembers: { set: [] },
             }
         });
-        
-        // Reset all quotes to submitted to allow for re-evaluation without deleting data
-        await tx.quotation.updateMany({
-            where: { requisitionId: requisition.id },
-            data: {
-                status: 'Submitted',
-                rank: null,
-                finalAverageScore: 0
-            }
-        });
-
-        // Delete all scores associated with this requisition's quotes
-        const scoreSetsToDelete = await tx.committeeScoreSet.findMany({
-            where: {
-                quotation: {
-                    requisitionId: requisition.id
-                }
-            }
-        });
-        const scoreSetIds = scoreSetsToDelete.map(s => s.id);
-        if (scoreSetIds.length > 0) {
-             const itemScoresToDelete = await tx.itemScore.findMany({ where: { scoreSetId: { in: scoreSetIds } }});
-             const itemScoreIds = itemScoresToDelete.map(is => is.id);
-             if (itemScoreIds.length > 0) {
-                await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } }});
-             }
-            await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } }});
-            await tx.committeeScoreSet.deleteMany({
-                where: {
-                    id: { in: scoreSetIds }
-                }
-            });
-        }
         
         await tx.auditLog.create({
             data: {
@@ -190,7 +190,7 @@ export async function handleAwardRejection(
                 action: 'RESTART_RFQ',
                 entity: 'Requisition',
                 entityId: requisition.id,
-                details: `All vendors declined or failed award process. Requisition and quotes have been reset for a new RFQ process.`,
+                details: `All vendors declined or failed award process. Requisition and all related quotes/scores have been reset for a new RFQ process.`,
                 transactionId: requisition.transactionId,
             }
         });

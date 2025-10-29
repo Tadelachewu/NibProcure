@@ -1686,7 +1686,7 @@ const ScoringProgressTracker = ({
 
     const getButtonState = () => {
         if (requisition.status === 'Award_Declined') {
-            return { text: "Finalize & Award", disabled: true };
+            return { text: "Award Process Reset", disabled: true };
         }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
@@ -2768,6 +2768,7 @@ export default function QuotationDetailsPage() {
             requisition={requisition}
             quotations={quotations}
             onSuccess={fetchRequisitionAndQuotes}
+            disabled={requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved'}
         />
 
 
