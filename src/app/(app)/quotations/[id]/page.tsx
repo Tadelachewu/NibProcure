@@ -443,8 +443,9 @@ const committeeFormSchema = z.object({
   committeeName: z.string().min(3, "Committee name is required."),
   committeePurpose: z.string().min(10, "Purpose is required."),
   financialCommitteeMemberIds: z.array(z.string()).min(1, "At least one financial member is required."),
-  technicalCommitteeMemberIds: z.array(z.string()).min(1, "At least one technical member is required."),
+  technicalCommitteeMemberIds: z.array(z.string()).optional(),
 }).refine(data => {
+    if (!data.technicalCommitteeMemberIds) return true; // No overlap check needed if it's optional and not provided
     const financialIds = new Set(data.financialCommitteeMemberIds);
     const hasOverlap = data.technicalCommitteeMemberIds.some(id => financialIds.has(id));
     return !hasOverlap;
@@ -1686,7 +1687,7 @@ const ScoringProgressTracker = ({
 
     const getButtonState = () => {
         if (requisition.status === 'Award_Declined') {
-            return { text: "Award Process Reset", disabled: true };
+            return { text: "Finalize Scores & Award", disabled: true };
         }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
@@ -2752,7 +2753,7 @@ export default function QuotationDetailsPage() {
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved'
+            requisition.status !== 'PreApproved' && requisition.status !== 'Award_Declined'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2917,3 +2918,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
