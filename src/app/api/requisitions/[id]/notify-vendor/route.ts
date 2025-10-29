@@ -26,12 +26,16 @@ export async function POST(
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
     }
+    
+    if (requisition.status !== 'PostApproved') {
+        return NextResponse.json({ error: 'This requisition is not ready for vendor notification.' }, { status: 400 });
+    }
 
     const transactionResult = await prisma.$transaction(async (tx) => {
         const winningQuote = await tx.quotation.findFirst({
             where: {
                 requisitionId: requisitionId,
-                status: 'Awarded' // Find the quote that is officially awarded
+                status: 'Pending_Award'
             },
             include: {
                 vendor: true
@@ -42,10 +46,17 @@ export async function POST(
             throw new Error("No winning quote found to notify. The requisition might not be in the correct state.");
         }
 
+        // Update the winning quote to Awarded
+        await tx.quotation.update({
+            where: { id: winningQuote.id },
+            data: { status: 'Awarded' }
+        });
+
+        // Update the main requisition status to Awarded
         const updatedRequisition = await tx.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
-                // Status is already 'Awarded' from the final approval step
+                status: 'Awarded', // Set the main status to Awarded
                 awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
             }
         });
