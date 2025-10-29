@@ -40,12 +40,9 @@ export async function GET(request: Request) {
       'Pending_President_Approval'
     ];
     
-    // Check if the user has a committee role (e.g., Committee_A_Member, Committee_C_Member)
     const isCommitteeRole = userRole.startsWith('Committee_') && userRole.endsWith('_Member');
 
     if (isCommitteeRole) {
-        // Dynamically construct the status based on the role.
-        // e.g., 'Committee_C_Member' -> 'Pending_Committee_C_Member'
         const statusToFind = `Pending_${userRole}`;
         console.log(`[Reviews API] Matched committee role: ${userRole}. Searching for status: ${statusToFind}`);
         whereClause = { status: statusToFind };
@@ -57,7 +54,7 @@ export async function GET(request: Request) {
       };
     } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
        console.log(`[Reviews API] Matched admin/procurement role. Searching for all review statuses.`);
-       const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_' } } });
+       const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
        const allCommitteeStatuses = allCommitteeRoles.map(r => `Pending_${r.name}`);
 
        whereClause = { 
