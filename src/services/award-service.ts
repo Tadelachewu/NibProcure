@@ -198,3 +198,56 @@ export async function handleAwardRejection(
         return { message: 'Award declined. No more standby vendors. Requisition has been reset for a new RFQ process.' };
     }
 }
+
+
+/**
+ * Promotes the next standby vendor and starts their approval workflow.
+ * @param tx - Prisma transaction client.
+ * @param requisitionId - The ID of the requisition.
+ * @param actor - The user performing the action.
+ * @returns A message indicating the result of the operation.
+ */
+export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
+    const nextStandby = await tx.quotation.findFirst({
+        where: {
+            requisitionId,
+            status: 'Standby'
+        },
+        orderBy: { rank: 'asc' },
+        include: { items: true }
+    });
+
+    if (!nextStandby) {
+        throw new Error('No standby vendor found to promote.');
+    }
+
+    const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, nextStandby.totalPrice);
+
+    await tx.quotation.update({
+        where: { id: nextStandby.id },
+        data: { status: 'Pending_Award' }
+    });
+
+    await tx.purchaseRequisition.update({
+        where: { id: requisitionId },
+        data: {
+            status: nextStatus as any,
+            currentApproverId: nextApproverId,
+            totalPrice: nextStandby.totalPrice, // Update req price to the standby's price
+            awardedQuoteItemIds: nextStandby.items.map(item => item.id), // Update awarded items
+        }
+    });
+
+    await tx.auditLog.create({
+        data: {
+            user: { connect: { id: actor.id } },
+            action: 'PROMOTE_STANDBY_AWARD',
+            entity: 'Requisition',
+            entityId: requisitionId,
+            details: `Promoted standby vendor ${nextStandby.vendorName}. ${auditDetails}`,
+            transactionId: requisitionId,
+        }
+    });
+
+    return { message: `Promoted ${nextStandby.vendorName}. Award review process initiated.` };
+}

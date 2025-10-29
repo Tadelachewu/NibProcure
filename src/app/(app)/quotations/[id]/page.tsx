@@ -1686,7 +1686,7 @@ const ScoringProgressTracker = ({
 
     const getButtonState = () => {
         if (requisition.status === 'Award_Declined') {
-            return { text: "Award Declined", disabled: true };
+            return { text: "Finalize & Award", disabled: true };
         }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
@@ -2248,7 +2248,7 @@ export default function QuotationDetailsPage() {
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
-  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
+  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby', 'Pending_Award'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   
   const isDeadlinePassed = useMemo(() => {
@@ -2767,9 +2767,7 @@ export default function QuotationDetailsPage() {
         <AwardStandbyButton 
             requisition={requisition}
             quotations={quotations}
-            onFinalize={handleFinalizeScores}
-            isFinalizing={isFinalizing}
-            disabled={awardProcessStarted}
+            onSuccess={fetchRequisitionAndQuotes}
         />
 
 
