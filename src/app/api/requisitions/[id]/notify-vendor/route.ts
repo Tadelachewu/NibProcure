@@ -84,6 +84,7 @@ export async function POST(
             data: {
                 transactionId: requisition.transactionId,
                 user: { connect: { id: userId } },
+                timestamp: new Date(),
                 action: 'NOTIFY_VENDOR',
                 entity: 'Requisition',
                 entityId: requisitionId,
