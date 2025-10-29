@@ -126,12 +126,13 @@ export async function POST(
   } catch (error) {
     console.error('Failed to respond to award:', error);
     if (error instanceof Error) {
-      if ((error as any).code === 'P2003' || (error as any).code === 'P2014') {
+      if ((error as any).code === 'P2014') {
         // More specific error for foreign key violation
-        return NextResponse.json({ error: 'Failed to process award rejection due to a data conflict. Please try again or contact support.', details: (error as any).meta?.field_name || 'Unknown field' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to process award acceptance due to a data conflict. The Purchase Order could not be linked to the Requisition.', details: (error as any).meta?.relation_name || 'Unknown relation' }, { status: 500 });
       }
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
