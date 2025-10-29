@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserByToken } from '@/lib/auth';
@@ -31,15 +33,18 @@ export async function GET(request: Request) {
       'Pending_President_Approval',
       'Pending_Manager_Procurement_Division'
     ];
+    
+    const committeeMatch = userRole.match(/Committee_(\w+)_Member/);
 
-    if (userRole === 'Committee_A_Member') {
-      whereClause = {
-        status: 'Pending_Committee_A_Recommendation',
-      };
-    } else if (userRole === 'Committee_B_Member') {
-      whereClause = {
-        status: 'Pending_Committee_B_Review',
-      };
+    if (committeeMatch) {
+        const committeeLetter = committeeMatch[1];
+        let statusToFind = `Pending_Committee_${committeeLetter}_Recommendation`;
+        // Handle the specific case for Committee B from the original logic
+        if (committeeLetter === 'B') {
+            statusToFind = 'Pending_Committee_B_Review';
+        }
+        reviewStatuses.push(statusToFind); // Add dynamically to the list of possible statuses
+        whereClause = { status: statusToFind };
     } else if (
       userRole === 'Manager_Procurement_Division' || 
       userRole === 'Director_Supply_Chain_and_Property_Management' || 
