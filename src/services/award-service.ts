@@ -1,5 +1,3 @@
-
-
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -79,7 +77,7 @@ export async function handleAwardRejection(
     quote: any, 
     requisition: any,
     actor: any,
-    declinedItemIds: string[]
+    declinedItemIds: string[] = [] // Default to empty array if not provided
 ) {
     // 1. Mark the current quote as Declined
     await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
@@ -90,72 +88,86 @@ export async function handleAwardRejection(
             action: 'REJECT_AWARD',
             entity: 'Quotation',
             entityId: quote.id,
-            details: `Vendor declined award for items: ${declinedItemIds.join(', ')}.`,
+            details: `Vendor declined award for items: ${declinedItemIds.join(', ') || 'all'}.`,
             transactionId: requisition.transactionId,
         }
     });
 
-    const alreadyDeclinedVendorIds = (await tx.quotation.findMany({
-        where: { requisitionId: quote.requisitionId, status: 'Declined' },
-        select: { vendorId: true }
-    })).map(q => q.vendorId);
+    // 2. Find the next highest-ranked standby quote that hasn't already declined.
+    const nextStandbyQuote = await tx.quotation.findFirst({
+        where: {
+            requisitionId: requisition.id,
+            status: 'Standby'
+        },
+        orderBy: { rank: 'asc' },
+        include: { items: true }
+    });
 
-
-    // For each declined item, find the next best standby vendor
-    let promotionOccurred = false;
-    for (const itemId of declinedItemIds) {
-         const nextStandbyQuote = await tx.quotation.findFirst({
-            where: {
-                requisitionId: requisition.id,
-                status: 'Standby',
-                vendorId: { notIn: alreadyDeclinedVendorIds },
-                items: { some: { requisitionItemId: itemId } }
-            },
-            orderBy: { rank: 'asc' },
-            include: { items: true }
+    if (nextStandbyQuote) {
+        // 3. If a standby exists, promote them.
+        await tx.quotation.update({
+            where: { id: nextStandbyQuote.id },
+            data: { status: 'Awarded' } 
         });
 
-        if (nextStandbyQuote) {
-            promotionOccurred = true;
-            // Promote this vendor for this specific item
-            const newAwardedItemIds = [...requisition.awardedQuoteItemIds.filter((id: string) => !declinedItemIds.includes(id)), nextStandbyQuote.items.find(i => i.requisitionItemId === itemId)!.id];
-            
-            await tx.quotation.update({
-                where: { id: nextStandbyQuote.id },
-                data: { status: 'Partially_Awarded' } // Promote to partially awarded
-            });
-            
-            await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { awardedQuoteItemIds: newAwardedItemIds }
-            });
-             await tx.auditLog.create({
-                data: {
-                    timestamp: new Date(),
-                    user: { connect: { id: actor.id } },
-                    action: 'PROMOTE_STANDBY',
-                    entity: 'Quotation',
-                    entityId: nextStandbyQuote.id,
-                    details: `Promoted standby vendor ${nextStandbyQuote.vendorName} to Partially Awarded for item ${itemId}.`,
-                    transactionId: requisition.transactionId,
-                }
-            });
-        }
-    }
+        // The requisition goes back to PostApproved so the PO can notify the new winner
+        await tx.purchaseRequisition.update({
+            where: { id: requisition.id },
+            data: { 
+                status: 'PostApproved',
+                totalPrice: nextStandbyQuote.totalPrice // Update price to the new winner's
+            }
+        });
 
-
-    if (promotionOccurred) {
-        // If we promoted someone, we just return the message. The PO creation is handled by acceptances.
-        return { message: 'Award declined. A standby vendor has been promoted for the declined items.' };
+        await tx.auditLog.create({
+            data: {
+                timestamp: new Date(),
+                user: { connect: { id: actor.id } },
+                action: 'PROMOTE_STANDBY',
+                entity: 'Quotation',
+                entityId: nextStandbyQuote.id,
+                details: `Promoted standby vendor ${nextStandbyQuote.vendorName} to Awarded. Waiting for Procurement Officer to notify.`,
+                transactionId: requisition.transactionId,
+            }
+        });
+        return { message: 'Award declined. A standby vendor has been promoted and is ready for notification.' };
     } else {
-        // If no standby exists for any of the declined items, perform a full reset of the RFQ process for this requisition.
-        await tx.quotation.deleteMany({ where: { requisitionId: requisition.id }});
+        // 4. If NO standby exists, reset the entire RFQ process for this requisition.
+        const quotationIds = (await tx.quotation.findMany({
+            where: { requisitionId: requisition.id },
+            select: { id: true }
+        })).map(q => q.id);
+
+        const scoreSetIds = (await tx.committeeScoreSet.findMany({
+            where: { quotationId: { in: quotationIds } },
+            select: { id: true }
+        })).map(s => s.id);
+        
+        const itemScoreIds = (await tx.itemScore.findMany({
+            where: { scoreSetId: { in: scoreSetIds } },
+            select: { id: true }
+        })).map(i => i.id);
+
+        // Delete in correct order to avoid constraint violations
+        if (itemScoreIds.length > 0) {
+            await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
+        }
+        if (scoreSetIds.length > 0) {
+            await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
+        }
+        if (scoreSetIds.length > 0) {
+            await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
+        }
+        if (quotationIds.length > 0) {
+            await tx.quotation.deleteMany({ where: { id: { in: quotationIds } } });
+        }
+        
         await tx.committeeAssignment.deleteMany({ where: { requisitionId: requisition.id }});
 
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { 
-                status: 'PreApproved',
+                status: 'PreApproved', // Revert to a state where RFQ can be re-sent
                 deadline: null,
                 scoringDeadline: null,
                 awardResponseDeadline: null,
@@ -174,7 +186,7 @@ export async function handleAwardRejection(
                 action: 'RESTART_RFQ',
                 entity: 'Requisition',
                 entityId: requisition.id,
-                details: `All vendors declined or failed award process. Requisition and all related quotes/scores have been reset for a new RFQ process.`,
+                details: `All vendors declined or no standby was available. Requisition and all related quotes/scores have been reset for a new RFQ process.`,
                 transactionId: requisition.transactionId,
             }
         });
@@ -207,11 +219,13 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
     const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, nextStandby.totalPrice);
 
+    // Instead of directly awarding, set to Pending_Award and start the review process.
     await tx.quotation.update({
         where: { id: nextStandby.id },
         data: { status: 'Pending_Award' }
     });
 
+    // Update the requisition to reflect the new approval flow
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
         data: {
