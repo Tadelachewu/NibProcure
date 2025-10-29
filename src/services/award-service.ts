@@ -69,7 +69,7 @@ async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue
 
 /**
  * Handles the logic when a vendor rejects an award. It updates the quote and requisition status,
- * but importantly, it does NOT automatically promote the next vendor. It waits for manual intervention.
+ * promoting a standby if one is available, or resetting the RFQ if not.
  * @param tx - Prisma transaction client.
  * @param quote - The quote that was rejected.
  * @param requisition - The associated requisition.
@@ -98,26 +98,61 @@ export async function handleAwardRejection(
         }
     });
 
-    // 2. Set the main requisition status to 'Award_Declined'.
-    // This stops the process and signals that manual action is needed.
-    await tx.purchaseRequisition.update({
-        where: { id: requisition.id },
-        data: { status: 'Award_Declined' }
+    const nextStandby = await tx.quotation.findFirst({
+        where: { requisitionId: requisition.id, status: 'Standby' },
+        orderBy: { rank: 'asc' },
     });
 
-    await tx.auditLog.create({
-        data: {
-            timestamp: new Date(),
-            user: { connect: { id: actor.id } },
-            action: 'AWARD_DECLINED',
-            entity: 'Requisition',
-            entityId: requisition.id,
-            details: `Award declined by ${quote.vendorName}. Requisition requires manual intervention to promote a standby or re-award.`,
-            transactionId: requisition.transactionId,
-        }
-    });
+    if (nextStandby) {
+         // 2a. If a standby exists, set the main requisition status to 'Award_Declined' to signal manual promotion is needed.
+        await tx.purchaseRequisition.update({
+            where: { id: requisition.id },
+            data: { status: 'Award_Declined' }
+        });
 
-    return { message: 'Award has been declined. The procurement officer must now manually promote a standby vendor.' };
+        await tx.auditLog.create({
+            data: {
+                timestamp: new Date(),
+                user: { connect: { id: actor.id } },
+                action: 'AWARD_DECLINED',
+                entity: 'Requisition',
+                entityId: requisition.id,
+                details: `Award declined by ${quote.vendorName}. A standby vendor is available. Manual promotion required.`,
+                transactionId: requisition.transactionId,
+            }
+        });
+
+        return { message: 'Award has been declined. A standby vendor is available for promotion.' };
+    } else {
+        // 2b. If NO standby exists, reset the process.
+        await tx.quotation.updateMany({
+            where: { requisitionId: requisition.id },
+            data: { status: 'Submitted', rank: null }
+        });
+        
+        await tx.purchaseRequisition.update({
+            where: { id: requisition.id },
+            data: {
+                status: 'PreApproved', // Revert to a state where RFQ can be re-initiated
+                deadline: null,
+                scoringDeadline: null,
+                awardResponseDeadline: null
+            }
+        });
+        
+        await tx.auditLog.create({
+            data: {
+                timestamp: new Date(),
+                action: 'RESTART_RFQ_NO_STANDBY',
+                entity: 'Requisition',
+                entityId: requisition.id,
+                details: `All vendors declined award and no standby vendors were available. RFQ process has been reset for requisition.`,
+                transactionId: requisition.transactionId,
+            }
+        });
+        
+        return { message: 'Award declined. No more standby vendors. Requisition has been reset for a new RFQ process.' };
+    }
 }
 
 

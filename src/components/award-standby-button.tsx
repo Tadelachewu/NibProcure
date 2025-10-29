@@ -10,23 +10,19 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { AwardCenterDialog } from './award-center-dialog';
-import { Dialog, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogTrigger } from './ui/dialog';
 
 
 interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
-    isFinalizing: boolean;
-    disabled?: boolean;
+    onSuccess: () => void;
 }
 
 export function AwardStandbyButton({
     requisition,
     quotations,
-    onFinalize,
-    isFinalizing,
-    disabled = false
+    onSuccess,
 }: AwardStandbyButtonProps) {
     const { user } = useAuth();
     const { toast } = useToast();
@@ -34,18 +30,12 @@ export function AwardStandbyButton({
     const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
 
     const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
-    const isRelevantStatus = requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete';
+    const isRelevantStatus = requisition.status === 'Award_Declined';
     
     if (!isRelevantStatus) {
         return null;
     }
 
-    const buttonText = requisition.status === 'Award_Declined' 
-        ? "Promote Standby Vendor"
-        : "Finalize Scores & Award";
-
-    const isDisabled = disabled || isPromoting || isFinalizing;
-    
     const handlePromote = async () => {
         if (!user) return;
         setIsPromoting(true);
@@ -63,7 +53,7 @@ export function AwardStandbyButton({
                 title: 'Success',
                 description: result.message,
             });
-            // onSuccess(); // This was causing an issue, let's rely on toast
+            onSuccess();
         } catch (error) {
             toast({
                 variant: 'destructive',
@@ -87,9 +77,9 @@ export function AwardStandbyButton({
                 <CardFooter className="pt-0">
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button disabled={isDisabled || !hasStandbyVendors}>
+                            <Button disabled={isPromoting || !hasStandbyVendors}>
                                 {isPromoting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {buttonText}
+                                {hasStandbyVendors ? 'Promote Standby Vendor' : 'No Standby Vendors Available'}
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -110,32 +100,5 @@ export function AwardStandbyButton({
         );
     }
     
-    if (requisition.status === 'Scoring_Complete') {
-         return (
-            <Card className="mt-6">
-                <CardHeader>
-                    <CardTitle>Finalize Award</CardTitle>
-                    <CardDescription>All committee scores have been submitted. You can now finalize the award decision.</CardDescription>
-                </CardHeader>
-                <CardFooter className="pt-0">
-                    <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
-                        <DialogTrigger asChild>
-                            <Button disabled={isDisabled}>
-                                {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {buttonText}
-                            </Button>
-                        </DialogTrigger>
-                        <AwardCenterDialog 
-                            requisition={requisition}
-                            quotations={quotations}
-                            onFinalize={onFinalize}
-                            onClose={() => setAwardCenterOpen(false)}
-                        />
-                    </Dialog>
-                </CardFooter>
-            </Card>
-        );
-    }
-
     return null;
 }
