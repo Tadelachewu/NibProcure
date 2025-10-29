@@ -24,12 +24,20 @@ export function AwardStandbyButton({
 }: AwardStandbyButtonProps) {
     const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
 
+    // This button should only be visible if there are actual standby vendors to promote.
+    // The backend logic now handles the "no standby" case automatically.
+    const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
+
+    if (requisition.status !== 'Award_Declined' || !hasStandbyVendors) {
+        return null;
+    }
+
     return (
         <Card className="mt-6 border-amber-500">
              <CardHeader>
                 <CardTitle>Action Required: Award Declined</CardTitle>
                 <CardDescription>
-                    A vendor has declined their award. You may now promote a standby vendor.
+                    A vendor has declined their award. You may now promote a standby vendor by re-opening the Award Center.
                 </CardDescription>
             </CardHeader>
             <CardFooter className="pt-0">

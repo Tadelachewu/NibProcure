@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -250,4 +249,9 @@ export const AwardCenterDialog = ({
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction onClick={handleConfirmAward}>Confirm</AlertDialogAction>
                         </AlertDialogFooter>
-                    </AlertDialog
+                    </AlertDialogContent>
+                </AlertDialog>
+            </DialogFooter>
+        </DialogContent>
+    );
+};
