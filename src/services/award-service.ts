@@ -71,13 +71,15 @@ async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue
  * @param quote - The quote that was rejected.
  * @param requisition - The associated requisition.
  * @param actor - The user performing the action.
+ * @param declinedItemIds - The specific requisition item IDs that were declined.
  * @returns A message indicating the result of the operation.
  */
 export async function handleAwardRejection(
     tx: Prisma.TransactionClient, 
     quote: any, 
     requisition: any,
-    actor: any
+    actor: any,
+    declinedItemIds: string[]
 ) {
     // 1. Mark the current quote as Declined
     await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
@@ -88,86 +90,68 @@ export async function handleAwardRejection(
             action: 'REJECT_AWARD',
             entity: 'Quotation',
             entityId: quote.id,
-            details: `Vendor declined award.`,
+            details: `Vendor declined award for items: ${declinedItemIds.join(', ')}.`,
             transactionId: requisition.transactionId,
         }
     });
 
-    // 2. Find the next standby vendor, EXCLUDING any vendors that have already declined.
-    const declinedVendorIds = (await tx.quotation.findMany({
+    const alreadyDeclinedVendorIds = (await tx.quotation.findMany({
         where: { requisitionId: quote.requisitionId, status: 'Declined' },
         select: { vendorId: true }
     })).map(q => q.vendorId);
 
 
-    const nextQuote = await tx.quotation.findFirst({
-        where: { 
-            requisitionId: quote.requisitionId, 
-            status: 'Standby', // Only consider standby vendors
-            vendorId: { notIn: declinedVendorIds } // Exclude declined vendors
-        },
-        orderBy: {
-            rank: 'asc' // Get the highest ranked standby (e.g., rank 2)
-        },
-        include: { items: true }
-    });
-
-    if (nextQuote) {
-        // 3a. If a standby exists, set the requisition to Award_Declined to allow manual re-award
-        await tx.purchaseRequisition.update({
-            where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
-        });
-        
-        await tx.auditLog.create({
-            data: {
-                timestamp: new Date(),
-                user: { connect: { id: actor.id } },
-                action: 'AWAIT_STANDBY_PROMOTION',
-                entity: 'Requisition',
-                entityId: requisition.id,
-                details: `Award was declined. Standby vendor ${nextQuote.vendorName} is available for promotion.`,
-                transactionId: requisition.transactionId,
-            }
+    // For each declined item, find the next best standby vendor
+    let promotionOccurred = false;
+    for (const itemId of declinedItemIds) {
+         const nextStandbyQuote = await tx.quotation.findFirst({
+            where: {
+                requisitionId: requisition.id,
+                status: 'Standby',
+                vendorId: { notIn: alreadyDeclinedVendorIds },
+                items: { some: { requisitionItemId: itemId } }
+            },
+            orderBy: { rank: 'asc' },
+            include: { items: true }
         });
 
-        return { message: `Award declined. Standby vendor (${nextQuote.vendorName}) is ready for promotion.` };
+        if (nextStandbyQuote) {
+            promotionOccurred = true;
+            // Promote this vendor for this specific item
+            const newAwardedItemIds = [...requisition.awardedQuoteItemIds.filter((id: string) => !declinedItemIds.includes(id)), nextStandbyQuote.items.find(i => i.requisitionItemId === itemId)!.id];
+            
+            await tx.quotation.update({
+                where: { id: nextStandbyQuote.id },
+                data: { status: 'Partially_Awarded' } // Promote to partially awarded
+            });
+            
+            await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: { awardedQuoteItemIds: newAwardedItemIds }
+            });
+             await tx.auditLog.create({
+                data: {
+                    timestamp: new Date(),
+                    user: { connect: { id: actor.id } },
+                    action: 'PROMOTE_STANDBY',
+                    entity: 'Quotation',
+                    entityId: nextStandbyQuote.id,
+                    details: `Promoted standby vendor ${nextStandbyQuote.vendorName} to Partially Awarded for item ${itemId}.`,
+                    transactionId: requisition.transactionId,
+                }
+            });
+        }
+    }
 
+
+    if (promotionOccurred) {
+        // If we promoted someone, we just return the message. The PO creation is handled by acceptances.
+        return { message: 'Award declined. A standby vendor has been promoted for the declined items.' };
     } else {
-        // 3b. If no standby exists, perform a full reset of the RFQ process for this requisition
-        
-        // Find all related quotes and their descendants for deletion
-        const quotesToDelete = await tx.quotation.findMany({
-            where: { requisitionId: requisition.id },
-            include: { 
-                items: true, 
-                answers: true,
-                scores: { include: { itemScores: { include: { scores: true } } } } 
-            }
-        });
-
-        const scoreSetIds = quotesToDelete.flatMap(q => q.scores.map(s => s.id));
-        if (scoreSetIds.length > 0) {
-            const itemScoreIds = quotesToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
-            if (itemScoreIds.length > 0) {
-                await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
-            }
-            await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
-            await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
-        }
-
-        // Delete QuoteAnswers and QuoteItems before deleting the Quotation
-        const quoteIds = quotesToDelete.map(q => q.id);
-        if (quoteIds.length > 0) {
-            await tx.quoteAnswer.deleteMany({ where: { quotationId: { in: quoteIds } } });
-            await tx.quoteItem.deleteMany({ where: { quotationId: { in: quoteIds } } });
-            await tx.quotation.deleteMany({ where: { id: { in: quoteIds } } });
-        }
-        
-        // Disband the committee and reset assignments
+        // If no standby exists for any of the declined items, perform a full reset of the RFQ process for this requisition.
+        await tx.quotation.deleteMany({ where: { requisitionId: requisition.id }});
         await tx.committeeAssignment.deleteMany({ where: { requisitionId: requisition.id }});
 
-        // Reset the requisition to its PreApproved state, ready for a new RFQ
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { 

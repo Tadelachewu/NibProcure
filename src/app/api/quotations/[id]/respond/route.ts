@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -76,23 +75,22 @@ export async function POST(
                 }
             });
 
-            // Set other awarded/partially awarded quotes for this req to "Failed" since this one was accepted.
-            await tx.quotation.updateMany({
+            // After accepting, check if any other awards are still pending.
+            const otherPendingAwards = await tx.quotation.count({
                 where: {
                     requisitionId: requisition.id,
                     id: { not: quote.id },
                     status: { in: ['Awarded', 'Partially_Awarded'] }
-                },
-                data: {
-                    status: 'Failed'
                 }
-            })
-
-            // Finalize the requisition status
-            await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'PO_Created' }
             });
+
+            // If there are no more pending awards, the PO process is complete for the whole req.
+            if (otherPendingAwards === 0) {
+                 await tx.purchaseRequisition.update({
+                    where: { id: requisition.id },
+                    data: { status: 'PO_Created' }
+                });
+            }
             
             await tx.auditLog.create({
                 data: {
@@ -109,8 +107,11 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            // The logic is now entirely handled by the award service
-            return await handleAwardRejection(tx, quote, requisition, user);
+            const declinedItemIds = quote.items
+                .filter(item => requisition.awardedQuoteItemIds.includes(item.id))
+                .map(item => item.requisitionItemId);
+                
+            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds);
         }
         
         throw new Error('Invalid action.');
