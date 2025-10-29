@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -2164,7 +2165,7 @@ const NotifyVendorDialog = ({
 
     const finalDeadline = useMemo(() => {
         if (!deadlineDate) return undefined;
-        const [hours, minutes] = newDeadlineTime.split(':').map(Number);
+        const [hours, minutes] = deadlineTime.split(':').map(Number);
         return setMinutes(setHours(deadlineDate, hours), minutes);
     }, [deadlineDate, deadlineTime]);
 
@@ -2746,7 +2747,7 @@ export default function QuotationDetailsPage() {
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' && requisition.status !== 'Award_Declined'
+            requisition.status !== 'PreApproved' && requisition.status !== 'Award_Declined' && requisition.status !== 'Scoring_Complete'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2902,6 +2903,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
