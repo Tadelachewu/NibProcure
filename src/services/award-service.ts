@@ -34,13 +34,17 @@ async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue
 
     const firstStep = relevantTier.steps[0];
     const getNextStatusFromRole = (role: string): string => {
+        const committeeMatch = role.match(/Committee_(\w+)_Member/);
+        if (committeeMatch) {
+            const committeeLetter = committeeMatch[1];
+            return `Pending_Committee_${committeeLetter}_Recommendation`;
+        }
+
         const statusMap: { [key: string]: string } = {
             'Manager_Procurement_Division': 'Pending_Managerial_Approval',
             'Director_Supply_Chain_and_Property_Management': 'Pending_Director_Approval',
             'VP_Resources_and_Facilities': 'Pending_VP_Approval',
             'President': 'Pending_President_Approval',
-            'Committee_A_Member': 'Pending_Committee_A_Recommendation',
-            'Committee_B_Member': 'Pending_Committee_B_Review',
         };
         return statusMap[role] || `Pending_${role}`;
     }
@@ -143,16 +147,14 @@ export async function handleAwardRejection(
 
         // If other vendors have already accepted their part of the award, we should NOT reset the whole thing.
         if (acceptedPOsCount > 0) {
-             await tx.quotation.updateMany({
+             await tx.quotation.update({
                 where: {
                     id: quote.id
                 },
                 data: { status: 'Failed' } // Mark as failed instead of resetting
             });
-             await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'Award_Declined' } // Set a clear status for the PO to act on
-            });
+             // DO NOT change the main requisition status. Let it reflect the successful parts.
+             // The UI will now be responsible for showing the mixed state.
             await tx.auditLog.create({
                 data: {
                     timestamp: new Date(),
@@ -160,7 +162,7 @@ export async function handleAwardRejection(
                     action: 'PARTIAL_AWARD_FAILURE',
                     entity: 'Requisition',
                     entityId: requisition.id,
-                    details: `Vendor ${quote.vendorName} declined and no standby was available. Other parts of this requisition have been awarded. Manual action is required for the unawarded items.`,
+                    details: `Vendor ${quote.vendorName} declined and no standby was available. Other parts of this requisition remain active. Manual action is required for the unawarded items.`,
                     transactionId: requisition.transactionId,
                 }
             });
@@ -191,6 +193,7 @@ export async function handleAwardRejection(
                 await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
             }
              await tx.committeeScoreSet.deleteMany({ where: { quotationId: { in: quotationIds } } });
+             await tx.quoteItem.deleteMany({ where: { quotationId: { in: quotationIds } } });
         }
         if (quotationIds.length > 0) {
             await tx.quotation.deleteMany({ where: { id: { in: quotationIds } } });
