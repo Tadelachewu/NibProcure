@@ -18,7 +18,7 @@ export async function POST(
     const { userId, awardResponseDeadline } = body;
 
     const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user || user.role !== 'Procurement_Officer') {
+    if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -31,7 +31,7 @@ export async function POST(
         const winningQuote = await tx.quotation.findFirst({
             where: {
                 requisitionId: requisitionId,
-                rank: 1
+                status: 'Awarded' // Find the quote that is officially awarded
             },
             include: {
                 vendor: true
@@ -39,18 +39,13 @@ export async function POST(
         });
 
         if (!winningQuote) {
-            throw new Error("No winning quote found to notify.");
+            throw new Error("No winning quote found to notify. The requisition might not be in the correct state.");
         }
-
-        await tx.quotation.update({
-            where: { id: winningQuote.id },
-            data: { status: 'Awarded' }
-        });
 
         const updatedRequisition = await tx.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
-                status: 'Awarded',
+                // Status is already 'Awarded' from the final approval step
                 awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
             }
         });
