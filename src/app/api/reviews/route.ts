@@ -26,26 +26,19 @@ export async function GET(request: Request) {
 
     console.log(`[Reviews API] Fetching reviews for user ${userId} with role: ${userRole}`);
 
-
     const reviewStatuses = [
-      'Pending_Committee_A_Recommendation',
-      'Pending_Committee_B_Review',
-      'Pending_Managerial_Review',
+      'Pending_Managerial_Approval',
       'Pending_Director_Approval',
       'Pending_VP_Approval',
-      'Pending_President_Approval',
-      'Pending_Manager_Procurement_Division'
+      'Pending_President_Approval'
     ];
     
-    // This regex will now correctly capture any letter for the committee.
     const committeeMatch = userRole.match(/Committee_([A-Z])_Member/);
 
     if (committeeMatch) {
         const committeeLetter = committeeMatch[1];
-        // This is the crucial fix: The logic for Committee B was different and was breaking the generic case.
-        // By standardizing the status name, all committees (A, B, C, etc.) will now work.
         const statusToFind = `Pending_Committee_${committeeLetter}_Recommendation`;
-        reviewStatuses.push(statusToFind); 
+        console.log(`[Reviews API] Matched committee role: ${userRole}. Searching for status: ${statusToFind}`);
         whereClause = { status: statusToFind };
     } else if (
       userRole === 'Manager_Procurement_Division' || 
@@ -62,7 +55,12 @@ export async function GET(request: Request) {
     } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
        whereClause = { 
          status: { 
-           in: reviewStatuses
+           in: [
+            'Pending_Committee_A_Recommendation',
+            'Pending_Committee_B_Recommendation',
+            'Pending_Committee_C_Recommendation',
+            ...reviewStatuses
+           ]
          }
       };
     } else {
