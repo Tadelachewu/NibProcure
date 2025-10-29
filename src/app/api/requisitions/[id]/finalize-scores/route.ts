@@ -7,23 +7,27 @@ import { prisma } from '@/lib/prisma';
 import { User, UserRole } from '@/lib/types';
 
 function getNextStatusFromRole(role: string): string {
-    switch (role) {
-        case 'Manager_Procurement_Division':
-            return 'Pending_Managerial_Approval';
-        case 'Director_Supply_Chain_and_Property_Management':
-            return 'Pending_Director_Approval';
-        case 'VP_Resources_and_Facilities':
-            return 'Pending_VP_Approval';
-        case 'President':
-            return 'Pending_President_Approval';
-        case 'Committee_A_Member':
-            return 'Pending_Committee_A_Recommendation';
-        case 'Committee_B_Member':
-            return 'Pending_Committee_B_Review';
-        default:
-            // Fallback for any other roles, though the primary ones should be covered.
-            return `Pending_${role}`;
+    const statusMap: { [key: string]: string } = {
+        'Manager_Procurement_Division': 'Pending_Managerial_Approval',
+        'Director_Supply_Chain_and_Property_Management': 'Pending_Director_Approval',
+        'VP_Resources_and_Facilities': 'Pending_VP_Approval',
+        'President': 'Pending_President_Approval',
+    };
+
+    if (statusMap[role]) {
+        return statusMap[role];
     }
+    
+    // Dynamically handle any committee role, e.g., Committee_C_Member
+    const committeeMatch = role.match(/Committee_(\w+)_Member/);
+    if (committeeMatch) {
+        const committeeLetter = committeeMatch[1];
+        // Use a consistent suffix for all committee review statuses
+        return `Pending_Committee_${committeeLetter}_Recommendation`;
+    }
+
+    // Fallback for any other roles, though the primary ones should be covered.
+    return `Pending_${role}`;
 }
 
 
