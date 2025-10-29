@@ -2166,7 +2166,7 @@ const NotifyVendorDialog = ({
 
     const finalDeadline = useMemo(() => {
         if (!deadlineDate) return undefined;
-        const [hours, minutes] = newDeadlineTime.split(':').map(Number);
+        const [hours, minutes] = deadlineTime.split(':').map(Number);
         return setMinutes(setHours(deadlineDate, hours), minutes);
     }, [deadlineDate, deadlineTime]);
 
@@ -2542,7 +2542,7 @@ export default function QuotationDetailsPage() {
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
-  const awardProcessStarted = isAwarded || requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded';
+  const awardProcessStarted = isAwarded || requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
 
 
   return (
@@ -2749,7 +2749,8 @@ export default function QuotationDetailsPage() {
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'Scoring_Complete'
+            requisition.status !== 'PreApproved' &&
+            requisition.status !== 'Award_Declined'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
