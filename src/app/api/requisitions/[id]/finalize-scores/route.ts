@@ -63,13 +63,11 @@ export async function POST(
             const awardedVendorIds = Object.keys(awards);
             const winnerQuotes = allQuotes.filter(q => awardedVendorIds.includes(q.vendorId));
 
-            // *** FIX STARTS HERE ***
             // Create an exclusion list of vendors who have already declined.
             const declinedVendorIds = new Set(allQuotes.filter(q => q.status === 'Declined').map(q => q.vendorId));
 
             // The pool of "other" quotes now EXCLUDES winners and any previously declined vendors.
             const otherQuotes = allQuotes.filter(q => !awardedVendorIds.includes(q.vendorId) && !declinedVendorIds.has(q.vendorId));
-            // *** FIX ENDS HERE ***
 
 
             for (const quote of winnerQuotes) {
@@ -116,7 +114,6 @@ export async function POST(
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.replace(/_/g, ' ')} for approval.`;
             } else {
                 // If there are no steps, it's auto-approved. We can move straight to PostApproved
-                // and the main PATCH handler will convert Pending_Award to Awarded.
                 nextStatus = 'PostApproved';
                  console.log(`[FINALIZE-SCORES] No approval steps for this tier. Setting status to: ${nextStatus}`);
                 auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier, which has no approval steps. Approved for vendor notification.`;

@@ -137,24 +137,30 @@ export async function handleAwardRejection(
         });
         return { message: 'Award declined. A standby vendor has been promoted and is ready for notification.' };
     } else {
-        // 4. If NO standby exists, check if other parts of the award are already accepted.
-        const acceptedPOsCount = await tx.purchaseOrder.count({
+        // 4. If NO standby exists, check if other parts of the award are already accepted or still pending.
+        const otherActiveAwardsCount = await tx.quotation.count({
             where: {
                 requisitionId: requisition.id,
-                vendorId: { not: quote.vendorId } // Exclude POs from the declining vendor
+                id: { not: quote.id }, // Exclude the currently declining quote
+                status: { in: ['Awarded', 'Partially_Awarded', 'Accepted', 'Pending_Award'] }
             }
         });
 
-        // If other vendors have already accepted their part of the award, we should NOT reset the whole thing.
-        if (acceptedPOsCount > 0) {
+        // If other awards are still active, we should NOT reset the whole thing.
+        if (otherActiveAwardsCount > 0) {
              await tx.quotation.update({
                 where: {
                     id: quote.id
                 },
-                data: { status: 'Failed' } // Mark as failed instead of resetting
+                data: { status: 'Failed' } // Mark as failed instead of just declined
             });
-             // DO NOT change the main requisition status. Let it reflect the successful parts.
-             // The UI will now be responsible for showing the mixed state.
+            
+             // Set the main requisition status to reflect that action is needed.
+             await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: { status: 'Award_Declined' }
+             });
+
             await tx.auditLog.create({
                 data: {
                     timestamp: new Date(),
