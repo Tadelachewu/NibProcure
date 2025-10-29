@@ -12,22 +12,8 @@ import { differenceInMinutes, format, isPast } from 'date-fns';
 
 
 function getNextStatusFromRole(role: string): string {
-    switch (role) {
-        case 'Manager_Procurement_Division':
-            return 'Pending_Managerial_Approval';
-        case 'Director_Supply_Chain_and_Property_Management':
-            return 'Pending_Director_Approval';
-        case 'VP_Resources_and_Facilities':
-            return 'Pending_VP_Approval';
-        case 'President':
-            return 'Pending_President_Approval';
-        case 'Committee_A_Member':
-            return 'Pending_Committee_A_Recommendation';
-        case 'Committee_B_Member':
-            return 'Pending_Committee_B_Review';
-        default:
-            return `Pending_${role}`;
-    }
+    // This function now standardly creates a 'Pending' status from a role name.
+    return `Pending_${role.replace(/ /g, '_')}`;
 }
 
 
@@ -50,24 +36,18 @@ export async function GET(request: Request) {
     let whereClause: any = {};
     
     if (forReview === 'true' && userPayload) {
-        const userRole = userPayload.role;
-        const reviewStatuses = [
-            'Pending_Committee_A_Recommendation',
-            'Pending_Committee_B_Review',
-            'Pending_Managerial_Approval',
-            'Pending_Director_Approval',
-            'Pending_VP_Approval',
-            'Pending_President_Approval'
-        ];
+        const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
+        const statusToFind = `Pending_${userRole}`;
 
-        if (userRole === 'Committee_A_Member') {
-             whereClause.status = 'Pending_Committee_A_Recommendation';
-        } else if (userRole === 'Committee_B_Member') {
-            whereClause.status = 'Pending_Committee_B_Review';
+        if (userRole.startsWith('Committee_')) {
+             whereClause.status = statusToFind;
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-             whereClause.status = { in: reviewStatuses };
+            const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
+            const allReviewStatuses = allCommitteeRoles.map(r => `Pending_${r.name}`);
+            allReviewStatuses.push('Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval');
+            whereClause.status = { in: allReviewStatuses };
         } else {
-            // For hierarchical approvers
+            // For hierarchical approvers, find items assigned to them
             whereClause.currentApproverId = userPayload.user.id;
         }
 
@@ -77,7 +57,7 @@ export async function GET(request: Request) {
         }
         
         whereClause.OR = [
-            // Condition A: Open for bidding
+            // Condition A: Open for bidding (not yet quoted by this vendor)
             {
                 AND: [
                     { status: 'Accepting_Quotes' }, 
@@ -100,12 +80,12 @@ export async function GET(request: Request) {
                     },
                 ]
             },
-            // Condition B: Awarded to this vendor (but not pending)
+            // Condition B: Vendor has an active relation to this req (Awarded, Accepted, etc.)
             {
                 quotations: {
                     some: {
                         vendorId: userPayload.user.vendorId,
-                        status: { in: ['Awarded', 'Partially_Awarded', 'Accepted', 'Invoice_Submitted'] }
+                        status: { in: ['Awarded', 'Partially_Awarded', 'Accepted', 'Invoice_Submitted', 'Standby'] }
                     }
                 }
             }
@@ -219,14 +199,11 @@ export async function PATCH(
         dataToUpdate.approverComment = comment;
 
     } else if (requisition.status.startsWith('Pending_')) {
-        const isCommitteeA = requisition.status === 'Pending_Committee_A_Recommendation';
-        const isCommitteeB = requisition.status === 'Pending_Committee_B_Review';
+        const isCommitteeApproval = requisition.status.includes('_Committee_');
         let isDesignatedApprover = false;
         
-        if (isCommitteeA) {
-            isDesignatedApprover = user.role === 'Committee_A_Member';
-        } else if (isCommitteeB) {
-            isDesignatedApprover = user.role === 'Committee_B_Member';
+        if (isCommitteeApproval) {
+            isDesignatedApprover = user.role === requisition.status.replace('Pending_', '');
         } else {
             isDesignatedApprover = requisition.currentApproverId === userId;
         }
@@ -237,7 +214,6 @@ export async function PATCH(
         
         if (newStatus === 'Rejected') {
              return await prisma.$transaction(async (tx) => {
-                // Step 1: Find all related quotations and their descendants
                 const quotationsToDelete = await tx.quotation.findMany({
                     where: { requisitionId: id },
                     include: { scores: { include: { itemScores: { include: { scores: true } } } } }
@@ -246,7 +222,6 @@ export async function PATCH(
                 const scoreSetIds = quotationsToDelete.flatMap(q => q.scores.map(s => s.id));
                 const itemScoreIds = quotationsToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
 
-                // Step 2: Delete in the correct order
                 if (itemScoreIds.length > 0) {
                     await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
                 }
@@ -258,14 +233,11 @@ export async function PATCH(
                 }
                 await tx.quotation.deleteMany({ where: { requisitionId: id } });
                 
-                // Step 3: Reset committee assignments
                 await tx.committeeAssignment.updateMany({
                     where: { requisitionId: id },
                     data: { scoresSubmitted: false }
                 });
 
-
-                // Step 4: Update the requisition to reset its state
                 const updatedReq = await tx.purchaseRequisition.update({
                     where: { id: id },
                     data: {
@@ -276,13 +248,11 @@ export async function PATCH(
                         scoringDeadline: null,
                         awardedQuoteItemIds: [],
                         awardResponseDeadline: null,
-                        // Disconnect all committee members
                         financialCommitteeMembers: { set: [] },
                         technicalCommitteeMembers: { set: [] },
                     }
                 });
 
-                // Step 5: Log the action
                 await tx.auditLog.create({
                     data: {
                         transactionId: requisition.transactionId,
@@ -324,18 +294,10 @@ export async function PATCH(
                     }
                     auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
                 } else {
+                    // This is the final approval. Set to PostApproved to await manual notification.
                     dataToUpdate.status = 'PostApproved';
                     dataToUpdate.currentApprover = { disconnect: true };
                     auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
-                    
-                    // This is the final approval, so we officially mark the quote as 'Awarded'
-                    await tx.quotation.updateMany({
-                        where: {
-                            requisitionId: id,
-                            status: 'Pending_Award'
-                        },
-                        data: { status: 'Awarded' }
-                    });
                 }
                 auditAction = 'APPROVE_AWARD_STEP';
 

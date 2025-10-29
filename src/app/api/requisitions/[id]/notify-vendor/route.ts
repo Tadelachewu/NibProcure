@@ -27,51 +27,57 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
     }
     
+    // This is the crucial gate. Only requisitions in PostApproved can be notified.
     if (requisition.status !== 'PostApproved') {
         return NextResponse.json({ error: 'This requisition is not ready for vendor notification.' }, { status: 400 });
     }
 
     const transactionResult = await prisma.$transaction(async (tx) => {
-        const winningQuote = await tx.quotation.findFirst({
+        // Update the main requisition status from PostApproved to Awarded
+        const updatedRequisition = await tx.purchaseRequisition.update({
+            where: { id: requisitionId },
+            data: {
+                status: 'Awarded',
+                awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
+            }
+        });
+
+        // The quotes are already in 'Pending_Award'. Now we just find them to notify the vendor.
+        const winningQuotes = await tx.quotation.findMany({
             where: {
                 requisitionId: requisitionId,
-                status: 'Awarded'
+                status: 'Pending_Award'
             },
             include: {
                 vendor: true
             }
         });
 
-        if (!winningQuote) {
-            throw new Error("No winning quote found to notify. The requisition might not be in the correct state.");
+
+        if (winningQuotes.length === 0) {
+            throw new Error("No winning quote in 'Pending Award' status found to notify. The requisition might be in an inconsistent state.");
         }
+        
+        // Notify all winning vendors (for split awards)
+        for (const winningQuote of winningQuotes) {
+            if (winningQuote.vendor && requisition) {
+                const finalDeadline = awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline;
+                const emailHtml = `
+                    <h1>Congratulations, ${winningQuote.vendor.name}!</h1>
+                    <p>You have been awarded a contract for requisition <strong>${requisition.title}</strong>.</p>
+                    <p>Please log in to the vendor portal to review the award details and respond.</p>
+                    ${finalDeadline ? `<p><strong>This award must be accepted by ${format(finalDeadline, 'PPpp')}.</strong></p>` : ''}
+                    <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
+                    <p>Thank you,</p>
+                    <p>Nib InternationalBank Procurement</p>
+                `;
 
-        // Update the main requisition status to Awarded
-        const updatedRequisition = await tx.purchaseRequisition.update({
-            where: { id: requisitionId },
-            data: {
-                status: 'Awarded', // Set the main status to Awarded
-                awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
+                await sendEmail({
+                    to: winningQuote.vendor.email,
+                    subject: `Contract Awarded: ${requisition.title}`,
+                    html: emailHtml
+                });
             }
-        });
-
-        if (winningQuote.vendor && requisition) {
-            const finalDeadline = awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline;
-            const emailHtml = `
-                <h1>Congratulations, ${winningQuote.vendor.name}!</h1>
-                <p>You have been awarded the contract for requisition <strong>${requisition.title}</strong>.</p>
-                <p>Please log in to the vendor portal to review the award and respond.</p>
-                ${finalDeadline ? `<p><strong>This award must be accepted by ${format(finalDeadline, 'PPpp')}.</strong></p>` : ''}
-                <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
-                <p>Thank you,</p>
-                <p>Nib InternationalBank Procurement</p>
-            `;
-
-            await sendEmail({
-                to: winningQuote.vendor.email,
-                subject: `Contract Awarded: ${requisition.title}`,
-                html: emailHtml
-            });
         }
         
         await tx.auditLog.create({
@@ -82,7 +88,7 @@ export async function POST(
                 action: 'NOTIFY_VENDOR',
                 entity: 'Requisition',
                 entityId: requisitionId,
-                details: `Sent award notification to vendor ${winningQuote.vendor.name} for requisition ${requisitionId}.`
+                details: `Sent award notification to winning vendor(s) for requisition ${requisitionId}.`
             }
         });
 
