@@ -440,5 +440,3 @@ export function RequisitionsTable() {
     </>
   );
 }
-
-    

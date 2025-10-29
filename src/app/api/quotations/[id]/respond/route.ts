@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -32,7 +31,7 @@ export async function POST(
           throw new Error('Quotation not found or not owned by this vendor');
         }
         
-        if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded') {
+        if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') {
             throw new Error('This quote is not currently in an awarded state.');
         }
         
@@ -135,4 +134,3 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-

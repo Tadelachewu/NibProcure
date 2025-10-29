@@ -2,7 +2,7 @@
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
-import { UserRole } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 
 /**
  * Finds the correct initial status and approver for a given value tier.
@@ -46,7 +46,7 @@ async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue
             'VP_Resources_and_Facilities': 'Pending_VP_Approval',
             'President': 'Pending_President_Approval',
         };
-        return statusMap[role] || `Pending_${role}`;
+        return statusMap[role] || `Pending_${role.replace(/ /g, '_')}`;
     }
     
     const nextStatus = getNextStatusFromRole(firstStep.role);

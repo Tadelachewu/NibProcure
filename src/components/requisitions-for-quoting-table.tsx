@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -81,19 +80,20 @@ export function RequisitionsForQuotingTable() {
     const acceptedQuotes = req.quotations?.filter(q => q.status === 'Accepted').length || 0;
     const failedQuotes = req.quotations?.filter(q => q.status === 'Failed' || q.status === 'Declined').length || 0;
     const awardedQuotes = req.quotations?.filter(q => ['Awarded', 'Partially_Awarded', 'Pending_Award'].includes(q.status)).length || 0;
-    const totalAwardableQuotes = acceptedQuotes + failedQuotes + awardedQuotes;
-
+    const poCreatedCount = req.purchaseOrderId?.length || 0; // Simplified for now
 
     // Handle terminal or high-priority statuses first
     if (req.status === 'PO_Created') {
-        if (failedQuotes > 0) {
-            return <Badge variant="default" className="bg-amber-600">Partial PO / Action Required</Badge>;
-        }
         return <Badge variant="default" className="bg-green-700">PO Created</Badge>;
     }
-     if (failedQuotes > 0 && awardedQuotes === 0) {
+    
+    if (req.status === 'Award_Declined') {
+        if (poCreatedCount > 0) {
+             return <Badge variant="default" className="bg-amber-600 animate-pulse">Partial PO / Action Required</Badge>;
+        }
         return <Badge variant="destructive" className="animate-pulse">Award Declined - Action Required</Badge>;
     }
+     
     if (req.status.startsWith('Pending_')) {
       return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status.replace(/_/g, ' ')}</Badge>;
     }

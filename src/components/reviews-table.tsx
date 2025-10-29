@@ -74,13 +74,10 @@ export function ReviewsTable() {
     if (!selectedRequisition || !user) return [];
     
     if (selectedRequisition.status.includes('Committee')) {
-        // For committee reviews, all members of that committee are potential attendees.
         const isCommitteeA = selectedRequisition.status.includes('Committee A');
-        const assignedMemberIds = isCommitteeA 
-            ? new Set(selectedRequisition.financialCommitteeMemberIds) 
-            : new Set(selectedRequisition.technicalCommitteeMemberIds);
-        
-        return allUsers.filter(u => assignedMemberIds.has(u.id));
+        // This logic is a bit of a guess, might need refinement based on actual business rules.
+        const committeeRoleName = isCommitteeA ? 'Committee_A_Member' : 'Committee_B_Member';
+        return allUsers.filter(u => u.role === committeeRoleName);
     }
     // For managerial roles, attendees are likely just the individual approver
     return [user];

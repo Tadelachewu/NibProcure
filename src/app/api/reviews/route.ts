@@ -46,6 +46,7 @@ export async function GET(request: Request) {
       userRole === 'VP_Resources_and_Facilities' || 
       userRole === 'President'
     ) {
+      console.log(`[Reviews API] Matched managerial role: ${userRole}. Searching for currentApproverId: ${userId}`);
       whereClause = { 
         currentApproverId: userId,
         status: {
@@ -53,12 +54,15 @@ export async function GET(request: Request) {
         }
       };
     } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
+       console.log(`[Reviews API] Matched admin/procurement role. Searching for all review statuses.`);
+       const allCommitteeStatuses = (await prisma.role.findMany({ where: { name: { startsWith: 'Committee_' } } }))
+          .map(r => r.name.replace(/_Member$/, ''))
+          .map(r => `Pending_${r}_Recommendation`);
+
        whereClause = { 
          status: { 
            in: [
-            'Pending_Committee_A_Recommendation',
-            'Pending_Committee_B_Recommendation',
-            'Pending_Committee_C_Recommendation',
+            ...allCommitteeStatuses,
             ...reviewStatuses
            ]
          }

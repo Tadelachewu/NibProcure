@@ -121,7 +121,7 @@ export function ApprovalsTable() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             id: selectedRequisition.id, 
-            status: actionType === 'approve' ? 'Approved' : 'Rejected', 
+            status: actionType === 'approve' ? 'PreApproved' : 'Rejected', 
             userId: user.id, 
             comment,
             rfqSenderId, // Pass the designated RFQ sender ID to the API

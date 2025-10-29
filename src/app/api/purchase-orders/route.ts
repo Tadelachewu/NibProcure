@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     const allAwardedQuotes = await prisma.quotation.findMany({
         where: {
             requisitionId: requisition.id,
-            status: { in: ['Awarded', 'Partially_Awarded'] }
+            status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
         }
     });
 
@@ -67,7 +67,8 @@ export async function POST(request: Request) {
             await prisma.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
-                purchaseOrderId: newPO.id, // This might need revisiting for multiple POs
+                // Do not link a single PO ID anymore as there can be multiple
+                // purchaseOrderId: newPO.id, 
                 status: 'PO_Created',
             }
         });

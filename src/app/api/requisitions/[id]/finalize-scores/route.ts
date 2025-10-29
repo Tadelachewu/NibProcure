@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -7,10 +6,9 @@ import { prisma } from '@/lib/prisma';
 import { User, UserRole } from '@/lib/types';
 
 function getNextStatusFromRole(role: string): string {
-    const committeeMatch = role.match(/Committee_(\w+)_Member/);
+    const committeeMatch = role.match(/Committee_([A-Z])_Member/);
     if (committeeMatch) {
         const committeeLetter = committeeMatch[1];
-        // Standardize the status format for ALL committees.
         return `Pending_Committee_${committeeLetter}_Recommendation`;
     }
     
@@ -21,7 +19,7 @@ function getNextStatusFromRole(role: string): string {
         'President': 'Pending_President_Approval',
     };
 
-    return statusMap[role] || `Pending_${role}`;
+    return statusMap[role] || `Pending_${role.replace(/ /g, '_')}`;
 }
 
 
