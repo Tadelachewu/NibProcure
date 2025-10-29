@@ -35,7 +35,7 @@ export async function POST(
         const winningQuote = await tx.quotation.findFirst({
             where: {
                 requisitionId: requisitionId,
-                status: 'Pending_Award'
+                status: 'Awarded'
             },
             include: {
                 vendor: true
@@ -45,12 +45,6 @@ export async function POST(
         if (!winningQuote) {
             throw new Error("No winning quote found to notify. The requisition might not be in the correct state.");
         }
-
-        // Update the winning quote to Awarded
-        await tx.quotation.update({
-            where: { id: winningQuote.id },
-            data: { status: 'Awarded' }
-        });
 
         // Update the main requisition status to Awarded
         const updatedRequisition = await tx.purchaseRequisition.update({
