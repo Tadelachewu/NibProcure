@@ -55,14 +55,23 @@ export async function POST(request: Request) {
         }
     });
     
-    // Update requisition with PO ID
-    await prisma.purchaseRequisition.update({
-        where: { id: requisitionId },
-        data: {
-            purchaseOrderId: newPO.id,
-            status: 'PO_Created',
+    // Check if all awards are accepted to update the main requisition status
+    const allAwardedQuotes = await prisma.quotation.findMany({
+        where: {
+            requisitionId: requisition.id,
+            status: { in: ['Awarded', 'Partially_Awarded'] }
         }
     });
+
+    if (allAwardedQuotes.length === 0) {
+            await prisma.purchaseRequisition.update({
+            where: { id: requisitionId },
+            data: {
+                purchaseOrderId: newPO.id, // This might need revisiting for multiple POs
+                status: 'PO_Created',
+            }
+        });
+    }
 
     await prisma.auditLog.create({
         data: {
