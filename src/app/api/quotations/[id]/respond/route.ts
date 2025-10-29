@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -108,26 +109,8 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Declined' }});
-
-            await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'Award_Declined' }
-            })
-
-            await tx.auditLog.create({
-                data: {
-                    timestamp: new Date(),
-                    user: { connect: { id: user.id } },
-                    action: 'REJECT_AWARD',
-                    entity: 'Quotation',
-                    entityId: quoteId,
-                    details: `Vendor declined award.`,
-                    transactionId: requisition.transactionId,
-                }
-            });
-            
-            return { message: 'Award declined. Procurement officer has been notified.' };
+            // The logic is now entirely handled by the award service
+            return await handleAwardRejection(tx, quote, requisition, user);
         }
         
         throw new Error('Invalid action.');
@@ -143,6 +126,4 @@ export async function POST(
     if (error instanceof Error) {
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
-  }
-}
+    

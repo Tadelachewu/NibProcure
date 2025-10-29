@@ -250,9 +250,4 @@ export const AwardCenterDialog = ({
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction onClick={handleConfirmAward}>Confirm</AlertDialogAction>
                         </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </DialogFooter>
-        </DialogContent>
-    )
-}
+                    </AlertDialog
