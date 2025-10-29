@@ -99,7 +99,8 @@ export default function VendorDashboardPage() {
 
                     if (vendorQuote && awardStatuses.includes(vendorQuote.status)) {
                         vendorAwards.push(req);
-                    } else if (req.status === 'Accepting_Quotes') {
+                    } else if (req.status === 'Accepting_Quotes' && !vendorQuote) {
+                        // Only show requisitions for quoting if the vendor has NOT already submitted a quote.
                         availableForQuoting.push(req);
                     }
                 });
@@ -246,7 +247,6 @@ export default function VendorDashboardPage() {
 
                                         return (
                                             <Card key={req.id} className={cn("flex flex-col hover:shadow-md transition-shadow relative", !isClickable && "opacity-60")}>
-                                                <VendorStatusBadge status={status} />
                                                 <CardHeader>
                                                     <CardTitle>{req.title}</CardTitle>
                                                     <CardDescription>From {req.department} Department</CardDescription>
@@ -269,7 +269,7 @@ export default function VendorDashboardPage() {
                                                 <CardFooter>
                                                     <Button asChild className="w-full" disabled={!isClickable}>
                                                         <Link href={`/vendor/requisitions/${req.id}`}>
-                                                            {status === 'Submitted' ? 'View Your Quote' : 'View & Quote'} <ArrowRight className="ml-2 h-4 w-4" />
+                                                            View & Quote <ArrowRight className="ml-2 h-4 w-4" />
                                                         </Link>
                                                     </Button>
                                                 </CardFooter>

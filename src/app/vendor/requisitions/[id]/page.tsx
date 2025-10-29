@@ -704,6 +704,8 @@ export default function VendorRequisitionPage() {
     const hasResponded = submittedQuote?.status === 'Accepted' || submittedQuote?.status === 'Declined';
     const hasSubmittedInvoice = submittedQuote?.status === 'Invoice_Submitted';
     const isResponseDeadlineExpired = requisition.awardResponseDeadline ? isPast(new Date(requisition.awardResponseDeadline)) : false;
+    const isStandby = submittedQuote?.status === 'Standby';
+
 
     const QuoteDisplayCard = ({ quote, itemsToShow }: { quote: Quotation, itemsToShow: QuoteItem[] }) => {
          const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
@@ -790,9 +792,9 @@ export default function VendorRequisitionPage() {
                      <CardFooter className="p-0 pt-4">
                         <Alert variant="default" className="border-blue-500/50">
                             <Info className="h-4 w-4 text-blue-500" />
-                            <AlertTitle>Quote Under Review</AlertTitle>
+                            <AlertTitle>{ isStandby ? "You are on Standby" : "Quote Under Review" }</AlertTitle>
                             <AlertDescription>
-                                {canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.'}
+                                { isStandby ? "Your quote is a backup option. You will be notified if the primary vendor declines." : (canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.')}
                             </AlertDescription>
                         </Alert>
                      </CardFooter>
