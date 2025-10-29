@@ -26,44 +26,45 @@ export async function GET(request: Request) {
 
     console.log(`[Reviews API] Fetching reviews for user ${userId} with role: ${userRole}`);
 
-    const reviewStatuses = [
+    const managerialRoles = [
+      'Manager_Procurement_Division', 
+      'Director_Supply_Chain_and_Property_Management', 
+      'VP_Resources_and_Facilities', 
+      'President'
+    ];
+    
+    const managerialStatuses = [
       'Pending_Managerial_Approval',
       'Pending_Director_Approval',
       'Pending_VP_Approval',
       'Pending_President_Approval'
     ];
     
-    const committeeMatch = userRole.match(/Committee_([A-Z])_Member/);
+    // Check if the user has a committee role (e.g., Committee_A_Member, Committee_C_Member)
+    const isCommitteeRole = userRole.startsWith('Committee_') && userRole.endsWith('_Member');
 
-    if (committeeMatch) {
-        const committeeLetter = committeeMatch[1];
-        const statusToFind = `Pending_Committee_${committeeLetter}_Recommendation`;
+    if (isCommitteeRole) {
+        // Dynamically construct the status based on the role.
+        // e.g., 'Committee_C_Member' -> 'Pending_Committee_C_Member'
+        const statusToFind = `Pending_${userRole}`;
         console.log(`[Reviews API] Matched committee role: ${userRole}. Searching for status: ${statusToFind}`);
         whereClause = { status: statusToFind };
-    } else if (
-      userRole === 'Manager_Procurement_Division' || 
-      userRole === 'Director_Supply_Chain_and_Property_Management' || 
-      userRole === 'VP_Resources_and_Facilities' || 
-      userRole === 'President'
-    ) {
+    } else if (managerialRoles.includes(userRole)) {
       console.log(`[Reviews API] Matched managerial role: ${userRole}. Searching for currentApproverId: ${userId}`);
       whereClause = { 
         currentApproverId: userId,
-        status: {
-          in: reviewStatuses
-        }
+        status: { in: managerialStatuses }
       };
     } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
        console.log(`[Reviews API] Matched admin/procurement role. Searching for all review statuses.`);
-       const allCommitteeStatuses = (await prisma.role.findMany({ where: { name: { startsWith: 'Committee_' } } }))
-          .map(r => r.name.replace(/_Member$/, ''))
-          .map(r => `Pending_${r}_Recommendation`);
+       const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_' } } });
+       const allCommitteeStatuses = allCommitteeRoles.map(r => `Pending_${r.name}`);
 
        whereClause = { 
          status: { 
            in: [
             ...allCommitteeStatuses,
-            ...reviewStatuses
+            ...managerialStatuses
            ]
          }
       };
