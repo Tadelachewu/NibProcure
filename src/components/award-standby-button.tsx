@@ -14,6 +14,7 @@ interface AwardStandbyButtonProps {
     quotations: Quotation[];
     isFinalizing: boolean;
     onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
+    disabled?: boolean;
 }
 
 export function AwardStandbyButton({
@@ -21,34 +22,38 @@ export function AwardStandbyButton({
     quotations,
     isFinalizing,
     onFinalize,
+    disabled = false,
 }: AwardStandbyButtonProps) {
     const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
 
     // This button should only be visible if there are actual standby vendors to promote.
-    // The backend logic now handles the "no standby" case automatically.
     const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
+    const isRelevantStatus = requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete';
 
-    if (requisition.status !== 'Award_Declined' || !hasStandbyVendors) {
+    if (!isRelevantStatus || !hasStandbyVendors) {
         return null;
     }
 
     return (
         <Card className="mt-6 border-amber-500">
              <CardHeader>
-                <CardTitle>Action Required: Award Declined</CardTitle>
+                <CardTitle>Action Required: Ready to Award</CardTitle>
                 <CardDescription>
-                    A vendor has declined their award. You may now promote a standby vendor by re-opening the Award Center.
+                    {requisition.status === 'Award_Declined'
+                        ? 'A vendor has declined their award. You may now promote a standby vendor by re-opening the Award Center.'
+                        : 'All scores are in. You may now finalize the scores and send the award for final approval.'
+                    }
                 </CardDescription>
             </CardHeader>
             <CardFooter className="pt-0">
                 <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
                     <DialogTrigger asChild>
-                        <Button>
+                        <Button disabled={isFinalizing || disabled}>
                             {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Award Standby
+                             {requisition.status === 'Award_Declined' ? 'Award Standby' : 'Finalize & Award'}
                         </Button>
                     </DialogTrigger>
-                    <AwardCenterDialog 
+                    <AwardCenterDialog
                         requisition={requisition}
                         quotations={quotations}
                         onFinalize={onFinalize}

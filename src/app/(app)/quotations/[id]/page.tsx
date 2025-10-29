@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, AlertTriangle } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -2541,6 +2541,7 @@ export default function QuotationDetailsPage() {
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
+  const awardProcessStarted = isAwarded || requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded';
 
 
   return (
@@ -2575,7 +2576,7 @@ export default function QuotationDetailsPage() {
         {noBidsAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
             <Card className="border-amber-500">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> RFQ Closed: No Bids Received</CardTitle>
+                    <CardTitle className="flex items-center gap-2 text-amber-600"><AlertCircle/> RFQ Closed: No Bids Received</CardTitle>
                     <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardDescription>
                 </CardHeader>
                 <CardFooter className="gap-2">
@@ -2746,8 +2747,7 @@ export default function QuotationDetailsPage() {
         )}
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
-            ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete')
+            ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0)
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2759,12 +2759,13 @@ export default function QuotationDetailsPage() {
             />
         )}
         
-        {(requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete') && (role === 'Procurement_Officer' || role === 'Admin') && (
+        {(role === 'Procurement_Officer' || role === 'Admin') && (
              <AwardStandbyButton 
                 requisition={requisition}
                 quotations={quotations}
                 onFinalize={handleFinalizeScores}
                 isFinalizing={isFinalizing}
+                disabled={awardProcessStarted}
             />
         )}
 
@@ -2777,9 +2778,9 @@ export default function QuotationDetailsPage() {
                 <CardFooter>
                      <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
                         <DialogTrigger asChild>
-                            <Button disabled={isNotifying}>
+                            <Button disabled={isNotifying || requisition.status === 'Awarded'}>
                                 {isNotifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Send Award Notification
+                                {requisition.status === 'Awarded' ? 'Notification Sent' : 'Send Award Notification'}
                             </Button>
                         </DialogTrigger>
                         <NotifyVendorDialog
@@ -2867,7 +2868,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     return (
          <Card className="border-amber-500">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> Quorum Not Met</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-amber-600"><AlertCircle/> Quorum Not Met</CardTitle>
                 <CardDescription>
                     The submission deadline has passed, but not enough quotes were submitted. You can re-open the RFQ to all other verified vendors.
                 </CardDescription>
