@@ -4,27 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User, UserRole } from '@/lib/types';
-
-function getNextStatusFromRole(role: string): string {
-    // This regex will match "Committee_A_Member", "Committee_C_Member", etc.
-    const committeeMatch = role.match(/^Committee_(\w+)_Member$/);
-    if (committeeMatch) {
-        // Dynamically create the status based on the role.
-        // e.g., 'Committee_C_Member' -> 'Pending_Committee_C_Member'
-        return `Pending_${role}`;
-    }
-    
-    // Fallback for non-committee roles
-    const statusMap: { [key: string]: string } = {
-        'Manager_Procurement_Division': 'Pending_Managerial_Approval',
-        'Director_Supply_Chain_and_Property_Management': 'Pending_Director_Approval',
-        'VP_Resources_and_Facilities': 'Pending_VP_Approval',
-        'President': 'Pending_President_Approval',
-    };
-
-    return statusMap[role] || `Pending_${role.replace(/ /g, '_')}`;
-}
-
+import { getNextApprovalStep } from '@/services/award-service';
 
 export async function POST(
   request: Request,
@@ -53,19 +33,13 @@ export async function POST(
                 throw new Error("No quotes found to process for this requisition.");
             }
             
-            const approvalMatrix = await tx.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
-            const relevantTier = approvalMatrix.find(tier => totalAwardValue >= tier.min && (tier.max === null || totalAwardValue <= tier.max));
-            console.log(`[FINALIZE-SCORES] Matched Tier: ${relevantTier?.name || 'NONE'}`);
-
-            if (!relevantTier) {
-                throw new Error(`No approval tier found for an award value of ${totalAwardValue.toLocaleString()} ETB. Please configure the Approval Matrix.`);
-            }
+            const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
 
             const awardedVendorIds = Object.keys(awards);
             const winnerQuotes = allQuotes.filter(q => awardedVendorIds.includes(q.vendorId));
 
             // Create an exclusion list of vendors who have already declined.
-            const declinedVendorIds = new Set(allQuotes.filter(q => q.status === 'Declined').map(q => q.vendorId));
+            const declinedVendorIds = new Set(allQuotes.filter(q => q.status === 'Declined' || q.status === 'Failed').map(q => q.vendorId));
 
             // The pool of "other" quotes now EXCLUDES winners and any previously declined vendors.
             const otherQuotes = allQuotes.filter(q => !awardedVendorIds.includes(q.vendorId) && !declinedVendorIds.has(q.vendorId));
@@ -92,32 +66,6 @@ export async function POST(
             const rejectedQuoteIds = otherQuotes.slice(2).map(q => q.id);
             if (rejectedQuoteIds.length > 0) {
                 await tx.quotation.updateMany({ where: { id: { in: rejectedQuoteIds } }, data: { status: 'Rejected', rank: null } });
-            }
-
-            let nextStatus: string;
-            let nextApproverId: string | null = null;
-            let auditDetails: string;
-
-            if (relevantTier.steps.length > 0) {
-                const firstStep = relevantTier.steps[0];
-                console.log(`[FINALIZE-SCORES] First approval step role: ${firstStep.role}`);
-                nextStatus = getNextStatusFromRole(firstStep.role);
-                console.log(`[FINALIZE-SCORES] Generated initial status: ${nextStatus}`);
-
-                if (!firstStep.role.includes('Committee')) {
-                    const approverUser = await tx.user.findFirst({ where: { role: firstStep.role }});
-                    if (!approverUser) {
-                        throw new Error(`Could not find a user for the role: ${firstStep.role.replace(/_/g, ' ')}`);
-                    }
-                    nextApproverId = approverUser.id;
-                }
-                console.log(`[FINALIZE-SCORES] Next Approver ID: ${nextApproverId}`);
-                auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.replace(/_/g, ' ')} for approval.`;
-            } else {
-                // If there are no steps, it's auto-approved. We can move straight to PostApproved
-                nextStatus = 'PostApproved';
-                 console.log(`[FINALIZE-SCORES] No approval steps for this tier. Setting status to: ${nextStatus}`);
-                auditDetails = `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier, which has no approval steps. Approved for vendor notification.`;
             }
             
             const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));

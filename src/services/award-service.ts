@@ -34,18 +34,8 @@ async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue
 
     const firstStep = relevantTier.steps[0];
     const getNextStatusFromRole = (role: string): string => {
-        const committeeMatch = role.match(/Committee_(\w+)_Member/);
-        if (committeeMatch) {
-            return `Pending_${role}`;
-        }
-
-        const statusMap: { [key: string]: string } = {
-            'Manager_Procurement_Division': 'Pending_Managerial_Approval',
-            'Director_Supply_Chain_and_Property_Management': 'Pending_Director_Approval',
-            'VP_Resources_and_Facilities': 'Pending_VP_Approval',
-            'President': 'Pending_President_Approval',
-        };
-        return statusMap[role] || `Pending_${role.replace(/ /g, '_')}`;
+        // This function now standardly creates a 'Pending' status from a role name.
+        return `Pending_${role.replace(/ /g, '_')}`;
     }
     
     const nextStatus = getNextStatusFromRole(firstStep.role);
@@ -85,18 +75,49 @@ export async function handleAwardRejection(
     declinedItemIds: string[] = []
 ) {
     // 1. Mark the current quote as Declined
-    await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
+    await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Failed' } }); // Use 'Failed' to show it went through the process and failed
     await tx.auditLog.create({
         data: {
             timestamp: new Date(),
             user: { connect: { id: actor.id } },
-            action: 'REJECT_AWARD',
+            action: 'DECLINE_AWARD',
             entity: 'Quotation',
             entityId: quote.id,
             details: `Vendor declined award for items: ${declinedItemIds.join(', ') || 'all'}.`,
             transactionId: requisition.transactionId,
         }
     });
+    
+    // Check if other vendors have accepted or are pending award for other items
+    const otherActiveAwards = await tx.quotation.count({
+        where: {
+            requisitionId: requisition.id,
+            id: { not: quote.id },
+            status: { in: ['Accepted', 'Awarded', 'Partially_Awarded', 'Pending_Award'] }
+        }
+    });
+
+    if (otherActiveAwards > 0) {
+        // If other parts of the award are active, isolate this failure.
+        // Just flag the main requisition to show action is needed.
+        await tx.purchaseRequisition.update({
+            where: { id: requisition.id },
+            data: { status: 'Award_Declined' }
+        });
+         await tx.auditLog.create({
+            data: {
+                timestamp: new Date(),
+                user: { connect: { id: actor.id } },
+                action: 'AWARD_PARTIALLY_DECLINED',
+                entity: 'Requisition',
+                entityId: requisition.id,
+                details: `A portion of the award was declined by ${quote.vendorName}. Other parts of the award remain active. Manual promotion of standby is required for the failed items.`,
+                transactionId: requisition.transactionId,
+            }
+        });
+        return { message: 'A part of the award has been declined. Manual action is required.' };
+    }
+
 
     const nextStandby = await tx.quotation.findFirst({
         where: { requisitionId: requisition.id, status: 'Standby' },
@@ -124,7 +145,7 @@ export async function handleAwardRejection(
 
         return { message: 'Award has been declined. A standby vendor is available for promotion.' };
     } else {
-        // 2b. If NO standby exists, reset the process.
+        // 2b. If NO standby exists and no other awards are active, reset the whole process.
         await tx.quotation.updateMany({
             where: { requisitionId: requisition.id },
             data: { status: 'Submitted', rank: null }
@@ -177,35 +198,41 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         throw new Error('No standby vendor found to promote.');
     }
     
-    // Set the requisition to PostApproved, which makes it ready for the PO to send the notification
+    // Get the next approval step based on the standby vendor's quote price.
+    const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, nextStandby.totalPrice);
+    
+    // Update the requisition to start the new approval workflow.
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
         data: {
-            status: 'PostApproved',
+            status: nextStatus as any,
             totalPrice: nextStandby.totalPrice, // Update price to the new winner's
             awardedQuoteItemIds: nextStandby.items.map(item => item.id), // Update awarded items
-            currentApproverId: null, // Clear current approver as it's now with the PO
+            currentApproverId: nextApproverId, // Set the first approver in the new chain
         }
     });
     
-    // Update the promoted quote's status to 'Awarded'. It's now the official winner, pending notification.
+    // Update the promoted quote's status to 'Pending_Award'.
+    // It is NOT 'Awarded' yet. It will become 'Awarded' only after passing the full approval chain.
     await tx.quotation.update({
         where: { id: nextStandby.id },
-        data: { status: 'Awarded' }
+        data: { 
+            status: 'Pending_Award',
+            rank: 1 // They are now the primary candidate.
+        }
     });
     
-     // The old 'Declined' quote should remain as is. Other 'Standby' quotes also remain.
-
     await tx.auditLog.create({
         data: {
             user: { connect: { id: actor.id } },
             action: 'PROMOTE_STANDBY_AWARD',
             entity: 'Requisition',
             entityId: requisitionId,
-            details: `Promoted standby vendor ${nextStandby.vendorName}. Requisition is now ready for vendor notification.`,
+            details: `Promoted standby vendor ${nextStandby.vendorName}. ${auditDetails}`,
             transactionId: requisitionId,
         }
     });
 
-    return { message: `Promoted ${nextStandby.vendorName}. The requisition is now ready for vendor notification.` };
+    return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
 }
+
