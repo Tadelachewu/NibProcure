@@ -113,37 +113,25 @@ export async function handleAwardRejection(
     });
 
     if (nextQuote) {
-        // 3a. If a standby exists, promote them to 'Pending Award' and re-trigger approval workflow
-        const newTotalAwardValue = nextQuote.items.reduce((acc: number, item: any) => acc + (item.unitPrice * item.quantity), 0);
-        
-        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalAwardValue);
-
+        // 3a. If a standby exists, set the requisition to Award_Declined to allow manual re-award
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
-            data: {
-                totalPrice: newTotalAwardValue,
-                status: nextStatus as any,
-                currentApproverId: nextApproverId,
-                awardedQuoteItemIds: nextQuote.items.map((i: any) => i.id) // Pre-emptively set the new item IDs
-            }
+            data: { status: 'Award_Declined' }
         });
-        
-        // Update ranks and statuses for the promotion
-        await tx.quotation.update({ where: { id: nextQuote.id }, data: { rank: 1, status: 'Pending_Award' } });
         
         await tx.auditLog.create({
             data: {
                 timestamp: new Date(),
                 user: { connect: { id: actor.id } },
-                action: 'PROMOTE_STANDBY',
-                entity: 'Quotation',
-                entityId: nextQuote.id,
-                details: `Promoted standby vendor ${nextQuote.vendorName} to winning position. Re-initiating approval workflow. ${auditDetails}`,
+                action: 'AWAIT_STANDBY_PROMOTION',
+                entity: 'Requisition',
+                entityId: requisition.id,
+                details: `Award was declined. Standby vendor ${nextQuote.vendorName} is available for promotion.`,
                 transactionId: requisition.transactionId,
             }
         });
 
-        return { message: `Award declined. Next vendor (${nextQuote.vendorName}) has been promoted and sent for approval.` };
+        return { message: `Award declined. Standby vendor (${nextQuote.vendorName}) is ready for promotion.` };
 
     } else {
         // 3b. If no standby exists, reset the entire RFQ process for this requisition

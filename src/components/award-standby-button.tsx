@@ -1,7 +1,8 @@
+
 "use client";
 
 import React, { useState } from 'react';
-import { Card, CardFooter } from './ui/card';
+import { Card, CardFooter, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Loader2 } from 'lucide-react';
 import { Dialog, DialogTrigger } from './ui/dialog';
@@ -25,7 +26,13 @@ export function AwardStandbyButton({
 
     return (
         <Card className="mt-6 border-amber-500">
-            <CardFooter className="pt-6">
+             <CardHeader>
+                <CardTitle>Action Required: Award Declined</CardTitle>
+                <CardDescription>
+                    A vendor has declined their award. You may now promote a standby vendor.
+                </CardDescription>
+            </CardHeader>
+            <CardFooter className="pt-0">
                 <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
                     <DialogTrigger asChild>
                         <Button>
