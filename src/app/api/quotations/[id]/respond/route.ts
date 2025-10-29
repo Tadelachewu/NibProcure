@@ -80,7 +80,7 @@ export async function POST(
                 where: {
                     requisitionId: requisition.id,
                     id: { not: quote.id },
-                    status: { in: ['Awarded', 'Partially_Awarded'] }
+                    status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
                 }
             });
 
@@ -108,8 +108,8 @@ export async function POST(
 
         } else if (action === 'reject') {
             const declinedItemIds = quote.items
-                .filter(item => requisition.awardedQuoteItemIds.includes(item.id))
-                .map(item => item.requisitionItemId);
+                .filter((item: any) => requisition.awardedQuoteItemIds.includes(item.id))
+                .map((item: any) => item.requisitionItemId);
                 
             return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds);
         }
@@ -125,6 +125,10 @@ export async function POST(
   } catch (error) {
     console.error('Failed to respond to award:', error);
     if (error instanceof Error) {
+      if ((error as any).code === 'P2003') {
+        // More specific error for foreign key violation
+        return NextResponse.json({ error: 'Failed to process award rejection due to a data conflict. Please try again or contact support.', details: (error as any).meta.field_name }, { status: 500 });
+      }
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });

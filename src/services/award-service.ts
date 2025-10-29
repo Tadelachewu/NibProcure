@@ -1,3 +1,4 @@
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -64,7 +65,7 @@ async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue
 
 
 /**
- * Handles the logic when a vendor rejects an award, promoting the next vendor and re-evaluating the approval workflow.
+ * Handles the logic when a vendor rejects an award, promoting the next vendor or resetting the process.
  * @param tx - Prisma transaction client.
  * @param quote - The quote that was rejected.
  * @param requisition - The associated requisition.
@@ -77,7 +78,7 @@ export async function handleAwardRejection(
     quote: any, 
     requisition: any,
     actor: any,
-    declinedItemIds: string[] = [] // Default to empty array if not provided
+    declinedItemIds: string[] = []
 ) {
     // 1. Mark the current quote as Declined
     await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
@@ -132,31 +133,64 @@ export async function handleAwardRejection(
         });
         return { message: 'Award declined. A standby vendor has been promoted and is ready for notification.' };
     } else {
-        // 4. If NO standby exists, reset the entire RFQ process for this requisition.
+        // 4. If NO standby exists, check if other parts of the award are already accepted.
+        const acceptedPOsCount = await tx.purchaseOrder.count({
+            where: {
+                requisitionId: requisition.id,
+                vendorId: { not: quote.vendorId } // Exclude POs from the declining vendor
+            }
+        });
+
+        // If other vendors have already accepted their part of the award, we should NOT reset the whole thing.
+        if (acceptedPOsCount > 0) {
+             await tx.quotation.updateMany({
+                where: {
+                    id: quote.id
+                },
+                data: { status: 'Failed' } // Mark as failed instead of resetting
+            });
+             await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: { status: 'Award_Declined' } // Set a clear status for the PO to act on
+            });
+            await tx.auditLog.create({
+                data: {
+                    timestamp: new Date(),
+                    user: { connect: { id: actor.id } },
+                    action: 'PARTIAL_AWARD_FAILURE',
+                    entity: 'Requisition',
+                    entityId: requisition.id,
+                    details: `Vendor ${quote.vendorName} declined and no standby was available. Other parts of this requisition have been awarded. Manual action is required for the unawarded items.`,
+                    transactionId: requisition.transactionId,
+                }
+            });
+            return { message: 'Award declined. No more standby vendors for this item. Other awards remain active.' };
+        }
+
+        // --- FULL RESET LOGIC (only if no other part of the award is active) ---
         const quotationIds = (await tx.quotation.findMany({
             where: { requisitionId: requisition.id },
             select: { id: true }
         })).map(q => q.id);
 
-        const scoreSetIds = (await tx.committeeScoreSet.findMany({
-            where: { quotationId: { in: quotationIds } },
-            select: { id: true }
-        })).map(s => s.id);
-        
-        const itemScoreIds = (await tx.itemScore.findMany({
-            where: { scoreSetId: { in: scoreSetIds } },
-            select: { id: true }
-        })).map(i => i.id);
+        if (quotationIds.length > 0) {
+            const scoreSetIds = (await tx.committeeScoreSet.findMany({
+                where: { quotationId: { in: quotationIds } },
+                select: { id: true }
+            })).map(s => s.id);
+            
+            if (scoreSetIds.length > 0) {
+                const itemScoreIds = (await tx.itemScore.findMany({
+                    where: { scoreSetId: { in: scoreSetIds } },
+                    select: { id: true }
+                })).map(i => i.id);
 
-        // Delete in correct order to avoid constraint violations
-        if (itemScoreIds.length > 0) {
-            await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
-        }
-        if (scoreSetIds.length > 0) {
-            await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
-        }
-        if (scoreSetIds.length > 0) {
-            await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
+                if (itemScoreIds.length > 0) {
+                    await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
+                }
+                await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
+            }
+             await tx.committeeScoreSet.deleteMany({ where: { quotationId: { in: quotationIds } } });
         }
         if (quotationIds.length > 0) {
             await tx.quotation.deleteMany({ where: { id: { in: quotationIds } } });
@@ -219,7 +253,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
     const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, nextStandby.totalPrice);
 
-    // Instead of directly awarding, set to Pending_Award and start the review process.
+    // Update the promoted quote's status to Pending_Award
     await tx.quotation.update({
         where: { id: nextStandby.id },
         data: { status: 'Pending_Award' }
