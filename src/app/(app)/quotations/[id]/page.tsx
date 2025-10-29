@@ -456,7 +456,7 @@ type CommitteeFormValues = z.infer<typeof committeeFormSchema>;
 
 const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, onOpenChange, isAuthorized }: { requisition: PurchaseRequisition; onCommitteeUpdated: () => void; open: boolean; onOpenChange: (open: boolean) => void; isAuthorized: boolean; }) => {
     const { user, allUsers } = useAuth();
-    const { toast } } from '@/hooks/use-toast';
+    const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>(
         requisition.scoringDeadline ? new Date(requisition.scoringDeadline) : undefined
@@ -2211,7 +2211,7 @@ const NotifyVendorDialog = ({
                 </div>
                 <DialogFooter>
                     <Button variant="ghost" onClick={onClose}>Cancel</Button>
-                    <Button onClick={() => onConfirm(finalDeadline)}>Confirm & Notify</Button>
+                    <Button onClick={() => onConfirm(finalDeadline)}>Confirm &amp; Notify</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -2747,7 +2747,7 @@ export default function QuotationDetailsPage() {
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' && requisition.status !== 'Award_Declined' && requisition.status !== 'Scoring_Complete'
+            (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete')
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2909,5 +2909,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
 
 
+
+    
 
     
