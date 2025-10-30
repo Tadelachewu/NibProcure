@@ -117,7 +117,7 @@ export async function POST(
             if (!quote || quote.vendorId !== user.vendorId) throw new Error('Quotation not found or not owned by this vendor');
             if (!quote.requisition) throw new Error('Associated requisition not found');
 
-            return await handleAwardRejection(tx, quote, quote.requisition, user);
+            return await handleAwardRejection(tx as PrismaClient, quote, quote.requisition, user);
         }, {
           maxWait: 15000,
           timeout: 30000,
@@ -147,3 +147,5 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
