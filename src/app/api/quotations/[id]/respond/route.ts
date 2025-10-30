@@ -21,31 +21,23 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
-    const transactionResult = await prisma.$transaction(async (tx) => {
-        const quote = await tx.quotation.findUnique({ 
-            where: { id: quoteId },
-            include: { items: true, requisition: true }
-        });
-
-        if (!quote || quote.vendorId !== user.vendorId) {
-          throw new Error('Quotation not found or not owned by this vendor');
-        }
-        
-        if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') {
-            throw new Error('This quote is not currently in an awarded state.');
-        }
-        
-        const requisition = quote.requisition;
-        if (!requisition) {
-           throw new Error('Associated requisition not found');
-        }
-
-        if (action === 'accept') {
-            await tx.quotation.update({
+    if (action === 'accept') {
+        let newPO;
+        // Transaction 1: Handle the PO Creation
+        await prisma.$transaction(async (tx) => {
+            const quote = await tx.quotation.findUnique({ 
                 where: { id: quoteId },
-                data: { status: 'Accepted' }
+                include: { requisition: true, items: true }
             });
+
+            if (!quote || quote.vendorId !== user.vendorId) throw new Error('Quotation not found or not owned by this vendor');
+            if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') throw new Error('This quote is not currently in an awarded state.');
             
+            const requisition = quote.requisition;
+            if (!requisition) throw new Error('Associated requisition not found');
+            
+            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Accepted' } });
+
             const awardedItemsForThisVendor = quote.items.filter((item: any) => 
                 requisition.awardedQuoteItemIds.includes(item.id)
             );
@@ -53,7 +45,7 @@ export async function POST(
             const itemsForPO = awardedItemsForThisVendor.length > 0 ? awardedItemsForThisVendor : quote.items;
             const totalPriceForThisPO = itemsForPO.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
 
-            const newPO = await tx.purchaseOrder.create({
+            newPO = await tx.purchaseOrder.create({
                 data: {
                     transactionId: requisition.transactionId,
                     requisition: { connect: { id: requisition.id } },
@@ -74,23 +66,6 @@ export async function POST(
                 }
             });
 
-            // Check if there are any OTHER quotes still pending an award decision.
-            const otherPendingAwards = await tx.quotation.count({
-                where: {
-                    requisitionId: requisition.id,
-                    id: { not: quote.id }, // Exclude the current quote
-                    status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
-                }
-            });
-
-            // Only update the requisition to PO_Created if this acceptance resolves the LAST pending part of the award.
-            if (otherPendingAwards === 0 && requisition.status !== 'Award_Partially_Declined') {
-                 await tx.purchaseRequisition.update({
-                    where: { id: requisition.id },
-                    data: { status: 'PO_Created' }
-                });
-            }
-            
             await tx.auditLog.create({
                 data: {
                     timestamp: new Date(),
@@ -102,24 +77,54 @@ export async function POST(
                     transactionId: requisition.transactionId,
                 }
             });
-            
-            return { message: 'Award accepted. PO has been generated.' };
+        });
 
-        } else if (action === 'reject') {
+        // Step 2: After the first transaction succeeds, check and update the parent requisition status
+        const quote = await prisma.quotation.findUnique({ where: { id: quoteId }, select: { requisitionId: true }});
+        if (quote?.requisitionId) {
+            const otherPendingAwards = await prisma.quotation.count({
+                where: {
+                    requisitionId: quote.requisitionId,
+                    status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
+                }
+            });
+
+            // If this acceptance was the last pending one, update the requisition.
+            if (otherPendingAwards === 0) {
+                 await prisma.purchaseRequisition.update({
+                    where: { id: quote.requisitionId },
+                    data: { status: 'PO_Created' }
+                });
+            }
+        }
+        
+        return NextResponse.json({ message: 'Award accepted. PO has been generated.' });
+        
+    } else if (action === 'reject') {
+        const transactionResult = await prisma.$transaction(async (tx) => {
+             const quote = await tx.quotation.findUnique({ 
+                where: { id: quoteId },
+                include: { items: true, requisition: true }
+            });
+            if (!quote || quote.vendorId !== user.vendorId) throw new Error('Quotation not found or not owned by this vendor');
+            if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') throw new Error('This quote is not currently in an awarded state.');
+            const requisition = quote.requisition;
+            if (!requisition) throw new Error('Associated requisition not found');
+
             const declinedItemIds = quote.items
                 .filter((item: any) => requisition.awardedQuoteItemIds.includes(item.id))
                 .map((item: any) => item.requisitionItemId);
                 
             return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds);
-        }
-        
+        }, {
+          maxWait: 15000,
+          timeout: 30000,
+        });
+
+        return NextResponse.json(transactionResult);
+    } else {
         throw new Error('Invalid action.');
-    }, {
-      maxWait: 15000,
-      timeout: 30000,
-    });
-    
-    return NextResponse.json(transactionResult);
+    }
 
   } catch (error) {
     console.error('Failed to respond to award:', error);
