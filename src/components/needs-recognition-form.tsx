@@ -162,11 +162,11 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
 
   useEffect(() => {
     // If user data loads after form initialization, update the fields
-    if (user) {
+    if (user && !isEditMode) {
         form.setValue('department', user.department || '');
         form.setValue('requesterId', user.id || '');
     }
-  }, [user, form]);
+  }, [user, form, isEditMode]);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -683,28 +683,30 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save as Draft
                 </Button>
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button type="button" disabled={loading}>
-                             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                            Submit for Approval
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Are you ready to submit?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This will submit the requisition to your department head for approval. You will not be able to edit it after submission unless it is rejected.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleFormSubmit}>
-                                Yes, Submit for Approval
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
+                {isEditMode && (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button type="button" disabled={loading}>
+                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                                Submit for Approval
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Are you ready to submit?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will submit the requisition to your department head for approval. You will not be able to edit it after submission unless it is rejected.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleFormSubmit}>
+                                    Yes, Submit for Approval
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
             </div>
           </form>
         </Form>
@@ -746,5 +748,3 @@ function QuestionOptions({ index }: { index: number }) {
     </div>
   );
 }
-
-    
