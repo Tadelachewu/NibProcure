@@ -57,38 +57,17 @@ export function ReviewsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, token, allUsers } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
   const [justification, setJustification] = useState('');
-  const [attendees, setAttendees] = useState<string[]>([]);
   const [isActionDialogOpen, setActionDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
-
-  const potentialAttendees = useMemo(() => {
-    if (!selectedRequisition || !user) return [];
-    
-    if (selectedRequisition.status.includes('Committee')) {
-        const isCommitteeA = selectedRequisition.status.includes('Committee A');
-        // This logic is a bit of a guess, might need refinement based on actual business rules.
-        const committeeRoleName = isCommitteeA ? 'Committee_A_Member' : 'Committee_B_Member';
-        return allUsers.filter(u => u.role === committeeRoleName);
-    }
-    // For managerial roles, attendees are likely just the individual approver
-    return [user];
-  }, [selectedRequisition, allUsers, user]);
-
-  useEffect(() => {
-    if(selectedRequisition && user) {
-        setAttendees(potentialAttendees.map(u => u.id));
-    }
-  }, [selectedRequisition, user, potentialAttendees]);
-
   const fetchRequisitions = async () => {
     if (!user || !token) {
       setLoading(false);
@@ -143,7 +122,7 @@ export function ReviewsTable() {
     const minute = {
         decisionBody: selectedRequisition.status.replace(/_/g, ' '),
         justification,
-        attendeeIds: attendees,
+        attendeeIds: [user.id], // Attendee is always the current user making the decision
     }
 
     try {
@@ -176,7 +155,6 @@ export function ReviewsTable() {
         setJustification('');
         setSelectedRequisition(null);
         setActionType(null);
-        setAttendees([]);
     }
   }
 
@@ -196,7 +174,7 @@ export function ReviewsTable() {
       <CardHeader>
         <CardTitle>Award Recommendations for Review</CardTitle>
         <CardDescription>
-          Review and act on award recommendations that require your committee's approval.
+          Review and act on award recommendations that require your approval.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -277,13 +255,13 @@ export function ReviewsTable() {
         )}
       </CardContent>
        <Dialog open={isActionDialogOpen} onOpenChange={setActionDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>
               Record Minute for {actionType === 'approve' ? 'Approval' : 'Rejection'}
             </DialogTitle>
             <DialogDescription>
-                Record the official minute for the decision on the award for {selectedRequisition?.id}. This is a formal record for auditing purposes.
+                Provide a justification for your decision on the award for {selectedRequisition?.id}. This is a formal record for auditing purposes.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
@@ -293,28 +271,9 @@ export function ReviewsTable() {
                 id="justification" 
                 value={justification}
                 onChange={(e) => setJustification(e.target.value)}
-                placeholder="Provide a detailed rationale for the committee's decision..."
+                placeholder="Provide a detailed rationale for the decision..."
                 rows={6}
               />
-            </div>
-            <div className="grid gap-2">
-                <Label>Attendees</Label>
-                <ScrollArea className="h-40 w-full rounded-md border p-2">
-                    <div className="space-y-2">
-                    {potentialAttendees.map(attendee => (
-                        <div key={attendee.id} className="flex items-center space-x-2">
-                            <Checkbox 
-                                id={`attendee-${attendee.id}`} 
-                                checked={attendees.includes(attendee.id)}
-                                onCheckedChange={(checked) => {
-                                    setAttendees(prev => checked ? [...prev, attendee.id] : prev.filter(id => id !== attendee.id))
-                                }}
-                            />
-                            <Label htmlFor={`attendee-${attendee.id}`} className="font-normal">{attendee.name}</Label>
-                        </div>
-                    ))}
-                    </div>
-                </ScrollArea>
             </div>
           </div>
           <DialogFooter>
