@@ -46,13 +46,15 @@ export async function POST(
                 data: { status: 'Accepted' }
             });
             
-            const awardedQuoteItems = quote.items.filter(item => 
+            // This logic correctly handles split awards by only including items that were actually awarded to this vendor.
+            // The `awardedQuoteItemIds` on the requisition is the source of truth for what was awarded.
+            const awardedItemsForThisVendor = quote.items.filter((item: any) => 
                 requisition.awardedQuoteItemIds.includes(item.id)
             );
 
-            const thisVendorAwardedItems = awardedQuoteItems.length > 0 ? awardedQuoteItems : quote.items;
-
-            const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
+            // If the awardedQuoteItemIds is empty (which happens in a single-vendor award), fall back to all items in the quote.
+            const itemsForPO = awardedItemsForThisVendor.length > 0 ? awardedItemsForThisVendor : quote.items;
+            const totalPriceForThisPO = itemsForPO.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
 
             const newPO = await tx.purchaseOrder.create({
                 data: {
@@ -61,7 +63,7 @@ export async function POST(
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
                     items: {
-                        create: thisVendorAwardedItems.map((item: any) => ({
+                        create: itemsForPO.map((item: any) => ({
                             requisitionItemId: item.requisitionItemId,
                             name: item.name,
                             quantity: item.quantity,
@@ -75,7 +77,7 @@ export async function POST(
                 }
             });
 
-            // After accepting, check if any other awards are still pending.
+            // After accepting, check if any other awards are still pending for this requisition.
             const otherPendingAwards = await tx.quotation.count({
                 where: {
                     requisitionId: requisition.id,
@@ -84,7 +86,7 @@ export async function POST(
                 }
             });
 
-            // If there are no more pending awards, the PO process is complete for the whole req.
+            // If there are no more pending awards, the entire requisition's PO process is complete.
             if (otherPendingAwards === 0) {
                  await tx.purchaseRequisition.update({
                     where: { id: requisition.id },
@@ -107,6 +109,7 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
+            // Identify which specific items are being declined by this action.
             const declinedItemIds = quote.items
                 .filter((item: any) => requisition.awardedQuoteItemIds.includes(item.id))
                 .map((item: any) => item.requisitionItemId);

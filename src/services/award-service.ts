@@ -139,9 +139,11 @@ export async function handleAwardRejection(
     });
 
     if (otherActiveAwards > 0) {
+        // This is a partial decline. Other awards are still in play.
+        // We just mark the requisition to indicate a partial failure, but don't stop other processes.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
+            data: { status: 'Award_Declined' } // A general status to alert the PO
         });
          await tx.auditLog.create({
             data: {
@@ -154,16 +156,18 @@ export async function handleAwardRejection(
                 transactionId: requisition.transactionId,
             }
         });
-        return { message: 'A part of the award has been declined. Manual action is required.' };
+        return { message: 'A part of the award has been declined. Manual action is required for the failed items.' };
     }
 
 
+    // If we are here, it means this was the LAST or ONLY part of the award.
     const nextStandby = await tx.quotation.findFirst({
         where: { requisitionId: requisition.id, status: 'Standby' },
         orderBy: { rank: 'asc' },
     });
 
     if (nextStandby) {
+        // A standby is available. Set status to allow manual promotion.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }
