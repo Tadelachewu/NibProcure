@@ -12,17 +12,24 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { AwardCenterDialog } from './award-center-dialog';
 import { Dialog, DialogContent, DialogTrigger } from './ui/dialog';
 
+// This component is now deprecated as its logic has been integrated into
+// the main [id]/page.tsx component for a more cohesive UI.
+// This file can be safely removed in a future cleanup.
 
 interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onSuccess: () => void;
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
+    isFinalizing: boolean;
 }
 
 export function AwardStandbyButton({
     requisition,
     quotations,
     onSuccess,
+    onFinalize,
+    isFinalizing,
 }: AwardStandbyButtonProps) {
     const { user } = useAuth();
     const { toast } = useToast();
@@ -30,75 +37,8 @@ export function AwardStandbyButton({
     const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
 
     const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
-    const isRelevantStatus = requisition.status === 'Award_Declined';
     
-    if (!isRelevantStatus) {
-        return null;
-    }
-
-    const handlePromote = async () => {
-        if (!user) return;
-        setIsPromoting(true);
-        try {
-            const response = await fetch(`/api/requisitions/${requisition.id}/promote-standby`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id }),
-            });
-            const result = await response.json();
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to promote standby vendor.');
-            }
-            toast({
-                title: 'Success',
-                description: result.message,
-            });
-            onSuccess();
-        } catch (error) {
-            toast({
-                variant: 'destructive',
-                title: 'Error',
-                description: error instanceof Error ? error.message : 'An unknown error occurred.',
-            });
-        } finally {
-            setIsPromoting(false);
-        }
-    }
-    
-    if (requisition.status === 'Award_Declined') {
-         return (
-            <Card className="mt-6 border-amber-500">
-                <CardHeader>
-                    <CardTitle>Action Required: Award Declined</CardTitle>
-                    <CardDescription>
-                        A vendor has declined their award. You may now promote the next standby vendor.
-                    </CardDescription>
-                </CardHeader>
-                <CardFooter className="pt-0">
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button disabled={isPromoting || !hasStandbyVendors}>
-                                {isPromoting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {hasStandbyVendors ? 'Promote Standby Vendor' : 'No Standby Vendors Available'}
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                            <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This will promote the next vendor in rank to the 'Awarded' status. The requisition will then be ready for you to notify the new winner.
-                            </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handlePromote}>Confirm & Promote</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                </CardFooter>
-            </Card>
-        );
-    }
+    // This component's logic is now handled inside the main page component.
     
     return null;
 }

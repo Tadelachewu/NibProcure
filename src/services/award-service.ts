@@ -80,7 +80,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     }
     await tx.quotation.deleteMany({ where: { requisitionId } });
     
-    await tx.committeeAssignment.deleteMany({ where: { requisitionId } });
+    await tx.committeeAssignment.deleteMany({ where: { requisitionId }});
 
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
