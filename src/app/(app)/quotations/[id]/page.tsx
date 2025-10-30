@@ -1732,7 +1732,7 @@ const ScoringProgressTracker = ({
                                     </div>
                                 ) : member.isOverdue ? (
                                     <>
-                                     <Badge variant="destructive" className="mr-auto"><AlertTriangle className="mr-1 h-3 w-3" />Overdue</Badge>
+                                     <Badge variant="destructive"><AlertTriangle className="mr-1 h-3 w-3" />Overdue</Badge>
                                      <Button size="sm" variant="secondary" onClick={()=>{ setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
                                      <Button size="sm" variant="secondary" onClick={() => onCommitteeUpdate(true)}>Replace</Button>
                                      <Button size="sm" variant="outline" onClick={()=>{ setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
@@ -2753,7 +2753,7 @@ export default function QuotationDetailsPage() {
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' && requisition.status !== 'Award_Declined'
+            requisition.status !== 'PreApproved'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2769,7 +2769,6 @@ export default function QuotationDetailsPage() {
             requisition={requisition}
             quotations={quotations}
             onSuccess={fetchRequisitionAndQuotes}
-            disabled={requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved'}
         />
 
 
@@ -2919,3 +2918,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
 
+
+
+    
