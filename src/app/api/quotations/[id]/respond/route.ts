@@ -74,14 +74,16 @@ export async function POST(
                 }
             });
 
+            // Check if there are any OTHER quotes still pending an award decision.
             const otherPendingAwards = await tx.quotation.count({
                 where: {
                     requisitionId: requisition.id,
-                    id: { not: quote.id },
-                    status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award', 'Standby'] }
+                    id: { not: quote.id }, // Exclude the current quote
+                    status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
                 }
             });
 
+            // Only update the requisition to PO_Created if this acceptance resolves the LAST pending part of the award.
             if (otherPendingAwards === 0 && requisition.status !== 'Award_Partially_Declined') {
                  await tx.purchaseRequisition.update({
                     where: { id: requisition.id },
