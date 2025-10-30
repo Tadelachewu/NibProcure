@@ -57,24 +57,16 @@ export function ReviewsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, token, allUsers } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
   const [justification, setJustification] = useState('');
-  const [attendees, setAttendees] = useState<string[]>([]);
   const [isActionDialogOpen, setActionDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
-  
-
-  useEffect(() => {
-    if(user) {
-        setAttendees([user.id]);
-    }
-  }, [user]);
 
   const fetchRequisitions = async () => {
     if (!user || !token) {
@@ -127,10 +119,11 @@ export function ReviewsTable() {
 
     setActiveActionId(selectedRequisition.id);
 
+    // The sole attendee is the user performing the action.
     const minute = {
         decisionBody: selectedRequisition.status.replace(/_/g, ' '),
         justification,
-        attendeeIds: [user.id], // Always just the current user
+        attendeeIds: [user.id], 
     }
 
     try {
@@ -163,7 +156,6 @@ export function ReviewsTable() {
         setJustification('');
         setSelectedRequisition(null);
         setActionType(null);
-        setAttendees([]);
     }
   }
 

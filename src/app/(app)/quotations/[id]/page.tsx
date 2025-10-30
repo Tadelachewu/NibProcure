@@ -1686,8 +1686,8 @@ const ScoringProgressTracker = ({
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
     const getButtonState = () => {
-        if (requisition.status === 'Award_Declined') {
-            return { text: "Finalize Scores & Award", disabled: true };
+        if (requisition.status === 'Award_Partially_Declined' || requisition.status === 'Award_Declined') {
+            return { text: "Open Award Center", disabled: false };
         }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
@@ -1697,7 +1697,7 @@ const ScoringProgressTracker = ({
         }
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
         if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
-        return { text: "Finalize Scores & Award", disabled: false };
+        return { text: "Open Award Center", disabled: false };
     }
     const buttonState = getButtonState();
 
@@ -1705,10 +1705,24 @@ const ScoringProgressTracker = ({
     return (
         <Card className="mt-6">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2"><GanttChart /> Scoring Progress</CardTitle>
-                <CardDescription>Track the committee's scoring progress. The award can be finalized once all members have submitted their scores for all quotations.</CardDescription>
+                <CardTitle className="flex items-center gap-2"><GanttChart /> Scoring & Award</CardTitle>
+                <CardDescription>Track committee scoring. Finalize the award once all scores are submitted.</CardDescription>
             </CardHeader>
             <CardContent>
+                 {requisition.status === 'Award_Partially_Declined' && (
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>Action Required: Partial Decline</AlertTitle>
+                        <AlertDescription>One or more vendors declined part of the award. Open the Award Center to promote a standby vendor for the failed items.</AlertDescription>
+                    </Alert>
+                 )}
+                 {requisition.status === 'Award_Declined' && (
+                    <Alert variant="destructive" className="mb-4">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>Action Required: Award Declined</AlertTitle>
+                        <AlertDescription>The winning vendor declined the award. Open the Award Center to promote a standby vendor.</AlertDescription>
+                    </Alert>
+                 )}
                 <ul className="space-y-3">
                     {scoringStatus.map(member => (
                         <li key={member.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-md border">
@@ -1748,10 +1762,23 @@ const ScoringProgressTracker = ({
             <CardFooter>
                  <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
                     <DialogTrigger asChild>
-                         <Button disabled={buttonState.disabled}>
-                            {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {buttonState.text}
-                        </Button>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <span tabIndex={buttonState.disabled ? 0 : -1}>
+                                        <Button disabled={buttonState.disabled}>
+                                            {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            {buttonState.text}
+                                        </Button>
+                                    </span>
+                                </TooltipTrigger>
+                                {buttonState.disabled && !isFinalizing && buttonState.text.startsWith('Waiting') && (
+                                <TooltipContent>
+                                    <p>The award can be finalized once all committee members have submitted their scores.</p>
+                                </TooltipContent>
+                                )}
+                            </Tooltip>
+                        </TooltipProvider>
                     </DialogTrigger>
                     <AwardCenterDialog 
                         requisition={requisition}
@@ -2493,7 +2520,7 @@ export default function QuotationDetailsPage() {
       if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
       if (requisition.status === 'Accepting_Quotes' && deadlinePassed) return 'committee';
 
-      const inScoringProcess = requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined';
+      const inScoringProcess = requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined' || requisition.status === 'Award_Partially_Declined';
       if (inScoringProcess) {
           return isScoringComplete ? 'award' : 'committee';
       }

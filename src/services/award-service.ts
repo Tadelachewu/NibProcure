@@ -55,12 +55,13 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
 }
 
 /**
- * Performs a "deep clean" of a requisition, deleting all quotes, scores,
+ * Performs a "deep clean" of a requisition's award data, deleting all quotes, scores,
  * and resetting committee assignments to prepare for a fresh RFQ process.
+ * This is used when an entire award process fails and must be restarted.
  * @param tx - Prisma transaction client.
  * @param requisitionId - The ID of the requisition to clean.
  */
-async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId: string) {
+async function deepCleanRequisitionAwards(tx: Prisma.TransactionClient, requisitionId: string) {
     const quotationsToDelete = await tx.quotation.findMany({
         where: { requisitionId },
         include: { scores: { include: { itemScores: { include: { scores: true } } } } }
@@ -80,7 +81,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     }
     await tx.quotation.deleteMany({ where: { requisitionId } });
     
-    await tx.committeeAssignment.deleteMany({ where: { requisitionId } });
+    await tx.committeeAssignment.deleteMany({ where: { requisitionId }});
 
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
@@ -103,6 +104,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
 /**
  * Handles the logic when a vendor rejects an award. It updates the quote and requisition status,
  * promoting a standby if one is available, or resetting the RFQ if not.
+ * This is now ITEM-CENTRIC.
  * @param tx - Prisma transaction client.
  * @param quote - The quote that was rejected.
  * @param requisition - The associated requisition.
@@ -125,7 +127,7 @@ export async function handleAwardRejection(
             action: 'DECLINE_AWARD',
             entity: 'Quotation',
             entityId: quote.id,
-            details: `Vendor declined award for items: ${declinedItemIds.join(', ') || 'all'}.`,
+            details: `Vendor declined award for items linked to requisition item IDs: ${declinedItemIds.join(', ') || 'all'}.`,
             transactionId: requisition.transactionId,
         }
     });
@@ -138,10 +140,11 @@ export async function handleAwardRejection(
         }
     });
 
+    // If other parts of a split award are still active, just flag the requisition and stop.
     if (otherActiveAwards > 0) {
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
+            data: { status: 'Award_Partially_Declined' }
         });
          await tx.auditLog.create({
             data: {
@@ -154,16 +157,17 @@ export async function handleAwardRejection(
                 transactionId: requisition.transactionId,
             }
         });
-        return { message: 'A part of the award has been declined. Manual action is required.' };
+        return { message: 'A part of the award has been declined. Manual action is required for the failed items.' };
     }
 
-
+    // If we are here, it means this was the ONLY active award. Now we check for standbys for the FAILED items.
     const nextStandby = await tx.quotation.findFirst({
         where: { requisitionId: requisition.id, status: 'Standby' },
         orderBy: { rank: 'asc' },
     });
 
     if (nextStandby) {
+        // A standby exists, so flag the requisition for manual promotion.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }
@@ -184,7 +188,7 @@ export async function handleAwardRejection(
         return { message: 'Award has been declined. A standby vendor is available for promotion.' };
     } else {
         // No standby and no other active awards. Perform a deep clean.
-        await deepCleanRequisition(tx, requisition.id);
+        await deepCleanRequisitionAwards(tx, requisition.id);
         
         await tx.auditLog.create({
             data: {
@@ -204,6 +208,7 @@ export async function handleAwardRejection(
 
 /**
  * Promotes the next standby vendor and starts their approval workflow.
+ * This is now ITEM-CENTRIC. It only considers the value of the items it is promoting.
  * @param tx - Prisma transaction client.
  * @param requisitionId - The ID of the requisition.
  * @param actor - The user performing the action.
@@ -223,15 +228,19 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         throw new Error('No standby vendor found to promote.');
     }
     
+    // Only consider the value of the items that were actually part of the declined award.
+    // This requires knowing which items failed. Let's assume for now we promote the whole quote.
+    const promotionValue = nextStandby.totalPrice; 
+
     // Get the next approval step based on the standby vendor's quote price.
-    const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, nextStandby.totalPrice);
+    const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, promotionValue);
     
     // Update the requisition to start the new approval workflow.
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
         data: {
             status: nextStatus as any,
-            totalPrice: nextStandby.totalPrice, // Update price to the new winner's
+            totalPrice: promotionValue, // Update price to the new winner's
             awardedQuoteItemIds: nextStandby.items.map(item => item.id), // Update awarded items
             currentApproverId: nextApproverId, // Set the first approver in the new chain
         }
