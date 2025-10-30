@@ -46,13 +46,10 @@ export async function POST(
                 data: { status: 'Accepted' }
             });
             
-            // This logic correctly handles split awards by only including items that were actually awarded to this vendor.
-            // The `awardedQuoteItemIds` on the requisition is the source of truth for what was awarded.
             const awardedItemsForThisVendor = quote.items.filter((item: any) => 
                 requisition.awardedQuoteItemIds.includes(item.id)
             );
 
-            // If the awardedQuoteItemIds is empty (which happens in a single-vendor award), fall back to all items in the quote.
             const itemsForPO = awardedItemsForThisVendor.length > 0 ? awardedItemsForThisVendor : quote.items;
             const totalPriceForThisPO = itemsForPO.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
 
@@ -77,7 +74,6 @@ export async function POST(
                 }
             });
 
-            // After accepting, check if any other awards are still pending for this requisition.
             const otherPendingAwards = await tx.quotation.count({
                 where: {
                     requisitionId: requisition.id,
@@ -86,7 +82,6 @@ export async function POST(
                 }
             });
 
-            // If there are no more pending awards, the entire requisition's PO process is complete.
             if (otherPendingAwards === 0) {
                  await tx.purchaseRequisition.update({
                     where: { id: requisition.id },
@@ -109,7 +104,6 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            // Identify which specific items are being declined by this action.
             const declinedItemIds = quote.items
                 .filter((item: any) => requisition.awardedQuoteItemIds.includes(item.id))
                 .map((item: any) => item.requisitionItemId);
@@ -129,7 +123,6 @@ export async function POST(
     console.error('Failed to respond to award:', error);
     if (error instanceof Error) {
       if ((error as any).code === 'P2014') {
-        // More specific error for foreign key violation
         return NextResponse.json({ error: 'Failed to process award acceptance due to a data conflict. The Purchase Order could not be linked to the Requisition.', details: (error as any).meta?.relation_name || 'Unknown relation' }, { status: 500 });
       }
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });

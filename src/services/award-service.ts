@@ -4,12 +4,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { User, UserRole } from '@/lib/types';
 
-/**
- * Finds the correct initial status and approver for a given value tier.
- * @param tx - Prisma transaction client.
- * @param totalAwardValue - The value of the award.
- * @returns An object with the next status and approver ID.
- */
 export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue: number) {
     const approvalMatrix = await tx.approvalThreshold.findMany({ 
         include: { steps: { orderBy: { order: 'asc' } } }, 
@@ -38,7 +32,6 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
     const nextStatus = getNextStatusFromRole(firstStep.role);
     let nextApproverId: string | null = null;
     
-    // Assign an approver only if it's a specific user role, not a general committee role.
     if (!firstStep.role.includes('Committee')) {
         const approverUser = await tx.user.findFirst({ where: { role: firstStep.role }});
         if (!approverUser) {
@@ -54,12 +47,6 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
     };
 }
 
-/**
- * Performs a "deep clean" of a requisition, deleting all quotes, scores,
- * and resetting committee assignments to prepare for a fresh RFQ process.
- * @param tx - Prisma transaction client.
- * @param requisitionId - The ID of the requisition to clean.
- */
 async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId: string) {
     const quotationsToDelete = await tx.quotation.findMany({
         where: { requisitionId },
@@ -80,7 +67,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     }
     await tx.quotation.deleteMany({ where: { requisitionId } });
     
-    await tx.committeeAssignment.deleteMany({ where: { requisitionId } });
+    await tx.committeeAssignment.deleteMany({ where: { requisitionId }});
 
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
@@ -99,17 +86,6 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     });
 }
 
-
-/**
- * Handles the logic when a vendor rejects an award. It updates the quote and requisition status,
- * promoting a standby if one is available, or resetting the RFQ if not.
- * @param tx - Prisma transaction client.
- * @param quote - The quote that was rejected.
- * @param requisition - The associated requisition.
- * @param actor - The user performing the action.
- * @param declinedItemIds - The specific requisition item IDs that were declined.
- * @returns A message indicating the result of the operation.
- */
 export async function handleAwardRejection(
     tx: Prisma.TransactionClient, 
     quote: any, 
@@ -139,11 +115,9 @@ export async function handleAwardRejection(
     });
 
     if (otherActiveAwards > 0) {
-        // This is a partial decline. Other awards are still in play.
-        // We just mark the requisition to indicate a partial failure, but don't stop other processes.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
-            data: { status: 'Award_Declined' } // A general status to alert the PO
+            data: { status: 'Award_Partially_Declined' }
         });
          await tx.auditLog.create({
             data: {
@@ -159,15 +133,12 @@ export async function handleAwardRejection(
         return { message: 'A part of the award has been declined. Manual action is required for the failed items.' };
     }
 
-
-    // If we are here, it means this was the LAST or ONLY part of the award.
     const nextStandby = await tx.quotation.findFirst({
         where: { requisitionId: requisition.id, status: 'Standby' },
         orderBy: { rank: 'asc' },
     });
 
     if (nextStandby) {
-        // A standby is available. Set status to allow manual promotion.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }
@@ -180,14 +151,13 @@ export async function handleAwardRejection(
                 action: 'AWARD_DECLINED_STANDBY_AVAILABLE',
                 entity: 'Requisition',
                 entityId: requisition.id,
-                details: `Award declined by ${quote.vendorName}. A standby vendor is available. Manual promotion required.`,
+                details: `Award declined by ${quote.vendorName}. A standby vendor is available for promotion.`,
                 transactionId: requisition.transactionId,
             }
         });
 
         return { message: 'Award has been declined. A standby vendor is available for promotion.' };
     } else {
-        // No standby and no other active awards. Perform a deep clean.
         await deepCleanRequisition(tx, requisition.id);
         
         await tx.auditLog.create({
@@ -205,14 +175,6 @@ export async function handleAwardRejection(
     }
 }
 
-
-/**
- * Promotes the next standby vendor and starts their approval workflow.
- * @param tx - Prisma transaction client.
- * @param requisitionId - The ID of the requisition.
- * @param actor - The user performing the action.
- * @returns A message indicating the result of the operation.
- */
 export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
     const nextStandby = await tx.quotation.findFirst({
         where: {
@@ -227,27 +189,23 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         throw new Error('No standby vendor found to promote.');
     }
     
-    // Get the next approval step based on the standby vendor's quote price.
     const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, nextStandby.totalPrice);
     
-    // Update the requisition to start the new approval workflow.
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
         data: {
             status: nextStatus as any,
-            totalPrice: nextStandby.totalPrice, // Update price to the new winner's
-            awardedQuoteItemIds: nextStandby.items.map(item => item.id), // Update awarded items
-            currentApproverId: nextApproverId, // Set the first approver in the new chain
+            totalPrice: nextStandby.totalPrice, 
+            awardedQuoteItemIds: nextStandby.items.map(item => item.id), 
+            currentApproverId: nextApproverId,
         }
     });
     
-    // Update the promoted quote's status to 'Pending_Award'.
-    // It is NOT 'Awarded' yet. It will become 'Awarded' only after passing the full approval chain.
     await tx.quotation.update({
         where: { id: nextStandby.id },
         data: { 
             status: 'Pending_Award',
-            rank: 1 // They are now the primary candidate.
+            rank: 1
         }
     });
     
