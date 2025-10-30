@@ -31,13 +31,19 @@ export async function POST(
             for (const vendorId in awards) {
                 const award = awards[vendorId];
                 for (const item of award.items) {
+                    if (!item.quoteItemId) {
+                        throw new Error(`quoteItemId is missing for awarded item. This should not happen.`);
+                    }
+                    if (!award.quoteId) {
+                         throw new Error(`quoteId is missing for award to vendor ${vendorId}.`);
+                    }
                     await tx.awardedItem.create({
                         data: {
                             status: 'PendingAcceptance',
                             requisition: { connect: { id: requisitionId } },
                             requisitionItem: { connect: { id: item.requisitionItemId } },
                             vendor: { connect: { id: vendorId } },
-                            quotation: { connect: { id: item.quoteId } }
+                            quotation: { connect: { id: award.quoteId } }
                         }
                     });
                 }
