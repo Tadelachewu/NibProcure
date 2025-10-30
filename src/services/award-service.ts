@@ -33,14 +33,12 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
     }
 
     const firstStep = relevantTier.steps[0];
-    const getNextStatusFromRole = (role: string): string => {
-        // This function now standardly creates a 'Pending' status from a role name.
-        return `Pending_${role.replace(/ /g, '_')}`;
-    }
+    const getNextStatusFromRole = (role: string): string => `Pending_${role.replace(/ /g, '_')}`;
     
     const nextStatus = getNextStatusFromRole(firstStep.role);
     let nextApproverId: string | null = null;
     
+    // Assign an approver only if it's a specific user role, not a general committee role.
     if (!firstStep.role.includes('Committee')) {
         const approverUser = await tx.user.findFirst({ where: { role: firstStep.role }});
         if (!approverUser) {
@@ -54,6 +52,51 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
         nextApproverId,
         auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.replace(/_/g, ' ')} for approval.`
     };
+}
+
+/**
+ * Performs a "deep clean" of a requisition, deleting all quotes, scores,
+ * and resetting committee assignments to prepare for a fresh RFQ process.
+ * @param tx - Prisma transaction client.
+ * @param requisitionId - The ID of the requisition to clean.
+ */
+async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId: string) {
+    const quotationsToDelete = await tx.quotation.findMany({
+        where: { requisitionId },
+        include: { scores: { include: { itemScores: { include: { scores: true } } } } }
+    });
+
+    const scoreSetIds = quotationsToDelete.flatMap(q => q.scores.map(s => s.id));
+    const itemScoreIds = quotationsToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
+
+    if (itemScoreIds.length > 0) {
+        await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
+    }
+    if (scoreSetIds.length > 0) {
+        await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
+    }
+    if (scoreSetIds.length > 0) {
+        await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
+    }
+    await tx.quotation.deleteMany({ where: { requisitionId } });
+    
+    await tx.committeeAssignment.deleteMany({ where: { requisitionId } });
+
+    await tx.purchaseRequisition.update({
+        where: { id: requisitionId },
+        data: {
+            status: 'PreApproved',
+            currentApproverId: null,
+            deadline: null,
+            scoringDeadline: null,
+            awardResponseDeadline: null,
+            awardedQuoteItemIds: [],
+            committeeName: null,
+            committeePurpose: null,
+            financialCommitteeMembers: { set: [] },
+            technicalCommitteeMembers: { set: [] },
+        }
+    });
 }
 
 
@@ -74,8 +117,7 @@ export async function handleAwardRejection(
     actor: any,
     declinedItemIds: string[] = []
 ) {
-    // 1. Mark the current quote as Declined
-    await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Failed' } }); // Use 'Failed' to show it went through the process and failed
+    await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
     await tx.auditLog.create({
         data: {
             timestamp: new Date(),
@@ -88,7 +130,6 @@ export async function handleAwardRejection(
         }
     });
     
-    // Check if other vendors have accepted or are pending award for other items
     const otherActiveAwards = await tx.quotation.count({
         where: {
             requisitionId: requisition.id,
@@ -98,8 +139,6 @@ export async function handleAwardRejection(
     });
 
     if (otherActiveAwards > 0) {
-        // If other parts of the award are active, isolate this failure.
-        // Just flag the main requisition to show action is needed.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }
@@ -125,7 +164,6 @@ export async function handleAwardRejection(
     });
 
     if (nextStandby) {
-         // 2a. If a standby exists, set the main requisition status to 'Award_Declined' to signal manual promotion is needed.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }
@@ -135,7 +173,7 @@ export async function handleAwardRejection(
             data: {
                 timestamp: new Date(),
                 user: { connect: { id: actor.id } },
-                action: 'AWARD_DECLINED',
+                action: 'AWARD_DECLINED_STANDBY_AVAILABLE',
                 entity: 'Requisition',
                 entityId: requisition.id,
                 details: `Award declined by ${quote.vendorName}. A standby vendor is available. Manual promotion required.`,
@@ -145,21 +183,8 @@ export async function handleAwardRejection(
 
         return { message: 'Award has been declined. A standby vendor is available for promotion.' };
     } else {
-        // 2b. If NO standby exists and no other awards are active, reset the whole process.
-        await tx.quotation.updateMany({
-            where: { requisitionId: requisition.id },
-            data: { status: 'Submitted', rank: null }
-        });
-        
-        await tx.purchaseRequisition.update({
-            where: { id: requisition.id },
-            data: {
-                status: 'PreApproved', // Revert to a state where RFQ can be re-initiated
-                deadline: null,
-                scoringDeadline: null,
-                awardResponseDeadline: null
-            }
-        });
+        // No standby and no other active awards. Perform a deep clean.
+        await deepCleanRequisition(tx, requisition.id);
         
         await tx.auditLog.create({
             data: {
@@ -167,7 +192,7 @@ export async function handleAwardRejection(
                 action: 'RESTART_RFQ_NO_STANDBY',
                 entity: 'Requisition',
                 entityId: requisition.id,
-                details: `All vendors declined award and no standby vendors were available. RFQ process has been reset for requisition.`,
+                details: `All vendors declined award and no standby vendors were available. The RFQ process has been completely reset.`,
                 transactionId: requisition.transactionId,
             }
         });

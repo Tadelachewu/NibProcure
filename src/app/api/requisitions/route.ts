@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -233,10 +232,7 @@ export async function PATCH(
                 }
                 await tx.quotation.deleteMany({ where: { requisitionId: id } });
                 
-                await tx.committeeAssignment.updateMany({
-                    where: { requisitionId: id },
-                    data: { scoresSubmitted: false }
-                });
+                await tx.committeeAssignment.deleteMany({ where: { requisitionId: id }});
 
                 const updatedReq = await tx.purchaseRequisition.update({
                     where: { id: id },
