@@ -70,24 +70,11 @@ export function ReviewsTable() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
 
-  const potentialAttendees = useMemo(() => {
-    if (!selectedRequisition || !user) return [];
-    
-    if (selectedRequisition.status.includes('Committee')) {
-        const isCommitteeA = selectedRequisition.status.includes('Committee A');
-        // This logic is a bit of a guess, might need refinement based on actual business rules.
-        const committeeRoleName = isCommitteeA ? 'Committee_A_Member' : 'Committee_B_Member';
-        return allUsers.filter(u => u.role === committeeRoleName);
-    }
-    // For managerial roles, attendees are likely just the individual approver
-    return [user];
-  }, [selectedRequisition, allUsers, user]);
-
   useEffect(() => {
-    if(selectedRequisition && user) {
-        setAttendees(potentialAttendees.map(u => u.id));
+    if(user) {
+        setAttendees([user.id]);
     }
-  }, [selectedRequisition, user, potentialAttendees]);
+  }, [user]);
 
   const fetchRequisitions = async () => {
     if (!user || !token) {
@@ -143,7 +130,7 @@ export function ReviewsTable() {
     const minute = {
         decisionBody: selectedRequisition.status.replace(/_/g, ' '),
         justification,
-        attendeeIds: attendees,
+        attendeeIds: [user.id], // Always just the current user
     }
 
     try {
@@ -296,25 +283,6 @@ export function ReviewsTable() {
                 placeholder="Provide a detailed rationale for the committee's decision..."
                 rows={6}
               />
-            </div>
-            <div className="grid gap-2">
-                <Label>Attendees</Label>
-                <ScrollArea className="h-40 w-full rounded-md border p-2">
-                    <div className="space-y-2">
-                    {potentialAttendees.map(attendee => (
-                        <div key={attendee.id} className="flex items-center space-x-2">
-                            <Checkbox 
-                                id={`attendee-${attendee.id}`} 
-                                checked={attendees.includes(attendee.id)}
-                                onCheckedChange={(checked) => {
-                                    setAttendees(prev => checked ? [...prev, attendee.id] : prev.filter(id => id !== attendee.id))
-                                }}
-                            />
-                            <Label htmlFor={`attendee-${attendee.id}`} className="font-normal">{attendee.name}</Label>
-                        </div>
-                    ))}
-                    </div>
-                </ScrollArea>
             </div>
           </div>
           <DialogFooter>
