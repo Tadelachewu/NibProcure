@@ -23,33 +23,35 @@ export async function POST(
     }
     
     if (action === 'accept') {
-        // Step 1: Atomic transaction for PO creation and Quote update. This is the direct consequence of the action.
+        const quote = await prisma.quotation.findUnique({
+            where: { id: quoteId },
+            include: { requisition: true, items: true }
+        });
+        if (!quote || quote.vendorId !== user.vendorId) throw new Error('Quotation not found or not owned by this vendor');
+        if (!quote.requisition) throw new Error(`Associated requisition with ID ${quote.requisitionId} not found.`);
+
+        const awardedItemsToAccept = await prisma.awardedItem.findMany({
+            where: {
+                quotationId: quoteId,
+                status: 'PendingAcceptance'
+            }
+        });
+
+        if (awardedItemsToAccept.length === 0) {
+            throw new Error('No items are currently pending acceptance for this quote.');
+        }
+
         const newPO = await prisma.$transaction(async (tx) => {
-            const quote = await tx.quotation.findUnique({ 
-                where: { id: quoteId },
-                include: { requisition: true, items: true }
-            });
-
-            if (!quote || quote.vendorId !== user.vendorId) throw new Error('Quotation not found or not owned by this vendor');
-            if (!quote.requisition) throw new Error(`Associated requisition with ID ${quote.requisitionId} not found.`);
-            if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') throw new Error('This quote is not currently in an awarded state.');
-            
-            const requisition = quote.requisition;
-
-            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Accepted' } });
-
-            const awardedItemsForThisVendor = quote.items.filter((item: any) => 
-                requisition.awardedQuoteItemIds.includes(item.id)
+            const itemsForPO = quote.items.filter((item: any) => 
+                awardedItemsToAccept.some(a => a.requisitionItemId === item.requisitionItemId)
             );
-
-            const itemsForPO = awardedItemsForThisVendor.length > 0 ? awardedItemsForThisVendor : quote.items;
             const totalPriceForThisPO = itemsForPO.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
 
             const createdPO = await tx.purchaseOrder.create({
                 data: {
-                    transactionId: requisition.transactionId,
-                    requisition: { connect: { id: requisition.id } },
-                    requisitionTitle: requisition.title,
+                    transactionId: quote.requisition.transactionId,
+                    requisition: { connect: { id: quote.requisition.id } },
+                    requisitionTitle: quote.requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
                     items: {
                         create: itemsForPO.map((item: any) => ({
@@ -66,6 +68,14 @@ export async function POST(
                 }
             });
 
+            await tx.awardedItem.updateMany({
+                where: { id: { in: awardedItemsToAccept.map(a => a.id) } },
+                data: {
+                    status: 'Accepted',
+                    purchaseOrderId: createdPO.id
+                }
+            });
+
             await tx.auditLog.create({
                 data: {
                     timestamp: new Date(),
@@ -73,30 +83,27 @@ export async function POST(
                     action: 'ACCEPT_AWARD',
                     entity: 'Quotation',
                     entityId: quoteId,
-                    details: `Vendor accepted award. PO ${createdPO.id} auto-generated.`,
-                    transactionId: requisition.transactionId,
+                    details: `Vendor accepted award for ${itemsForPO.length} item(s). PO ${createdPO.id} auto-generated.`,
+                    transactionId: quote.requisition.transactionId,
                 }
             });
+
             return createdPO;
         });
 
-        // Step 2: Post-transaction reconciliation. Check if the parent requisition's status needs to be updated.
-        const quote = await prisma.quotation.findUnique({ where: { id: quoteId }, select: { requisitionId: true }});
-        if (quote?.requisitionId) {
-            const otherPendingAwards = await prisma.quotation.count({
-                where: {
-                    requisitionId: quote.requisitionId,
-                    status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
-                }
-            });
-
-            // Only if there are no more pending awards for other vendors, update the main requisition status.
-            if (otherPendingAwards === 0) {
-                 await prisma.purchaseRequisition.update({
-                    where: { id: quote.requisitionId },
-                    data: { status: 'PO_Created' }
-                });
+        // Post-transaction: check if the overall requisition is fully processed.
+        const pendingAwards = await prisma.awardedItem.count({
+            where: {
+                requisitionId: quote.requisitionId,
+                status: 'PendingAcceptance'
             }
+        });
+        
+        if (pendingAwards === 0) {
+            await prisma.purchaseRequisition.update({
+                where: { id: quote.requisitionId },
+                data: { status: 'PO_Created' }
+            });
         }
         
         return NextResponse.json({ message: 'Award accepted. PO has been generated.' });
@@ -108,15 +115,9 @@ export async function POST(
                 include: { items: true, requisition: true }
             });
             if (!quote || quote.vendorId !== user.vendorId) throw new Error('Quotation not found or not owned by this vendor');
-            if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') throw new Error('This quote is not currently in an awarded state.');
-            const requisition = quote.requisition;
-            if (!requisition) throw new Error('Associated requisition not found');
+            if (!quote.requisition) throw new Error('Associated requisition not found');
 
-            const declinedItemIds = quote.items
-                .filter((item: any) => requisition.awardedQuoteItemIds.includes(item.id))
-                .map((item: any) => item.requisitionItemId);
-                
-            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds);
+            return await handleAwardRejection(tx, quote, quote.requisition, user);
         }, {
           maxWait: 15000,
           timeout: 30000,

@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -41,35 +40,28 @@ export async function POST(
                 awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
             }
         });
-
-        // The quotes are already in 'Pending_Award'. Now we find them to update and notify.
-        const winningQuotes = await tx.quotation.findMany({
+        
+        // Find all vendors with items pending acceptance
+        const awardsToNotify = await tx.awardedItem.findMany({
             where: {
                 requisitionId: requisitionId,
-                status: 'Pending_Award'
+                status: 'PendingAcceptance'
             },
             include: {
                 vendor: true
-            }
+            },
+            distinct: ['vendorId']
         });
 
-        if (winningQuotes.length === 0) {
-            throw new Error("No winning quote in 'Pending Award' status found to notify. The requisition might be in an inconsistent state.");
+        if (awardsToNotify.length === 0) {
+            throw new Error("No items in 'PendingAcceptance' status found to notify. The requisition might be in an inconsistent state.");
         }
         
-        // Notify all winning vendors (for split awards)
-        for (const winningQuote of winningQuotes) {
-            
-            // CRITICAL FIX: Update the quote status to 'Awarded'
-            await tx.quotation.update({
-                where: { id: winningQuote.id },
-                data: { status: 'Awarded' }
-            });
-
-            if (winningQuote.vendor && requisition) {
+        for (const award of awardsToNotify) {
+            if (award.vendor && requisition) {
                 const finalDeadline = awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline;
                 const emailHtml = `
-                    <h1>Congratulations, ${winningQuote.vendor.name}!</h1>
+                    <h1>Congratulations, ${award.vendor.name}!</h1>
                     <p>You have been awarded a contract for requisition <strong>${requisition.title}</strong>.</p>
                     <p>Please log in to the vendor portal to review the award details and respond.</p>
                     ${finalDeadline ? `<p><strong>This award must be accepted by ${format(finalDeadline, 'PPpp')}.</strong></p>` : ''}
@@ -79,7 +71,7 @@ export async function POST(
                 `;
 
                 await sendEmail({
-                    to: winningQuote.vendor.email,
+                    to: award.vendor.email,
                     subject: `Contract Awarded: ${requisition.title}`,
                     html: emailHtml
                 });
@@ -94,7 +86,7 @@ export async function POST(
                 action: 'NOTIFY_VENDOR',
                 entity: 'Requisition',
                 entityId: requisitionId,
-                details: `Sent award notification to winning vendor(s) for requisition ${requisitionId}.`
+                details: `Sent award notification to ${awardsToNotify.length} winning vendor(s) for requisition ${requisitionId}.`
             }
         });
 
