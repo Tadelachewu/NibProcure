@@ -42,7 +42,7 @@ export async function POST(
             }
         });
 
-        // The quotes are already in 'Pending_Award'. Now we just find them to notify the vendor.
+        // The quotes are already in 'Pending_Award'. Now we find them to update and notify.
         const winningQuotes = await tx.quotation.findMany({
             where: {
                 requisitionId: requisitionId,
@@ -53,13 +53,19 @@ export async function POST(
             }
         });
 
-
         if (winningQuotes.length === 0) {
             throw new Error("No winning quote in 'Pending Award' status found to notify. The requisition might be in an inconsistent state.");
         }
         
         // Notify all winning vendors (for split awards)
         for (const winningQuote of winningQuotes) {
+            
+            // CRITICAL FIX: Update the quote status to 'Awarded'
+            await tx.quotation.update({
+                where: { id: winningQuote.id },
+                data: { status: 'Awarded' }
+            });
+
             if (winningQuote.vendor && requisition) {
                 const finalDeadline = awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline;
                 const emailHtml = `
