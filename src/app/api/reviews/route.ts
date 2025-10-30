@@ -24,39 +24,25 @@ export async function GET(request: Request) {
     const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
     const userId = userPayload.user.id;
 
-    const managerialRoles = [
-      'Manager_Procurement_Division', 
-      'Director_Supply_Chain_and_Property_Management', 
-      'VP_Resources_and_Facilities', 
-      'President'
-    ];
-    
     const isCommitteeRole = userRole.startsWith('Committee_') && userRole.endsWith('_Member');
 
     if (isCommitteeRole) {
         const statusToFind = `Pending_${userRole}`;
         whereClause = { status: statusToFind };
-    } else if (managerialRoles.includes(userRole)) {
-      whereClause = { 
-        currentApproverId: userId,
-      };
     } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
        const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
-       const allCommitteeStatuses = allCommitteeRoles.map(r => `Pending_${r.name}`);
+       const allReviewStatuses = allCommitteeRoles.map(r => `Pending_${r.name}`);
+        allReviewStatuses.push('Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval');
 
        whereClause = { 
          status: { 
-           in: [
-            ...allCommitteeStatuses,
-            'Pending_Managerial_Approval',
-            'Pending_Director_Approval',
-            'Pending_VP_Approval',
-            'Pending_President_Approval'
-           ]
+           in: allReviewStatuses
          }
       };
-    } else {
-      return NextResponse.json([]);
+    } else { // This handles hierarchical roles
+      whereClause = { 
+        currentApproverId: userId,
+      };
     }
     
     const requisitions = await prisma.purchaseRequisition.findMany({
