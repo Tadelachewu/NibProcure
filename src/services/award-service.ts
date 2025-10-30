@@ -10,7 +10,7 @@ import { User, UserRole } from '@/lib/types';
  * @param totalAwardValue - The value of the award.
  * @returns An object with the next status and approver ID.
  */
-async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue: number) {
+export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue: number) {
     const approvalMatrix = await tx.approvalThreshold.findMany({ 
         include: { steps: { orderBy: { order: 'asc' } } }, 
         orderBy: { min: 'asc' }
@@ -235,4 +235,3 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
     return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
 }
-
