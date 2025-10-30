@@ -37,7 +37,7 @@ export async function POST(
                             requisition: { connect: { id: requisitionId } },
                             requisitionItem: { connect: { id: item.requisitionItemId } },
                             vendor: { connect: { id: vendorId } },
-                            quotation: { connect: { id: item.quoteId } } // Assuming quoteId is passed
+                            quotation: { connect: { id: item.quoteId } }
                         }
                     });
                 }

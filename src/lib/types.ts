@@ -53,6 +53,7 @@ export type RequisitionStatus =
   | 'Scoring_Complete' // All scores are in, ready to finalize award
   | 'Awarded' // Award has been sent to vendor(s) and is pending response
   | 'Award_Declined' // The winning vendor has declined the award
+  | 'Award_Partially_Declined'
   | 'PostApproved' // All hierarchical reviews complete, ready for vendor notification
   | 'PO_Created'
   | 'Fulfilled'
@@ -157,9 +158,7 @@ export type PurchaseRequisition = {
       uploadDate: Date;
   };
   negotiationNotes?: string;
-  purchaseOrderId?: string;
   allowedVendorIds: string[];
-  awardedQuoteItemIds: string[];
   customQuestions?: CustomQuestion[];
   deadline?: Date;
   scoringDeadline?: Date;
@@ -228,7 +227,7 @@ export type QuoteAnswer = {
   answer: string;
 }
 
-export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'Rejected' | 'Standby' | 'Invoice Submitted' | 'Failed' | 'Accepted' | 'Declined' | 'Pending_Award';
+export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'Rejected' | 'Standby' | 'Invoice_Submitted' | 'Failed' | 'Accepted' | 'Declined' | 'Pending_Award';
 
 export type Score = {
   id: string;
