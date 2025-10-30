@@ -78,11 +78,11 @@ export async function POST(
                 where: {
                     requisitionId: requisition.id,
                     id: { not: quote.id },
-                    status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
+                    status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award', 'Standby'] }
                 }
             });
 
-            if (otherPendingAwards === 0) {
+            if (otherPendingAwards === 0 && requisition.status !== 'Award_Partially_Declined') {
                  await tx.purchaseRequisition.update({
                     where: { id: requisition.id },
                     data: { status: 'PO_Created' }
