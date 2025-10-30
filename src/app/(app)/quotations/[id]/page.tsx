@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -1687,7 +1686,7 @@ const ScoringProgressTracker = ({
 
     const getButtonState = () => {
         if (requisition.status === 'Award_Partially_Declined' || requisition.status === 'Award_Declined') {
-            return { text: "Open Award Center", disabled: false };
+            return { text: "Finalize Scores & Award", disabled: false };
         }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
@@ -1697,7 +1696,7 @@ const ScoringProgressTracker = ({
         }
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
         if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
-        return { text: "Open Award Center", disabled: false };
+        return { text: "Finalize Scores & Award", disabled: false };
     }
     const buttonState = getButtonState();
 
@@ -2778,7 +2777,9 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-         {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
+        {(
+            (currentStep === 'committee' || currentStep === 'award' || requisition.status === 'Award_Declined' || requisition.status === 'Award_Partially_Declined') &&
+            (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
             requisition.status !== 'PreApproved'
         ) && (
@@ -2792,12 +2793,6 @@ export default function QuotationDetailsPage() {
             />
         )}
         
-        <AwardStandbyButton 
-            requisition={requisition}
-            quotations={quotations}
-            onSuccess={fetchRequisitionAndQuotes}
-        />
-
 
         {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
             <Card className="mt-6 border-amber-500">
