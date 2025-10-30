@@ -242,7 +242,6 @@ export async function PATCH(
                         committeeName: null,
                         committeePurpose: null,
                         scoringDeadline: null,
-                        awardedQuoteItemIds: [],
                         awardResponseDeadline: null,
                         financialCommitteeMembers: { set: [] },
                         technicalCommitteeMembers: { set: [] },
@@ -540,5 +539,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
