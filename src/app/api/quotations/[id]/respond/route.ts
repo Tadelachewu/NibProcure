@@ -23,72 +23,64 @@ export async function POST(
     }
     
     if (action === 'accept') {
-        let newPO;
-        // Step 1: Atomic transaction for PO creation and Quote update
-        try {
-            newPO = await prisma.$transaction(async (tx) => {
-                const quote = await tx.quotation.findUnique({ 
-                    where: { id: quoteId },
-                    include: { requisition: true, items: true }
-                });
-
-                if (!quote || quote.vendorId !== user.vendorId) throw new Error('Quotation not found or not owned by this vendor');
-                if (!quote.requisition) throw new Error(`Associated requisition with ID ${quote.requisitionId} not found.`);
-                if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') throw new Error('This quote is not currently in an awarded state.');
-                
-                const requisition = quote.requisition;
-
-                await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Accepted' } });
-
-                const awardedItemsForThisVendor = quote.items.filter((item: any) => 
-                    requisition.awardedQuoteItemIds.includes(item.id)
-                );
-
-                const itemsForPO = awardedItemsForThisVendor.length > 0 ? awardedItemsForThisVendor : quote.items;
-                const totalPriceForThisPO = itemsForPO.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
-
-                const createdPO = await tx.purchaseOrder.create({
-                    data: {
-                        transactionId: requisition.transactionId,
-                        requisition: { connect: { id: requisition.id } },
-                        requisitionTitle: requisition.title,
-                        vendor: { connect: { id: quote.vendorId } },
-                        items: {
-                            create: itemsForPO.map((item: any) => ({
-                                requisitionItemId: item.requisitionItemId,
-                                name: item.name,
-                                quantity: item.quantity,
-                                unitPrice: item.unitPrice,
-                                totalPrice: item.quantity * item.unitPrice,
-                                receivedQuantity: 0,
-                            }))
-                        },
-                        totalAmount: totalPriceForThisPO,
-                        status: 'Issued',
-                    }
-                });
-
-                await tx.auditLog.create({
-                    data: {
-                        timestamp: new Date(),
-                        user: { connect: { id: user.id } },
-                        action: 'ACCEPT_AWARD',
-                        entity: 'Quotation',
-                        entityId: quoteId,
-                        details: `Vendor accepted award. PO ${createdPO.id} auto-generated.`,
-                        transactionId: requisition.transactionId,
-                    }
-                });
-                return createdPO;
+        // Step 1: Atomic transaction for PO creation and Quote update. This is the direct consequence of the action.
+        const newPO = await prisma.$transaction(async (tx) => {
+            const quote = await tx.quotation.findUnique({ 
+                where: { id: quoteId },
+                include: { requisition: true, items: true }
             });
-        } catch (e) {
-            // This will now catch the error inside the transaction and allow us to handle it
-            // before re-throwing it to the main catch block.
-            console.error("Error during award acceptance transaction:", e);
-            throw e;
-        }
 
-        // Step 2: Post-transaction check to update the parent requisition status
+            if (!quote || quote.vendorId !== user.vendorId) throw new Error('Quotation not found or not owned by this vendor');
+            if (!quote.requisition) throw new Error(`Associated requisition with ID ${quote.requisitionId} not found.`);
+            if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') throw new Error('This quote is not currently in an awarded state.');
+            
+            const requisition = quote.requisition;
+
+            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Accepted' } });
+
+            const awardedItemsForThisVendor = quote.items.filter((item: any) => 
+                requisition.awardedQuoteItemIds.includes(item.id)
+            );
+
+            const itemsForPO = awardedItemsForThisVendor.length > 0 ? awardedItemsForThisVendor : quote.items;
+            const totalPriceForThisPO = itemsForPO.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
+
+            const createdPO = await tx.purchaseOrder.create({
+                data: {
+                    transactionId: requisition.transactionId,
+                    requisition: { connect: { id: requisition.id } },
+                    requisitionTitle: requisition.title,
+                    vendor: { connect: { id: quote.vendorId } },
+                    items: {
+                        create: itemsForPO.map((item: any) => ({
+                            requisitionItemId: item.requisitionItemId,
+                            name: item.name,
+                            quantity: item.quantity,
+                            unitPrice: item.unitPrice,
+                            totalPrice: item.quantity * item.unitPrice,
+                            receivedQuantity: 0,
+                        }))
+                    },
+                    totalAmount: totalPriceForThisPO,
+                    status: 'Issued',
+                }
+            });
+
+            await tx.auditLog.create({
+                data: {
+                    timestamp: new Date(),
+                    user: { connect: { id: user.id } },
+                    action: 'ACCEPT_AWARD',
+                    entity: 'Quotation',
+                    entityId: quoteId,
+                    details: `Vendor accepted award. PO ${createdPO.id} auto-generated.`,
+                    transactionId: requisition.transactionId,
+                }
+            });
+            return createdPO;
+        });
+
+        // Step 2: Post-transaction reconciliation. Check if the parent requisition's status needs to be updated.
         const quote = await prisma.quotation.findUnique({ where: { id: quoteId }, select: { requisitionId: true }});
         if (quote?.requisitionId) {
             const otherPendingAwards = await prisma.quotation.count({
@@ -98,6 +90,7 @@ export async function POST(
                 }
             });
 
+            // Only if there are no more pending awards for other vendors, update the main requisition status.
             if (otherPendingAwards === 0) {
                  await prisma.purchaseRequisition.update({
                     where: { id: quote.requisitionId },
