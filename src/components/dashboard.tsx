@@ -42,7 +42,7 @@ const StatCard = ({
 }: {
   title: string;
   value: string;
-  description: string;
+  description:string;
   icon: React.ReactNode;
   onClick?: () => void;
   cta?: string;
@@ -266,7 +266,7 @@ export function Dashboard({ setActiveView }: DashboardProps) {
             />
           </div>
         );
-      case 'Procurement Officer':
+      case 'Procurement_Officer':
         return <ProcurementOfficerDashboard setActiveView={setActiveView} />;
       default:
         return <p>No dashboard available for this role.</p>;
@@ -275,15 +275,13 @@ export function Dashboard({ setActiveView }: DashboardProps) {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex justify-between items-start">
         <div>
             <h1 className="text-3xl font-bold">Welcome back, {user?.name}!</h1>
             <p className="text-muted-foreground">
-            Here's a summary of procurement activities for your role as a{' '}
-            <strong>{role}</strong>.
+            Here's a summary of procurement activities for your role as{' '}
+            <strong>{role?.replace(/_/g, ' ')}</strong>.
             </p>
         </div>
-      </div>
       {renderDashboard()}
     </div>
   );

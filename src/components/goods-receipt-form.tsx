@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -29,6 +30,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { Input } from './ui/input';
 import { Separator } from './ui/separator';
 import { Textarea } from './ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 
 const receiptFormSchema = z.object({
@@ -93,7 +95,7 @@ export function GoodsReceiptForm() {
         const formItems = po.items.map(item => ({
             poItemId: item.id,
             name: item.name,
-            quantityOrdered: item.quantity,
+            quantityOrdered: item.quantity - item.receivedQuantity, // Only show remaining quantity
             quantityReceived: 0,
             condition: 'Good' as const,
             notes: "",
@@ -167,13 +169,19 @@ export function GoodsReceiptForm() {
             
             {selectedPO && (
                 <>
+                <Alert>
+                    <AlertTitle className="font-semibold">PO Summary for {selectedPO.id}</AlertTitle>
+                    <AlertDescription>
+                        Vendor: {selectedPO.vendor.name}
+                    </AlertDescription>
+                </Alert>
                 <Separator />
                 <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
                     <h3 className="text-lg font-medium">Items to Receive</h3>
                     {fields.map((field, index) => (
-                        <Card key={field.id} className="p-4">
+                        <div key={field.id} className="p-4 border rounded-lg">
                             <p className="font-semibold mb-2">{field.name}</p>
-                            <p className="text-sm text-muted-foreground mb-4">Ordered: {field.quantityOrdered}</p>
+                            <p className="text-sm text-muted-foreground mb-4">Remaining to Receive: {field.quantityOrdered}</p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <FormField
                                     control={form.control}
@@ -181,7 +189,7 @@ export function GoodsReceiptForm() {
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Quantity Received</FormLabel>
-                                            <FormControl><Input type="number" {...field} /></FormControl>
+                                            <FormControl><Input type="number" {...field} max={field.quantityOrdered} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}
@@ -220,7 +228,7 @@ export function GoodsReceiptForm() {
                                     )}
                                 />
                             </div>
-                        </Card>
+                        </div>
                     ))}
                 </div>
                 </>
