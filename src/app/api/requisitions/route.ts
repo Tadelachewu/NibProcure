@@ -418,8 +418,8 @@ export async function POST(request: Request) {
             items: {
                 create: body.items.map((item: any) => ({
                     name: item.name,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice || 0,
+                    quantity: Number(item.quantity) || 0,
+                    unitPrice: Number(item.unitPrice) || 0,
                     description: item.description || ''
                 }))
             },
@@ -540,5 +540,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
