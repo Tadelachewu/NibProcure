@@ -84,7 +84,7 @@ const seedData: AppData = {
             ],
             totalPrice: 16490,
             justification: 'Current laptops are over 5 years old and struggling with new design software.',
-            status: 'Approved',
+            status: 'PreApproved',
             urgency: 'Low',
             createdAt: new Date('2023-10-01T10:00:00Z'),
             updatedAt: new Date('2023-10-05T11:30:00Z'),
@@ -104,122 +104,126 @@ const seedData: AppData = {
             ],
             totalPrice: 1050,
             justification: 'Standard quarterly replenishment of office supplies.',
-            status: 'Pending Approval',
+            status: 'Pending_Approval',
             urgency: 'Low',
             createdAt: new Date('2023-10-02T14:00:00Z'),
             updatedAt: new Date('2023-10-02T14:00:00Z'),
             quotations: [],
         },
         {
-            id: `REQ-1672704000`,
-            requesterId: '3',
-            title: 'Software License Renewals',
-            department: 'IT',
-            departmentId: 'DEPT-3',
+            id: `REQ-SPLIT-AWARD-01`,
+            requesterId: '1',
+            title: 'New Branch Office Furniture (Split Award Test)',
+            department: 'Design',
+            departmentId: 'DEPT-1',
             items: [
-              { id: 'ITEM-5', name: 'Project Management Tool (Annual)', quantity: 20, unitPrice: 240, description: '' },
+                { id: 'ITEM-SPLIT-1', name: 'Executive Desk', quantity: 5, unitPrice: 15000, description: '' },
+                { id: 'ITEM-SPLIT-2', name: 'Conference Table', quantity: 1, unitPrice: 40000, description: '' },
             ],
-            totalPrice: 4800,
-            justification: 'Annual renewal for critical project management software.',
-            status: 'PO Created',
-            urgency: 'Medium',
-            purchaseOrderId: 'PO-SEED-001',
-            createdAt: new Date('2023-09-15T09:20:00Z'),
-            updatedAt: new Date('2023-09-25T16:00:00Z'),
+            totalPrice: 115000,
+            justification: 'Furnishing for the new downtown branch office. Award has been split between two vendors.',
+            status: 'PO_Created', // Status is PO_Created because at least one vendor has accepted
+            urgency: 'High',
+            createdAt: new Date('2023-11-01T09:00:00Z'),
+            updatedAt: new Date('2023-11-10T11:00:00Z'),
             quotations: [],
+            awardedQuoteItemIds: ['QI-SPLIT-A1', 'QI-SPLIT-B2'], // ID of Desk from Vendor A, ID of Table from Vendor B
         },
     ],
 
     auditLogs: [
-        {
-            id: 'log-001',
-            timestamp: new Date('2023-10-26T10:00:00Z'),
-            user: 'Alice',
-            role: 'Requester',
-            action: 'CREATE',
-            entity: 'Requisition',
-            entityId: 'REQ-1672531200',
-            details: 'Created new requisition for "New Laptops for Design Team"',
-        },
-        {
-            id: 'log-002',
-            timestamp: new Date('2023-10-26T10:05:00Z'),
-            user: 'System',
-            role: 'Admin',
-            action: 'POLICY_CHECK',
-            entity: 'Requisition',
-            entityId: 'REQ-1672531200',
-            details: 'Automated policy check passed',
-        },
-        {
-            id: 'log-003',
-            timestamp: new Date('2023-10-26T11:30:00Z'),
-            user: 'Bob',
-            role: 'Approver',
-            action: 'APPROVE',
-            entity: 'Requisition',
-            entityId: 'REQ-1672531200',
-            details: 'Approved requisition. Comment: "Urgent need, proceed."',
-        },
+        // Logs for standard requisitions
+        { id: 'log-001', timestamp: new Date('2023-10-26T10:00:00Z'), user: 'Alice', role: 'Requester', action: 'CREATE', entity: 'Requisition', entityId: 'REQ-1672531200', details: 'Created new requisition for "New Laptops for Design Team"',},
+        { id: 'log-002', timestamp: new Date('2023-10-26T11:30:00Z'), user: 'Diana', role: 'Admin', action: 'APPROVE', entity: 'Requisition', entityId: 'REQ-1672531200', details: 'Approved requisition.', },
+        // Logs for split-award test requisition
+        { id: 'log-split-001', timestamp: new Date('2023-11-10T10:00:00Z'), user: 'Charlie', role: 'Procurement_Officer', action: 'FINALIZE_AWARD', entity: 'Requisition', entityId: 'REQ-SPLIT-AWARD-01', details: 'Finalized split award for "New Branch Office Furniture".', transactionId: 'REQ-SPLIT-AWARD-01'},
+        { id: 'log-split-002', timestamp: new Date('2023-11-10T11:00:00Z'), user: 'Apple Inc.', role: 'Vendor', action: 'ACCEPT_AWARD', entity: 'Quotation', entityId: 'QUO-SPLIT-A', details: 'Vendor accepted award for Executive Desks. PO PO-SPLIT-001 auto-generated.', transactionId: 'REQ-SPLIT-AWARD-01'},
+        { id: 'log-split-003', timestamp: new Date('2023-11-12T14:00:00Z'), user: 'David', role: 'Receiving', action: 'RECEIVE_GOODS', entity: 'PurchaseOrder', entityId: 'PO-SPLIT-001', details: 'Received all 5 Executive Desks.', transactionId: 'REQ-SPLIT-AWARD-01'},
+        { id: 'log-split-004', timestamp: new Date('2023-11-13T10:00:00Z'), user: 'Eve', role: 'Finance', action: 'PROCESS_PAYMENT', entity: 'Invoice', entityId: 'INV-SPLIT-001', details: 'Processed payment for invoice INV-SPLIT-001.', transactionId: 'REQ-SPLIT-AWARD-01'},
     ],
 
     quotations: [
+        // Standard quotes for laptop req
+        { id: 'QUO-001', transactionId: 'REQ-1672531200', requisitionId: 'REQ-1672531200', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', items: [ { id: 'QI-001', requisitionItemId: 'ITEM-1', name: 'MacBook Pro 16-inch', quantity: 5, unitPrice: 2450, leadTimeDays: 14 }, { id: 'QI-002', requisitionItemId: 'ITEM-2', name: '4K Monitor', quantity: 5, unitPrice: 780, leadTimeDays: 10 } ], totalPrice: 16150, deliveryDate: new Date('2023-11-15T00:00:00Z'), createdAt: new Date('2023-10-06T10:00:00Z'), status: 'Submitted', notes: 'Bulk discount applied. Warranty included.'},
+        { id: 'QUO-002', transactionId: 'REQ-1672531200', requisitionId: 'REQ-1672531200', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', items: [ { id: 'QI-003', requisitionItemId: 'ITEM-1', name: 'MacBook Pro 16-inch', quantity: 5, unitPrice: 2550, leadTimeDays: 20 }, { id: 'QI-004', requisitionItemId: 'ITEM-2', name: '4K Monitor', quantity: 5, unitPrice: 750, leadTimeDays: 5 } ], totalPrice: 16500, deliveryDate: new Date('2023-11-20T00:00:00Z'), createdAt: new Date('2023-10-07T14:30:00Z'), status: 'Submitted', notes: 'Can ship monitors immediately.'},
+        
+        // Quotes for the split award test case
         {
-            id: 'QUO-001',
-            requisitionId: 'REQ-1672531200',
+            id: 'QUO-SPLIT-A',
+            transactionId: 'REQ-SPLIT-AWARD-01',
+            requisitionId: 'REQ-SPLIT-AWARD-01',
             vendorId: 'VENDOR-001',
             vendorName: 'Apple Inc.',
             items: [
-                { requisitionItemId: 'ITEM-1', name: 'MacBook Pro 16-inch', quantity: 5, unitPrice: 2450, leadTimeDays: 14 },
-                { requisitionItemId: 'ITEM-2', name: '4K Monitor', quantity: 5, unitPrice: 780, leadTimeDays: 10 }
+                { id: 'QI-SPLIT-A1', requisitionItemId: 'ITEM-SPLIT-1', name: 'Executive Desk', quantity: 5, unitPrice: 15000, leadTimeDays: 20 },
+                { id: 'QI-SPLIT-A2', requisitionItemId: 'ITEM-SPLIT-2', name: 'Conference Table', quantity: 1, unitPrice: 42000, leadTimeDays: 30 }
             ],
-            totalPrice: 16150,
-            deliveryDate: new Date('2023-11-15T00:00:00Z'),
-            createdAt: new Date('2023-10-06T10:00:00Z'),
-            status: 'Submitted',
-            notes: 'Bulk discount applied. Warranty included.'
+            totalPrice: 117000,
+            deliveryDate: new Date('2023-12-01T00:00:00Z'),
+            createdAt: new Date('2023-11-05T10:00:00Z'),
+            status: 'Accepted', // This vendor has accepted their part of the award
         },
         {
-            id: 'QUO-002',
-            requisitionId: 'REQ-1672531200',
+            id: 'QUO-SPLIT-B',
+            transactionId: 'REQ-SPLIT-AWARD-01',
+            requisitionId: 'REQ-SPLIT-AWARD-01',
             vendorId: 'VENDOR-002',
             vendorName: 'Dell Technologies',
             items: [
-                 { requisitionItemId: 'ITEM-1', name: 'MacBook Pro 16-inch', quantity: 5, unitPrice: 2550, leadTimeDays: 20 },
-                 { requisitionItemId: 'ITEM-2', name: '4K Monitor', quantity: 5, unitPrice: 750, leadTimeDays: 5 }
+                { id: 'QI-SPLIT-B1', requisitionItemId: 'ITEM-SPLIT-1', name: 'Executive Desk', quantity: 5, unitPrice: 16000, leadTimeDays: 15 },
+                { id: 'QI-SPLIT-B2', requisitionItemId: 'ITEM-SPLIT-2', name: 'Conference Table', quantity: 1, unitPrice: 40000, leadTimeDays: 25 }
             ],
-            totalPrice: 16500,
-            deliveryDate: new Date('2023-11-20T00:00:00Z'),
-            createdAt: new Date('2023-10-07T14:30:00Z'),
-            status: 'Submitted',
-            notes: 'Can ship monitors immediately. Laptops will have a longer lead time.'
+            totalPrice: 120000,
+            deliveryDate: new Date('2023-12-05T00:00:00Z'),
+            createdAt: new Date('2023-11-05T11:00:00Z'),
+            status: 'Partially_Awarded', // This vendor has been awarded but has not accepted yet
         }
     ],
     purchaseOrders: [
+        // PO for the split-award test (Vendor A's part)
         {
-            id: 'PO-SEED-001',
-            requisitionId: 'REQ-1672704000',
-            requisitionTitle: 'Software License Renewals',
-            vendor: {
-                id: 'VENDOR-002',
-                userId: '7',
-                name: 'Dell Technologies',
-                contactPerson: 'Michael Dell',
-                email: 'tade2024bdulin@gmail.com',
-                phone: '1-877-275-3355',
-                address: '1 Dell Way, Round Rock, TX 78682',
-                kycStatus: 'Verified',
-            },
+            id: 'PO-SPLIT-001',
+            transactionId: 'REQ-SPLIT-AWARD-01',
+            requisitionId: 'REQ-SPLIT-AWARD-01',
+            requisitionTitle: 'New Branch Office Furniture (Split Award Test)',
+            vendor: { id: 'VENDOR-001', userId: '6', name: 'Apple Inc.', contactPerson: 'Tim Cook', email: 'tade2024bdugit@gmail.com', phone: '1-800-MY-APPLE', address: '1 Apple Park Way', kycStatus: 'Verified' },
             items: [
-                { id: 'PO-ITEM-1', name: 'Project Management Tool (Annual)', requisitionItemId: 'ITEM-5', quantity: 20, unitPrice: 235, totalPrice: 4700, receivedQuantity: 20 }
+                { id: 'PO-ITEM-SPLIT-1', name: 'Executive Desk', requisitionItemId: 'ITEM-SPLIT-1', quantity: 5, unitPrice: 15000, totalPrice: 75000, receivedQuantity: 5 }
             ],
-            totalAmount: 4700,
-            status: 'Delivered',
-            createdAt: new Date('2023-09-25T16:00:00Z')
+            totalAmount: 75000,
+            status: 'Delivered', // This part is fully delivered
+            createdAt: new Date('2023-11-10T11:00:00Z')
         }
     ],
-    goodsReceipts: [],
-    invoices: [],
+    goodsReceipts: [
+        {
+            id: 'GRN-SPLIT-001',
+            transactionId: 'REQ-SPLIT-AWARD-01',
+            purchaseOrderId: 'PO-SPLIT-001',
+            receivedById: '4', // David
+            receivedBy: { id: '4', name: 'David', email: 'david@example.com', role: 'Receiving' },
+            receivedDate: new Date('2023-11-12T14:00:00Z'),
+            items: [
+                { poItemId: 'PO-ITEM-SPLIT-1', quantityReceived: 5, condition: 'Good' }
+            ]
+        }
+    ],
+    invoices: [
+        {
+            id: 'INV-SPLIT-001',
+            transactionId: 'REQ-SPLIT-AWARD-01',
+            purchaseOrderId: 'PO-SPLIT-001',
+            vendorId: 'VENDOR-001',
+            invoiceDate: new Date('2023-11-12T15:00:00Z'),
+            items: [
+                { id: 'INV-ITEM-SPLIT-1', name: 'Executive Desk', quantity: 5, unitPrice: 15000, totalPrice: 75000 }
+            ],
+            totalAmount: 75000,
+            status: 'Paid',
+            paymentDate: new Date('2023-11-13T10:00:00Z'),
+            paymentReference: 'PAY-SPLIT-98765'
+        }
+    ],
     users: [
         { id: '1', name: 'Alice', email: 'alice@example.com', password: 'password123', role: 'Requester', departmentId: 'DEPT-1', department: 'Design' },
         { id: '2', name: 'Bob', email: 'bob@example.com', password: 'password123', role: 'Approver', departmentId: 'DEPT-2', department: 'Operations' },
@@ -232,7 +236,7 @@ const seedData: AppData = {
         { id: '9', name: 'Fiona', email: 'fiona@example.com', password: 'password123', role: 'Committee_Member', departmentId: 'DEPT-1', department: 'Design' },
         { id: '10', name: 'George', email: 'george@example.com', password: 'password123', role: 'Committee_Member', departmentId: 'DEPT-3', department: 'IT' },
         { id: '11', name: 'Hannah', email: 'hannah@example.com', password: 'password123', role: 'Committee', departmentId: 'DEPT-2', department: 'Operations' },
-        { id: '12', name: 'Diana', email: 'diana@example.com', password: 'password123', role: 'Admin', departmentId: 'DEPT-2', department: 'Operations' },
+        { id: '12', name: 'Diana', email: 'diana@example.com', password: 'password123', role: 'Admin', departmentId: 'DEPT-1' },
         { id: '13', name: 'Irene', email: 'irene@example.com', password: 'password123', role: 'Committee_A_Member', departmentId: 'DEPT-5', department: 'Finance' },
         { id: '14', name: 'Jack', email: 'jack@example.com', password: 'password123', role: 'Committee_B_Member', departmentId: 'DEPT-4', department: 'Marketing' },
         { id: '15', name: 'Procurement Manager', email: 'manager.proc@example.com', password: 'password123', role: 'Manager_Procurement_Division', departmentId: 'DEPT-2', department: 'Operations' },
@@ -241,9 +245,9 @@ const seedData: AppData = {
         { id: '18', name: 'President', email: 'president@example.com', password: 'password123', role: 'President', departmentId: 'DEPT-2', department: 'Operations' },
     ],
     departments: [
-        { id: 'DEPT-1', name: 'Design', description: 'Handles all creative and design tasks.', headId: '1' },
-        { id: 'DEPT-2', name: 'Operations', description: 'Manages day-to-day business operations.', headId: '12' },
-        { id: 'DEPT-3', name: 'IT', description: 'Manages all technology and infrastructure.', headId: '3' },
+        { id: 'DEPT-1', name: 'Design', description: 'Handles all creative and design tasks.', headId: '12' },
+        { id: 'DEPT-2', name: 'Operations', description: 'Manages day-to-day business operations.', headId: null },
+        { id: 'DEPT-3', name: 'IT', description: 'Manages all technology and infrastructure.', headId: null },
         { id: 'DEPT-4', name: 'Marketing', description: 'Responsible for marketing and sales.', headId: null },
         { id: 'DEPT-5', name: 'Finance', description: 'Handles all financial matters.', headId: '5' },
         { id: 'DEPT-6', name: 'Human Resources', description: 'Manages employee relations and hiring.', headId: null },
