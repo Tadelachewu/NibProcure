@@ -11,9 +11,11 @@ export async function POST(
   { params }: { params: { id:string } }
 ) {
     const requisitionId = params.id;
+    console.log(`--- FINALIZE-SCORES START for REQ: ${requisitionId} ---`);
     try {
         const body = await request.json();
         const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue } = body;
+        console.log(`[FINALIZE-SCORES] Award Value: ${totalAwardValue}`);
 
         const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
         if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Admin' && user.role !== 'Committee')) {
@@ -22,84 +24,64 @@ export async function POST(
         
         const result = await prisma.$transaction(async (tx) => {
             
-            const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
-
-            // 1. Clear any previous awards for this requisition to ensure a clean state
-            await tx.awardedItem.deleteMany({ where: { requisitionId: requisitionId } });
-
-            // 2. Create new AwardedItem entries for each winning item
-            const winningQuoteIds = new Set<string>();
-            for (const vendorId in awards) {
-                const award = awards[vendorId];
-                if (!award.quoteId) {
-                    throw new Error(`quoteId is missing for award to vendor ${vendorId}.`);
-                }
-                winningQuoteIds.add(award.quoteId);
-
-                for (const item of award.items) {
-                    if (!item.quoteItemId) {
-                        throw new Error(`quoteItemId is missing for awarded item. This should not happen.`);
-                    }
-                    await tx.awardedItem.create({
-                        data: {
-                            status: 'PendingAcceptance',
-                            requisition: { connect: { id: requisitionId } },
-                            requisitionItem: { connect: { id: item.requisitionItemId } },
-                            vendor: { connect: { id: vendorId } },
-                            quotation: { connect: { id: award.quoteId } }
-                        }
-                    });
-                }
-            }
-
-            // 3. Set winning quotes to 'Pending_Award', rank others as standby, and reject the rest
-            const allQuotesForReq = await tx.quotation.findMany({
-                where: { 
-                    requisitionId: requisitionId,
-                    status: { notIn: ['Declined', 'Failed'] } // Don't consider already declined quotes
-                },
-                orderBy: { finalAverageScore: 'desc' },
+            const allQuotes = await tx.quotation.findMany({ 
+                where: { requisitionId: requisitionId }, 
+                orderBy: { finalAverageScore: 'desc' } 
             });
 
-            let rankCounter = 1;
-            const quotesToUpdate = [];
-
-            for (const quote of allQuotesForReq) {
-                if (winningQuoteIds.has(quote.id)) {
-                    quotesToUpdate.push({
-                        where: { id: quote.id },
-                        data: { status: 'Pending_Award', rank: 1 }
-                    });
-                } else if (rankCounter <= 2) { // Ranks 2 and 3 are standby
-                    rankCounter++;
-                    quotesToUpdate.push({
-                        where: { id: quote.id },
-                        data: { status: 'Standby', rank: rankCounter }
-                    });
-                } else { // All others are rejected
-                    quotesToUpdate.push({
-                        where: { id: quote.id },
-                        data: { status: 'Rejected', rank: null }
-                    });
-                }
-            }
-
-            for (const update of quotesToUpdate) {
-                await tx.quotation.update(update);
+            if (allQuotes.length === 0) {
+                throw new Error("No quotes found to process for this requisition.");
             }
             
-            // 4. Update the main requisition with the new status and approval routing
+            const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
+
+            const awardedVendorIds = Object.keys(awards);
+            const winnerQuotes = allQuotes.filter(q => awardedVendorIds.includes(q.vendorId));
+
+            // Create an exclusion list of vendors who have already declined.
+            const declinedVendorIds = new Set(allQuotes.filter(q => q.status === 'Declined' || q.status === 'Failed').map(q => q.vendorId));
+
+            // The pool of "other" quotes now EXCLUDES winners and any previously declined vendors.
+            const otherQuotes = allQuotes.filter(q => !awardedVendorIds.includes(q.vendorId) && !declinedVendorIds.has(q.vendorId));
+
+
+            for (const quote of winnerQuotes) {
+                const award = awards[quote.vendorId];
+                 await tx.quotation.update({
+                    where: { id: quote.id },
+                    data: {
+                        status: 'Pending_Award', // Set to pending, not awarded yet
+                        rank: 1
+                    }
+                });
+            }
+            
+            const standbyQuotes = otherQuotes.slice(0, 2);
+            if (standbyQuotes.length > 0) {
+                for (let i = 0; i < standbyQuotes.length; i++) {
+                    await tx.quotation.update({ where: { id: standbyQuotes[i].id }, data: { status: 'Standby', rank: (i + 2) as 2 | 3 } });
+                }
+            }
+            
+            const rejectedQuoteIds = otherQuotes.slice(2).map(q => q.id);
+            if (rejectedQuoteIds.length > 0) {
+                await tx.quotation.updateMany({ where: { id: { in: rejectedQuoteIds } }, data: { status: 'Rejected', rank: null } });
+            }
+            
+            const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
+            
             const updatedRequisition = await tx.purchaseRequisition.update({
                 where: { id: requisitionId },
                 data: {
                     status: nextStatus as any,
                     currentApproverId: nextApproverId,
+                    awardedQuoteItemIds: awardedItemIds,
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
                     totalPrice: totalAwardValue
                 }
             });
-            
-            // 5. Create the audit log
+            console.log(`[FINALIZE-SCORES] Requisition ${requisitionId} updated. New status: ${updatedRequisition.status}, Approver: ${updatedRequisition.currentApproverId}`);
+
             await tx.auditLog.create({
                 data: {
                     user: { connect: { id: userId } },
@@ -108,16 +90,16 @@ export async function POST(
                     entityId: requisitionId,
                     details: auditDetails,
                     transactionId: requisitionId,
-                    timestamp: new Date(),
                 }
             });
             
             return updatedRequisition;
         }, {
-            maxWait: 15000,
-            timeout: 30000,
+            maxWait: 10000,
+            timeout: 20000,
         });
         
+        console.log(`--- FINALIZE-SCORES END for REQ: ${requisitionId} ---`);
         return NextResponse.json({ message: 'Award process finalized and routed for review.', requisition: result });
 
     } catch (error) {

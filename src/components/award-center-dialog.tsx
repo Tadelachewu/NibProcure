@@ -54,7 +54,7 @@ export const AwardCenterDialog = ({
 
         return requisition.items.map(reqItem => {
             let bestScore = -1;
-            let winner: { vendorId: string; vendorName: string; quoteId: string; quoteItemId: string; } | null = null;
+            let winner: { vendorId: string; vendorName: string; quoteItemId: string; } | null = null;
 
             eligibleQuotes.forEach(quote => {
                 const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
@@ -79,7 +79,6 @@ export const AwardCenterDialog = ({
                         winner = {
                             vendorId: quote.vendorId,
                             vendorName: quote.vendorName,
-                            quoteId: quote.id,
                             quoteItemId: proposal.id
                         };
                     }
@@ -97,7 +96,7 @@ export const AwardCenterDialog = ({
     // Single vendor award logic
     const overallWinner = useMemo(() => {
         let bestOverallScore = -1;
-        let overallWinner: { vendorId: string; vendorName: string; quoteId: string; items: { requisitionItemId: string, quoteItemId: string }[] } | null = null;
+        let overallWinner: { vendorId: string; vendorName: string; items: { requisitionItemId: string, quoteItemId: string }[] } | null = null;
         
         eligibleQuotes.forEach(quote => {
             if (quote.finalAverageScore && quote.finalAverageScore > bestOverallScore) {
@@ -105,7 +104,6 @@ export const AwardCenterDialog = ({
                 overallWinner = {
                     vendorId: quote.vendorId,
                     vendorName: quote.vendorName,
-                    quoteId: quote.id,
                     // Award all original items, assuming vendor quoted them
                     items: requisition.items.map(reqItem => {
                         const vendorItem = quote.items.find(i => i.requisitionItemId === reqItem.id);
@@ -119,13 +117,13 @@ export const AwardCenterDialog = ({
 
 
     const handleConfirmAward = () => {
-        let awards: { [vendorId: string]: { vendorName: string; quoteId: string; items: { requisitionItemId: string, quoteItemId: string }[] } } = {};
+        let awards: { [vendorId: string]: { vendorName: string, items: { requisitionItemId: string, quoteItemId: string }[] } } = {};
         
         if (awardStrategy === 'item') {
              itemWinners.forEach(item => {
                 if (item.winner) {
                     if (!awards[item.winner.vendorId]) {
-                        awards[item.winner.vendorId] = { vendorName: item.winner.vendorName, quoteId: item.winner.quoteId, items: [] };
+                        awards[item.winner.vendorId] = { vendorName: item.winner.vendorName, items: [] };
                     }
                     awards[item.winner.vendorId].items.push({ requisitionItemId: item.requisitionItemId, quoteItemId: item.winner.quoteItemId });
                 }
@@ -134,7 +132,6 @@ export const AwardCenterDialog = ({
            if (overallWinner?.vendorId) {
                 awards[overallWinner.vendorId] = { 
                     vendorName: overallWinner.vendorName!, 
-                    quoteId: overallWinner.quoteId!,
                     items: overallWinner.items!
                 };
            }

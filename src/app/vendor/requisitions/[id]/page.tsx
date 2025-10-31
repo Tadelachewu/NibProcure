@@ -681,12 +681,7 @@ export default function VendorRequisitionPage() {
             if (!response.ok) throw new Error(result.error || `Failed to ${action} award.`);
             
             toast({ title: 'Response Submitted', description: result.message });
-            
-            if (result.quote) {
-                setSubmittedQuote(result.quote);
-            } else {
-                fetchRequisitionData();
-            }
+            fetchRequisitionData();
 
         } catch (error) {
              toast({
@@ -705,8 +700,8 @@ export default function VendorRequisitionPage() {
     if (!requisition) return <div className="text-center p-8">Requisition not found.</div>;
 
     const isAwarded = submittedQuote?.status === 'Awarded' || submittedQuote?.status === 'Partially_Awarded';
-    const hasResponded = submittedQuote?.status === 'Accepted' || submittedQuote?.status === 'Declined';
     const isAccepted = submittedQuote?.status === 'Accepted';
+    const hasResponded = submittedQuote?.status === 'Accepted' || submittedQuote?.status === 'Declined';
     const hasSubmittedInvoice = submittedQuote?.status === 'Invoice_Submitted';
     const isResponseDeadlineExpired = requisition.awardResponseDeadline ? isPast(new Date(requisition.awardResponseDeadline)) : false;
     const isStandby = submittedQuote?.status === 'Standby';
@@ -826,7 +821,7 @@ export default function VendorRequisitionPage() {
                 Back to Dashboard
             </Button>
             
-            {isAwarded && !hasResponded && (
+            {isAwarded && (
                  <Card>
                     <CardHeader>
                         <CardTitle className="text-green-600">Congratulations! You've Been Awarded!</CardTitle>
@@ -854,7 +849,7 @@ export default function VendorRequisitionPage() {
                     <CardFooter className="gap-4">
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button className="flex-1" disabled={isResponding || isResponseDeadlineExpired || hasResponded}>
+                                <Button className="flex-1" disabled={isResponding || isResponseDeadlineExpired}>
                                     {isResponding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4"/>} Accept Award
                                 </Button>
                             </AlertDialogTrigger>
@@ -873,7 +868,7 @@ export default function VendorRequisitionPage() {
                         </AlertDialog>
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button className="flex-1" variant="destructive" disabled={isResponding || isResponseDeadlineExpired || hasResponded}>
+                                <Button className="flex-1" variant="destructive" disabled={isResponding || isResponseDeadlineExpired}>
                                     {isResponding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsDown className="mr-2 h-4 w-4"/>} Decline Award
                                 </Button>
                             </AlertDialogTrigger>

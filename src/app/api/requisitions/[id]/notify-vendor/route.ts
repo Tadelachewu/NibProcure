@@ -1,11 +1,12 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
-import { format } from 'date-fns';
+import { format, differenceInMinutes } from 'date-fns';
 
 export async function POST(
   request: Request,
@@ -32,7 +33,7 @@ export async function POST(
     }
 
     const transactionResult = await prisma.$transaction(async (tx) => {
-        // Update the main requisition status from PostApproved to Awarded, which signifies the award is active and pending vendor response.
+        // Update the main requisition status from PostApproved to Awarded
         const updatedRequisition = await tx.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
@@ -40,42 +41,35 @@ export async function POST(
                 awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
             }
         });
-        
-        // Find all vendors with items in a "PendingAcceptance" state for this requisition.
-        // This correctly identifies the winners of the finalized award.
-        const awardsToNotify = await tx.awardedItem.findMany({
+
+        // The quotes are already in 'Pending_Award'. Now we find them to update and notify.
+        const winningQuotes = await tx.quotation.findMany({
             where: {
                 requisitionId: requisitionId,
-                status: 'PendingAcceptance'
+                status: 'Pending_Award'
             },
             include: {
                 vendor: true
-            },
-            distinct: ['vendorId']
+            }
         });
 
-        if (awardsToNotify.length === 0) {
-            throw new Error("No items in 'PendingAcceptance' status found to notify. The requisition might be in an inconsistent state.");
+        if (winningQuotes.length === 0) {
+            throw new Error("No winning quote in 'Pending Award' status found to notify. The requisition might be in an inconsistent state.");
         }
-
-        // Set the corresponding quotes to "Awarded" or "Partially_Awarded" to be visible in the vendor portal.
-        for (const award of awardsToNotify) {
-            const allAwardedItemsForVendor = await tx.awardedItem.count({ where: { requisitionId, vendorId: award.vendorId }});
-            const quote = await tx.quotation.findFirst({ where: { requisitionId, vendorId: award.vendorId }, include: { items: true }});
+        
+        // Notify all winning vendors (for split awards)
+        for (const winningQuote of winningQuotes) {
             
-            if(quote) {
-                const status = quote.items.length === allAwardedItemsForVendor ? 'Awarded' : 'Partially_Awarded';
-                await tx.quotation.update({
-                    where: { id: quote.id },
-                    data: { status: status }
-                });
-            }
+            // CRITICAL FIX: Update the quote status to 'Awarded'
+            await tx.quotation.update({
+                where: { id: winningQuote.id },
+                data: { status: 'Awarded' }
+            });
 
-            // Send the email notification
-            if (award.vendor && requisition) {
+            if (winningQuote.vendor && requisition) {
                 const finalDeadline = awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline;
                 const emailHtml = `
-                    <h1>Congratulations, ${award.vendor.name}!</h1>
+                    <h1>Congratulations, ${winningQuote.vendor.name}!</h1>
                     <p>You have been awarded a contract for requisition <strong>${requisition.title}</strong>.</p>
                     <p>Please log in to the vendor portal to review the award details and respond.</p>
                     ${finalDeadline ? `<p><strong>This award must be accepted by ${format(finalDeadline, 'PPpp')}.</strong></p>` : ''}
@@ -85,7 +79,7 @@ export async function POST(
                 `;
 
                 await sendEmail({
-                    to: award.vendor.email,
+                    to: winningQuote.vendor.email,
                     subject: `Contract Awarded: ${requisition.title}`,
                     html: emailHtml
                 });
@@ -100,14 +94,14 @@ export async function POST(
                 action: 'NOTIFY_VENDOR',
                 entity: 'Requisition',
                 entityId: requisitionId,
-                details: `Sent award notification to ${awardsToNotify.length} winning vendor(s) for requisition ${requisitionId}.`
+                details: `Sent award notification to winning vendor(s) for requisition ${requisitionId}.`
             }
         });
 
         return updatedRequisition;
     });
 
-    return NextResponse.json({ message: 'Vendor(s) notified successfully.', requisition: transactionResult });
+    return NextResponse.json({ message: 'Vendor notified successfully.', requisition: transactionResult });
 
   } catch (error) {
     console.error("Failed to notify vendor:", error);
