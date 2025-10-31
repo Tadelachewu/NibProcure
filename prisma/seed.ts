@@ -426,11 +426,12 @@ async function main() {
 
     // Seed Goods Receipt Notes
     for (const grn of seedData.goodsReceipts) {
-        const { items, ...grnData } = grn;
+        const { items, receivedBy, ...grnData } = grn;
         const createdGrn = await prisma.goodsReceiptNote.create({
             data: {
                 ...grnData,
                 receivedDate: new Date(grnData.receivedDate),
+                receivedBy: { connect: { id: grnData.receivedById } }
             }
         });
 
