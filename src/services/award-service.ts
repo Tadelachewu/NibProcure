@@ -177,6 +177,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
     const itemsToPromote = nextVendor.items.filter(item => declinedItemIds.includes(item.requisitionItemId));
     const promotionValue = itemsToPromote.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
     
+    // Mark the old declined awards as 'Superseded' so they are out of the flow
     await tx.awardedItem.updateMany({
         where: {
             requisitionId: requisitionId,

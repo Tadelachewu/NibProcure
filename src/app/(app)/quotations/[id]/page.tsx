@@ -2426,9 +2426,11 @@ export default function QuotationDetailsPage() {
             throw new Error(errorData.error);
         }
 
+        const result = await response.json();
+
         toast({
             title: `Action Successful`,
-            description: `The award status has been updated.`
+            description: result.message || `The award status has been updated.`
         });
         fetchRequisitionAndQuotes();
     } catch (error) {
@@ -2546,7 +2548,6 @@ export default function QuotationDetailsPage() {
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
-  const awardProcessStarted = isAwarded || requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
 
 
   return (
@@ -2921,3 +2922,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
 
     
+
