@@ -32,10 +32,12 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
     const nextStatus = getNextStatusFromRole(firstStep.role);
     let nextApproverId: string | null = null;
     
+    // If the first step is a specific role (not a general committee), find the user to assign.
     if (!firstStep.role.includes('Committee')) {
         const approverUser = await tx.user.findFirst({ where: { role: firstStep.role }});
         if (!approverUser) {
-            throw new Error(`Could not find a user for the role: ${firstStep.role.replace(/_/g, ' ')}`);
+            // This is a critical configuration error. The system can't proceed.
+            throw new Error(`System configuration error: Could not find a user for the role: ${firstStep.role.replace(/_/g, ' ')}. Please assign a user to this role.`);
         }
         nextApproverId = approverUser.id;
     }
@@ -47,45 +49,6 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
     };
 }
 
-async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId: string) {
-    await tx.awardedItem.deleteMany({ where: { requisitionId } });
-
-    const quotationsToDelete = await tx.quotation.findMany({
-        where: { requisitionId },
-        include: { scores: { include: { itemScores: { include: { scores: true } } } } }
-    });
-
-    const scoreSetIds = quotationsToDelete.flatMap(q => q.scores.map(s => s.id));
-    const itemScoreIds = quotationsToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
-
-    if (itemScoreIds.length > 0) {
-        await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
-    }
-    if (scoreSetIds.length > 0) {
-        await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
-    }
-    if (scoreSetIds.length > 0) {
-        await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
-    }
-    await tx.quotation.deleteMany({ where: { requisitionId } });
-    
-    await tx.committeeAssignment.deleteMany({ where: { requisitionId }});
-
-    await tx.purchaseRequisition.update({
-        where: { id: requisitionId },
-        data: {
-            status: 'PreApproved',
-            currentApproverId: null,
-            deadline: null,
-            scoringDeadline: null,
-            awardResponseDeadline: null,
-            committeeName: null,
-            committeePurpose: null,
-            financialCommitteeMembers: { set: [] },
-            technicalCommitteeMembers: { set: [] },
-        }
-    });
-}
 
 export async function handleAwardRejection(
     tx: Prisma.TransactionClient, 
@@ -165,9 +128,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
     });
     
     if (standbyQuotes.length === 0) {
-        // No standby vendors available for any of the failed items. Reset RFQ for these items.
-        // This logic is complex and might be better handled as a manual action by the PO.
-        // For now, we'll just indicate no standby is available.
         return { message: 'No standby vendors available for the declined items. Manual re-sourcing is required.' };
     }
 
@@ -198,10 +158,15 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         });
     }
 
-    // Update the main requisition to reflect the new state
+    // THIS IS THE CRITICAL FIX: Re-run the approval matrix logic
+    const { nextStatus, nextApproverId, auditDetails: promotionAuditDetails } = await getNextApprovalStep(tx, promotionValue);
+
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
-        data: { status: 'PostApproved' } // Ready for PO to notify vendor again
+        data: { 
+            status: nextStatus as any,
+            currentApproverId: nextApproverId
+        }
     });
 
     await tx.auditLog.create({
@@ -210,11 +175,11 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             action: 'PROMOTE_STANDBY_AWARD',
             entity: 'Requisition',
             entityId: requisitionId,
-            details: `Promoted standby vendor ${nextVendor.vendorName} for ${itemsToPromote.length} item(s).`,
+            details: `Promoted standby vendor ${nextVendor.vendorName} for ${itemsToPromote.length} item(s). New award value: ${promotionValue.toLocaleString()} ETB. ${promotionAuditDetails}`,
             transactionId: requisitionId,
             timestamp: new Date(),
         }
     });
 
-    return { message: `Promoted ${nextVendor.vendorName}. Requisition is ready for vendor notification.` };
+    return { message: `Promoted ${nextVendor.vendorName}. Award has been re-routed for approval.` };
 }
