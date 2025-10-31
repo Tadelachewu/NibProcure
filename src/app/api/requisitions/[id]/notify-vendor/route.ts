@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
-import { format, differenceInMinutes } from 'date-fns';
+import { format } from 'date-fns';
 
 export async function POST(
   request: Request,
@@ -32,7 +32,7 @@ export async function POST(
     }
 
     const transactionResult = await prisma.$transaction(async (tx) => {
-        // Update the main requisition status from PostApproved to Awarded
+        // Update the main requisition status from PostApproved to Awarded, which signifies the award is active and pending vendor response.
         const updatedRequisition = await tx.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
@@ -41,7 +41,8 @@ export async function POST(
             }
         });
         
-        // Find all vendors with items pending acceptance
+        // Find all vendors with items in a "PendingAcceptance" state for this requisition.
+        // This correctly identifies the winners of the finalized award.
         const awardsToNotify = await tx.awardedItem.findMany({
             where: {
                 requisitionId: requisitionId,
@@ -56,8 +57,21 @@ export async function POST(
         if (awardsToNotify.length === 0) {
             throw new Error("No items in 'PendingAcceptance' status found to notify. The requisition might be in an inconsistent state.");
         }
-        
+
+        // Set the corresponding quotes to "Awarded" or "Partially_Awarded" to be visible in the vendor portal.
         for (const award of awardsToNotify) {
+            const allAwardedItemsForVendor = await tx.awardedItem.count({ where: { requisitionId, vendorId: award.vendorId }});
+            const quote = await tx.quotation.findFirst({ where: { requisitionId, vendorId: award.vendorId }, include: { items: true }});
+            
+            if(quote) {
+                const status = quote.items.length === allAwardedItemsForVendor ? 'Awarded' : 'Partially_Awarded';
+                await tx.quotation.update({
+                    where: { id: quote.id },
+                    data: { status: status }
+                });
+            }
+
+            // Send the email notification
             if (award.vendor && requisition) {
                 const finalDeadline = awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline;
                 const emailHtml = `
@@ -93,7 +107,7 @@ export async function POST(
         return updatedRequisition;
     });
 
-    return NextResponse.json({ message: 'Vendor notified successfully.', requisition: transactionResult });
+    return NextResponse.json({ message: 'Vendor(s) notified successfully.', requisition: transactionResult });
 
   } catch (error) {
     console.error("Failed to notify vendor:", error);
