@@ -62,7 +62,7 @@ export async function POST(
                 ['Delivered', 'Closed', 'Cancelled'].includes(po.status.replace(/_/g, ' '))
             );
 
-            if (allPOsCompleted) {
+            if (allPOsForRequisition.length > 0 && allPOsCompleted) {
                 await tx.purchaseRequisition.update({
                     where: { id: requisitionId },
                     data: { status: 'Closed' }
