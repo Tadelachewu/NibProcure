@@ -431,7 +431,7 @@ async function main() {
             data: {
                 ...grnData,
                 receivedDate: new Date(grnData.receivedDate),
-                receivedBy: { connect: { id: grnData.receivedById } }
+                receivedById: grnData.receivedById,
             }
         });
 
@@ -481,5 +481,7 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    
 
     
