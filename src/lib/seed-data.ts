@@ -129,6 +129,25 @@ const seedData: AppData = {
             quotations: [],
             awardedQuoteItemIds: ['QI-SPLIT-A1', 'QI-SPLIT-B2'], // ID of Desk from Vendor A, ID of Table from Vendor B
         },
+        {
+            id: 'REQ-PARTIAL-TEST-01',
+            requesterId: '1',
+            title: 'Partial Award Test - Office Tech',
+            department: 'IT',
+            departmentId: 'DEPT-3',
+            items: [
+                { id: 'ITEM-PARTIAL-1', name: 'High-Performance Laptop', quantity: 10, unitPrice: 30000, description: '' },
+                { id: 'ITEM-PARTIAL-2', name: '27-inch 4K Monitor', quantity: 20, unitPrice: 8000, description: '' },
+            ],
+            totalPrice: 460000, // 10*30000 + 20*8000
+            justification: 'Seeding a requisition to test a partial award scenario where different items are awarded to different vendors.',
+            status: 'PostApproved',
+            urgency: 'High',
+            createdAt: new Date('2023-12-01T09:00:00Z'),
+            updatedAt: new Date('2023-12-05T15:00:00Z'),
+            quotations: [],
+            awardedQuoteItemIds: ['QI-PARTIAL-A1', 'QI-PARTIAL-B2'], // Apple wins laptops, Dell wins monitors
+        },
         // --- 10 NEW AWARDED REQUISITIONS ---
         ...Array.from({ length: 10 }).map((_, i) => {
             const isAppleWinner = i % 2 === 0;
@@ -198,6 +217,40 @@ const seedData: AppData = {
             createdAt: new Date('2023-11-05T11:00:00Z'),
             status: 'Awarded', // This vendor has been awarded but has not accepted yet
         },
+
+        // Quotes for the NEW partial award test case
+        {
+            id: 'QUO-PARTIAL-A',
+            transactionId: 'REQ-PARTIAL-TEST-01',
+            requisitionId: 'REQ-PARTIAL-TEST-01',
+            vendorId: 'VENDOR-001', // Apple
+            vendorName: 'Apple Inc.',
+            items: [
+                { id: 'QI-PARTIAL-A1', requisitionItemId: 'ITEM-PARTIAL-1', name: 'High-Performance Laptop', quantity: 10, unitPrice: 30000, leadTimeDays: 14 },
+                { id: 'QI-PARTIAL-A2', requisitionItemId: 'ITEM-PARTIAL-2', name: '27-inch 4K Monitor', quantity: 20, unitPrice: 8500, leadTimeDays: 10 },
+            ],
+            totalPrice: 470000,
+            deliveryDate: new Date('2023-12-20T00:00:00Z'),
+            createdAt: new Date('2023-12-02T10:00:00Z'),
+            status: 'Pending_Award', // Apple is awarded Laptops
+        },
+        {
+            id: 'QUO-PARTIAL-B',
+            transactionId: 'REQ-PARTIAL-TEST-01',
+            requisitionId: 'REQ-PARTIAL-TEST-01',
+            vendorId: 'VENDOR-002', // Dell
+            vendorName: 'Dell Technologies',
+            items: [
+                { id: 'QI-PARTIAL-B1', requisitionItemId: 'ITEM-PARTIAL-1', name: 'High-Performance Laptop', quantity: 10, unitPrice: 31000, leadTimeDays: 12 },
+                { id: 'QI-PARTIAL-B2', requisitionItemId: 'ITEM-PARTIAL-2', name: '27-inch 4K Monitor', quantity: 20, unitPrice: 8000, leadTimeDays: 5 },
+            ],
+            totalPrice: 470000,
+            deliveryDate: new Date('2023-12-18T00:00:00Z'),
+            createdAt: new Date('2023-12-02T11:00:00Z'),
+            status: 'Pending_Award', // Dell is awarded Monitors
+        },
+
+
          // --- 20 NEW QUOTATIONS FOR THE AWARD TESTS ---
         ...Array.from({ length: 10 }).flatMap((_, i) => {
             const isAppleWinner = i % 2 === 0;
