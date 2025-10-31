@@ -85,6 +85,7 @@ export async function POST(
                     entityId: requisitionId,
                     details: auditDetails,
                     transactionId: requisitionId,
+                    timestamp: new Date(),
                 }
             });
             
