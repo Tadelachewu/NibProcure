@@ -68,271 +68,140 @@ const seedData: AppData = {
                 { name: 'Business License', url: '#', submittedAt: new Date('2023-10-28T00:00:00Z')},
                 { name: 'Tax ID', url: '#', submittedAt: new Date('2023-10-28T00:00:00Z')}
             ]
+        },
+        {
+            id: 'VENDOR-004',
+            userId: '19',
+            name: 'HP Inc.',
+            contactPerson: 'Enrique Lores',
+            email: 'vendor@hp.com',
+            phone: '1-800-474-6836',
+            address: '1501 Page Mill Rd, Palo Alto, CA 94304',
+            kycStatus: 'Verified',
+            kycDocuments: [
+                { name: 'Business License', url: '#', submittedAt: new Date('2023-03-10T00:00:00Z')},
+                { name: 'Tax ID', url: '#', submittedAt: new Date('2023-03-10T00:00:00Z')}
+            ]
         }
     ],
 
     requisitions: [
+        // --- BASE SCENARIOS ---
         {
             id: `REQ-1672531200`,
             requesterId: '1',
             title: 'New Laptops for Design Team',
             department: 'Design',
             departmentId: 'DEPT-1',
-            items: [
-                { id: 'ITEM-1', name: 'MacBook Pro 16-inch', quantity: 5, unitPrice: 2499, description: '' },
-                { id: 'ITEM-2', name: '4K Monitor', quantity: 5, unitPrice: 799, description: '' }
-            ],
-            totalPrice: 16490,
+            items: [ { id: 'ITEM-1', name: 'MacBook Pro 16-inch', quantity: 5, unitPrice: 2499, description: '' } ],
+            totalPrice: 12495,
             justification: 'Current laptops are over 5 years old and struggling with new design software.',
-            status: 'PreApproved',
+            status: 'Scoring_Complete',
             urgency: 'Low',
-            createdAt: new Date('2023-10-01T10:00:00Z'),
-            updatedAt: new Date('2023-10-05T11:30:00Z'),
+            createdAt: new Date('2024-01-01T10:00:00Z'),
+            updatedAt: new Date('2024-01-05T11:30:00Z'),
+            deadline: new Date('2024-01-10T23:59:00Z'),
+            scoringDeadline: new Date('2024-01-15T23:59:00Z'),
             quotations: [],
             financialCommitteeMemberIds: ['9'],
             technicalCommitteeMemberIds: ['10'],
         },
+         // --- 10 NEW TEST SCENARIOS ---
         {
-            id: `REQ-1672617600`,
-            requesterId: '2',
-            title: 'Office Supplies Replenishment',
-            department: 'Operations',
-            departmentId: 'DEPT-2',
-            items: [
-                { id: 'ITEM-3', name: 'Printer Paper (Case)', quantity: 10, unitPrice: 45, description: '' },
-                { id: 'ITEM-4', name: 'Toner Cartridge', quantity: 4, unitPrice: 150, description: '' }
-            ],
-            totalPrice: 1050,
-            justification: 'Standard quarterly replenishment of office supplies.',
-            status: 'Pending_Approval',
-            urgency: 'Low',
-            createdAt: new Date('2023-10-02T14:00:00Z'),
-            updatedAt: new Date('2023-10-02T14:00:00Z'),
-            quotations: [],
+            id: 'TEST-REQ-01', requesterId: '1', title: 'Test 01: Pending Approval', department: 'Design', departmentId: 'DEPT-1',
+            items: [{ id: 'TEST-ITEM-01', name: 'Test Item', quantity: 1, unitPrice: 100, description: '' }], totalPrice: 100,
+            justification: 'Scenario 1: Waiting for initial departmental approval.', status: 'Pending_Approval', urgency: 'Low',
+            createdAt: new Date(), updatedAt: new Date(), currentApproverId: '12', quotations: [],
         },
         {
-            id: `REQ-SPLIT-AWARD-01`,
-            requesterId: '1',
-            title: 'New Branch Office Furniture (Split Award Test)',
-            department: 'Design',
-            departmentId: 'DEPT-1',
-            items: [
-                { id: 'ITEM-SPLIT-1', name: 'Executive Desk', quantity: 5, unitPrice: 15000, description: '' },
-                { id: 'ITEM-SPLIT-2', name: 'Conference Table', quantity: 1, unitPrice: 40000, description: '' },
-            ],
-            totalPrice: 115000,
-            justification: 'Furnishing for the new downtown branch office. Award has been split between two vendors.',
-            status: 'Closed',
-            urgency: 'High',
-            createdAt: new Date('2023-11-01T09:00:00Z'),
-            updatedAt: new Date('2023-11-13T10:00:00Z'),
-            quotations: [],
-            awardedQuoteItemIds: ['QI-SPLIT-A1', 'QI-SPLIT-B2'], // ID of Desk from Vendor A, ID of Table from Vendor B
+            id: 'TEST-REQ-02', requesterId: '1', title: 'Test 02: Rejected Requisition', department: 'Design', departmentId: 'DEPT-1',
+            items: [{ id: 'TEST-ITEM-02', name: 'Test Item', quantity: 1, unitPrice: 100, description: '' }], totalPrice: 100,
+            justification: 'Scenario 2: Rejected by manager, ready for requester to edit.', status: 'Rejected', urgency: 'Low',
+            createdAt: new Date(), updatedAt: new Date(), approverComment: 'Budget is frozen for this quarter. Please resubmit next month.', quotations: [],
         },
         {
-            id: 'REQ-PARTIAL-TEST-01',
-            requesterId: '1',
-            title: 'Partial Award Test - Office Tech',
-            department: 'IT',
-            departmentId: 'DEPT-3',
-            items: [
-                { id: 'ITEM-PARTIAL-1', name: 'High-Performance Laptop', quantity: 10, unitPrice: 30000, description: '' },
-                { id: 'ITEM-PARTIAL-2', name: '27-inch 4K Monitor', quantity: 20, unitPrice: 8000, description: '' },
-            ],
-            totalPrice: 460000, // 10*30000 + 20*8000
-            justification: 'Seeding a requisition to test a partial award scenario where different items are awarded to different vendors.',
-            status: 'PostApproved',
-            urgency: 'High',
-            createdAt: new Date('2023-12-01T09:00:00Z'),
-            updatedAt: new Date('2023-12-05T15:00:00Z'),
-            quotations: [],
-            awardedQuoteItemIds: ['QI-PARTIAL-A1', 'QI-PARTIAL-B2'], // Apple wins laptops, Dell wins monitors
+            id: 'TEST-REQ-03', requesterId: '1', title: 'Test 03: Ready for RFQ', department: 'Design', departmentId: 'DEPT-1',
+            items: [{ id: 'TEST-ITEM-03', name: 'Test Item', quantity: 1, unitPrice: 100, description: '' }], totalPrice: 100,
+            justification: 'Scenario 3: Approved by department, waiting for Procurement to send RFQ.', status: 'PreApproved', urgency: 'Low',
+            createdAt: new Date(), updatedAt: new Date(), quotations: [],
         },
-        // --- 10 NEW AWARDED REQUISITIONS ---
-        ...Array.from({ length: 10 }).map((_, i) => {
-            const isAppleWinner = i % 2 === 0;
-            const winner = isAppleWinner ? 'Apple Inc.' : 'Dell Technologies';
-            const loser = isAppleWinner ? 'Dell Technologies' : 'Apple Inc.';
-            return {
-                id: `REQ-AWARD-TEST-${i + 1}`,
-                requesterId: '1',
-                title: `Award Test ${i + 1}: ${winner} Laptops`,
-                department: 'IT',
-                departmentId: 'DEPT-3',
-                items: [{ id: `ITEM-AWARD-${i + 1}`, name: 'High-End Laptop', quantity: 50, unitPrice: 2000, description: '' }],
-                totalPrice: 100000,
-                justification: `High value test case #${i + 1} for award workflow testing.`,
-                status: 'PostApproved',
-                urgency: 'Medium',
-                createdAt: new Date(`2023-11-${15 + i}T10:00:00Z`),
-                updatedAt: new Date(`2023-11-${15 + i}T10:00:00Z`),
-                quotations: [],
-                awardedQuoteItemIds: [`QI-AWARD-${i + 1}-${isAppleWinner ? 'A' : 'B'}`]
-            };
-        })
+        {
+            id: 'TEST-REQ-04', requesterId: '1', title: 'Test 04: Accepting Quotes', department: 'Design', departmentId: 'DEPT-1',
+            items: [{ id: 'TEST-ITEM-04', name: 'Test Item', quantity: 1, unitPrice: 100, description: '' }], totalPrice: 100,
+            justification: 'Scenario 4: RFQ sent, deadline for vendors has not passed yet.', status: 'Accepting_Quotes', urgency: 'Low',
+            createdAt: new Date(), updatedAt: new Date(), deadline: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), quotations: [],
+        },
+        {
+            id: 'TEST-REQ-05', requesterId: '1', title: 'Test 05: Ready for Committee Assignment', department: 'Design', departmentId: 'DEPT-1',
+            items: [{ id: 'TEST-ITEM-05', name: 'Test Item', quantity: 2, unitPrice: 100, description: '' }], totalPrice: 200,
+            justification: 'Scenario 5: RFQ deadline passed with enough quotes, ready for committee assignment.', status: 'Accepting_Quotes', urgency: 'Medium',
+            createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), updatedAt: new Date(), deadline: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), quotations: [],
+        },
+        {
+            id: 'TEST-REQ-06', requesterId: '1', title: 'Test 06: Scoring in Progress', department: 'Design', departmentId: 'DEPT-1',
+            items: [{ id: 'TEST-ITEM-06', name: 'Test Item', quantity: 1, unitPrice: 100, description: '' }], totalPrice: 100,
+            justification: 'Scenario 6: Committee assigned, scoring deadline has not passed.', status: 'Scoring_In_Progress', urgency: 'Low',
+            createdAt: new Date(), updatedAt: new Date(), deadline: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), scoringDeadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), 
+            financialCommitteeMemberIds: ['9'], technicalCommitteeMemberIds: ['10'], quotations: [],
+        },
+        {
+            id: 'TEST-REQ-07', requesterId: '1', title: 'Test 07: Ready to Award (Scoring Complete)', department: 'IT', departmentId: 'DEPT-3',
+            items: [{ id: 'TEST-ITEM-07', name: 'Test Item', quantity: 1, unitPrice: 150000, description: '' }], totalPrice: 150000,
+            justification: 'Scenario 7: All committee members have submitted scores. Ready for PO to finalize.', status: 'Scoring_Complete', urgency: 'High',
+            createdAt: new Date(), updatedAt: new Date(), deadline: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), scoringDeadline: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+            financialCommitteeMemberIds: ['9'], technicalCommitteeMemberIds: ['10'], quotations: [],
+        },
+        {
+            id: 'TEST-REQ-08', requesterId: '1', title: 'Test 08: Mid-Value Hierarchical Approval', department: 'IT', departmentId: 'DEPT-3',
+            items: [{ id: 'TEST-ITEM-08', name: 'Mid-Value Server Rack', quantity: 1, unitPrice: 150000, description: '' }], totalPrice: 150000,
+            justification: 'Scenario 8: Award decided, now in a multi-step approval chain.', status: 'Pending_Managerial_Approval', urgency: 'High',
+            createdAt: new Date(), updatedAt: new Date(), currentApproverId: '15', quotations: [],
+        },
+        {
+            id: 'TEST-REQ-09', requesterId: '1', title: 'Test 09: Split Award Ready for Notification', department: 'Operations', departmentId: 'DEPT-2',
+            items: [
+                { id: 'TEST-ITEM-09A', name: 'Executive Desk', quantity: 5, unitPrice: 20000, description: '' },
+                { id: 'TEST-ITEM-09B', name: 'Conference Table', quantity: 1, unitPrice: 50000, description: '' },
+            ],
+            totalPrice: 150000,
+            justification: 'Scenario 9: Split award has passed all approvals. Ready to notify the two winning vendors.', status: 'PostApproved', urgency: 'Medium',
+            createdAt: new Date(), updatedAt: new Date(),
+            awardedQuoteItemIds: ['TEST-QI-09A', 'TEST-QI-09B'], quotations: [],
+        },
+        {
+            id: 'TEST-REQ-10', requesterId: '1', title: 'Test 10: Declined Award with Standby', department: 'Operations', departmentId: 'DEPT-2',
+            items: [{ id: 'TEST-ITEM-10', name: 'Test Item', quantity: 1, unitPrice: 100, description: '' }], totalPrice: 100,
+            justification: 'Scenario 10: The winning vendor declined the award. A standby vendor is available.', status: 'Award_Declined', urgency: 'Low',
+            createdAt: new Date(), updatedAt: new Date(), quotations: [],
+        },
     ],
 
     auditLogs: [
-        // Logs for standard requisitions
         { id: 'log-001', timestamp: new Date('2023-10-26T10:00:00Z'), user: 'Alice', role: 'Requester', action: 'CREATE', entity: 'Requisition', entityId: 'REQ-1672531200', details: 'Created new requisition for "New Laptops for Design Team"',},
-        { id: 'log-002', timestamp: new Date('2023-10-26T11:30:00Z'), user: 'Diana', role: 'Admin', action: 'APPROVE', entity: 'Requisition', entityId: 'REQ-1672531200', details: 'Approved requisition.', },
-        // Logs for split-award test requisition
-        { id: 'log-split-001', timestamp: new Date('2023-11-10T10:00:00Z'), user: 'Charlie', role: 'Procurement_Officer', action: 'FINALIZE_AWARD', entity: 'Requisition', entityId: 'REQ-SPLIT-AWARD-01', details: 'Finalized split award for "New Branch Office Furniture".', transactionId: 'REQ-SPLIT-AWARD-01'},
-        { id: 'log-split-002', timestamp: new Date('2023-11-10T11:00:00Z'), user: 'Apple Inc.', role: 'Vendor', action: 'ACCEPT_AWARD', entity: 'Quotation', entityId: 'QUO-SPLIT-A', details: 'Vendor accepted award for Executive Desks. PO PO-SPLIT-001 auto-generated.', transactionId: 'REQ-SPLIT-AWARD-01'},
-        { id: 'log-split-003', timestamp: new Date('2023-11-12T14:00:00Z'), user: 'David', role: 'Receiving', action: 'RECEIVE_GOODS', entity: 'PurchaseOrder', entityId: 'PO-SPLIT-001', details: 'Received all 5 Executive Desks.', transactionId: 'REQ-SPLIT-AWARD-01'},
-        { id: 'log-split-004', timestamp: new Date('2023-11-13T10:00:00Z'), user: 'Eve', role: 'Finance', action: 'PROCESS_PAYMENT', entity: 'Invoice', entityId: 'INV-SPLIT-001', details: 'Processed payment for invoice INV-SPLIT-001.', transactionId: 'REQ-SPLIT-AWARD-01'},
     ],
 
     quotations: [
-        // Standard quotes for laptop req
-        { id: 'QUO-001', transactionId: 'REQ-1672531200', requisitionId: 'REQ-1672531200', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', items: [ { id: 'QI-001', requisitionItemId: 'ITEM-1', name: 'MacBook Pro 16-inch', quantity: 5, unitPrice: 2450, leadTimeDays: 14 }, { id: 'QI-002', requisitionItemId: 'ITEM-2', name: '4K Monitor', quantity: 5, unitPrice: 780, leadTimeDays: 10 } ], totalPrice: 16150, deliveryDate: new Date('2023-11-15T00:00:00Z'), createdAt: new Date('2023-10-06T10:00:00Z'), status: 'Submitted', notes: 'Bulk discount applied. Warranty included.'},
-        { id: 'QUO-002', transactionId: 'REQ-1672531200', requisitionId: 'REQ-1672531200', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', items: [ { id: 'QI-003', requisitionItemId: 'ITEM-1', name: 'MacBook Pro 16-inch', quantity: 5, unitPrice: 2550, leadTimeDays: 20 }, { id: 'QI-004', requisitionItemId: 'ITEM-2', name: '4K Monitor', quantity: 5, unitPrice: 750, leadTimeDays: 5 } ], totalPrice: 16500, deliveryDate: new Date('2023-11-20T00:00:00Z'), createdAt: new Date('2023-10-07T14:30:00Z'), status: 'Submitted', notes: 'Can ship monitors immediately.'},
-        
-        // Quotes for the split award test case
-        {
-            id: 'QUO-SPLIT-A',
-            transactionId: 'REQ-SPLIT-AWARD-01',
-            requisitionId: 'REQ-SPLIT-AWARD-01',
-            vendorId: 'VENDOR-001',
-            vendorName: 'Apple Inc.',
-            items: [
-                { id: 'QI-SPLIT-A1', requisitionItemId: 'ITEM-SPLIT-1', name: 'Executive Desk', quantity: 5, unitPrice: 15000, leadTimeDays: 20 }
-            ],
-            totalPrice: 75000,
-            deliveryDate: new Date('2023-12-01T00:00:00Z'),
-            createdAt: new Date('2023-11-05T10:00:00Z'),
-            status: 'Paid',
-        },
-        {
-            id: 'QUO-SPLIT-B',
-            transactionId: 'REQ-SPLIT-AWARD-01',
-            requisitionId: 'REQ-SPLIT-AWARD-01',
-            vendorId: 'VENDOR-002',
-            vendorName: 'Dell Technologies',
-            items: [
-                { id: 'QI-SPLIT-B2', requisitionItemId: 'ITEM-SPLIT-2', name: 'Conference Table', quantity: 1, unitPrice: 40000, leadTimeDays: 25 }
-            ],
-            totalPrice: 40000,
-            deliveryDate: new Date('2023-12-05T00:00:00Z'),
-            createdAt: new Date('2023-11-05T11:00:00Z'),
-            status: 'Awarded', // This vendor has been awarded but has not accepted yet
-        },
-
-        // Quotes for the NEW partial award test case
-        {
-            id: 'QUO-PARTIAL-A',
-            transactionId: 'REQ-PARTIAL-TEST-01',
-            requisitionId: 'REQ-PARTIAL-TEST-01',
-            vendorId: 'VENDOR-001', // Apple
-            vendorName: 'Apple Inc.',
-            items: [
-                { id: 'QI-PARTIAL-A1', requisitionItemId: 'ITEM-PARTIAL-1', name: 'High-Performance Laptop', quantity: 10, unitPrice: 30000, leadTimeDays: 14 },
-                { id: 'QI-PARTIAL-A2', requisitionItemId: 'ITEM-PARTIAL-2', name: '27-inch 4K Monitor', quantity: 20, unitPrice: 8500, leadTimeDays: 10 },
-            ],
-            totalPrice: 470000,
-            deliveryDate: new Date('2023-12-20T00:00:00Z'),
-            createdAt: new Date('2023-12-02T10:00:00Z'),
-            status: 'Pending_Award', // Apple is awarded Laptops
-        },
-        {
-            id: 'QUO-PARTIAL-B',
-            transactionId: 'REQ-PARTIAL-TEST-01',
-            requisitionId: 'REQ-PARTIAL-TEST-01',
-            vendorId: 'VENDOR-002', // Dell
-            vendorName: 'Dell Technologies',
-            items: [
-                { id: 'QI-PARTIAL-B1', requisitionItemId: 'ITEM-PARTIAL-1', name: 'High-Performance Laptop', quantity: 10, unitPrice: 31000, leadTimeDays: 12 },
-                { id: 'QI-PARTIAL-B2', requisitionItemId: 'ITEM-PARTIAL-2', name: '27-inch 4K Monitor', quantity: 20, unitPrice: 8000, leadTimeDays: 5 },
-            ],
-            totalPrice: 470000,
-            deliveryDate: new Date('2023-12-18T00:00:00Z'),
-            createdAt: new Date('2023-12-02T11:00:00Z'),
-            status: 'Pending_Award', // Dell is awarded Monitors
-        },
-
-
-         // --- 20 NEW QUOTATIONS FOR THE AWARD TESTS ---
-        ...Array.from({ length: 10 }).flatMap((_, i) => {
-            const isAppleWinner = i % 2 === 0;
-            const winnerPrice = 100000;
-            const loserPrice = 105000;
-
-            const appleQuote = {
-                id: `QUO-AWARD-${i + 1}-A`,
-                transactionId: `REQ-AWARD-TEST-${i + 1}`,
-                requisitionId: `REQ-AWARD-TEST-${i + 1}`,
-                vendorId: 'VENDOR-001',
-                vendorName: 'Apple Inc.',
-                items: [{ id: `QI-AWARD-${i + 1}-A`, requisitionItemId: `ITEM-AWARD-${i + 1}`, name: 'High-End Laptop', quantity: 50, unitPrice: isAppleWinner ? 2000 : 2100, leadTimeDays: 14 }],
-                totalPrice: isAppleWinner ? winnerPrice : loserPrice,
-                deliveryDate: new Date(`2023-12-01T00:00:00Z`),
-                createdAt: new Date(`2023-11-${15 + i}T11:00:00Z`),
-                status: isAppleWinner ? 'Pending_Award' : 'Standby',
-                rank: isAppleWinner ? 1 : 2,
-            };
-
-            const dellQuote = {
-                id: `QUO-AWARD-${i + 1}-B`,
-                transactionId: `REQ-AWARD-TEST-${i + 1}`,
-                requisitionId: `REQ-AWARD-TEST-${i + 1}`,
-                vendorId: 'VENDOR-002',
-                vendorName: 'Dell Technologies',
-                items: [{ id: `QI-AWARD-${i + 1}-B`, requisitionItemId: `ITEM-AWARD-${i + 1}`, name: 'High-End Laptop', quantity: 50, unitPrice: !isAppleWinner ? 2000 : 2100, leadTimeDays: 12 }],
-                totalPrice: !isAppleWinner ? winnerPrice : loserPrice,
-                deliveryDate: new Date(`2023-12-01T00:00:00Z`),
-                createdAt: new Date(`2023-11-${15 + i}T12:00:00Z`),
-                status: !isAppleWinner ? 'Pending_Award' : 'Standby',
-                rank: !isAppleWinner ? 1 : 2,
-            };
-
-            return [appleQuote, dellQuote];
-        })
+        // --- QUOTES FOR SCENARIOS ---
+        // For TEST-REQ-05 (Ready for Committee)
+        { id: 'TEST-QUO-05A', transactionId: 'TEST-REQ-05', requisitionId: 'TEST-REQ-05', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', items: [{id: 'TEST-QI-05A', requisitionItemId: 'TEST-ITEM-05', name: 'Test Item', quantity: 2, unitPrice: 95, leadTimeDays: 5}], totalPrice: 190, deliveryDate: new Date(), createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), status: 'Submitted'},
+        { id: 'TEST-QUO-05B', transactionId: 'TEST-REQ-05', requisitionId: 'TEST-REQ-05', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', items: [{id: 'TEST-QI-05B', requisitionItemId: 'TEST-ITEM-05', name: 'Test Item', quantity: 2, unitPrice: 98, leadTimeDays: 3}], totalPrice: 196, deliveryDate: new Date(), createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), status: 'Submitted'},
+        // For TEST-REQ-06 (Scoring in Progress) - same quotes as 05
+        { id: 'TEST-QUO-06A', transactionId: 'TEST-REQ-06', requisitionId: 'TEST-REQ-06', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', items: [{id: 'TEST-QI-06A', requisitionItemId: 'TEST-ITEM-06', name: 'Test Item', quantity: 1, unitPrice: 95, leadTimeDays: 5}], totalPrice: 95, deliveryDate: new Date(), createdAt: new Date(), status: 'Submitted'},
+        { id: 'TEST-QUO-06B', transactionId: 'TEST-REQ-06', requisitionId: 'TEST-REQ-06', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', items: [{id: 'TEST-QI-06B', requisitionItemId: 'TEST-ITEM-06', name: 'Test Item', quantity: 1, unitPrice: 98, leadTimeDays: 3}], totalPrice: 98, deliveryDate: new Date(), createdAt: new Date(), status: 'Submitted'},
+        // For TEST-REQ-07 (Ready to Award) - same quotes as 05
+        { id: 'TEST-QUO-07A', transactionId: 'TEST-REQ-07', requisitionId: 'TEST-REQ-07', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', items: [{id: 'TEST-QI-07A', requisitionItemId: 'TEST-ITEM-07', name: 'Test Item', quantity: 1, unitPrice: 148000, leadTimeDays: 5}], totalPrice: 148000, deliveryDate: new Date(), createdAt: new Date(), status: 'Submitted'},
+        { id: 'TEST-QUO-07B', transactionId: 'TEST-REQ-07', requisitionId: 'TEST-REQ-07', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', items: [{id: 'TEST-QI-07B', requisitionItemId: 'TEST-ITEM-07', name: 'Test Item', quantity: 1, unitPrice: 150000, leadTimeDays: 3}], totalPrice: 150000, deliveryDate: new Date(), createdAt: new Date(), status: 'Submitted'},
+        // For TEST-REQ-09 (Split Award)
+        { id: 'TEST-QUO-09A', transactionId: 'TEST-REQ-09', requisitionId: 'TEST-REQ-09', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', items: [{id: 'TEST-QI-09A', requisitionItemId: 'TEST-ITEM-09A', name: 'Executive Desk', quantity: 5, unitPrice: 19000, leadTimeDays: 15}], totalPrice: 95000, deliveryDate: new Date(), createdAt: new Date(), status: 'Pending_Award'},
+        { id: 'TEST-QUO-09B', transactionId: 'TEST-REQ-09', requisitionId: 'TEST-REQ-09', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', items: [{id: 'TEST-QI-09B', requisitionItemId: 'TEST-ITEM-09B', name: 'Conference Table', quantity: 1, unitPrice: 48000, leadTimeDays: 10}], totalPrice: 48000, deliveryDate: new Date(), createdAt: new Date(), status: 'Pending_Award'},
+        // For TEST-REQ-10 (Declined Award)
+        { id: 'TEST-QUO-10A', transactionId: 'TEST-REQ-10', requisitionId: 'TEST-REQ-10', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', items: [{id: 'TEST-QI-10A', requisitionItemId: 'TEST-ITEM-10', name: 'Test Item', quantity: 1, unitPrice: 90, leadTimeDays: 5}], totalPrice: 90, deliveryDate: new Date(), createdAt: new Date(), status: 'Declined'},
+        { id: 'TEST-QUO-10B', transactionId: 'TEST-REQ-10', requisitionId: 'TEST-REQ-10', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', items: [{id: 'TEST-QI-10B', requisitionItemId: 'TEST-ITEM-10', name: 'Test Item', quantity: 1, unitPrice: 92, leadTimeDays: 3}], totalPrice: 92, deliveryDate: new Date(), createdAt: new Date(), status: 'Standby'},
+        { id: 'TEST-QUO-10C', transactionId: 'TEST-REQ-10', requisitionId: 'TEST-REQ-10', vendorId: 'VENDOR-004', vendorName: 'HP Inc.', items: [{id: 'TEST-QI-10C', requisitionItemId: 'TEST-ITEM-10', name: 'Test Item', quantity: 1, unitPrice: 95, leadTimeDays: 7}], totalPrice: 95, deliveryDate: new Date(), createdAt: new Date(), status: 'Standby'},
     ],
-    purchaseOrders: [
-        // PO for the split-award test (Vendor A's part)
-        {
-            id: 'PO-SPLIT-001',
-            transactionId: 'REQ-SPLIT-AWARD-01',
-            requisitionId: 'REQ-SPLIT-AWARD-01',
-            requisitionTitle: 'New Branch Office Furniture (Split Award Test)',
-            vendor: { id: 'VENDOR-001', userId: '6', name: 'Apple Inc.', contactPerson: 'Tim Cook', email: 'tade2024bdugit@gmail.com', phone: '1-800-MY-APPLE', address: '1 Apple Park Way', kycStatus: 'Verified' },
-            items: [
-                { id: 'PO-ITEM-SPLIT-1', name: 'Executive Desk', requisitionItemId: 'ITEM-SPLIT-1', quantity: 5, unitPrice: 15000, totalPrice: 75000, receivedQuantity: 5 }
-            ],
-            totalAmount: 75000,
-            status: 'Delivered', // This part is fully delivered
-            createdAt: new Date('2023-11-10T11:00:00Z')
-        }
-    ],
-    goodsReceipts: [
-        {
-            id: 'GRN-SPLIT-001',
-            transactionId: 'REQ-SPLIT-AWARD-01',
-            purchaseOrderId: 'PO-SPLIT-001',
-            receivedById: '4', // David
-            receivedBy: { id: '4', name: 'David', email: 'david@example.com', role: 'Receiving' },
-            receivedDate: new Date('2023-11-12T14:00:00Z'),
-            items: [
-                { poItemId: 'PO-ITEM-SPLIT-1', quantityReceived: 5, condition: 'Good' }
-            ]
-        }
-    ],
-    invoices: [
-        {
-            id: 'INV-SPLIT-001',
-            transactionId: 'REQ-SPLIT-AWARD-01',
-            purchaseOrderId: 'PO-SPLIT-001',
-            vendorId: 'VENDOR-001',
-            invoiceDate: new Date('2023-11-12T15:00:00Z'),
-            items: [
-                { id: 'INV-ITEM-SPLIT-1', name: 'Executive Desk', quantity: 5, unitPrice: 15000, totalPrice: 75000 }
-            ],
-            totalAmount: 75000,
-            status: 'Paid',
-            paymentDate: new Date('2023-11-13T10:00:00Z'),
-            paymentReference: 'PAY-SPLIT-98765'
-        }
-    ],
+    purchaseOrders: [],
+    goodsReceipts: [],
+    invoices: [],
     users: [
         { id: '1', name: 'Alice', email: 'alice@example.com', password: 'password123', role: 'Requester', departmentId: 'DEPT-1', department: 'Design' },
         { id: '2', name: 'Bob', email: 'bob@example.com', password: 'password123', role: 'Approver', departmentId: 'DEPT-2', department: 'Operations' },
@@ -352,6 +221,7 @@ const seedData: AppData = {
         { id: '16', name: 'Supply Chain Director', email: 'director.supply@example.com', password: 'password123', role: 'Director_Supply_Chain_and_Property_Management', departmentId: 'DEPT-2', department: 'Operations' },
         { id: '17', name: 'VP of Resources', email: 'vp.resources@example.com', password: 'password123', role: 'VP_Resources_and_Facilities', departmentId: 'DEPT-2', department: 'Operations' },
         { id: '18', name: 'President', email: 'president@example.com', password: 'password123', role: 'President', departmentId: 'DEPT-2', department: 'Operations' },
+        { id: '19', name: 'HP Inc.', email: 'vendor@hp.com', password: 'password123', role: 'Vendor', vendorId: 'VENDOR-004' },
     ],
     departments: [
         { id: 'DEPT-1', name: 'Design', description: 'Handles all creative and design tasks.', headId: '12' },

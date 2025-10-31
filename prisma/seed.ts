@@ -109,7 +109,7 @@ async function main() {
   await prisma.setting.create({
     data: {
         key: 'committeeQuorum',
-        value: 3,
+        value: 2,
     }
   });
 
@@ -432,20 +432,16 @@ async function main() {
                 ...grnData,
                 receivedDate: new Date(grnData.receivedDate),
                 receivedById: grnData.receivedById,
+                items: {
+                    create: items.map(item => ({
+                        poItemId: item.poItemId,
+                        quantityReceived: item.quantityReceived,
+                        condition: item.condition.replace(/ /g, '_') as any,
+                        notes: item.notes,
+                    }))
+                }
             }
         });
-
-        if (items) {
-            for (const item of items) {
-                await prisma.receiptItem.create({
-                    data: {
-                        ...item,
-                        condition: item.condition.replace(/ /g, '_') as any,
-                        goodsReceiptNoteId: createdGrn.id,
-                    }
-                })
-            }
-        }
     }
     console.log('Seeded goods receipts and related items.');
 
@@ -485,3 +481,4 @@ main()
     
 
     
+
