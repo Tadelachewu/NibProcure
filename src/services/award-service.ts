@@ -33,11 +33,9 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
     const nextStatus = getNextStatusFromRole(firstStep.role);
     let nextApproverId: string | null = null;
     
-    // If the first step is a specific role (not a general committee), find the user to assign.
     if (!firstStep.role.includes('Committee')) {
         const approverUser = await tx.user.findFirst({ where: { role: firstStep.role }});
         if (!approverUser) {
-            // This is a critical configuration error. The system can't proceed.
             throw new Error(`System configuration error: Could not find a user for the role: ${firstStep.role.replace(/_/g, ' ')}. Please assign a user to this role.`);
         }
         nextApproverId = approverUser.id;
@@ -57,7 +55,6 @@ export async function handleAwardRejection(
     requisition: any,
     actor: any
 ) {
-    // Find all awarded items for this quote that are pending acceptance and mark them as declined.
     const declinedAwards = await tx.awardedItem.updateMany({
         where: {
             quotationId: quote.id,
@@ -87,7 +84,6 @@ export async function handleAwardRejection(
     });
 
 
-    // Check if there are any other items for this requisition still waiting for vendor acceptance.
     const otherPendingAwards = await tx.awardedItem.count({
         where: {
             requisitionId: requisition.id,
@@ -96,15 +92,13 @@ export async function handleAwardRejection(
     });
 
     let message: string;
-    // If there are no other pending acceptances, we can proceed with standby logic.
     if (otherPendingAwards === 0) {
          await tx.purchaseRequisition.update({
             where: { id: requisition.id },
-            data: { status: 'Award_Declined' } // Signal to UI that action is needed.
+            data: { status: 'Award_Declined' }
         });
         message = 'Award has been declined. The procurement officer can now promote a standby vendor if available.';
     } else {
-        // If other awards are still pending, just flag the requisition as partially declined.
          await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Partially_Declined' }
@@ -126,12 +120,11 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         throw new Error('No declined items found to promote a standby for.');
     }
     
-    // Explicitly reject the quotation of the vendor who declined.
     const declinedQuotationIds = [...new Set(declinedItems.map(d => d.quotationId).filter(Boolean))] as string[];
     for(const quoteId of declinedQuotationIds) {
          await tx.quotation.update({
             where: { id: quoteId },
-            data: { status: 'Rejected' } // Set to Rejected instead of Declined
+            data: { status: 'Rejected' }
         });
     }
 
@@ -148,14 +141,42 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
     });
     
     if (standbyQuotes.length === 0) {
-        return { message: 'No standby vendors available for the declined items. Manual re-sourcing is required.' };
+        // NO STANDBY FOUND - RESET THE PROCESS
+        await tx.purchaseRequisition.update({
+            where: { id: requisitionId },
+            data: {
+                status: 'PreApproved',
+                deadline: null,
+                currentApproverId: null,
+            }
+        });
+        await tx.quotation.updateMany({
+            where: { requisitionId },
+            data: { status: 'Submitted', rank: null }
+        });
+        await tx.awardedItem.deleteMany({
+            where: { requisitionId }
+        });
+        
+         await tx.auditLog.create({
+            data: {
+                timestamp: new Date(),
+                user: { connect: { id: actor.id } },
+                action: 'AWARD_RESET',
+                entity: 'Requisition',
+                entityId: requisitionId,
+                details: `Award declined and no standby vendors were available. The RFQ process for this requisition has been reset.`,
+                transactionId: requisitionId,
+            }
+        });
+
+        return { message: 'No standby vendors available. The award process has been reset for re-evaluation.' };
     }
 
     const nextVendor = standbyQuotes[0];
     const itemsToPromote = nextVendor.items.filter(item => declinedItemIds.includes(item.requisitionItemId));
     const promotionValue = itemsToPromote.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
     
-    // Mark the old declined items as superseded to close their loop
     await tx.awardedItem.updateMany({
         where: {
             requisitionId: requisitionId,
@@ -165,7 +186,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         data: { status: 'Superseded' }
     });
 
-    // Create new awards for the standby vendor
     for (const item of itemsToPromote) {
         await tx.awardedItem.create({
             data: {
@@ -178,7 +198,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         });
     }
 
-    // Re-run the approval matrix logic
     const { nextStatus, nextApproverId, auditDetails: promotionAuditDetails } = await getNextApprovalStep(tx, promotionValue);
 
     await tx.purchaseRequisition.update({
@@ -191,13 +210,13 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
     await tx.auditLog.create({
         data: {
+            timestamp: new Date(),
             user: { connect: { id: actor.id } },
             action: 'PROMOTE_STANDBY_AWARD',
             entity: 'Requisition',
             entityId: requisitionId,
             details: `Promoted standby vendor ${nextVendor.vendorName} for ${itemsToPromote.length} item(s). ${promotionAuditDetails}`,
             transactionId: requisitionId,
-            timestamp: new Date(),
         }
     });
 
