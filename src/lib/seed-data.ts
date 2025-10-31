@@ -122,13 +122,35 @@ const seedData: AppData = {
             ],
             totalPrice: 115000,
             justification: 'Furnishing for the new downtown branch office. Award has been split between two vendors.',
-            status: 'PO_Created', // Status is PO_Created because at least one vendor has accepted
+            status: 'Closed',
             urgency: 'High',
             createdAt: new Date('2023-11-01T09:00:00Z'),
-            updatedAt: new Date('2023-11-10T11:00:00Z'),
+            updatedAt: new Date('2023-11-13T10:00:00Z'),
             quotations: [],
             awardedQuoteItemIds: ['QI-SPLIT-A1', 'QI-SPLIT-B2'], // ID of Desk from Vendor A, ID of Table from Vendor B
         },
+        // --- 10 NEW AWARDED REQUISITIONS ---
+        ...Array.from({ length: 10 }).map((_, i) => {
+            const isAppleWinner = i % 2 === 0;
+            const winner = isAppleWinner ? 'Apple Inc.' : 'Dell Technologies';
+            const loser = isAppleWinner ? 'Dell Technologies' : 'Apple Inc.';
+            return {
+                id: `REQ-AWARD-TEST-${i + 1}`,
+                requesterId: '1',
+                title: `Award Test ${i + 1}: ${winner} Laptops`,
+                department: 'IT',
+                departmentId: 'DEPT-3',
+                items: [{ id: `ITEM-AWARD-${i + 1}`, name: 'High-End Laptop', quantity: 50, unitPrice: 2000, description: '' }],
+                totalPrice: 100000,
+                justification: `High value test case #${i + 1} for award workflow testing.`,
+                status: 'PostApproved',
+                urgency: 'Medium',
+                createdAt: new Date(`2023-11-${15 + i}T10:00:00Z`),
+                updatedAt: new Date(`2023-11-${15 + i}T10:00:00Z`),
+                quotations: [],
+                awardedQuoteItemIds: [`QI-AWARD-${i + 1}-${isAppleWinner ? 'A' : 'B'}`]
+            };
+        })
     ],
 
     auditLogs: [
@@ -155,13 +177,12 @@ const seedData: AppData = {
             vendorId: 'VENDOR-001',
             vendorName: 'Apple Inc.',
             items: [
-                { id: 'QI-SPLIT-A1', requisitionItemId: 'ITEM-SPLIT-1', name: 'Executive Desk', quantity: 5, unitPrice: 15000, leadTimeDays: 20 },
-                { id: 'QI-SPLIT-A2', requisitionItemId: 'ITEM-SPLIT-2', name: 'Conference Table', quantity: 1, unitPrice: 42000, leadTimeDays: 30 }
+                { id: 'QI-SPLIT-A1', requisitionItemId: 'ITEM-SPLIT-1', name: 'Executive Desk', quantity: 5, unitPrice: 15000, leadTimeDays: 20 }
             ],
-            totalPrice: 117000,
+            totalPrice: 75000,
             deliveryDate: new Date('2023-12-01T00:00:00Z'),
             createdAt: new Date('2023-11-05T10:00:00Z'),
-            status: 'Accepted', // This vendor has accepted their part of the award
+            status: 'Paid',
         },
         {
             id: 'QUO-SPLIT-B',
@@ -170,14 +191,49 @@ const seedData: AppData = {
             vendorId: 'VENDOR-002',
             vendorName: 'Dell Technologies',
             items: [
-                { id: 'QI-SPLIT-B1', requisitionItemId: 'ITEM-SPLIT-1', name: 'Executive Desk', quantity: 5, unitPrice: 16000, leadTimeDays: 15 },
                 { id: 'QI-SPLIT-B2', requisitionItemId: 'ITEM-SPLIT-2', name: 'Conference Table', quantity: 1, unitPrice: 40000, leadTimeDays: 25 }
             ],
-            totalPrice: 120000,
+            totalPrice: 40000,
             deliveryDate: new Date('2023-12-05T00:00:00Z'),
             createdAt: new Date('2023-11-05T11:00:00Z'),
-            status: 'Partially_Awarded', // This vendor has been awarded but has not accepted yet
-        }
+            status: 'Awarded', // This vendor has been awarded but has not accepted yet
+        },
+         // --- 20 NEW QUOTATIONS FOR THE AWARD TESTS ---
+        ...Array.from({ length: 10 }).flatMap((_, i) => {
+            const isAppleWinner = i % 2 === 0;
+            const winnerPrice = 100000;
+            const loserPrice = 105000;
+
+            const appleQuote = {
+                id: `QUO-AWARD-${i + 1}-A`,
+                transactionId: `REQ-AWARD-TEST-${i + 1}`,
+                requisitionId: `REQ-AWARD-TEST-${i + 1}`,
+                vendorId: 'VENDOR-001',
+                vendorName: 'Apple Inc.',
+                items: [{ id: `QI-AWARD-${i + 1}-A`, requisitionItemId: `ITEM-AWARD-${i + 1}`, name: 'High-End Laptop', quantity: 50, unitPrice: isAppleWinner ? 2000 : 2100, leadTimeDays: 14 }],
+                totalPrice: isAppleWinner ? winnerPrice : loserPrice,
+                deliveryDate: new Date(`2023-12-01T00:00:00Z`),
+                createdAt: new Date(`2023-11-${15 + i}T11:00:00Z`),
+                status: isAppleWinner ? 'Pending_Award' : 'Standby',
+                rank: isAppleWinner ? 1 : 2,
+            };
+
+            const dellQuote = {
+                id: `QUO-AWARD-${i + 1}-B`,
+                transactionId: `REQ-AWARD-TEST-${i + 1}`,
+                requisitionId: `REQ-AWARD-TEST-${i + 1}`,
+                vendorId: 'VENDOR-002',
+                vendorName: 'Dell Technologies',
+                items: [{ id: `QI-AWARD-${i + 1}-B`, requisitionItemId: `ITEM-AWARD-${i + 1}`, name: 'High-End Laptop', quantity: 50, unitPrice: !isAppleWinner ? 2000 : 2100, leadTimeDays: 12 }],
+                totalPrice: !isAppleWinner ? winnerPrice : loserPrice,
+                deliveryDate: new Date(`2023-12-01T00:00:00Z`),
+                createdAt: new Date(`2023-11-${15 + i}T12:00:00Z`),
+                status: !isAppleWinner ? 'Pending_Award' : 'Standby',
+                rank: !isAppleWinner ? 1 : 2,
+            };
+
+            return [appleQuote, dellQuote];
+        })
     ],
     purchaseOrders: [
         // PO for the split-award test (Vendor A's part)
