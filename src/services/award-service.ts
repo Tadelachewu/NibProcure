@@ -108,13 +108,23 @@ export async function handleAwardRejection(
 export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
     const declinedItems = await tx.awardedItem.findMany({
         where: { requisitionId, status: 'Declined' },
-        select: { requisitionItemId: true }
+        select: { requisitionItemId: true, quotationId: true }
     });
 
     if (declinedItems.length === 0) {
         throw new Error('No declined items found to promote a standby for.');
     }
     
+    // Explicitly reject the quotation of the vendor who declined.
+    const declinedQuotationIds = [...new Set(declinedItems.map(d => d.quotationId).filter(Boolean))] as string[];
+    for(const quoteId of declinedQuotationIds) {
+         await tx.quotation.update({
+            where: { id: quoteId },
+            data: { status: 'Declined' }
+        });
+    }
+
+
     const declinedItemIds = declinedItems.map(d => d.requisitionItemId);
     
     const standbyQuotes = await tx.quotation.findMany({
@@ -158,7 +168,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         });
     }
 
-    // THIS IS THE CRITICAL FIX: Re-run the approval matrix logic
+    // Re-run the approval matrix logic
     const { nextStatus, nextApproverId, auditDetails: promotionAuditDetails } = await getNextApprovalStep(tx, promotionValue);
 
     await tx.purchaseRequisition.update({
