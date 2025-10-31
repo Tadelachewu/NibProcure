@@ -106,7 +106,13 @@ export async function POST(
             });
         }
         
-        return NextResponse.json({ message: 'Award accepted. PO has been generated.' });
+        // Update the quotation status to Accepted
+        const updatedQuote = await prisma.quotation.update({
+            where: { id: quoteId },
+            data: { status: 'Accepted' },
+        });
+
+        return NextResponse.json({ message: 'Award accepted. PO has been generated.', quote: updatedQuote });
         
     } else if (action === 'reject') {
         const transactionResult = await prisma.$transaction(async (tx) => {
@@ -117,7 +123,7 @@ export async function POST(
             if (!quote || quote.vendorId !== user.vendorId) throw new Error('Quotation not found or not owned by this vendor');
             if (!quote.requisition) throw new Error('Associated requisition not found');
 
-            return await handleAwardRejection(tx as PrismaClient, quote, quote.requisition, user);
+            return await handleAwardRejection(tx, quote, quote.requisition, user);
         }, {
           maxWait: 15000,
           timeout: 30000,
@@ -147,5 +153,3 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    

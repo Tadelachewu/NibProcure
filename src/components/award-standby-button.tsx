@@ -9,25 +9,23 @@ import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { AwardCenterDialog } from './award-center-dialog';
 
 interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onSuccess: () => void;
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
-    isFinalizing: boolean;
 }
 
 export function AwardStandbyButton({
     requisition,
     quotations,
     onSuccess,
-    onFinalize,
-    isFinalizing,
 }: AwardStandbyButtonProps) {
     const { user, role } = useAuth();
     const { toast } = useToast();
     const [isPromoting, setIsPromoting] = useState(false);
+    const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
 
     const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
     const isRelevantStatus = requisition.status === 'Award_Declined' || requisition.status === 'Award_Partially_Declined';
@@ -66,6 +64,7 @@ export function AwardStandbyButton({
     }
     
     return (
+        <>
         <Card className="mt-6 border-amber-500">
             <CardHeader>
                 <CardTitle>Action Required: Award Declined</CardTitle>
@@ -100,5 +99,6 @@ export function AwardStandbyButton({
                  )}
             </CardFooter>
         </Card>
+        </>
     );
 }
