@@ -31,10 +31,6 @@ export async function POST(
           throw new Error('Quotation not found or not owned by this vendor');
         }
         
-        if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') {
-            throw new Error('This quote is not currently in an awarded state.');
-        }
-        
         const requisition = quote.requisition;
         if (!requisition) {
            throw new Error('Associated requisition not found');
@@ -46,6 +42,10 @@ export async function POST(
             throw new Error(`Cannot accept award because the parent requisition '${requisition.id}' is already closed.`);
         }
         // **SAFEGUARD END**
+
+        if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') {
+            throw new Error('This quote is not currently in an awarded state.');
+        }
 
         if (action === 'accept') {
             const updatedQuote = await tx.quotation.update({
