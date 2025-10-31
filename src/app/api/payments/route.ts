@@ -3,7 +3,6 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { users } from '@/lib/auth-store';
 
 export async function POST(
   request: Request
@@ -48,14 +47,32 @@ export async function POST(
         });
         console.log('Invoice updated to Paid status.');
 
-        // Now, update the requisition status to 'Closed'
+        // **MODIFIED LOGIC START**
+        // Check if all POs for the requisition are fulfilled before closing the requisition
         if (invoiceToUpdate.po) {
-             await tx.purchaseRequisition.update({
-                where: { id: invoiceToUpdate.po.requisitionId },
-                data: { status: 'Closed' }
+            const requisitionId = invoiceToUpdate.po.requisitionId;
+
+            // Find all purchase orders associated with the same requisition
+            const allPOsForRequisition = await tx.purchaseOrder.findMany({
+                where: { requisitionId: requisitionId }
             });
-            console.log(`Requisition ${invoiceToUpdate.po.requisitionId} status updated to Closed.`);
+
+            // Check if all of them are in a final state (Delivered, Closed, or Cancelled)
+            const allPOsCompleted = allPOsForRequisition.every(po => 
+                ['Delivered', 'Closed', 'Cancelled'].includes(po.status)
+            );
+
+            if (allPOsCompleted) {
+                await tx.purchaseRequisition.update({
+                    where: { id: requisitionId },
+                    data: { status: 'Closed' }
+                });
+                console.log(`All POs completed. Requisition ${requisitionId} status updated to Closed.`);
+            } else {
+                console.log(`Not all POs for requisition ${requisitionId} are complete. Requisition status remains unchanged.`);
+            }
         }
+        // **MODIFIED LOGIC END**
         
         await tx.auditLog.create({
             data: {
@@ -64,7 +81,8 @@ export async function POST(
                 action: 'PROCESS_PAYMENT',
                 entity: 'Invoice',
                 entityId: invoiceId,
-                details: `Processed payment for invoice ${invoiceId}. Ref: ${paymentReference}. Requisition closed.`,
+                details: `Processed payment for invoice ${invoiceId}. Ref: ${paymentReference}.`,
+                transactionId: invoiceToUpdate.transactionId,
             }
         });
         console.log('Added audit log:');

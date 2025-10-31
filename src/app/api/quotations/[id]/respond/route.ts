@@ -40,8 +40,15 @@ export async function POST(
            throw new Error('Associated requisition not found');
         }
 
+        // **SAFEGUARD START**
+        // Prevent creating a PO for a requisition that is already closed.
+        if (requisition.status === 'Closed' || requisition.status === 'Fulfilled') {
+            throw new Error(`Cannot accept award because the parent requisition '${requisition.id}' is already closed.`);
+        }
+        // **SAFEGUARD END**
+
         if (action === 'accept') {
-            await tx.quotation.update({
+            const updatedQuote = await tx.quotation.update({
                 where: { id: quoteId },
                 data: { status: 'Accepted' }
             });
@@ -104,7 +111,7 @@ export async function POST(
                 }
             });
             
-            return { message: 'Award accepted. PO has been generated.' };
+            return { message: 'Award accepted. PO has been generated.', quote: updatedQuote };
 
         } else if (action === 'reject') {
             const declinedItemIds = quote.items
