@@ -28,13 +28,13 @@ export async function POST(
             await tx.awardedItem.deleteMany({ where: { requisitionId: requisitionId } });
 
             // 2. Create new AwardedItem entries for each winning item
-            const awardedQuoteIds = new Set<string>();
+            const winningQuoteIds = new Set<string>();
             for (const vendorId in awards) {
                 const award = awards[vendorId];
                 if (!award.quoteId) {
                     throw new Error(`quoteId is missing for award to vendor ${vendorId}.`);
                 }
-                awardedQuoteIds.add(award.quoteId);
+                winningQuoteIds.add(award.quoteId);
 
                 for (const item of award.items) {
                     if (!item.quoteItemId) {
@@ -52,24 +52,40 @@ export async function POST(
                 }
             }
 
-            // 3. Set winning quotes to 'Pending_Award' and reject all others
+            // 3. Set winning quotes to 'Pending_Award', rank others as standby, and reject the rest
             const allQuotesForReq = await tx.quotation.findMany({
-                where: { requisitionId: requisitionId },
-                select: { id: true }
+                where: { 
+                    requisitionId: requisitionId,
+                    status: { notIn: ['Declined', 'Failed'] } // Don't consider already declined quotes
+                },
+                orderBy: { finalAverageScore: 'desc' },
             });
 
+            let rankCounter = 1;
+            const quotesToUpdate = [];
+
             for (const quote of allQuotesForReq) {
-                if (awardedQuoteIds.has(quote.id)) {
-                    await tx.quotation.update({
+                if (winningQuoteIds.has(quote.id)) {
+                    quotesToUpdate.push({
                         where: { id: quote.id },
-                        data: { status: 'Pending_Award' }
+                        data: { status: 'Pending_Award', rank: 1 }
                     });
-                } else {
-                    await tx.quotation.update({
+                } else if (rankCounter <= 2) { // Ranks 2 and 3 are standby
+                    rankCounter++;
+                    quotesToUpdate.push({
                         where: { id: quote.id },
-                        data: { status: 'Rejected', rank: null } // Explicitly reject and clear rank
+                        data: { status: 'Standby', rank: rankCounter }
+                    });
+                } else { // All others are rejected
+                    quotesToUpdate.push({
+                        where: { id: quote.id },
+                        data: { status: 'Rejected', rank: null }
                     });
                 }
+            }
+
+            for (const update of quotesToUpdate) {
+                await tx.quotation.update(update);
             }
             
             // 4. Update the main requisition with the new status and approval routing
