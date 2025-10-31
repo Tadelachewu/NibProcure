@@ -59,7 +59,7 @@ export async function POST(
 
             // Check if all of them are in a final state (Delivered, Closed, or Cancelled)
             const allPOsCompleted = allPOsForRequisition.every(po => 
-                ['Delivered', 'Closed', 'Cancelled'].includes(po.status)
+                ['Delivered', 'Closed', 'Cancelled'].includes(po.status.replace(/_/g, ' '))
             );
 
             if (allPOsCompleted) {
