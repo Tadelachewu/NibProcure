@@ -212,6 +212,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             entityId: requisitionId,
             details: `Promoted standby vendor ${nextVendor.vendorName} for ${itemsToPromote.length} item(s).`,
             transactionId: requisitionId,
+            timestamp: new Date(),
         }
     });
 
