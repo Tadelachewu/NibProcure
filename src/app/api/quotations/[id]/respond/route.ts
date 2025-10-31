@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -110,6 +111,7 @@ export async function POST(
         const updatedQuote = await prisma.quotation.update({
             where: { id: quoteId },
             data: { status: 'Accepted' },
+            include: { items: true, answers: true, scores: { include: { scorer: true, itemScores: { include: { scores: true } } } } }
         });
 
         return NextResponse.json({ message: 'Award accepted. PO has been generated.', quote: updatedQuote });

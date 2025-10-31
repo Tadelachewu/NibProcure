@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -680,7 +681,7 @@ export default function VendorRequisitionPage() {
             if (!response.ok) throw new Error(result.error || `Failed to ${action} award.`);
             
             toast({ title: 'Response Submitted', description: result.message });
-            // Optimistically update the UI for instant feedback
+            
             if (result.quote) {
                 setSubmittedQuote(result.quote);
             } else {

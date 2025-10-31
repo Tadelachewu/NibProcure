@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -78,6 +79,13 @@ export async function handleAwardRejection(
             }
         });
     }
+    
+    const updatedQuote = await tx.quotation.update({
+        where: { id: quote.id },
+        data: { status: 'Declined' },
+        include: { items: true, answers: true, scores: { include: { scorer: true, itemScores: { include: { scores: true } } } } }
+    });
+
 
     // Check if there are any other items for this requisition still waiting for vendor acceptance.
     const otherPendingAwards = await tx.awardedItem.count({
@@ -87,21 +95,24 @@ export async function handleAwardRejection(
         }
     });
 
+    let message: string;
     // If there are no other pending acceptances, we can proceed with standby logic.
     if (otherPendingAwards === 0) {
          await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' } // Signal to UI that action is needed.
         });
-        return { message: 'Award has been declined. The procurement officer can now promote a standby vendor if available.' };
+        message = 'Award has been declined. The procurement officer can now promote a standby vendor if available.';
     } else {
         // If other awards are still pending, just flag the requisition as partially declined.
          await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Partially_Declined' }
         });
-        return { message: 'A part of the award has been declined. Other portions of the award are still active.' };
+        message = 'A part of the award has been declined. Other portions of the award are still active.';
     }
+    
+    return { message, quote: updatedQuote };
 }
 
 
@@ -120,10 +131,9 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
     for(const quoteId of declinedQuotationIds) {
          await tx.quotation.update({
             where: { id: quoteId },
-            data: { status: 'Declined' }
+            data: { status: 'Rejected' } // Set to Rejected instead of Declined
         });
     }
-
 
     const declinedItemIds = declinedItems.map(d => d.requisitionItemId);
     
@@ -185,7 +195,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             action: 'PROMOTE_STANDBY_AWARD',
             entity: 'Requisition',
             entityId: requisitionId,
-            details: `Promoted standby vendor ${nextVendor.vendorName} for ${itemsToPromote.length} item(s). New award value: ${promotionValue.toLocaleString()} ETB. ${promotionAuditDetails}`,
+            details: `Promoted standby vendor ${nextVendor.vendorName} for ${itemsToPromote.length} item(s). ${promotionAuditDetails}`,
             transactionId: requisitionId,
             timestamp: new Date(),
         }
