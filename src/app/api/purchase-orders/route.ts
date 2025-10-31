@@ -68,7 +68,6 @@ export async function POST(request: Request) {
             where: { id: requisitionId },
             data: {
                 // Do not link a single PO ID anymore as there can be multiple
-                // purchaseOrderId: newPO.id, 
                 status: 'PO_Created',
             }
         });
