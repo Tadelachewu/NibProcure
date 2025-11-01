@@ -38,43 +38,34 @@ export async function POST(
     const quoteIdsToReset = quotesToReset.map(q => q.id);
 
     // 2. Find all scores associated with the quotes that need resetting.
-    const scoreSetsToReset = await prisma.committeeScoreSet.findMany({ where: { quotationId: { in: quoteIdsToReset } } });
-    const scoreSetIds = scoreSetsToReset.map(s => s.id);
-    const itemScoresToReset = await prisma.itemScore.findMany({ where: { scoreSetId: { in: scoreSetIds } } });
-    const itemScoreIds = itemScoresToReset.map(i => i.id);
-    
-    // 3. Delete the scores in the correct order (deepest first)
-    if (itemScoreIds.length > 0) {
-        await prisma.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
-    }
-    if (scoreSetIds.length > 0) {
-        await prisma.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
-    }
     if (quoteIdsToReset.length > 0) {
-        await prisma.committeeScoreSet.deleteMany({ where: { quotationId: { in: quoteIdsToReset } } });
-    }
-
-    // 4. Reset the status and scores of non-accepted quotes
-    if (quoteIdsToReset.length > 0) {
-        await prisma.quotation.updateMany({
-            where: {
-                id: { in: quoteIdsToReset }
-            },
-            data: {
-                status: 'Submitted',
-                rank: null,
-                finalAverageScore: 0
+        const scoreSetsToReset = await prisma.committeeScoreSet.findMany({ where: { quotationId: { in: quoteIdsToReset } } });
+        const scoreSetIds = scoreSetsToReset.map(s => s.id);
+        
+        if (scoreSetIds.length > 0) {
+            const itemScoresToReset = await prisma.itemScore.findMany({ where: { scoreSetId: { in: scoreSetIds } } });
+            const itemScoreIds = itemScoresToReset.map(i => i.id);
+            
+            // 3. Delete the scores in the correct order (deepest first)
+            if (itemScoreIds.length > 0) {
+                await prisma.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
             }
-        });
+            await prisma.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
+        }
+        await prisma.committeeScoreSet.deleteMany({ where: { quotationId: { in: quoteIdsToReset } } });
+
+        // Now, delete the quotes themselves
+        await prisma.quotation.deleteMany({ where: { id: { in: quoteIdsToReset } } });
     }
 
-    // 5. Reset committee assignments for everyone on this requisition
+
+    // 4. Reset committee assignments scores for everyone on this requisition as a new scoring round will be needed
     await prisma.committeeAssignment.updateMany({ 
         where: { requisitionId }, 
         data: { scoresSubmitted: false }
     });
 
-    // 6. IMPORTANT: Update the requisition to be ready for RFQ again, but DO NOT clear awardedQuoteItemIds
+    // 5. IMPORTANT: Update the requisition to be ready for RFQ again, but DO NOT clear awardedQuoteItemIds
     const updatedRequisition = await prisma.purchaseRequisition.update({
         where: { id: requisitionId },
         data: {

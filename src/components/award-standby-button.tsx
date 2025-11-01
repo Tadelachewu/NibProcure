@@ -4,7 +4,7 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardFooter, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
-import { Loader2, RefreshCw, CalendarIcon } from 'lucide-react';
+import { Loader2, RefreshCw, CalendarIcon, AlertTriangle } from 'lucide-react';
 import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
@@ -16,28 +16,36 @@ import { Input } from './ui/input';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes, isBefore } from 'date-fns';
+import { AwardCenterDialog } from './award-center-dialog';
 
 interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onSuccess: () => void;
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
+    isFinalizing: boolean;
 }
 
 export function AwardStandbyButton({
     requisition,
     quotations,
     onSuccess,
+    onFinalize,
+    isFinalizing,
 }: AwardStandbyButtonProps) {
     const { user } = useAuth();
     const { toast } = useToast();
     const [isPromoting, setIsPromoting] = useState(false);
     const [isReopening, setIsReopening] = useState(false);
     const [isDialogOpen, setDialogOpen] = useState(false);
+    const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
 
     const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
-    const isRelevantStatus = requisition.status === 'Award_Declined';
+    
+    // This component should now handle both 'Award_Declined' and 'Scoring_Complete'
+    const isRelevantStatus = requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete';
     
     const finalNewDeadline = useMemo(() => {
         if (!newDeadlineDate) return undefined;
@@ -80,17 +88,13 @@ export function AwardStandbyButton({
     
     const handleReopen = async () => {
          if (!user) return;
-        if (!finalNewDeadline || isBefore(finalNewDeadline, new Date())) {
-            toast({ variant: 'destructive', title: 'Error', description: 'A new deadline in the future must be set.' });
-            return;
-        }
-
         setIsReopening(true);
         try {
+            // Call the surgical reset API
             const response = await fetch(`/api/requisitions/${requisition.id}/reset-award`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, newDeadline: finalNewDeadline }),
+                body: JSON.stringify({ userId: user.id }),
             });
             if (!response.ok) {
                 const errorData = await response.json();
@@ -106,79 +110,76 @@ export function AwardStandbyButton({
         }
     };
     
-    return (
-        <Card className="mt-6 border-amber-500">
-            <CardHeader>
-                <CardTitle>Action Required: Award Declined</CardTitle>
-                <CardDescription>
-                    A vendor has declined their award. You may now promote the next standby vendor or re-open the RFQ for the declined items.
-                </CardDescription>
-            </CardHeader>
-            <CardFooter className="pt-0 flex gap-2">
-                 {hasStandbyVendors ? (
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button disabled={isPromoting}>
-                                {isPromoting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Promote Standby Vendor
+    if (requisition.status === 'Award_Declined') {
+        return (
+            <Card className="mt-6 border-amber-500">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> Action Required: Award Declined</CardTitle>
+                    <CardDescription>
+                        A vendor has declined their award. You may now promote the next standby vendor or re-open the RFQ for the declined items.
+                    </CardDescription>
+                </CardHeader>
+                <CardFooter className="pt-0 flex gap-2">
+                    {hasStandbyVendors ? (
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button disabled={isPromoting}>
+                                    {isPromoting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Promote Standby Vendor
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will promote the next vendor in rank to 'Pending Award'. The award will then be routed through the standard approval chain again.
+                                </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handlePromote}>Confirm & Promote</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    ) : (
+                        <Button disabled variant="secondary">No Standby Vendors Available</Button>
+                    )}
+                    <Button variant="outline" onClick={handleReopen}>
+                        {isReopening ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} 
+                        Re-Open RFQ for Declined Items
+                    </Button>
+                </CardFooter>
+            </Card>
+        );
+    }
+    
+    // Logic for Scoring_Complete state
+    if (requisition.status === 'Scoring_Complete') {
+        return (
+             <Card className="mt-6">
+                <CardHeader>
+                    <CardTitle>Finalize Award</CardTitle>
+                    <CardDescription>All scores have been submitted. You can now proceed to the Award Center to finalize the award decision.</CardDescription>
+                </CardHeader>
+                <CardFooter>
+                    <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
+                        <DialogTrigger asChild>
+                            <Button disabled={isFinalizing}>
+                                {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Go to Award Center
                             </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                            <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This will promote the next vendor in rank to the 'Pending Award' status. The award will then be routed through the standard approval chain again.
-                            </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handlePromote}>Confirm & Promote</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                 ) : (
-                    <Button disabled variant="secondary">No Standby Vendors Available</Button>
-                 )}
-                 <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-                    <DialogTrigger asChild>
-                         <Button variant="outline">
-                            Re-Open RFQ for Declined Items
-                         </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Re-Open RFQ for Declined Items</DialogTitle>
-                            <DialogDescription>
-                                This will reset the status for declined items and allow you to send the RFQ to a new set of vendors. Set a new submission deadline.
-                            </DialogDescription>
-                        </DialogHeader>
-                         <div className="py-4 space-y-2">
-                            <Label>New Quotation Submission Deadline</Label>
-                            <div className="flex gap-2">
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal",!newDeadlineDate && "text-muted-foreground")}>
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {newDeadlineDate ? format(newDeadlineDate, "PPP") : <span>Pick a new date</span>}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0">
-                                        <Calendar mode="single" selected={newDeadlineDate} onSelect={setNewDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
-                                    </PopoverContent>
-                                </Popover>
-                                <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                            <Button onClick={handleReopen} disabled={isReopening || !finalNewDeadline}>
-                                {isReopening ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} 
-                                Confirm & Re-open
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                 </Dialog>
-            </CardFooter>
-        </Card>
-    );
+                        </DialogTrigger>
+                        <AwardCenterDialog 
+                            requisition={requisition}
+                            quotations={quotations}
+                            onFinalize={onFinalize}
+                            onClose={() => setAwardCenterOpen(false)}
+                        />
+                    </Dialog>
+                </CardFooter>
+            </Card>
+        )
+    }
+
+    return null;
 }
