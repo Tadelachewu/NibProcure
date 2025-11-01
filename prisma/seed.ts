@@ -147,7 +147,7 @@ async function main() {
 
   // Seed Departments without heads first
   for (const department of seedData.departments) {
-    const { headId, ...deptData } = department;
+    const { head, users, headId, ...deptData } = department;
     await prisma.department.create({
       data: deptData,
     });
@@ -468,8 +468,8 @@ async function main() {
     // --- START: New Seed Data for Award Center Testing ---
     console.log('Seeding data for Award Center scenarios...');
 
-    // 10 Scenarios where one vendor is the clear overall winner
-    for (let i = 1; i <= 10; i++) {
+    // 20 Scenarios where one vendor is the clear overall winner
+    for (let i = 1; i <= 20; i++) {
         const reqId = `AWARD-SINGLE-${i}`;
         const itemAId = `ITEM-SGL-A-${i}`;
         const itemBId = `ITEM-SGL-B-${i}`;
@@ -538,7 +538,7 @@ async function main() {
             }
         });
     }
-    console.log('Seeded 10 single-winner scenarios.');
+    console.log('Seeded 20 single-winner scenarios.');
 
     // 10 Scenarios designed for split awards
     for (let i = 1; i <= 10; i++) {
@@ -637,4 +637,10 @@ main()
 
 
 
+
+
+
+
   
+
+    
