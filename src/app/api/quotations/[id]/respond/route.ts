@@ -37,9 +37,9 @@ export async function POST(
         }
 
         // **SAFEGUARD START**
-        // Prevent creating a PO for a requisition that is already closed.
-        if (requisition.status === 'Closed' || requisition.status === 'Fulfilled') {
-            throw new Error(`Cannot accept award because the parent requisition '${requisition.id}' is already closed.`);
+        // Prevent creating a PO for a requisition that is already in a final state.
+        if (['Closed', 'Fulfilled', 'PO_Created'].includes(requisition.status)) {
+            throw new Error(`Cannot accept award because the parent requisition '${requisition.id}' is already in a final state.`);
         }
         // **SAFEGUARD END**
 
@@ -60,7 +60,9 @@ export async function POST(
             const thisVendorAwardedItems = awardedQuoteItems.length > 0 ? awardedQuoteItems : quote.items;
 
             const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
-
+            
+            // This is the main change: the PO creation is now the primary goal of this transaction.
+            // The logic to update the parent requisition status is moved to the PO creation API.
             const newPO = await tx.purchaseOrder.create({
                 data: {
                     transactionId: requisition.transactionId,
@@ -81,21 +83,6 @@ export async function POST(
                     status: 'Issued',
                 }
             });
-
-            // After accepting, check if all awarded items for the entire requisition are now on POs
-            const allReqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisition.id } });
-            const allPOItems = await tx.pOItem.findMany({ where: { purchaseOrder: { requisitionId: requisition.id } } });
-            const allReqItemIds = new Set(allReqItems.map(i => i.id));
-            const allPOItemIds = new Set(allPOItems.map(i => i.requisitionItemId));
-
-            const allItemsAccountedFor = [...allReqItemIds].every(id => allPOItemIds.has(id));
-
-            if (allItemsAccountedFor) {
-                 await tx.purchaseRequisition.update({
-                    where: { id: requisition.id },
-                    data: { status: 'PO_Created' }
-                });
-            }
             
             await tx.auditLog.create({
                 data: {
@@ -109,7 +96,7 @@ export async function POST(
                 }
             });
             
-            return { message: 'Award accepted. PO has been generated.', quote: updatedQuote };
+            return { message: 'Award accepted. PO has been generated.', quote: updatedQuote, po: newPO };
 
         } else if (action === 'reject') {
             const declinedItemIds = quote.items
@@ -125,6 +112,16 @@ export async function POST(
       timeout: 30000,
     });
     
+    // Check and update parent requisition status AFTER the transaction is complete
+    if (transactionResult.po) {
+        await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/purchase-orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ triggerStatusCheck: true, requisitionId: transactionResult.po.requisitionId })
+        });
+    }
+
+
     return NextResponse.json(transactionResult);
 
   } catch (error) {

@@ -7,8 +7,35 @@ import { User } from '@/lib/types';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { requisitionId, userId } = body;
+    // New special property to trigger only the status check
+    const { requisitionId, userId, triggerStatusCheck } = body;
 
+    // --- LOGIC TO CHECK AND FINALIZE REQUISITION STATUS ---
+    if (triggerStatusCheck) {
+        const req = await prisma.purchaseRequisition.findUnique({
+            where: { id: requisitionId },
+            include: { items: true, purchaseOrders: { include: { items: true } } }
+        });
+        
+        if (req && req.status !== 'PO_Created' && req.status !== 'Closed') {
+            const allReqItemIds = new Set(req.items.map(i => i.id));
+            const allPOItemIds = new Set(req.purchaseOrders.flatMap(po => po.items).map(item => item.requisitionItemId));
+
+            const allItemsAccountedFor = [...allReqItemIds].every(id => allPOItemIds.has(id));
+
+            if (allItemsAccountedFor) {
+                await prisma.purchaseRequisition.update({
+                    where: { id: requisitionId },
+                    data: { status: 'PO_Created' }
+                });
+            }
+        }
+        return NextResponse.json({ status: 'check_complete' });
+    }
+    
+    // --- ORIGINAL LOGIC FOR CREATING A PO (NOW DEPRECATED and moved to respond route) ---
+    // This part of the code is kept to avoid breaking changes if it was called from elsewhere,
+    // but the primary logic is now handled in the /api/quotations/[id]/respond route.
     const user: User | null = await prisma.user.findUnique({where: {id: userId}});
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -23,7 +50,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    // This logic now assumes the quote has been accepted by the vendor.
     const acceptedQuote = requisition.quotations?.find(q => q.status === 'Accepted');
     if (!acceptedQuote) {
       return NextResponse.json({ error: 'No accepted quote found for this requisition' }, { status: 400 });
@@ -54,31 +80,6 @@ export async function POST(request: Request) {
             status: 'Issued',
         }
     });
-    
-    // Check if all awards are accepted to update the main requisition status
-    const otherPendingAwards = await prisma.quotation.count({
-        where: {
-            requisitionId: requisition.id,
-            status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
-        }
-    });
-
-    // Only set to PO_Created if this was the last acceptance
-    if (otherPendingAwards === 0) {
-            const allReqItems = await prisma.requisitionItem.findMany({ where: { requisitionId: requisition.id } });
-            const allPOItems = await prisma.pOItem.findMany({ where: { po: { requisitionId: requisition.id } } });
-            const allReqItemIds = new Set(allReqItems.map(i => i.id));
-            const allPOItemIds = new Set(allPOItems.map(i => i.requisitionItemId));
-
-            const allItemsAccountedFor = [...allReqItemIds].every(id => allPOItemIds.has(id));
-
-            if (allItemsAccountedFor) {
-                await prisma.purchaseRequisition.update({
-                    where: { id: requisitionId },
-                    data: { status: 'PO_Created' }
-                });
-            }
-    }
 
     await prisma.auditLog.create({
         data: {
@@ -88,13 +89,21 @@ export async function POST(request: Request) {
             action: 'CREATE_PO',
             entity: 'PurchaseOrder',
             entityId: newPO.id,
-            details: `Created Purchase Order for requisition ${requisitionId} after vendor acceptance.`,
+            details: `Created Purchase Order for requisition ${requisitionId}.`,
         }
     });
 
+    // Trigger the status check after creation
+     await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/purchase-orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ triggerStatusCheck: true, requisitionId: newPO.requisitionId })
+        });
+
+
     return NextResponse.json(newPO, { status: 201 });
   } catch (error) {
-    console.error('Failed to create purchase order:', error);
+    console.error('Failed to create/check purchase order:', error);
     if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }
