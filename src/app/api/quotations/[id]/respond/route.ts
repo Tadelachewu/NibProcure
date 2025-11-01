@@ -37,7 +37,6 @@ export async function POST(
         }
 
         // **SAFEGUARD START**
-        // Prevent creating a PO for a requisition that is already in a final state.
         if (['Closed', 'Fulfilled', 'PO_Created'].includes(requisition.status)) {
             throw new Error(`Cannot accept award because the parent requisition '${requisition.id}' is already in a final state.`);
         }
@@ -61,10 +60,9 @@ export async function POST(
 
             const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
             
-            // This is the main change: the PO creation is now the primary goal of this transaction.
             const newPO = await tx.purchaseOrder.create({
                 data: {
-                    transactionId: requisition.transactionId, // CRITICAL FIX
+                    transactionId: requisition.transactionId,
                     requisition: { connect: { id: requisition.id } },
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
@@ -113,11 +111,16 @@ export async function POST(
     
     // Check and update parent requisition status AFTER the transaction is complete
     if (transactionResult.po) {
-        await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/purchase-orders`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ triggerStatusCheck: true, requisitionId: transactionResult.po.requisitionId })
-        });
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+        if (!baseUrl) {
+            console.error("CRITICAL: NEXT_PUBLIC_BASE_URL is not defined. Cannot trigger post-acceptance status check.");
+        } else {
+             await fetch(`${baseUrl}/api/purchase-orders`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ triggerStatusCheck: true, requisitionId: transactionResult.po.requisitionId })
+            });
+        }
     }
 
 
@@ -127,7 +130,6 @@ export async function POST(
     console.error('Failed to respond to award:', error);
     if (error instanceof Error) {
       if ((error as any).code === 'P2014') {
-        // More specific error for foreign key violation
         return NextResponse.json({ error: 'Failed to process award acceptance due to a data conflict. The Purchase Order could not be linked to the Requisition.', details: (error as any).meta?.relation_name || 'Unknown relation' }, { status: 500 });
       }
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
