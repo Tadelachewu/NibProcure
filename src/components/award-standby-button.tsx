@@ -65,28 +65,28 @@ export function AwardStandbyButton({
         }
     }
     
-    if (requisition.status === 'Award_Declined') {
-         return (
-            <Card className="mt-6 border-amber-500">
-                <CardHeader>
-                    <CardTitle>Action Required: Award Declined</CardTitle>
-                    <CardDescription>
-                        A vendor has declined their award. You may now promote the next standby vendor.
-                    </CardDescription>
-                </CardHeader>
-                <CardFooter className="pt-0">
+    return (
+        <Card className="mt-6 border-amber-500">
+            <CardHeader>
+                <CardTitle>Action Required: Award Declined</CardTitle>
+                <CardDescription>
+                    A vendor has declined their award. You may now promote the next standby vendor or re-open the RFQ for the declined items.
+                </CardDescription>
+            </CardHeader>
+            <CardFooter className="pt-0 flex gap-2">
+                 {hasStandbyVendors ? (
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
-                            <Button disabled={isPromoting || !hasStandbyVendors}>
+                            <Button disabled={isPromoting}>
                                 {isPromoting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {hasStandbyVendors ? 'Promote Standby Vendor' : 'No Standby Vendors Available'}
+                                Promote Standby Vendor
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                             <AlertDialogHeader>
                             <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
                             <AlertDialogDescription>
-                                This will promote the next vendor in rank to the 'Awarded' status. The requisition will then be ready for you to notify the new winner.
+                                This will promote the next vendor in rank to the 'Pending Award' status. The award will then be routed through the standard approval chain again.
                             </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -95,10 +95,13 @@ export function AwardStandbyButton({
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
-                </CardFooter>
-            </Card>
-        );
-    }
-    
-    return null;
+                 ) : (
+                    <Button disabled variant="secondary">No Standby Vendors Available</Button>
+                 )}
+                 <Button variant="outline" onClick={() => toast({title: "Feature Coming Soon", description: "The ability to re-open an RFQ for specific items is under development."})}>
+                    Re-Open RFQ for Declined Items
+                 </Button>
+            </CardFooter>
+        </Card>
+    );
 }

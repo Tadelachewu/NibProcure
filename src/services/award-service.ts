@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -138,6 +139,8 @@ export async function handleAwardRejection(
         }
     });
 
+    // If another part of a split award is still active, just mark the requisition as 'Award_Declined'
+    // This allows the accepted part to proceed while flagging that the declined part needs manual intervention.
     if (otherActiveAwards > 0) {
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
@@ -154,7 +157,7 @@ export async function handleAwardRejection(
                 transactionId: requisition.transactionId,
             }
         });
-        return { message: 'A part of the award has been declined. Manual action is required.' };
+        return { message: 'A part of the award has been declined. The accepted portion can proceed. Manual action is required to handle the declined items.' };
     }
 
 
