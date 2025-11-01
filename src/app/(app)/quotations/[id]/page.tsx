@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -250,6 +249,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {quotes.sort((a, b) => (a.rank || 4) - (b.rank || 4)).map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
+                const awardedItemsForThisQuote = quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded') && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
@@ -296,11 +296,11 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                         </div>
                                     )}
 
-                                    {isDeadlinePassed && (
-                                        <div className="text-sm space-y-2">
-                                        <h4 className="font-semibold">Items:</h4>
-                                            {quote.items.map(item => (
-                                                <div key={item.requisitionItemId} className="flex justify-between items-center text-muted-foreground">
+                                    {isAwarded && awardedItemsForThisQuote.length > 0 && (
+                                        <div className="text-sm space-y-2 pt-2 border-t">
+                                            <h4 className="font-semibold text-green-600">Winning Items:</h4>
+                                            {awardedItemsForThisQuote.map(item => (
+                                                <div key={item.id} className="flex justify-between items-center text-muted-foreground">
                                                     <span>{item.name} x {item.quantity}</span>
                                                     {!hidePrices && <span className="font-mono">{item.unitPrice.toFixed(2)} ETB ea.</span>}
                                                 </div>
@@ -2921,3 +2921,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
 
     
+ 
