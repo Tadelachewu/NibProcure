@@ -147,7 +147,7 @@ async function main() {
 
   // Seed Departments without heads first
   for (const department of seedData.departments) {
-    const { headId, ...deptData } = department;
+    const { head, users, ...deptData } = department;
     await prisma.department.create({
       data: deptData,
     });
@@ -156,7 +156,7 @@ async function main() {
 
   // Seed non-vendor users first
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
-    const { committeeAssignments, department, vendorId, password, ...userData } = user;
+    const { committeeAssignments, department, vendor, password, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
 
     await prisma.user.create({
@@ -723,6 +723,7 @@ async function main() {
         requester: { connect: { id: '1' } },
         department: { connect: { id: 'DEPT-1' } },
         status: 'Scoring_Complete',
+        urgency: 'Medium',
         totalPrice: 1000 + i * 100,
         justification: `Test case for single winner award scenario ${i}.`,
         createdAt: new Date(),
@@ -785,6 +786,7 @@ async function main() {
               requester: { connect: { id: '1' } },
               department: { connect: { id: 'DEPT-2' } },
               status: 'Scoring_Complete',
+              urgency: 'Low',
               totalPrice: 3000 + i * 100,
               justification: `Test case for split award scenario ${i}.`,
               createdAt: new Date(),
@@ -867,5 +869,7 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    
 
     
