@@ -465,7 +465,7 @@ async function main() {
   }
   console.log('Seeded audit logs.');
 
-  // --- START: NEW PARTIAL AWARD SEED DATA ---
+  // --- START: PARTIAL AWARD SEED DATA ---
   console.log('Seeding partial award test scenarios...');
 
   // --- CASE 1: BOTH VENDORS AWARDED, READY TO ACCEPT ---
@@ -508,8 +508,8 @@ async function main() {
     data: {
       id: 'REQ-SPLIT-CASE2', transactionId: 'REQ-SPLIT-CASE2', title: 'Partial Award Case 2.1: One Accepts, One Declines',
       requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-1' } }, status: 'Award_Declined', totalPrice: 500,
-      justification: 'Test case for one vendor accepting and one declining.', createdAt: new Date(), updatedAt: new Date(),
       urgency: 'High',
+      justification: 'Test case for one vendor accepting and one declining.', createdAt: new Date(), updatedAt: new Date(),
       items: { create: [ { id: 'ITEM-SPLIT-C', name: 'Docking Station', quantity: 2, unitPrice: 150 }, { id: 'ITEM-SPLIT-D', name: '4K Webcam', quantity: 2, unitPrice: 100 } ] }
     }
   });
@@ -527,8 +527,8 @@ async function main() {
     data: {
       id: 'REQ-SPLIT-CASE5', transactionId: 'REQ-SPLIT-CASE5', title: 'Partial Award Case 2.2: One Accepts, One Rejects',
       requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-3' } }, status: 'Award_Declined', totalPrice: 1300,
-      justification: 'Second test case for one vendor accepting and one rejecting.', createdAt: new Date(), updatedAt: new Date(),
       urgency: 'Medium',
+      justification: 'Second test case for one vendor accepting and one rejecting.', createdAt: new Date(), updatedAt: new Date(),
       items: { create: [ { id: 'ITEM-SPLIT-K', name: 'Laser Printer', quantity: 1, unitPrice: 800 }, { id: 'ITEM-SPLIT-L', name: 'Scanner', quantity: 1, unitPrice: 500 } ] }
     }
   });
@@ -579,6 +579,136 @@ async function main() {
   console.log('Seeded partial award test scenarios.');
   // --- END: NEW PARTIAL AWARD SEED DATA ---
 
+  // --- START: BULK SEED FOR "READY TO AWARD" AND "READY TO NOTIFY" ---
+  console.log('Seeding bulk data for testing...');
+
+  const sampleItems = [
+    { name: 'Standard Office Chair', price: 150 },
+    { name: 'Ergonomic Keyboard', price: 75 },
+    { name: '24-inch Monitor', price: 250 },
+    { name: 'Docking Station', price: 180 },
+    { name: 'High-Speed Scanner', price: 400 },
+    { name: 'Color Laser Printer', price: 600 },
+    { name: 'Conference Room Camera', price: 900 },
+    { name: 'Whiteboard 4x6 ft', price: 220 },
+    { name: 'Noise-Cancelling Headphones', price: 350 },
+    { name: 'Developer-Grade Laptop', price: 2500 },
+  ];
+
+  // 10 "Ready to Award" (Scoring_Complete)
+  for (let i = 1; i <= 10; i++) {
+    const item = sampleItems[i-1];
+    const reqId = `TEST-AWARD-${i}`;
+    await prisma.purchaseRequisition.create({
+      data: {
+        id: reqId,
+        transactionId: reqId,
+        title: `Ready to Award ${i}: ${item.name}`,
+        requester: { connect: { id: '1' } },
+        department: { connect: { id: 'DEPT-3' } },
+        status: 'Scoring_Complete',
+        totalPrice: item.price * (i+1),
+        urgency: 'Medium',
+        justification: `Test scenario for Ready to Award case ${i}.`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deadline: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
+        scoringDeadline: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
+        financialCommitteeMemberIds: ['9'],
+        technicalCommitteeMemberIds: ['10'],
+        items: { create: { id: `ITEM-AWARD-${i}`, name: item.name, quantity: (i+1), unitPrice: item.price } },
+        quotations: {
+          create: [
+            {
+              id: `QUO-AWARD-W-${i}`,
+              transactionId: reqId,
+              vendor: { connect: { id: 'VENDOR-001' } },
+              vendorName: 'Apple Inc.',
+              status: 'Submitted',
+              totalPrice: item.price * (i+1) * 0.95, // Winning quote
+              finalAverageScore: 92.5 + i,
+              deliveryDate: new Date(),
+              items: { create: { id: `QI-AWARD-W-${i}`, requisitionItemId: `ITEM-AWARD-${i}`, name: item.name, quantity: (i+1), unitPrice: item.price * 0.95, leadTimeDays: 10 } },
+            },
+            {
+              id: `QUO-AWARD-L-${i}`,
+              transactionId: reqId,
+              vendor: { connect: { id: 'VENDOR-002' } },
+              vendorName: 'Dell Technologies',
+              status: 'Submitted',
+              totalPrice: item.price * (i+1),
+              finalAverageScore: 85.0 + i,
+              deliveryDate: new Date(),
+              items: { create: { id: `QI-AWARD-L-${i}`, requisitionItemId: `ITEM-AWARD-${i}`, name: item.name, quantity: (i+1), unitPrice: item.price, leadTimeDays: 8 } },
+            },
+          ],
+        },
+      },
+    });
+  }
+  console.log('Seeded 10 "Ready to Award" scenarios.');
+
+  // 10 "Ready to Notify" (PostApproved)
+  for (let i = 1; i <= 10; i++) {
+    const item = sampleItems[(i + 4) % 10]; // Use different items
+    const reqId = `TEST-NOTIFY-${i}`;
+    const winnerVendorId = i % 2 === 0 ? 'VENDOR-001' : 'VENDOR-002';
+    const winnerVendorName = i % 2 === 0 ? 'Apple Inc.' : 'Dell Technologies';
+    const loserVendorId = i % 2 === 0 ? 'VENDOR-002' : 'VENDOR-001';
+    const loserVendorName = i % 2 === 0 ? 'Dell Technologies' : 'Apple Inc.';
+
+    await prisma.purchaseRequisition.create({
+      data: {
+        id: reqId,
+        transactionId: reqId,
+        title: `Ready to Notify ${i}: ${item.name}`,
+        requester: { connect: { id: '1' } },
+        department: { connect: { id: 'DEPT-2' } },
+        status: 'PostApproved',
+        totalPrice: item.price * i,
+        urgency: 'Low',
+        justification: `Test scenario for Ready to Notify case ${i}.`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deadline: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+        scoringDeadline: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+        awardedQuoteItemIds: [`QI-NOTIFY-W-${i}`],
+        items: { create: { id: `ITEM-NOTIFY-${i}`, name: item.name, quantity: i, unitPrice: item.price } },
+        quotations: {
+          create: [
+            {
+              id: `QUO-NOTIFY-W-${i}`,
+              transactionId: reqId,
+              vendor: { connect: { id: winnerVendorId } },
+              vendorName: winnerVendorName,
+              status: 'Pending_Award',
+              rank: 1,
+              totalPrice: item.price * i * 0.9,
+              finalAverageScore: 95,
+              deliveryDate: new Date(),
+              items: { create: { id: `QI-NOTIFY-W-${i}`, requisitionItemId: `ITEM-NOTIFY-${i}`, name: item.name, quantity: i, unitPrice: item.price * 0.9, leadTimeDays: 5 } },
+            },
+            {
+              id: `QUO-NOTIFY-S-${i}`,
+              transactionId: reqId,
+              vendor: { connect: { id: loserVendorId } },
+              vendorName: loserVendorName,
+              status: 'Standby',
+              rank: 2,
+              totalPrice: item.price * i,
+              finalAverageScore: 90,
+              deliveryDate: new Date(),
+              items: { create: { id: `QI-NOTIFY-S-${i}`, requisitionItemId: `ITEM-NOTIFY-${i}`, name: item.name, quantity: i, unitPrice: item.price, leadTimeDays: 7 } },
+            },
+          ],
+        },
+      },
+    });
+  }
+  console.log('Seeded 10 "Ready to Notify" scenarios.');
+
+  // --- END: BULK SEED DATA ---
+
 
   console.log(`Seeding finished.`);
 }
@@ -601,3 +731,4 @@ main()
     
 
     
+
