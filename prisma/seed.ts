@@ -707,7 +707,142 @@ async function main() {
   }
   console.log('Seeded 10 "Ready to Notify" scenarios.');
 
-  // --- END: BULK SEED DATA ---
+  // --- START: NEW SEED DATA FOR AWARD CENTER TESTING ---
+  console.log('Seeding 20 scenarios for Award Center testing...');
+
+  // 10 Scenarios where one vendor is the clear overall winner
+  for (let i = 1; i <= 10; i++) {
+    const reqId = `AWARD-SINGLE-${i}`;
+    await prisma.purchaseRequisition.create({
+      data: {
+        id: reqId,
+        transactionId: reqId,
+        title: `Award Center Single Winner Test ${i}`,
+        requester: { connect: { id: '1' } },
+        department: { connect: { id: 'DEPT-1' } },
+        status: 'Scoring_Complete',
+        urgency: 'Medium',
+        totalPrice: 1100 + (i*10),
+        justification: `Test case for single winner award scenario ${i}.`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        items: {
+          create: [
+            { id: `ITEM-SGL-A-${i}`, name: `Item A${i}`, quantity: 5, unitPrice: 100 + i },
+            { id: `ITEM-SGL-B-${i}`, name: `Item B${i}`, quantity: 2, unitPrice: 50 + i },
+          ],
+        },
+        quotations: {
+          create: [
+            {
+              id: `QUO-SGL-W-${i}`,
+              transactionId: reqId,
+              vendor: { connect: { id: 'VENDOR-001' } },
+              vendorName: 'Apple Inc.',
+              status: 'Submitted',
+              finalAverageScore: 95,
+              totalPrice: 1045 + (i * 10),
+              deliveryDate: new Date(),
+              items: { create: [
+                { id: `QI-SGL-W-A-${i}`, requisitionItemId: `ITEM-SGL-A-${i}`, name: `Item A${i}`, quantity: 5, unitPrice: 95 + i, leadTimeDays: 5 },
+                { id: `QI-SGL-W-B-${i}`, requisitionItemId: `ITEM-SGL-B-${i}`, name: `Item B${i}`, quantity: 2, unitPrice: 48 + i, leadTimeDays: 5 },
+              ]}
+            },
+            {
+              id: `QUO-SGL-L-${i}`,
+              transactionId: reqId,
+              vendor: { connect: { id: 'VENDOR-002' } },
+              vendorName: 'Dell Technologies',
+              status: 'Submitted',
+              finalAverageScore: 85,
+              totalPrice: 1100 + (i * 10),
+              deliveryDate: new Date(),
+              items: { create: [
+                { id: `QI-SGL-L-A-${i}`, requisitionItemId: `ITEM-SGL-A-${i}`, name: `Item A${i}`, quantity: 5, unitPrice: 100 + i, leadTimeDays: 7 },
+                { id: `QI-SGL-L-B-${i}`, requisitionItemId: `ITEM-SGL-B-${i}`, name: `Item B${i}`, quantity: 2, unitPrice: 50 + i, leadTimeDays: 7 },
+              ]}
+            },
+          ]
+        }
+      }
+    })
+  }
+  console.log('Seeded 10 single-winner scenarios.');
+
+  // 10 Scenarios designed for split awards
+  for (let i = 1; i <= 10; i++) {
+    const reqId = `AWARD-SPLIT-${i}`;
+    await prisma.purchaseRequisition.create({
+      data: {
+        id: reqId,
+        transactionId: reqId,
+        title: `Award Center Split Award Test ${i}`,
+        requester: { connect: { id: '1' } },
+        department: { connect: { id: 'DEPT-2' } },
+        status: 'Scoring_Complete',
+        urgency: 'Medium',
+        totalPrice: 1600 + (i*10),
+        justification: `Test case for split award scenario ${i}.`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        items: {
+          create: [
+            { id: `ITEM-SPL-A-${i}`, name: `High-Performance GPU ${i}`, quantity: 2, unitPrice: 600 + i },
+            { id: `ITEM-SPL-B-${i}`, name: `Quiet Case Fan ${i}`, quantity: 4, unitPrice: 100 + i },
+          ],
+        },
+        quotations: {
+          create: [
+            { // Vendor 1 is good at GPUs, bad at Fans
+              id: `QUO-SPL-V1-${i}`,
+              transactionId: reqId,
+              vendor: { connect: { id: 'VENDOR-001' } },
+              vendorName: 'Apple Inc.',
+              status: 'Submitted',
+              finalAverageScore: 90,
+              totalPrice: 1550 + (i*10),
+              deliveryDate: new Date(),
+              items: { create: [
+                { id: `QI-SPL-V1-A-${i}`, requisitionItemId: `ITEM-SPL-A-${i}`, name: `High-Performance GPU ${i}`, quantity: 2, unitPrice: 575 + i, leadTimeDays: 4 }, // Better GPU Price
+                { id: `QI-SPL-V1-B-${i}`, requisitionItemId: `ITEM-SPL-B-${i}`, name: `Quiet Case Fan ${i}`, quantity: 4, unitPrice: 100 + i, leadTimeDays: 8 }, // Worse Fan Price
+              ]}
+            },
+            { // Vendor 2 is bad at GPUs, good at Fans
+              id: `QUO-SPL-V2-${i}`,
+              transactionId: reqId,
+              vendor: { connect: { id: 'VENDOR-002' } },
+              vendorName: 'Dell Technologies',
+              status: 'Submitted',
+              finalAverageScore: 88,
+              totalPrice: 1580 + (i*10),
+              deliveryDate: new Date(),
+              items: { create: [
+                { id: `QI-SPL-V2-A-${i}`, requisitionItemId: `ITEM-SPL-A-${i}`, name: `High-Performance GPU ${i}`, quantity: 2, unitPrice: 600 + i, leadTimeDays: 6 }, // Worse GPU Price
+                { id: `QI-SPL-V2-B-${i}`, requisitionItemId: `ITEM-SPL-B-${i}`, name: `Quiet Case Fan ${i}`, quantity: 4, unitPrice: 95 + i, leadTimeDays: 3 }, // Better Fan Price
+              ]}
+            },
+             { // Vendor 3 is a backup
+              id: `QUO-SPL-V3-${i}`,
+              transactionId: reqId,
+              vendor: { connect: { id: 'VENDOR-004' } },
+              vendorName: 'HP Inc.',
+              status: 'Submitted',
+              finalAverageScore: 80,
+              totalPrice: 1700 + (i*10),
+              deliveryDate: new Date(),
+              items: { create: [
+                { id: `QI-SPL-V3-A-${i}`, requisitionItemId: `ITEM-SPL-A-${i}`, name: `High-Performance GPU ${i}`, quantity: 2, unitPrice: 650 + i, leadTimeDays: 10 },
+                { id: `QI-SPL-V3-B-${i}`, requisitionItemId: `ITEM-SPL-B-${i}`, name: `Quiet Case Fan ${i}`, quantity: 4, unitPrice: 100 + i, leadTimeDays: 10 },
+              ]}
+            },
+          ]
+        }
+      }
+    })
+  }
+  console.log('Seeded 10 split-award scenarios.');
+
+  // --- END: NEW SEED DATA ---
 
 
   console.log(`Seeding finished.`);
@@ -731,6 +866,7 @@ main()
     
 
     
+
 
 
 
