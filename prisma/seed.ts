@@ -614,8 +614,8 @@ async function main() {
         updatedAt: new Date(),
         deadline: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
         scoringDeadline: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-        financialCommitteeMemberIds: ['9'],
-        technicalCommitteeMemberIds: ['10'],
+        financialCommitteeMembers: { connect: [{ id: '9' }] },
+        technicalCommitteeMembers: { connect: [{ id: '10' }] },
         items: { create: { id: `ITEM-AWARD-${i}`, name: item.name, quantity: (i+1), unitPrice: item.price } },
         quotations: {
           create: [
@@ -731,4 +731,5 @@ main()
     
 
     
+
 
