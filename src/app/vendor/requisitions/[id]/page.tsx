@@ -931,23 +931,18 @@ export default function VendorRequisitionPage() {
                         <Separator />
                         <div>
                             <h3 className="font-semibold text-sm mb-2">Items Requested</h3>
-                            <div className="border rounded-md">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Item Name</TableHead>
-                                            <TableHead className="text-right">Quantity</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {requisition.items.map((item, i) => (
-                                            <TableRow key={`${item.id}-${i}`}>
-                                                <TableCell>{item.name}</TableCell>
-                                                <TableCell className="text-right">{item.quantity}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                            <div className="space-y-4">
+                                {requisition.items.map((item, i) => (
+                                    <div key={`${item.id}-${i}`} className="p-3 border rounded-md bg-muted/50">
+                                        <div className="flex justify-between items-center">
+                                            <p className="font-semibold">{item.name}</p>
+                                            <p className="text-sm font-mono bg-background px-2 py-1 rounded">Qty: {item.quantity}</p>
+                                        </div>
+                                        {item.description && (
+                                            <p className="text-xs text-muted-foreground mt-2">{item.description}</p>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         </div>
                          {requisition.customQuestions && requisition.customQuestions.length > 0 && (
