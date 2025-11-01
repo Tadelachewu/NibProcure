@@ -56,18 +56,18 @@ export async function POST(request: Request) {
     });
     
     // Check if all awards are accepted to update the main requisition status
-    const allAwardedQuotes = await prisma.quotation.findMany({
+    const otherPendingAwards = await prisma.quotation.count({
         where: {
             requisitionId: requisition.id,
             status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
         }
     });
 
-    if (allAwardedQuotes.length === 0) {
+    // Only set to PO_Created if this was the last acceptance
+    if (otherPendingAwards === 0) {
             await prisma.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
-                // Do not link a single PO ID anymore as there can be multiple
                 status: 'PO_Created',
             }
         });
