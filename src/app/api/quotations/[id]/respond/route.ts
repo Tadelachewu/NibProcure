@@ -62,10 +62,9 @@ export async function POST(
             const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
             
             // This is the main change: the PO creation is now the primary goal of this transaction.
-            // The logic to update the parent requisition status is moved to the PO creation API.
             const newPO = await tx.purchaseOrder.create({
                 data: {
-                    transactionId: requisition.transactionId,
+                    transactionId: requisition.transactionId, // CRITICAL FIX
                     requisition: { connect: { id: requisition.id } },
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },

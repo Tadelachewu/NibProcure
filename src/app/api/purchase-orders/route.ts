@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const { requisitionId, userId, triggerStatusCheck } = body;
 
     // --- LOGIC TO CHECK AND FINALIZE REQUISITION STATUS ---
-    if (triggerStatusCheck) {
+    if (triggerStatusCheck && requisitionId) {
         const req = await prisma.purchaseRequisition.findUnique({
             where: { id: requisitionId },
             include: { items: true, purchaseOrders: { include: { items: true } } }
@@ -19,9 +19,12 @@ export async function POST(request: Request) {
         
         if (req && req.status !== 'PO_Created' && req.status !== 'Closed') {
             const allReqItemIds = new Set(req.items.map(i => i.id));
-            const allPOItemIds = new Set(req.purchaseOrders.flatMap(po => po.items).map(item => item.requisitionItemId));
+            const poItems = await prisma.pOItem.findMany({
+                where: { purchaseOrder: { requisitionId: requisitionId } }
+            });
+            const allPOItemReqIds = new Set(poItems.map(item => item.requisitionItemId));
 
-            const allItemsAccountedFor = [...allReqItemIds].every(id => allPOItemIds.has(id));
+            const allItemsAccountedFor = [...allReqItemIds].every(id => allPOItemReqIds.has(id));
 
             if (allItemsAccountedFor) {
                 await prisma.purchaseRequisition.update({
