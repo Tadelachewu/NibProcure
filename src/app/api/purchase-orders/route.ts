@@ -14,11 +14,13 @@ export async function POST(request: Request) {
     if (triggerStatusCheck && requisitionId) {
         const req = await prisma.purchaseRequisition.findUnique({
             where: { id: requisitionId },
-            include: { items: true, purchaseOrders: { include: { items: true } } }
+            include: { items: true }
         });
         
         if (req && req.status !== 'PO_Created' && req.status !== 'Closed') {
             const allReqItemIds = new Set(req.items.map(i => i.id));
+            
+            // Find all PO items across all POs linked to this requisition
             const poItems = await prisma.pOItem.findMany({
                 where: { purchaseOrder: { requisitionId: requisitionId } }
             });
@@ -66,7 +68,7 @@ export async function POST(request: Request) {
     const newPO = await prisma.purchaseOrder.create({
         data: {
             transactionId: requisition.transactionId,
-            requisition: { connect: { id: requisition.id } },
+            requisitionId: requisition.id,
             requisitionTitle: requisition.title,
             vendor: { connect: { id: vendor.id } },
             items: {
