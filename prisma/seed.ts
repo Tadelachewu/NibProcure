@@ -147,7 +147,7 @@ async function main() {
 
   // Seed Departments without heads first
   for (const department of seedData.departments) {
-    const { head, users, ...deptData } = department;
+    const { head, users, headId, ...deptData } = department;
     await prisma.department.create({
       data: deptData,
     });
