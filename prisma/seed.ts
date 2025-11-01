@@ -468,131 +468,104 @@ async function main() {
   // --- START: NEW PARTIAL AWARD SEED DATA ---
   console.log('Seeding partial award test scenarios...');
 
-  // CASE 1: BOTH VENDORS AWARDED, READY TO ACCEPT
+  // --- CASE 1: BOTH VENDORS AWARDED, READY TO ACCEPT ---
+  // SCENARIO 1.1
   await prisma.purchaseRequisition.create({
     data: {
-      id: 'REQ-SPLIT-CASE1',
-      transactionId: 'REQ-SPLIT-CASE1',
-      title: 'Partial Award Case 1: Both Accept',
-      requester: { connect: { id: '1' } },
-      department: { connect: { id: 'DEPT-1' } },
-      status: 'PostApproved',
-      totalPrice: 1500,
-      justification: 'Test case for both vendors accepting a split award.',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      id: 'REQ-SPLIT-CASE1', transactionId: 'REQ-SPLIT-CASE1', title: 'Partial Award Case 1.1: Both Accept (Laptops/Mice)',
+      requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-1' } }, status: 'PostApproved', totalPrice: 1500,
+      justification: 'Test case for both vendors accepting a split award.', createdAt: new Date(), updatedAt: new Date(),
       awardedQuoteItemIds: ['QI-SPLIT-A1', 'QI-SPLIT-B1'],
-      items: {
-        create: [
-          { id: 'ITEM-SPLIT-A', name: 'Laptop Power Adapter', quantity: 10, unitPrice: 50 },
-          { id: 'ITEM-SPLIT-B', name: 'Ergonomic Mouse', quantity: 10, unitPrice: 100 },
-        ]
-      },
-      quotations: {
-        create: [
-          // Vendor A wins Laptop Adapters
-          {
-            id: 'QUO-SPLIT-A',
-            transactionId: 'REQ-SPLIT-CASE1',
-            vendor: { connect: { id: 'VENDOR-001' } },
-            vendorName: 'Apple Inc.',
-            status: 'Pending_Award',
-            totalPrice: 500,
-            deliveryDate: new Date(),
-            rank: 1,
-            items: {
-              create: { id: 'QI-SPLIT-A1', requisitionItemId: 'ITEM-SPLIT-A', name: 'Laptop Power Adapter', quantity: 10, unitPrice: 50, leadTimeDays: 5 }
-            }
-          },
-          // Vendor B wins Mice
-          {
-            id: 'QUO-SPLIT-B',
-            transactionId: 'REQ-SPLIT-CASE1',
-            vendor: { connect: { id: 'VENDOR-002' } },
-            vendorName: 'Dell Technologies',
-            status: 'Pending_Award',
-            totalPrice: 1000,
-            deliveryDate: new Date(),
-            rank: 1,
-            items: {
-              create: { id: 'QI-SPLIT-B1', requisitionItemId: 'ITEM-SPLIT-B', name: 'Ergonomic Mouse', quantity: 10, unitPrice: 100, leadTimeDays: 7 }
-            }
-          }
-        ]
-      }
+      items: { create: [ { id: 'ITEM-SPLIT-A', name: 'Laptop Power Adapter', quantity: 10, unitPrice: 50 }, { id: 'ITEM-SPLIT-B', name: 'Ergonomic Mouse', quantity: 10, unitPrice: 100 } ] },
+      quotations: { create: [
+          { id: 'QUO-SPLIT-A', transactionId: 'REQ-SPLIT-CASE1', vendor: { connect: { id: 'VENDOR-001' } }, vendorName: 'Apple Inc.', status: 'Pending_Award', totalPrice: 500, deliveryDate: new Date(), rank: 1, items: { create: { id: 'QI-SPLIT-A1', requisitionItemId: 'ITEM-SPLIT-A', name: 'Laptop Power Adapter', quantity: 10, unitPrice: 50, leadTimeDays: 5 } } },
+          { id: 'QUO-SPLIT-B', transactionId: 'REQ-SPLIT-CASE1', vendor: { connect: { id: 'VENDOR-002' } }, vendorName: 'Dell Technologies', status: 'Pending_Award', totalPrice: 1000, deliveryDate: new Date(), rank: 1, items: { create: { id: 'QI-SPLIT-B1', requisitionItemId: 'ITEM-SPLIT-B', name: 'Ergonomic Mouse', quantity: 10, unitPrice: 100, leadTimeDays: 7 } } }
+      ] }
     }
   });
 
-  // CASE 2: ONE ACCEPTS, ONE DECLINES
+  // SCENARIO 1.2
   await prisma.purchaseRequisition.create({
     data: {
-      id: 'REQ-SPLIT-CASE2',
-      transactionId: 'REQ-SPLIT-CASE2',
-      title: 'Partial Award Case 2: One Accepts, One Declines',
-      requester: { connect: { id: '1' } },
-      department: { connect: { id: 'DEPT-1' } },
-      status: 'Award_Declined', // This status indicates manual action is needed
-      totalPrice: 200,
-      justification: 'Test case for one vendor accepting and one declining.',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      items: {
-        create: [
-          { id: 'ITEM-SPLIT-C', name: 'Docking Station', quantity: 2, unitPrice: 150 },
-          { id: 'ITEM-SPLIT-D', name: '4K Webcam', quantity: 2, unitPrice: 100 },
-        ]
-      }
+      id: 'REQ-SPLIT-CASE4', transactionId: 'REQ-SPLIT-CASE4', title: 'Partial Award Case 1.2: Both Accept (Monitors/Keyboards)',
+      requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-3' } }, status: 'PostApproved', totalPrice: 2200,
+      justification: 'Second test case for both vendors accepting a split award.', createdAt: new Date(), updatedAt: new Date(),
+      awardedQuoteItemIds: ['QI-SPLIT-I1', 'QI-SPLIT-J1'],
+      items: { create: [ { id: 'ITEM-SPLIT-I', name: '4K Monitor', quantity: 4, unitPrice: 400 }, { id: 'ITEM-SPLIT-J', name: 'Mechanical Keyboard', quantity: 4, unitPrice: 150 } ] },
+      quotations: { create: [
+          { id: 'QUO-SPLIT-I', transactionId: 'REQ-SPLIT-CASE4', vendor: { connect: { id: 'VENDOR-004' } }, vendorName: 'HP Inc.', status: 'Pending_Award', totalPrice: 1600, deliveryDate: new Date(), rank: 1, items: { create: { id: 'QI-SPLIT-I1', requisitionItemId: 'ITEM-SPLIT-I', name: '4K Monitor', quantity: 4, unitPrice: 400, leadTimeDays: 10 } } },
+          { id: 'QUO-SPLIT-J', transactionId: 'REQ-SPLIT-CASE4', vendor: { connect: { id: 'VENDOR-001' } }, vendorName: 'Apple Inc.', status: 'Pending_Award', totalPrice: 600, deliveryDate: new Date(), rank: 1, items: { create: { id: 'QI-SPLIT-J1', requisitionItemId: 'ITEM-SPLIT-J', name: 'Mechanical Keyboard', quantity: 4, unitPrice: 150, leadTimeDays: 5 } } }
+      ] }
     }
   });
-  // PO for the accepted part
-  await prisma.purchaseOrder.create({
-      data: {
-          id: 'PO-SPLIT-C',
-          transactionId: 'REQ-SPLIT-CASE2',
-          requisitionId: 'REQ-SPLIT-CASE2',
-          requisitionTitle: 'Partial Award Case 2: One Accepts, One Declines',
-          vendorId: 'VENDOR-004', // HP
-          totalAmount: 300,
-          status: 'Issued',
-          items: { create: { requisitionItemId: 'ITEM-SPLIT-C', name: 'Docking Station', quantity: 2, unitPrice: 150, totalPrice: 300, receivedQuantity: 0 } }
-      }
+
+
+  // --- CASE 2: ONE ACCEPTS, ONE DECLINES ---
+  // SCENARIO 2.1
+  await prisma.purchaseRequisition.create({
+    data: {
+      id: 'REQ-SPLIT-CASE2', transactionId: 'REQ-SPLIT-CASE2', title: 'Partial Award Case 2.1: One Accepts, One Declines',
+      requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-1' } }, status: 'Award_Declined', totalPrice: 500,
+      justification: 'Test case for one vendor accepting and one declining.', createdAt: new Date(), updatedAt: new Date(),
+      items: { create: [ { id: 'ITEM-SPLIT-C', name: 'Docking Station', quantity: 2, unitPrice: 150 }, { id: 'ITEM-SPLIT-D', name: '4K Webcam', quantity: 2, unitPrice: 100 } ] }
+    }
   });
-  // Quotes for Case 2
-  await prisma.quotation.createMany({
-    data: [
+  await prisma.purchaseOrder.create({
+      data: { id: 'PO-SPLIT-C', transactionId: 'REQ-SPLIT-CASE2', requisitionId: 'REQ-SPLIT-CASE2', requisitionTitle: 'Partial Award Case 2.1: One Accepts, One Declines', vendorId: 'VENDOR-004', totalAmount: 300, status: 'Issued', items: { create: { requisitionItemId: 'ITEM-SPLIT-C', name: 'Docking Station', quantity: 2, unitPrice: 150, totalPrice: 300, receivedQuantity: 0 } } }
+  });
+  await prisma.quotation.createMany({ data: [
       { id: 'QUO-SPLIT-C', transactionId: 'REQ-SPLIT-CASE2', requisitionId: 'REQ-SPLIT-CASE2', vendorId: 'VENDOR-004', vendorName: 'HP Inc.', status: 'Accepted', totalPrice: 300, deliveryDate: new Date(), rank: 1 },
       { id: 'QUO-SPLIT-D', transactionId: 'REQ-SPLIT-CASE2', requisitionId: 'REQ-SPLIT-CASE2', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Declined', totalPrice: 200, deliveryDate: new Date(), rank: 1 },
       { id: 'QUO-SPLIT-E', transactionId: 'REQ-SPLIT-CASE2', requisitionId: 'REQ-SPLIT-CASE2', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Standby', totalPrice: 220, deliveryDate: new Date(), rank: 2 },
-    ]
-  });
+  ]});
 
-
-  // CASE 3: BOTH VENDORS DECLINE, STANDBY AVAILABLE
+  // SCENARIO 2.2
   await prisma.purchaseRequisition.create({
     data: {
-      id: 'REQ-SPLIT-CASE3',
-      transactionId: 'REQ-SPLIT-CASE3',
-      title: 'Partial Award Case 3: Both Decline',
-      requester: { connect: { id: '1' } },
-      department: { connect: { id: 'DEPT-1' } },
-      status: 'Award_Declined',
-      totalPrice: 100,
-      justification: 'Test case for both vendors declining, with a standby available.',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      items: {
-        create: [
-          { id: 'ITEM-SPLIT-F', name: 'Wireless Keyboard', quantity: 5, unitPrice: 50 },
-          { id: 'ITEM-SPLIT-G', name: 'Wireless Mouse', quantity: 5, unitPrice: 30 },
-        ]
-      },
-      quotations: {
-        create: [
+      id: 'REQ-SPLIT-CASE5', transactionId: 'REQ-SPLIT-CASE5', title: 'Partial Award Case 2.2: One Accepts, One Rejects',
+      requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-3' } }, status: 'Award_Declined', totalPrice: 1300,
+      justification: 'Second test case for one vendor accepting and one rejecting.', createdAt: new Date(), updatedAt: new Date(),
+      items: { create: [ { id: 'ITEM-SPLIT-K', name: 'Laser Printer', quantity: 1, unitPrice: 800 }, { id: 'ITEM-SPLIT-L', name: 'Scanner', quantity: 1, unitPrice: 500 } ] }
+    }
+  });
+  await prisma.purchaseOrder.create({
+      data: { id: 'PO-SPLIT-K', transactionId: 'REQ-SPLIT-CASE5', requisitionId: 'REQ-SPLIT-CASE5', requisitionTitle: 'Partial Award Case 2.2: One Accepts, One Rejects', vendorId: 'VENDOR-001', totalAmount: 800, status: 'Issued', items: { create: { requisitionItemId: 'ITEM-SPLIT-K', name: 'Laser Printer', quantity: 1, unitPrice: 800, totalPrice: 800, receivedQuantity: 0 } } }
+  });
+  await prisma.quotation.createMany({ data: [
+      { id: 'QUO-SPLIT-K', transactionId: 'REQ-SPLIT-CASE5', requisitionId: 'REQ-SPLIT-CASE5', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', totalPrice: 800, deliveryDate: new Date(), rank: 1 },
+      { id: 'QUO-SPLIT-L', transactionId: 'REQ-SPLIT-CASE5', requisitionId: 'REQ-SPLIT-CASE5', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Declined', totalPrice: 500, deliveryDate: new Date(), rank: 1 },
+      { id: 'QUO-SPLIT-M', transactionId: 'REQ-SPLIT-CASE5', requisitionId: 'REQ-SPLIT-CASE5', vendorId: 'VENDOR-004', vendorName: 'HP Inc.', status: 'Standby', totalPrice: 550, deliveryDate: new Date(), rank: 2 },
+  ]});
+
+
+  // --- CASE 3: BOTH VENDORS DECLINE, STANDBY AVAILABLE ---
+  // SCENARIO 3.1
+  await prisma.purchaseRequisition.create({
+    data: {
+      id: 'REQ-SPLIT-CASE3', transactionId: 'REQ-SPLIT-CASE3', title: 'Partial Award Case 3.1: Both Decline',
+      requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-1' } }, status: 'Award_Declined', totalPrice: 400,
+      justification: 'Test case for both vendors declining, with a standby available.', createdAt: new Date(), updatedAt: new Date(),
+      items: { create: [ { id: 'ITEM-SPLIT-F', name: 'Wireless Keyboard', quantity: 5, unitPrice: 50 }, { id: 'ITEM-SPLIT-G', name: 'Wireless Mouse', quantity: 5, unitPrice: 30 } ] },
+      quotations: { create: [
           { id: 'QUO-SPLIT-F', transactionId: 'REQ-SPLIT-CASE3', vendor: { connect: { id: 'VENDOR-001' } }, vendorName: 'Apple Inc.', status: 'Declined', totalPrice: 250, deliveryDate: new Date(), rank: 1 },
           { id: 'QUO-SPLIT-G', transactionId: 'REQ-SPLIT-CASE3', vendor: { connect: { id: 'VENDOR-002' } }, vendorName: 'Dell Technologies', status: 'Declined', totalPrice: 150, deliveryDate: new Date(), rank: 1 },
-          { id: 'QUO-SPLIT-H', transactionId: 'REQ-SPLIT-CASE3', vendor: { connect: { id: 'VENDOR-004' } }, vendorName: 'HP Inc.', status: 'Standby', totalPrice: 400, deliveryDate: new Date(), rank: 2 },
-        ]
-      }
+          { id: 'QUO-SPLIT-H', transactionId: 'REQ-SPLIT-CASE3', vendor: { connect: { id: 'VENDOR-004' } }, vendorName: 'HP Inc.', status: 'Standby', totalPrice: 420, deliveryDate: new Date(), rank: 2 },
+      ] }
+    }
+  });
+
+  // SCENARIO 3.2
+  await prisma.purchaseRequisition.create({
+    data: {
+      id: 'REQ-SPLIT-CASE6', transactionId: 'REQ-SPLIT-CASE6', title: 'Partial Award Case 3.2: Both Decline Again',
+      requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-2' } }, status: 'Award_Declined', totalPrice: 900,
+      justification: 'Second test case for both vendors declining.', createdAt: new Date(), updatedAt: new Date(),
+      items: { create: [ { id: 'ITEM-SPLIT-N', name: 'Projector', quantity: 1, unitPrice: 600 }, { id: 'ITEM-SPLIT-O', name: 'Projector Screen', quantity: 1, unitPrice: 300 } ] },
+      quotations: { create: [
+          { id: 'QUO-SPLIT-N', transactionId: 'REQ-SPLIT-CASE6', vendor: { connect: { id: 'VENDOR-001' } }, vendorName: 'Apple Inc.', status: 'Declined', totalPrice: 600, deliveryDate: new Date(), rank: 1 },
+          { id: 'QUO-SPLIT-O', transactionId: 'REQ-SPLIT-CASE6', vendor: { connect: { id: 'VENDOR-002' } }, vendorName: 'Dell Technologies', status: 'Declined', totalPrice: 300, deliveryDate: new Date(), rank: 1 },
+          { id: 'QUO-SPLIT-P', transactionId: 'REQ-SPLIT-CASE6', vendor: { connect: { id: 'VENDOR-004' } }, vendorName: 'HP Inc.', status: 'Standby', totalPrice: 950, deliveryDate: new Date(), rank: 2 },
+      ] }
     }
   });
 
@@ -618,5 +591,7 @@ main()
     
 
 
+
+    
 
     
