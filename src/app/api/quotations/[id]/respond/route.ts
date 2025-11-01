@@ -84,7 +84,7 @@ export async function POST(
 
             // After accepting, check if all awarded items for the entire requisition are now on POs
             const allReqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisition.id } });
-            const allPOItems = await tx.pOItem.findMany({ where: { po: { requisitionId: requisition.id } } });
+            const allPOItems = await tx.pOItem.findMany({ where: { purchaseOrder: { requisitionId: requisition.id } } });
             const allReqItemIds = new Set(allReqItems.map(i => i.id));
             const allPOItemIds = new Set(allPOItems.map(i => i.requisitionItemId));
 
