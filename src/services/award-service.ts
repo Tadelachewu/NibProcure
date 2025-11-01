@@ -216,23 +216,67 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             status: 'Standby'
         },
         orderBy: { rank: 'asc' },
-        include: { items: true }
+        include: { items: true, scores: { include: { itemScores: true } } }
     });
 
     if (!nextStandby) {
         throw new Error('No standby vendor found to promote.');
     }
     
-    // Get the next approval step based on the standby vendor's quote price.
-    const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, nextStandby.totalPrice);
+    // Fetch the original requisition to get the list of requested items
+    const requisition = await tx.purchaseRequisition.findUnique({
+        where: { id: requisitionId },
+        include: { items: true }
+    });
+
+    if (!requisition) {
+        throw new Error('Associated requisition not found.');
+    }
+
+    // --- START: Intelligent Item Selection Logic ---
+    const bestItemsFromNewWinner = requisition.items.map(reqItem => {
+        const proposalsForItem = nextStandby.items.filter(i => i.requisitionItemId === reqItem.id);
+
+        if (proposalsForItem.length === 0) return null;
+        if (proposalsForItem.length === 1) return proposalsForItem[0];
+        
+        // If multiple proposals, find the best-scored one
+        let bestItemScore = -1;
+        let bestProposal = proposalsForItem[0];
+
+        proposalsForItem.forEach(proposal => {
+             let totalItemScore = 0;
+             let scoreCount = 0;
+             nextStandby.scores.forEach(scoreSet => {
+                 const itemScore = scoreSet.itemScores.find(i => i.quoteItemId === proposal.id);
+                 if (itemScore) {
+                     totalItemScore += itemScore.finalScore;
+                     scoreCount++;
+                 }
+             });
+             const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+             if (averageItemScore > bestItemScore) {
+                 bestItemScore = averageItemScore;
+                 bestProposal = proposal;
+             }
+        });
+        return bestProposal;
+    }).filter((item): item is NonNullable<typeof item> => item !== null);
+    // --- END: Intelligent Item Selection Logic ---
+
+    const newTotalPrice = bestItemsFromNewWinner.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+    const newAwardedItemIds = bestItemsFromNewWinner.map(item => item.id);
+    
+    // Get the next approval step based on the NEW standby vendor's total price
+    const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalPrice);
     
     // Update the requisition to start the new approval workflow.
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
         data: {
             status: nextStatus as any,
-            totalPrice: nextStandby.totalPrice, // Update price to the new winner's
-            awardedQuoteItemIds: nextStandby.items.map(item => item.id), // Update awarded items
+            totalPrice: newTotalPrice, // Update price to the new winner's
+            awardedQuoteItemIds: newAwardedItemIds, // Update awarded items
             currentApproverId: nextApproverId, // Set the first approver in the new chain
         }
     });
