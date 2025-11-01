@@ -86,7 +86,7 @@ export async function POST(
             const otherPendingAwards = await tx.quotation.count({
                 where: {
                     requisitionId: requisition.id,
-                    id: { not: quote.id },
+                    id: { not: quote.id }, // Exclude the current quote
                     status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
                 }
             });

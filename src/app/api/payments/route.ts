@@ -67,7 +67,7 @@ export async function POST(
                     where: { id: requisitionId },
                     data: { status: 'Closed' }
                 });
-                console.log(`All POs completed. Requisition ${requisitionId} status updated to Closed.`);
+                console.log(`All POs for requisition ${requisitionId} are complete. Requisition status updated to Closed.`);
             } else {
                 console.log(`Not all POs for requisition ${requisitionId} are complete. Requisition status remains unchanged.`);
             }
