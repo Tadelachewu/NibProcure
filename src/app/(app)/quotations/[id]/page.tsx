@@ -1048,7 +1048,9 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
         );
     }, [vendors, vendorSearch]);
 
-    const canTakeAction = !isSent && isAuthorized;
+    // An RFQ can be sent if the user is authorized AND the requisition status is PreApproved.
+    const canTakeAction = isAuthorized && requisition.status === 'PreApproved';
+
 
     return (
         <>
@@ -1688,7 +1690,7 @@ const ScoringProgressTracker = ({
 
     const getButtonState = () => {
         if (requisition.status === 'Award_Declined') {
-            return { text: "Finalize Scores & Award", disabled: true };
+            return { text: "Finalize Scores & Award", disabled: false };
         }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
@@ -2490,7 +2492,7 @@ export default function QuotationDetailsPage() {
       if (!requisition) return 'rfq';
       const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
 
-      if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
+      if (requisition.status === 'PreApproved') return 'rfq';
       if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
       if (requisition.status === 'Accepting_Quotes' && deadlinePassed) return 'committee';
 
@@ -2600,7 +2602,7 @@ export default function QuotationDetailsPage() {
             <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
         )}
 
-        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && (
+        {currentStep === 'rfq' && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && (
             <div className="grid md:grid-cols-2 gap-6 items-start">
                 <RFQDistribution 
                     requisition={requisition} 

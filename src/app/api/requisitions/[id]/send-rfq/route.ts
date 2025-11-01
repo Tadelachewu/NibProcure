@@ -64,6 +64,7 @@ export async function POST(
         }
     }
 
+    // This now allows sending RFQ even if POs exist, for partial re-bids.
     if (requisition.status !== 'PreApproved') {
         return NextResponse.json({ error: `Cannot start RFQ for a requisition that is not in PreApproved state.` }, { status: 400 });
     }
