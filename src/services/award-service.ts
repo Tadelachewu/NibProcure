@@ -135,7 +135,7 @@ export async function handleAwardRejection(
         where: {
             requisitionId: requisition.id,
             id: { not: quote.id },
-            status: { in: ['Accepted', 'Awarded', 'Partially_Awarded', 'Pending_Award'] }
+            status: { in: ['Accepted'] }
         }
     });
 
@@ -179,7 +179,7 @@ export async function handleAwardRejection(
                 action: 'AWARD_DECLINED_STANDBY_AVAILABLE',
                 entity: 'Requisition',
                 entityId: requisition.id,
-                details: `Award declined by ${quote.vendorName}. A standby vendor is available. Manual promotion required.`,
+                details: `Award declined by ${quote.vendorName}. A standby vendor is available for manual promotion.`,
                 transactionId: requisition.transactionId,
             }
         });

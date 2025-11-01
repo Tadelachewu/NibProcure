@@ -65,12 +65,19 @@ export async function POST(request: Request) {
 
     // Only set to PO_Created if this was the last acceptance
     if (otherPendingAwards === 0) {
-            await prisma.purchaseRequisition.update({
-            where: { id: requisitionId },
-            data: {
-                status: 'PO_Created',
+            const allReqItems = await prisma.requisitionItem.findMany({ where: { requisitionId: requisition.id } });
+            const allPOItems = await prisma.pOItem.findMany({ where: { po: { requisitionId: requisition.id } } });
+            const allReqItemIds = new Set(allReqItems.map(i => i.id));
+            const allPOItemIds = new Set(allPOItems.map(i => i.requisitionItemId));
+
+            const allItemsAccountedFor = [...allReqItemIds].every(id => allPOItemIds.has(id));
+
+            if (allItemsAccountedFor) {
+                await prisma.purchaseRequisition.update({
+                    where: { id: requisitionId },
+                    data: { status: 'PO_Created' }
+                });
             }
-        });
     }
 
     await prisma.auditLog.create({

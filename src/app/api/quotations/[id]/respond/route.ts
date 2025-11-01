@@ -82,17 +82,15 @@ export async function POST(
                 }
             });
 
-            // After accepting, check if any other awards are still pending.
-            const otherPendingAwards = await tx.quotation.count({
-                where: {
-                    requisitionId: requisition.id,
-                    id: { not: quote.id }, // Exclude the current quote
-                    status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
-                }
-            });
+            // After accepting, check if all awarded items for the entire requisition are now on POs
+            const allReqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisition.id } });
+            const allPOItems = await tx.pOItem.findMany({ where: { po: { requisitionId: requisition.id } } });
+            const allReqItemIds = new Set(allReqItems.map(i => i.id));
+            const allPOItemIds = new Set(allPOItems.map(i => i.requisitionItemId));
 
-            // If there are no more pending awards, the PO process is complete for the whole req.
-            if (otherPendingAwards === 0) {
+            const allItemsAccountedFor = [...allReqItemIds].every(id => allPOItemIds.has(id));
+
+            if (allItemsAccountedFor) {
                  await tx.purchaseRequisition.update({
                     where: { id: requisition.id },
                     data: { status: 'PO_Created' }
