@@ -475,6 +475,7 @@ async function main() {
       id: 'REQ-SPLIT-CASE1', transactionId: 'REQ-SPLIT-CASE1', title: 'Partial Award Case 1.1: Both Accept (Laptops/Mice)',
       requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-1' } }, status: 'PostApproved', totalPrice: 1500,
       justification: 'Test case for both vendors accepting a split award.', createdAt: new Date(), updatedAt: new Date(),
+      urgency: 'Medium',
       awardedQuoteItemIds: ['QI-SPLIT-A1', 'QI-SPLIT-B1'],
       items: { create: [ { id: 'ITEM-SPLIT-A', name: 'Laptop Power Adapter', quantity: 10, unitPrice: 50 }, { id: 'ITEM-SPLIT-B', name: 'Ergonomic Mouse', quantity: 10, unitPrice: 100 } ] },
       quotations: { create: [
@@ -490,6 +491,7 @@ async function main() {
       id: 'REQ-SPLIT-CASE4', transactionId: 'REQ-SPLIT-CASE4', title: 'Partial Award Case 1.2: Both Accept (Monitors/Keyboards)',
       requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-3' } }, status: 'PostApproved', totalPrice: 2200,
       justification: 'Second test case for both vendors accepting a split award.', createdAt: new Date(), updatedAt: new Date(),
+      urgency: 'Low',
       awardedQuoteItemIds: ['QI-SPLIT-I1', 'QI-SPLIT-J1'],
       items: { create: [ { id: 'ITEM-SPLIT-I', name: '4K Monitor', quantity: 4, unitPrice: 400 }, { id: 'ITEM-SPLIT-J', name: 'Mechanical Keyboard', quantity: 4, unitPrice: 150 } ] },
       quotations: { create: [
@@ -507,6 +509,7 @@ async function main() {
       id: 'REQ-SPLIT-CASE2', transactionId: 'REQ-SPLIT-CASE2', title: 'Partial Award Case 2.1: One Accepts, One Declines',
       requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-1' } }, status: 'Award_Declined', totalPrice: 500,
       justification: 'Test case for one vendor accepting and one declining.', createdAt: new Date(), updatedAt: new Date(),
+      urgency: 'High',
       items: { create: [ { id: 'ITEM-SPLIT-C', name: 'Docking Station', quantity: 2, unitPrice: 150 }, { id: 'ITEM-SPLIT-D', name: '4K Webcam', quantity: 2, unitPrice: 100 } ] }
     }
   });
@@ -525,6 +528,7 @@ async function main() {
       id: 'REQ-SPLIT-CASE5', transactionId: 'REQ-SPLIT-CASE5', title: 'Partial Award Case 2.2: One Accepts, One Rejects',
       requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-3' } }, status: 'Award_Declined', totalPrice: 1300,
       justification: 'Second test case for one vendor accepting and one rejecting.', createdAt: new Date(), updatedAt: new Date(),
+      urgency: 'Medium',
       items: { create: [ { id: 'ITEM-SPLIT-K', name: 'Laser Printer', quantity: 1, unitPrice: 800 }, { id: 'ITEM-SPLIT-L', name: 'Scanner', quantity: 1, unitPrice: 500 } ] }
     }
   });
@@ -545,6 +549,7 @@ async function main() {
       id: 'REQ-SPLIT-CASE3', transactionId: 'REQ-SPLIT-CASE3', title: 'Partial Award Case 3.1: Both Decline',
       requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-1' } }, status: 'Award_Declined', totalPrice: 400,
       justification: 'Test case for both vendors declining, with a standby available.', createdAt: new Date(), updatedAt: new Date(),
+      urgency: 'Low',
       items: { create: [ { id: 'ITEM-SPLIT-F', name: 'Wireless Keyboard', quantity: 5, unitPrice: 50 }, { id: 'ITEM-SPLIT-G', name: 'Wireless Mouse', quantity: 5, unitPrice: 30 } ] },
       quotations: { create: [
           { id: 'QUO-SPLIT-F', transactionId: 'REQ-SPLIT-CASE3', vendor: { connect: { id: 'VENDOR-001' } }, vendorName: 'Apple Inc.', status: 'Declined', totalPrice: 250, deliveryDate: new Date(), rank: 1 },
@@ -560,6 +565,7 @@ async function main() {
       id: 'REQ-SPLIT-CASE6', transactionId: 'REQ-SPLIT-CASE6', title: 'Partial Award Case 3.2: Both Decline Again',
       requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-2' } }, status: 'Award_Declined', totalPrice: 900,
       justification: 'Second test case for both vendors declining.', createdAt: new Date(), updatedAt: new Date(),
+      urgency: 'Medium',
       items: { create: [ { id: 'ITEM-SPLIT-N', name: 'Projector', quantity: 1, unitPrice: 600 }, { id: 'ITEM-SPLIT-O', name: 'Projector Screen', quantity: 1, unitPrice: 300 } ] },
       quotations: { create: [
           { id: 'QUO-SPLIT-N', transactionId: 'REQ-SPLIT-CASE6', vendor: { connect: { id: 'VENDOR-001' } }, vendorName: 'Apple Inc.', status: 'Declined', totalPrice: 600, deliveryDate: new Date(), rank: 1 },
