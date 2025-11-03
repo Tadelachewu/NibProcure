@@ -34,7 +34,7 @@ export async function POST(
 
             const allQuotes = await tx.quotation.findMany({ 
                 where: { requisitionId: requisitionId }, 
-                include: { items: true, scores: { include: { itemScores: true } } }
+                include: { items: { include: { itemScores: true } }, scores: { include: { itemScores: true } } }
             });
 
             if (allQuotes.length === 0) {
@@ -49,7 +49,11 @@ export async function POST(
                     q.items.filter(qi => qi.requisitionItemId === reqItem.id).map(qi => ({
                         quoteItemId: qi.id,
                         vendorId: q.vendorId,
-                        finalItemScore: qi.itemScores.reduce((sum, score) => sum + score.finalScore, 0) / (qi.itemScores.length || 1)
+                        // **FIX START**: Safely calculate finalItemScore
+                        finalItemScore: (qi.itemScores && qi.itemScores.length > 0)
+                            ? qi.itemScores.reduce((sum, score) => sum + score.finalScore, 0) / qi.itemScores.length
+                            : 0
+                        // **FIX END**
                     }))
                 );
 

@@ -67,10 +67,12 @@ export const AwardCenterDialog = ({
                     
                     quote.scores.forEach(scoreSet => {
                         const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
+                        // **FIX START**: Check if itemScore exists before accessing finalScore
                         if (itemScore) {
                             totalItemScore += itemScore.finalScore;
                             scoreCount++;
                         }
+                        // **FIX END**
                     });
                     
                     const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
