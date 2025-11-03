@@ -9,10 +9,12 @@ const prisma = new PrismaClient();
 async function main() {
   console.log(`Clearing existing data...`);
   // Manually manage order of deletion to avoid foreign key constraint violations
+  await prisma.score.deleteMany({});
+  await prisma.itemScore.deleteMany({});
+  await prisma.committeeScoreSet.deleteMany({});
   await prisma.minute.deleteMany({});
   await prisma.approvalStep.deleteMany({});
   await prisma.approvalThreshold.deleteMany({});
-  await prisma.score.deleteMany({});
   await prisma.auditLog.deleteMany({});
   await prisma.receiptItem.deleteMany({});
   await prisma.goodsReceiptNote.deleteMany({});
@@ -21,8 +23,6 @@ async function main() {
   await prisma.pOItem.deleteMany({});
   await prisma.purchaseOrder.deleteMany({});
   await prisma.quoteAnswer.deleteMany({});
-  await prisma.itemScore.deleteMany({});
-  await prisma.committeeScoreSet.deleteMany({});
   await prisma.quoteItem.deleteMany({});
   await prisma.quotation.deleteMany({});
   await prisma.technicalCriterion.deleteMany({});
@@ -157,7 +157,7 @@ async function main() {
 
   // Seed non-vendor users first
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
-    const { committeeAssignments, department, vendorId, password, ...userData } = user;
+    const { committeeAssignments, department, vendorId, password, managedDepartment, reviews, scores, goodsReceipts, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
 
     await prisma.user.create({
@@ -193,7 +193,8 @@ async function main() {
           continue;
       }
       
-      const hashedPassword = await bcrypt.hash(vendorUser.password || 'password123', 10);
+      const { password, ...userSafeData } = vendorUser;
+      const hashedPassword = await bcrypt.hash(password || 'password123', 10);
       
       // Create user for the vendor first
       const createdUser = await prisma.user.create({
@@ -535,57 +536,45 @@ async function main() {
                 ]},
             },
         });
-        // This is a simplified score. The real app calculates this.
-        const createItemScores = (quoteId: string, scores: { [key: string]: number }) => {
-            return Object.entries(scores).map(([quoteItemId, finalScore]) => ({
-                 scoreSet: { create: { quotationId: quoteId, scorerId: '10', finalScore, committeeComment: 'Auto-seeded score' } },
-                 quoteItemId, finalScore
-            }));
-        }
+        
+        const createAndScoreQuote = async (vendorId: string, vendorName: string, quoteId: string, itemAQuoteId: string, itemBQuoteId: string, itemAPrice: number, itemBPrice: number, itemAScore: number, itemBScore: number) => {
+            const quote = await prisma.quotation.create({
+                data: {
+                    id: quoteId, transactionId: reqId, requisition: { connect: { id: reqId } },
+                    vendor: { connect: { id: vendorId } }, vendorName, status: 'Submitted',
+                    totalPrice: (itemAPrice * 2) + (itemBPrice * 5), deliveryDate: new Date(),
+                    items: { create: [
+                        { id: itemAQuoteId, requisitionItemId: itemAId, name: `High-End GPU ${i}`, quantity: 2, unitPrice: itemAPrice, leadTimeDays: 10 },
+                        { id: itemBQuoteId, requisitionItemId: itemBId, name: `Power Supply Unit ${i}`, quantity: 5, unitPrice: itemBPrice, leadTimeDays: 10 },
+                    ]}
+                }
+            });
+
+            const scoreSet = await prisma.committeeScoreSet.create({
+                data: {
+                    quotationId: quote.id,
+                    scorerId: '10', // George
+                    committeeComment: 'Auto-seeded score for split award test.',
+                    finalScore: (itemAScore + itemBScore) / 2
+                }
+            });
+
+            await prisma.itemScore.createMany({
+                data: [
+                    { scoreSetId: scoreSet.id, quoteItemId: itemAQuoteId, finalScore: itemAScore },
+                    { scoreSetId: scoreSet.id, quoteItemId: itemBQuoteId, finalScore: itemBScore },
+                ]
+            });
+        };
 
         // Vendor 1: Good at Item A, bad at Item B
-        const quote1 = await prisma.quotation.create({
-            data: {
-                id: `QUO-SPT-V1-${i}`, transactionId: reqId, requisition: { connect: { id: reqId } },
-                vendor: { connect: { id: 'VENDOR-001' } }, vendorName: 'Apple Inc.', status: 'Submitted',
-                totalPrice: 2450, deliveryDate: new Date(),
-                items: { create: [
-                    { id: `QI-SPT-V1-A-${i}`, requisitionItemId: itemAId, name: `High-End GPU ${i}`, quantity: 2, unitPrice: 950, leadTimeDays: 10 },
-                    { id: `QI-SPT-V1-B-${i}`, requisitionItemId: itemBId, name: `Power Supply Unit ${i}`, quantity: 5, unitPrice: 110, leadTimeDays: 10 },
-                ]}
-            }
-        });
-        // Manually create simplified scores to represent item-level preference
-        await prisma.itemScore.createMany({ data: createItemScores(quote1.id, { [`QI-SPT-V1-A-${i}`]: 95, [`QI-SPT-V1-B-${i}`]: 70 }) });
-        
+        await createAndScoreQuote('VENDOR-001', 'Apple Inc.', `QUO-SPT-V1-${i}`, `QI-SPT-V1-A-${i}`, `QI-SPT-V1-B-${i}`, 950, 110, 95, 70);
 
         // Vendor 2: Bad at Item A, good at Item B
-        const quote2 = await prisma.quotation.create({
-            data: {
-                id: `QUO-SPT-V2-${i}`, transactionId: reqId, requisition: { connect: { id: reqId } },
-                vendor: { connect: { id: 'VENDOR-002' } }, vendorName: 'Dell Technologies', status: 'Submitted',
-                totalPrice: 2500, deliveryDate: new Date(),
-                items: { create: [
-                    { id: `QI-SPT-V2-A-${i}`, requisitionItemId: itemAId, name: `High-End GPU ${i}`, quantity: 2, unitPrice: 1050, leadTimeDays: 5 },
-                    { id: `QI-SPT-V2-B-${i}`, requisitionItemId: itemBId, name: `Power Supply Unit ${i}`, quantity: 5, unitPrice: 90, leadTimeDays: 5 },
-                ]}
-            }
-        });
-        await prisma.itemScore.createMany({ data: createItemScores(quote2.id, { [`QI-SPT-V2-A-${i}`]: 75, [`QI-SPT-V2-B-${i}`]: 98 }) });
-
+        await createAndScoreQuote('VENDOR-002', 'Dell Technologies', `QUO-SPT-V2-${i}`, `QI-SPT-V2-A-${i}`, `QI-SPT-V2-B-${i}`, 1050, 90, 75, 98);
+        
         // Vendor 3: A viable standby for both
-         const quote3 = await prisma.quotation.create({
-            data: {
-                id: `QUO-SPT-V3-${i}`, transactionId: reqId, requisition: { connect: { id: reqId } },
-                vendor: { connect: { id: 'VENDOR-004' } }, vendorName: 'HP Inc.', status: 'Submitted',
-                totalPrice: 2600, deliveryDate: new Date(),
-                items: { create: [
-                    { id: `QI-SPT-V3-A-${i}`, requisitionItemId: itemAId, name: `High-End GPU ${i}`, quantity: 2, unitPrice: 1020, leadTimeDays: 8 },
-                    { id: `QI-SPT-V3-B-${i}`, requisitionItemId: itemBId, name: `Power Supply Unit ${i}`, quantity: 5, unitPrice: 115, leadTimeDays: 8 },
-                ]}
-            }
-        });
-        await prisma.itemScore.createMany({ data: createItemScores(quote3.id, { [`QI-SPT-V3-A-${i}`]: 85, [`QI-SPT-V3-B-${i}`]: 88 }) });
+        await createAndScoreQuote('VENDOR-004', 'HP Inc.', `QUO-SPT-V3-${i}`, `QI-SPT-V3-A-${i}`, `QI-SPT-V3-B-${i}`, 1020, 115, 85, 88);
     }
     console.log('Seeded 3 split-award scenarios.');
 
@@ -603,20 +592,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-    
-
-    
-
-
-
-
-
-
-
-  
-
-    
-
-
-    
