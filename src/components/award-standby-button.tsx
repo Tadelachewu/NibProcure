@@ -9,32 +9,30 @@ import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { AwardCenterDialog } from './award-center-dialog';
-import { Dialog, DialogTrigger } from './ui/dialog';
-
 
 interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onSuccess: () => void;
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
-    isFinalizing: boolean;
 }
 
 export function AwardStandbyButton({
     requisition,
     quotations,
     onSuccess,
-    onFinalize,
-    isFinalizing,
 }: AwardStandbyButtonProps) {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
 
     if (requisition.status !== 'Award_Declined' && requisition.status !== 'Partially_Award_Declined') {
+        return null;
+    }
+    
+    const hasStandby = quotations.some(q => q.status === 'Standby');
+
+    if (!hasStandby) {
         return null;
     }
 

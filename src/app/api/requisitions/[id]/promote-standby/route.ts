@@ -52,7 +52,7 @@ export async function POST(
             data: { 
                 status: nextStatus as any,
                 totalPrice: newTotalPrice,
-                awardedQuoteItemIds: newAwardedItemIds,
+                awardedQuoteItemIds: [], // Single vendor award, so clear per-item awards
                 currentApproverId: nextApproverId
             }
         });

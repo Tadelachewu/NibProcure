@@ -82,7 +82,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     }
     await tx.quotation.deleteMany({ where: { requisitionId } });
     
-    await tx.committeeAssignment.deleteMany({ where: { requisitionId } });
+    await tx.committeeAssignment.deleteMany({ where: { requisitionId }});
 
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
@@ -103,8 +103,9 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
 
 
 /**
- * Handles the logic when a vendor rejects an award. It updates the quote and requisition status,
- * promoting a standby if one is available, or resetting the RFQ if not.
+ * Handles the logic when a vendor rejects an award. It updates the quote and requisition status.
+ * If no standby vendors are left, it resets the requisition for a new RFQ process.
+ * Otherwise, it sets the status to 'Award_Declined' for manual promotion.
  * @param tx - Prisma transaction client.
  * @param quote - The quote that was rejected.
  * @param requisition - The associated requisition.
@@ -140,14 +141,12 @@ export async function handleAwardRejection(
         }
     });
 
-    // If there are other active awards, it means it's a split award scenario.
-    // The PO should take manual action to re-source the declined items.
     if (otherActiveAwards > 0) {
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Partially_Award_Declined' }
         });
-         await tx.auditLog.create({
+        await tx.auditLog.create({
             data: {
                 timestamp: new Date(),
                 user: { connect: { id: actor.id } },
@@ -161,41 +160,29 @@ export async function handleAwardRejection(
         return { message: 'A part of the award has been declined. Manual action is required.' };
     }
 
-    // This is a single award scenario or the last part of a split award.
     const nextStandby = await tx.quotation.findFirst({
         where: { requisitionId: requisition.id, status: 'Standby' },
         orderBy: { rank: 'asc' },
     });
 
     if (nextStandby) {
-        // A standby exists, so we promote them.
-        await tx.quotation.update({ where: { id: nextStandby.id }, data: { status: 'Awarded', rank: 1 }});
-
-        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, nextStandby.totalPrice);
-        
+        // A standby exists, so set status for manual promotion.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
-            data: { 
-                status: nextStatus as any,
-                totalPrice: nextStandby.totalPrice,
-                awardedQuoteItemIds: [], // Reset for single vendor award
-                currentApproverId: nextApproverId
-            }
+            data: { status: 'Award_Declined' }
         });
-
         await tx.auditLog.create({
             data: {
                 timestamp: new Date(),
-                action: 'PROMOTE_STANDBY_AWARD',
+                action: 'AWARD_DECLINED_WITH_STANDBY',
                 entity: 'Requisition',
                 entityId: requisition.id,
-                details: `Award declined by ${quote.vendorName}. Promoted standby vendor ${nextStandby.vendorName}. ${auditDetails}`,
+                details: `Award declined by ${quote.vendorName}. Standby vendor is available for manual promotion.`,
                 transactionId: requisition.transactionId,
                 user: { connect: { id: actor.id } }
             }
         });
-
-        return { message: `Award declined. Promoted standby vendor ${nextStandby.vendorName}. Award is now being re-routed for approval.` };
+        return { message: `Award declined. A standby vendor is available.` };
 
     } else {
         // No standby and no other active awards. Perform a deep clean.

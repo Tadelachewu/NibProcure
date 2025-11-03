@@ -63,6 +63,7 @@ import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
+import { AwardStandbyButton } from '@/components/award-standby-button';
 
 
 const quoteFormSchema = z.object({
@@ -2257,6 +2258,7 @@ export default function QuotationDetailsPage() {
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
+  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   
   const isDeadlinePassed = useMemo(() => {
@@ -2446,7 +2448,7 @@ export default function QuotationDetailsPage() {
       if (!requisition) return 'rfq';
       const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
 
-      if (requisition.status === 'PreApproved') return 'rfq';
+      if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
       if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
       if (requisition.status === 'Accepting_Quotes' && deadlinePassed) return 'committee';
 
@@ -2501,7 +2503,7 @@ export default function QuotationDetailsPage() {
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
   const isReadyForNotification = requisition.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
-  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && quotations.length < committeeQuorum;
+  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
 
 
@@ -2647,7 +2649,7 @@ export default function QuotationDetailsPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 w-full sm:w-auto">
-                            {currentStep !== 'committee' && isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin') && (
+                            {isAwarded && isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin') && (
                                 <Button variant="secondary" onClick={() => setReportOpen(true)}>
                                     <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
                                 </Button>
@@ -2708,7 +2710,7 @@ export default function QuotationDetailsPage() {
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved'
+            requisition.status !== 'PreApproved' && requisition.status !== 'Award_Declined'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2719,6 +2721,12 @@ export default function QuotationDetailsPage() {
                 isFinalizing={isFinalizing}
             />
         )}
+        
+        <AwardStandbyButton 
+            requisition={requisition}
+            quotations={quotations}
+            onSuccess={fetchRequisitionAndQuotes}
+        />
 
 
         {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
@@ -2871,6 +2879,3 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
-
-
-
