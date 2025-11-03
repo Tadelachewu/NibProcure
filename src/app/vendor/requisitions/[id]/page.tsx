@@ -670,11 +670,18 @@ export default function VendorRequisitionPage() {
     const handleAwardResponse = async (action: 'accept' | 'reject') => {
         if (!submittedQuote || !user) return;
         setIsResponding(true);
+
+        const declinedItemIds = action === 'reject' 
+            ? submittedQuote.items
+                .filter(item => item.status === 'Pending_Award')
+                .map(item => item.id) 
+            : undefined;
+
         try {
             const response = await fetch(`/api/quotations/${submittedQuote.id}/respond`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, action })
+                body: JSON.stringify({ userId: user.id, action, declinedItemIds })
             });
 
             const result = await response.json();
