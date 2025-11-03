@@ -117,6 +117,7 @@ export async function handleAwardRejection(
     actor: any,
     declinedItemIds: string[] = []
 ) {
+    // 1. Mark the current quote as Declined
     await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
     await tx.auditLog.create({
         data: {
@@ -125,11 +126,12 @@ export async function handleAwardRejection(
             action: 'DECLINE_AWARD',
             entity: 'Quotation',
             entityId: quote.id,
-            details: `Vendor declined award for items: ${declinedItemIds.join(', ') || 'all'}.`,
+            details: `Vendor ${quote.vendorName} declined award for items: ${declinedItemIds.join(', ') || 'all'}.`,
             transactionId: requisition.transactionId,
         }
     });
-    
+
+    // 2. Check if other vendors have active awards for this requisition
     const otherActiveAwards = await tx.quotation.count({
         where: {
             requisitionId: requisition.id,
@@ -138,35 +140,55 @@ export async function handleAwardRejection(
         }
     });
 
-    // Remove the declined item IDs from the requisition's awarded list
-    const newAwardedQuoteItemIds = requisition.awardedQuoteItemIds.filter((id: string) => !declinedItemIds.includes(id));
-    
-    let newStatus: any = 'Partially_Award_Declined';
-    if(otherActiveAwards === 0) {
-        newStatus = 'Award_Declined'; // The whole award has now failed
+    // 3. LOGIC BRANCH: Handle Full Rejection vs. Partial Rejection
+    if (otherActiveAwards > 0) {
+        // --- This is a PARTIAL rejection (a split award scenario) ---
+        await tx.purchaseRequisition.update({
+            where: { id: requisition.id },
+            data: { status: 'Partially_Award_Declined' }
+        });
+
+        await tx.auditLog.create({
+            data: {
+                timestamp: new Date(),
+                user: { connect: { id: actor.id } },
+                action: 'AWARD_PARTIALLY_DECLINED',
+                entity: 'Requisition',
+                entityId: requisition.id,
+                details: `A portion of the award was declined by ${quote.vendorName}. Other awards remain active. Action required for declined items.`,
+                transactionId: requisition.transactionId,
+            }
+        });
+
+        return { message: 'A part of the award has been declined. Accepted parts will proceed. Declined items need re-sourcing.' };
+
+    } else {
+        // --- This is a FULL rejection (single vendor or all split vendors declined) ---
+        const nextStandby = await tx.quotation.findFirst({
+            where: { requisitionId: requisition.id, status: 'Standby' },
+            orderBy: { rank: 'asc' }
+        });
+
+        if (nextStandby) {
+            // Promote Standby
+            return await promoteStandbyVendor(tx, requisition.id, actor);
+        } else {
+            // No Standby, so reset the entire RFQ
+            await deepCleanRequisition(tx, requisition.id);
+            await tx.auditLog.create({
+                data: {
+                    timestamp: new Date(),
+                    user: { connect: { id: actor.id } },
+                    action: 'RESET_RFQ',
+                    entity: 'Requisition',
+                    entityId: requisition.id,
+                    details: 'Award declined and no standby vendors were available. The requisition has been reset to Pre-Approved for a new RFQ.',
+                    transactionId: requisition.transactionId,
+                }
+            });
+            return { message: 'Award declined. No standby vendor available. RFQ process has been reset.' };
+        }
     }
-
-    await tx.purchaseRequisition.update({
-        where: { id: requisition.id },
-        data: {
-            status: newStatus,
-            awardedQuoteItemIds: newAwardedQuoteItemIds,
-        }
-    });
-    
-     await tx.auditLog.create({
-        data: {
-            timestamp: new Date(),
-            user: { connect: { id: actor.id } },
-            action: 'AWARD_PARTIALLY_DECLINED',
-            entity: 'Requisition',
-            entityId: requisition.id,
-            details: `A portion of the award was declined by ${quote.vendorName}. The declined items are now ready for a new RFQ. Other accepted items are unaffected.`,
-            transactionId: requisition.transactionId,
-        }
-    });
-
-    return { message: 'A part of the award has been declined and is ready for re-sourcing.' };
 }
 
 

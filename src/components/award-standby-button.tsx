@@ -17,69 +17,95 @@ interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onSuccess: () => void;
+    // The onFinalize prop is added to fix the crash when calling AwardCenterDialog
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
+    isFinalizing: boolean;
 }
 
 export function AwardStandbyButton({
     requisition,
     quotations,
     onSuccess,
+    onFinalize,
+    isFinalizing,
 }: AwardStandbyButtonProps) {
     const { user, role } = useAuth();
     const { toast } = useToast();
     const [isPromoting, setIsPromoting] = useState(false);
     
-    // This component is now deprecated as the new logic handles standby promotion automatically.
-    // It will be removed in a future cleanup.
-    // The core logic is now in `handleAwardRejection` service.
+    // Determine the state based on requisition status
+    const isDeclined = requisition.status === 'Award_Declined';
+    const isPartiallyDeclined = requisition.status === 'Partially_Award_Declined';
+    const isScoringComplete = requisition.status === 'Scoring_Complete';
     
-    const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
-    const isRelevantStatus = requisition.status === 'Award_Declined' || requisition.status === 'Partially_Award_Declined';
+    const isRelevantStatus = isDeclined || isPartiallyDeclined || isScoringComplete;
     const isProcurement = role === 'Procurement_Officer' || role === 'Admin';
+    const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
     
     if (!isRelevantStatus || !isProcurement) {
         return null;
     }
 
-    const handlePromote = async () => {
-        if (!user) return;
-        setIsPromoting(true);
-        try {
-            const response = await fetch(`/api/requisitions/${requisition.id}/promote-standby`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id }),
-            });
-            const result = await response.json();
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to promote standby vendor.');
-            }
-            toast({
-                title: 'Success',
-                description: result.message,
-            });
-            onSuccess();
-        } catch (error) {
-            toast({
-                variant: 'destructive',
-                title: 'Error',
-                description: error instanceof Error ? error.message : 'An unknown error occurred.',
-            });
-        } finally {
-            setIsPromoting(false);
-        }
+    const buttonState = {
+        text: "Finalize Scores & Award",
+        disabled: isFinalizing,
+    };
+    
+    // Logic for the button and dialog based on the state
+    if (isDeclined || isPartiallyDeclined) {
+        return (
+             <Card className="mt-6 border-amber-500">
+                <CardHeader>
+                    <CardTitle>Action Required: Award Declined</CardTitle>
+                    <CardDescription>
+                        A vendor has declined their award. The system will automatically promote a standby vendor or reset the process. If manual intervention is needed, you can re-open the award center.
+                    </CardDescription>
+                </CardHeader>
+                <CardFooter>
+                     <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline">Re-Finalize Award</Button>
+                        </DialogTrigger>
+                        <AwardCenterDialog 
+                            requisition={requisition}
+                            quotations={quotations}
+                            onFinalize={onFinalize}
+                            onClose={() => setAwardCenterOpen(false)}
+                        />
+                    </Dialog>
+                </CardFooter>
+            </Card>
+        )
     }
     
-    return (
-        <Card className="mt-6 border-amber-500">
-            <CardHeader>
-                <CardTitle>Action Required: Award Declined</CardTitle>
-                <CardDescription>
-                    A vendor has declined a portion of the award. The system will automatically promote a standby vendor if available, or reset the item for a new RFQ.
-                </CardDescription>
-            </CardHeader>
-            <CardFooter className="flex-wrap gap-2 pt-0">
-                 <p className="text-sm text-muted-foreground">The system is designed to handle this automatically. If manual intervention is needed, please contact an administrator.</p>
-            </CardFooter>
-        </Card>
-    );
+     if (isScoringComplete) {
+         return (
+            <Card className="mt-6">
+                <CardHeader>
+                    <CardTitle>Scoring Complete</CardTitle>
+                    <CardDescription>
+                        All committee members have submitted their scores. You may now proceed to finalize the award.
+                    </CardDescription>
+                </CardHeader>
+                <CardFooter>
+                    <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
+                        <DialogTrigger asChild>
+                            <Button disabled={buttonState.disabled}>
+                                {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {buttonState.text}
+                            </Button>
+                        </DialogTrigger>
+                        <AwardCenterDialog 
+                            requisition={requisition}
+                            quotations={quotations}
+                            onFinalize={onFinalize}
+                            onClose={() => setAwardCenterOpen(false)}
+                        />
+                    </Dialog>
+                </CardFooter>
+            </Card>
+         )
+     }
+
+    return null;
 }

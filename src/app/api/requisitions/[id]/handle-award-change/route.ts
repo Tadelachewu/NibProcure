@@ -52,6 +52,7 @@ export async function POST(
             });
             await tx.auditLog.create({
                 data: {
+                    transactionId: requisition.id,
                     user: { connect: { id: user.id }},
                     action: 'RESET_AWARD_STATE',
                     entity: 'Requisition',

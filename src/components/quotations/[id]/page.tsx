@@ -228,6 +228,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             case 'Failed': return 'destructive';
             case 'Invoice_Submitted': return 'outline';
             case 'Partially_Awarded': return 'default';
+            case 'Pending_Award': return 'secondary';
         }
     }
 
@@ -248,6 +249,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {quotes.sort((a, b) => (a.rank || 4) - (b.rank || 4)).map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
+                const awardedItemsForThisQuote = quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded') && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
@@ -294,11 +296,11 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                         </div>
                                     )}
 
-                                    {isDeadlinePassed && (
-                                        <div className="text-sm space-y-2">
-                                        <h4 className="font-semibold">Items:</h4>
-                                            {quote.items.map(item => (
-                                                <div key={item.requisitionItemId} className="flex justify-between items-center text-muted-foreground">
+                                    {isAwarded && awardedItemsForThisQuote.length > 0 && (
+                                        <div className="text-sm space-y-2 pt-2 border-t">
+                                            <h4 className="font-semibold text-green-600">Winning Items:</h4>
+                                            {awardedItemsForThisQuote.map(item => (
+                                                <div key={item.id} className="flex justify-between items-center text-muted-foreground">
                                                     <span>{item.name} x {item.quantity}</span>
                                                     {!hidePrices && <span className="font-mono">{item.unitPrice.toFixed(2)} ETB ea.</span>}
                                                 </div>
@@ -361,6 +363,7 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
         try {
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('directory', 'contracts');
 
             const uploadResponse = await fetch('/api/upload', {
                 method: 'POST',
@@ -374,10 +377,16 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
 
             const notes = (event.target as any).notes.value;
 
-            const response = await fetch(`/api/requisitions/${requisition.id}/contract`, {
+            const response = await fetch(`/api/contracts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fileName: filePath, notes, userId: user.id }),
+                body: JSON.stringify({
+                    requisitionId: requisition.id,
+                    vendorId: awardedQuote.vendorId,
+                    filePath: filePath,
+                    notes, 
+                    userId: user.id 
+                }),
             });
             if (!response.ok) throw new Error("Failed to save contract details.");
 
@@ -434,8 +443,9 @@ const committeeFormSchema = z.object({
   committeeName: z.string().min(3, "Committee name is required."),
   committeePurpose: z.string().min(10, "Purpose is required."),
   financialCommitteeMemberIds: z.array(z.string()).min(1, "At least one financial member is required."),
-  technicalCommitteeMemberIds: z.array(z.string()).min(1, "At least one technical member is required."),
+  technicalCommitteeMemberIds: z.array(z.string()).optional(),
 }).refine(data => {
+    if (!data.technicalCommitteeMemberIds) return true; // No overlap check needed if it's optional and not provided
     const financialIds = new Set(data.financialCommitteeMemberIds);
     const hasOverlap = data.technicalCommitteeMemberIds.some(id => financialIds.has(id));
     return !hasOverlap;
@@ -1676,6 +1686,9 @@ const ScoringProgressTracker = ({
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
     const getButtonState = () => {
+        if (requisition.status === 'Award_Declined') {
+            return { text: "Finalize Scores & Award", disabled: true };
+        }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
         }
@@ -2236,7 +2249,7 @@ export default function QuotationDetailsPage() {
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
-  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
+  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby', 'Pending_Award'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   
   const isDeadlinePassed = useMemo(() => {
@@ -2533,6 +2546,7 @@ export default function QuotationDetailsPage() {
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
+  const awardProcessStarted = isAwarded || requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
 
 
   return (
@@ -2567,7 +2581,7 @@ export default function QuotationDetailsPage() {
         {noBidsAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
             <Card className="border-amber-500">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> RFQ Closed: No Bids Received</CardTitle>
+                    <CardTitle className="flex items-center gap-2 text-amber-600"><AlertCircle/> RFQ Closed: No Bids Received</CardTitle>
                     <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardDescription>
                 </CardHeader>
                 <CardFooter className="gap-2">
@@ -2739,8 +2753,7 @@ export default function QuotationDetailsPage() {
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' &&
-            requisition.status !== 'Scoring_Complete' && requisition.status !== 'Award_Declined'
+            requisition.status !== 'PreApproved'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2752,14 +2765,14 @@ export default function QuotationDetailsPage() {
             />
         )}
         
-        {(requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete') && (role === 'Procurement_Officer' || role === 'Admin') && (
-             <AwardStandbyButton 
-                requisition={requisition}
-                quotations={quotations}
-                onFinalize={handleFinalizeScores}
-                isFinalizing={isFinalizing}
-            />
-        )}
+        <AwardStandbyButton 
+            requisition={requisition}
+            quotations={quotations}
+            onSuccess={fetchRequisitionAndQuotes}
+            onFinalize={handleFinalizeScores}
+            isFinalizing={isFinalizing}
+        />
+
 
         {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
             <Card className="mt-6 border-amber-500">
@@ -2860,7 +2873,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     return (
          <Card className="border-amber-500">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> Quorum Not Met</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-amber-600"><AlertCircle/> Quorum Not Met</CardTitle>
                 <CardDescription>
                     The submission deadline has passed, but not enough quotes were submitted. You can re-open the RFQ to all other verified vendors.
                 </CardDescription>
@@ -2896,5 +2909,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
