@@ -166,6 +166,7 @@ export async function handleAwardRejection(
     const nextStandby = await tx.quotation.findFirst({
         where: { requisitionId: requisition.id, status: 'Standby' },
         orderBy: { rank: 'asc' },
+        include: { items: true } // *** FIX: Include items to prevent crash ***
     });
 
     if (nextStandby) {
@@ -174,7 +175,9 @@ export async function handleAwardRejection(
 
         // The old price and awarded items might be different. We need to re-evaluate based on the new winner.
         const newTotalPrice = nextStandby.totalPrice;
-        const newAwardedItemIds = (nextStandby as any).items.map((i: any) => i.id);
+        
+        // Ensure items are loaded before mapping
+        const newAwardedItemIds = nextStandby.items.map((i: any) => i.id);
 
         const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalPrice);
         
@@ -196,6 +199,7 @@ export async function handleAwardRejection(
                 entityId: requisition.id,
                 details: `Award declined by ${quote.vendorName}. Promoted standby vendor ${nextStandby.vendorName}. ${auditDetails}`,
                 transactionId: requisition.transactionId,
+                user: { connect: { id: actor.id } } // Connect actor to audit log
             }
         });
 
@@ -213,6 +217,7 @@ export async function handleAwardRejection(
                 entityId: requisition.id,
                 details: `All vendors declined award and no standby vendors were available. The RFQ process has been completely reset to 'PreApproved'.`,
                 transactionId: requisition.transactionId,
+                user: { connect: { id: actor.id } } // Connect actor to audit log
             }
         });
         
