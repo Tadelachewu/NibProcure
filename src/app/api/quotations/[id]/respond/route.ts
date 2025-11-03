@@ -24,7 +24,14 @@ export async function POST(
     const transactionResult = await prisma.$transaction(async (tx) => {
         const quote = await tx.quotation.findUnique({ 
             where: { id: quoteId },
-            include: { items: true, requisition: true }
+            include: { 
+              items: true, 
+              requisition: {
+                include: {
+                  items: true, // Eager load requisition items
+                }
+              }
+            }
         });
 
         if (!quote || quote.vendorId !== user.vendorId) {
@@ -115,6 +122,12 @@ export async function POST(
 
         } else if (action === 'reject') {
             const isSingleVendorAward = requisition.awardedQuoteItemIds.length === 0;
+            
+            // **FIX**: Ensure requisition.items is not undefined before mapping
+            if (isSingleVendorAward && !requisition.items) {
+                throw new Error("Requisition items not found for single vendor award rejection.");
+            }
+
             const declinedItemIds = isSingleVendorAward
                 ? requisition.items.map((item: any) => item.id)
                 : quote.items
