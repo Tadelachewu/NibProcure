@@ -80,7 +80,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     }
     await tx.quotation.deleteMany({ where: { requisitionId } });
     
-    await tx.committeeAssignment.deleteMany({ where: { requisitionId } });
+    await tx.committeeAssignment.deleteMany({ where: { requisitionId }});
 
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
@@ -141,7 +141,7 @@ export async function handleAwardRejection(
     if (otherActiveAwards > 0) {
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
+            data: { status: 'Partially_Award_Declined' }
         });
          await tx.auditLog.create({
             data: {
@@ -150,7 +150,7 @@ export async function handleAwardRejection(
                 action: 'AWARD_PARTIALLY_DECLINED',
                 entity: 'Requisition',
                 entityId: requisition.id,
-                details: `A portion of the award was declined by ${quote.vendorName}. Other parts of the award remain active. Manual promotion of standby is required for the failed items.`,
+                details: `A portion of the award was declined by ${quote.vendorName}. Other parts of the award remain active. Manual action is required for the failed items.`,
                 transactionId: requisition.transactionId,
             }
         });

@@ -17,22 +17,27 @@ interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onSuccess: () => void;
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
+    isFinalizing: boolean;
 }
 
 export function AwardStandbyButton({
     requisition,
     quotations,
     onSuccess,
+    onFinalize,
+    isFinalizing,
 }: AwardStandbyButtonProps) {
-    const { user } = useAuth();
+    const { user, role } = useAuth();
     const { toast } = useToast();
     const [isPromoting, setIsPromoting] = useState(false);
     const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
 
     const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
-    const isRelevantStatus = requisition.status === 'Award_Declined';
+    const isRelevantStatus = requisition.status === 'Award_Declined' || requisition.status === 'Partially_Award_Declined';
+    const isProcurement = role === 'Procurement_Officer' || role === 'Admin';
     
-    if (!isRelevantStatus) {
+    if (!isRelevantStatus || !isProcurement) {
         return null;
     }
 
@@ -65,16 +70,16 @@ export function AwardStandbyButton({
         }
     }
     
-    if (requisition.status === 'Award_Declined') {
+    if (isRelevantStatus) {
          return (
             <Card className="mt-6 border-amber-500">
                 <CardHeader>
                     <CardTitle>Action Required: Award Declined</CardTitle>
                     <CardDescription>
-                        A vendor has declined their award. You may now promote the next standby vendor.
+                        A vendor has declined a portion of the award. You can either promote a standby vendor for the declined items or re-run the award process.
                     </CardDescription>
                 </CardHeader>
-                <CardFooter className="pt-0">
+                <CardFooter className="flex-wrap gap-2 pt-0">
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button disabled={isPromoting || !hasStandbyVendors}>
@@ -86,7 +91,7 @@ export function AwardStandbyButton({
                             <AlertDialogHeader>
                             <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
                             <AlertDialogDescription>
-                                This will promote the next vendor in rank to the 'Awarded' status. The requisition will then be ready for you to notify the new winner.
+                                This will promote the next vendor in rank for the declined items. The award will be re-routed for approval based on the new total value.
                             </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
@@ -95,6 +100,19 @@ export function AwardStandbyButton({
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
+                     <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="secondary">
+                                Re-Award Declined Items
+                            </Button>
+                        </DialogTrigger>
+                        <AwardCenterDialog 
+                            requisition={requisition}
+                            quotations={quotations}
+                            onFinalize={onFinalize}
+                            onClose={() => setAwardCenterOpen(false)}
+                        />
+                    </Dialog>
                 </CardFooter>
             </Card>
         );
