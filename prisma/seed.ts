@@ -616,6 +616,102 @@ async function main() {
     }
     console.log('Seeded 10 split-award scenarios.');
 
+    // --- START: Seed data for standby promotion testing ---
+    console.log('Seeding data for standby promotion scenarios...');
+    for (let i = 1; i <= 10; i++) {
+        const reqId = `STANDBY-TEST-${i}`;
+        const itemAId = `STB-ITEM-A-${i}`;
+        const itemBId = `STB-ITEM-B-${i}`;
+
+        await prisma.purchaseRequisition.create({
+            data: {
+                id: reqId,
+                transactionId: reqId,
+                title: `Standby Promotion Test ${i}`,
+                requesterId: '1',
+                departmentId: 'DEPT-3',
+                status: 'Pending_Award',
+                urgency: 'Medium',
+                totalPrice: 5000,
+                justification: `Test standby promotion for per-item awards.`,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                items: {
+                    create: [
+                        { id: itemAId, name: `High-Performance CPU ${i}`, quantity: 10, unitPrice: 300 },
+                        { id: itemBId, name: `Bulk SSD Storage ${i}`, quantity: 20, unitPrice: 100 },
+                    ],
+                },
+            },
+        });
+
+        // Vendor A: Best at CPU, second-best at SSD
+        await prisma.quotation.create({
+            data: {
+                id: `QUO-STB-V1-${i}`,
+                transactionId: reqId,
+                requisitionId: reqId,
+                vendorId: 'VENDOR-001', // Apple
+                vendorName: 'Apple Inc.',
+                status: 'Pending_Award',
+                rank: 1,
+                finalAverageScore: 95,
+                totalPrice: 4900,
+                deliveryDate: new Date(),
+                items: {
+                    create: [
+                        { id: `QI-STB-V1-A-${i}`, requisitionItemId: itemAId, name: `Intel Core i9 (Proposed)`, quantity: 10, unitPrice: 290, leadTimeDays: 7 },
+                        { id: `QI-STB-V1-B-${i}`, requisitionItemId: itemBId, name: `Samsung 1TB SSD (Proposed)`, quantity: 20, unitPrice: 100, leadTimeDays: 7 },
+                    ]
+                }
+            }
+        });
+
+        // Vendor B: Second-best at CPU, Best at SSD
+        await prisma.quotation.create({
+            data: {
+                id: `QUO-STB-V2-${i}`,
+                transactionId: reqId,
+                requisitionId: reqId,
+                vendorId: 'VENDOR-002', // Dell
+                vendorName: 'Dell Technologies',
+                status: 'Standby',
+                rank: 2,
+                finalAverageScore: 92,
+                totalPrice: 5100,
+                deliveryDate: new Date(),
+                items: {
+                    create: [
+                        { id: `QI-STB-V2-A-${i}`, requisitionItemId: itemAId, name: `AMD Ryzen 9 (Proposed)`, quantity: 10, unitPrice: 320, leadTimeDays: 5 },
+                        { id: `QI-STB-V2-B-${i}`, requisitionItemId: itemBId, name: `Crucial 1TB SSD (Proposed)`, quantity: 20, unitPrice: 95, leadTimeDays: 5 },
+                    ]
+                }
+            }
+        });
+        
+         // Vendor C: Third-best, provides another alternative for standby
+        await prisma.quotation.create({
+            data: {
+                id: `QUO-STB-V3-${i}`,
+                transactionId: reqId,
+                requisitionId: reqId,
+                vendorId: 'VENDOR-004', // HP
+                vendorName: 'HP Inc.',
+                status: 'Standby',
+                rank: 3,
+                finalAverageScore: 88,
+                totalPrice: 5200,
+                deliveryDate: new Date(),
+                items: {
+                    create: [
+                        { id: `QI-STB-V3-A-${i}`, requisitionItemId: itemAId, name: `Intel Core i7 (Proposed)`, quantity: 10, unitPrice: 300, leadTimeDays: 10 },
+                        { id: `QI-STB-V3-B-${i}`, requisitionItemId: itemBId, name: `WD Blue 1TB SSD (Proposed)`, quantity: 20, unitPrice: 110, leadTimeDays: 10 },
+                    ]
+                }
+            }
+        });
+    }
+     console.log('Seeded 10 standby promotion scenarios.');
     // --- END: New Seed Data ---
 
 
