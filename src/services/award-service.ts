@@ -138,67 +138,35 @@ export async function handleAwardRejection(
         }
     });
 
-    if (otherActiveAwards > 0) {
-        await tx.purchaseRequisition.update({
-            where: { id: requisition.id },
-            data: { status: 'Partially_Award_Declined' }
-        });
-         await tx.auditLog.create({
-            data: {
-                timestamp: new Date(),
-                user: { connect: { id: actor.id } },
-                action: 'AWARD_PARTIALLY_DECLINED',
-                entity: 'Requisition',
-                entityId: requisition.id,
-                details: `A portion of the award was declined by ${quote.vendorName}. Other parts of the award remain active. Manual action is required for the failed items.`,
-                transactionId: requisition.transactionId,
-            }
-        });
-        return { message: 'A part of the award has been declined. Manual action is required.' };
+    // Remove the declined item IDs from the requisition's awarded list
+    const newAwardedQuoteItemIds = requisition.awardedQuoteItemIds.filter((id: string) => !declinedItemIds.includes(id));
+    
+    let newStatus: any = 'Partially_Award_Declined';
+    if(otherActiveAwards === 0) {
+        newStatus = 'Award_Declined'; // The whole award has now failed
     }
 
-
-    const nextStandby = await tx.quotation.findFirst({
-        where: { requisitionId: requisition.id, status: 'Standby' },
-        orderBy: { rank: 'asc' },
+    await tx.purchaseRequisition.update({
+        where: { id: requisition.id },
+        data: {
+            status: newStatus,
+            awardedQuoteItemIds: newAwardedQuoteItemIds,
+        }
+    });
+    
+     await tx.auditLog.create({
+        data: {
+            timestamp: new Date(),
+            user: { connect: { id: actor.id } },
+            action: 'AWARD_PARTIALLY_DECLINED',
+            entity: 'Requisition',
+            entityId: requisition.id,
+            details: `A portion of the award was declined by ${quote.vendorName}. The declined items are now ready for a new RFQ. Other accepted items are unaffected.`,
+            transactionId: requisition.transactionId,
+        }
     });
 
-    if (nextStandby) {
-        await tx.purchaseRequisition.update({
-            where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
-        });
-
-        await tx.auditLog.create({
-            data: {
-                timestamp: new Date(),
-                user: { connect: { id: actor.id } },
-                action: 'AWARD_DECLINED_STANDBY_AVAILABLE',
-                entity: 'Requisition',
-                entityId: requisition.id,
-                details: `Award declined by ${quote.vendorName}. A standby vendor is available. Manual promotion required.`,
-                transactionId: requisition.transactionId,
-            }
-        });
-
-        return { message: 'Award has been declined. A standby vendor is available for promotion.' };
-    } else {
-        // No standby and no other active awards. Perform a deep clean.
-        await deepCleanRequisition(tx, requisition.id);
-        
-        await tx.auditLog.create({
-            data: {
-                timestamp: new Date(),
-                action: 'RESTART_RFQ_NO_STANDBY',
-                entity: 'Requisition',
-                entityId: requisition.id,
-                details: `All vendors declined award and no standby vendors were available. The RFQ process has been completely reset.`,
-                transactionId: requisition.transactionId,
-            }
-        });
-        
-        return { message: 'Award declined. No more standby vendors. Requisition has been reset for a new RFQ process.' };
-    }
+    return { message: 'A part of the award has been declined and is ready for re-sourcing.' };
 }
 
 

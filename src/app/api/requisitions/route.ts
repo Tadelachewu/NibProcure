@@ -99,7 +99,9 @@ export async function GET(request: Request) {
             { status: 'Scoring_In_Progress' },
             { status: 'Scoring_Complete' },
             { status: 'Award_Declined' },
+            { status: 'Partially_Award_Declined' },
             { status: 'Awarded' },
+            { status: 'Partially_Awarded' },
         ];
     } else {
       if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
