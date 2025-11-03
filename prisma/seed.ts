@@ -23,6 +23,7 @@ async function main() {
   await prisma.quoteAnswer.deleteMany({});
   await prisma.itemScore.deleteMany({});
   await prisma.committeeScoreSet.deleteMany({});
+  await prisma.quoteItem.deleteMany({});
   await prisma.quotation.deleteMany({});
   await prisma.technicalCriterion.deleteMany({});
   await prisma.financialCriterion.deleteMany({});
@@ -468,250 +469,126 @@ async function main() {
     // --- START: New Seed Data for Award Center Testing ---
     console.log('Seeding data for Award Center scenarios...');
 
-    // 20 Scenarios where one vendor is the clear overall winner
-    for (let i = 1; i <= 20; i++) {
+    // --- 3 Single Winner Scenarios ---
+    for (let i = 1; i <= 3; i++) {
         const reqId = `AWARD-SINGLE-${i}`;
-        const itemAId = `ITEM-SGL-A-${i}`;
-        const itemBId = `ITEM-SGL-B-${i}`;
+        const itemId = `ITEM-SGL-${i}`;
 
         await prisma.purchaseRequisition.create({
             data: {
-                id: reqId,
-                transactionId: reqId,
-                title: `Award Center Single Winner Test ${i}`,
-                requester: { connect: { id: '1' } },
-                department: { connect: { id: 'DEPT-1' } },
-                status: 'Scoring_Complete',
-                urgency: 'Medium',
-                totalPrice: 1100 + i*10,
+                id: reqId, transactionId: reqId, title: `Award Center Single Winner Test ${i}`,
+                requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-1' } },
+                status: 'Scoring_Complete', urgency: 'Medium', totalPrice: 1000 + i*100,
                 justification: `Test case for single winner award scenario ${i}.`,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                items: {
-                    create: [
-                        { id: itemAId, name: `Item A${i}`, quantity: 5, unitPrice: 100 + i },
-                        { id: itemBId, name: `Item B${i}`, quantity: 2, unitPrice: 50 + i },
-                    ],
-                },
+                createdAt: new Date(), updatedAt: new Date(),
+                items: { create: [{ id: itemId, name: `Single Item ${i}`, quantity: 1, unitPrice: 1000 + i*100 }] },
             },
         });
 
-        // Winning Quote
+        // Winning Quote (Vendor 1)
         await prisma.quotation.create({
             data: {
-                id: `QUO-SGL-W-${i}`,
-                transactionId: reqId,
-                requisition: { connect: { id: reqId } },
-                vendor: { connect: { id: 'VENDOR-001' } },
-                vendorName: 'Apple Inc.',
-                status: 'Submitted',
-                finalAverageScore: 95,
-                totalPrice: 1045 + i*10,
-                deliveryDate: new Date(),
-                items: {
-                    create: [
-                        { id: `QI-SGL-W-A-${i}`, requisitionItemId: itemAId, name: `Item A${i}`, quantity: 5, unitPrice: 95 + i, leadTimeDays: 5 },
-                        { id: `QI-SGL-W-B-${i}`, requisitionItemId: itemBId, name: `Item B${i}`, quantity: 2, unitPrice: 48 + i, leadTimeDays: 5 },
-                    ]
-                }
+                id: `QUO-SGL-W-${i}`, transactionId: reqId, requisition: { connect: { id: reqId } },
+                vendor: { connect: { id: 'VENDOR-001' } }, vendorName: 'Apple Inc.', status: 'Submitted',
+                finalAverageScore: 95, totalPrice: 950 + i*100, deliveryDate: new Date(),
+                items: { create: [{ id: `QI-SGL-W-${i}`, requisitionItemId: itemId, name: `Single Item ${i}`, quantity: 1, unitPrice: 950 + i*100, leadTimeDays: 5 }] }
             }
         });
-
-        // Losing Quote
+        // Standby Quote 1 (Vendor 2)
         await prisma.quotation.create({
             data: {
-                id: `QUO-SGL-L-${i}`,
-                transactionId: reqId,
-                requisition: { connect: { id: reqId } },
-                vendor: { connect: { id: 'VENDOR-002' } },
-                vendorName: 'Dell Technologies',
-                status: 'Submitted',
-                finalAverageScore: 85,
-                totalPrice: 1100 + i*10,
-                deliveryDate: new Date(),
-                items: {
-                    create: [
-                        { id: `QI-SGL-L-A-${i}`, requisitionItemId: itemAId, name: `Item A${i}`, quantity: 5, unitPrice: 100 + i, leadTimeDays: 7 },
-                        { id: `QI-SGL-L-B-${i}`, requisitionItemId: itemBId, name: `Item B${i}`, quantity: 2, unitPrice: 50 + i, leadTimeDays: 7 },
-                    ]
-                }
+                id: `QUO-SGL-S1-${i}`, transactionId: reqId, requisition: { connect: { id: reqId } },
+                vendor: { connect: { id: 'VENDOR-002' } }, vendorName: 'Dell Technologies', status: 'Submitted',
+                finalAverageScore: 85, totalPrice: 1000 + i*100, deliveryDate: new Date(),
+                items: { create: [{ id: `QI-SGL-S1-${i}`, requisitionItemId: itemId, name: `Single Item ${i}`, quantity: 1, unitPrice: 1000 + i*100, leadTimeDays: 7 }] }
+            }
+        });
+        // Standby Quote 2 (Vendor 4)
+        await prisma.quotation.create({
+            data: {
+                id: `QUO-SGL-S2-${i}`, transactionId: reqId, requisition: { connect: { id: reqId } },
+                vendor: { connect: { id: 'VENDOR-004' } }, vendorName: 'HP Inc.', status: 'Submitted',
+                finalAverageScore: 80, totalPrice: 1050 + i*100, deliveryDate: new Date(),
+                items: { create: [{ id: `QI-SGL-S2-${i}`, requisitionItemId: itemId, name: `Single Item ${i}`, quantity: 1, unitPrice: 1050 + i*100, leadTimeDays: 8 }] }
             }
         });
     }
-    console.log('Seeded 20 single-winner scenarios.');
+    console.log('Seeded 3 single-winner scenarios.');
 
-    // 10 Scenarios designed for split awards
-    for (let i = 1; i <= 10; i++) {
+
+    // --- 3 Split Award Scenarios ---
+    for (let i = 1; i <= 3; i++) {
         const reqId = `AWARD-SPLIT-${i}`;
         const itemAId = `ITEM-SPT-A-${i}`;
         const itemBId = `ITEM-SPT-B-${i}`;
 
         await prisma.purchaseRequisition.create({
             data: {
-                id: reqId,
-                transactionId: reqId,
-                title: `Award Center Split Award Test ${i}`,
-                requester: { connect: { id: '1' } },
-                department: { connect: { id: 'DEPT-2' } },
-                status: 'Scoring_Complete',
-                urgency: 'Medium',
-                totalPrice: 2000 + i*20,
+                id: reqId, transactionId: reqId, title: `Award Center Split Award Test ${i}`,
+                requester: { connect: { id: '1' } }, department: { connect: { id: 'DEPT-2' } },
+                status: 'Scoring_Complete', urgency: 'Medium', totalPrice: 2500,
                 justification: `Test case for split award scenario ${i}.`,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                items: {
-                    create: [
-                        { id: itemAId, name: `Server Rack ${i}`, quantity: 1, unitPrice: 1500 + i*10 },
-                        { id: itemBId, name: `Power Supply ${i}`, quantity: 5, unitPrice: 100 + i*2 },
-                    ],
-                },
+                createdAt: new Date(), updatedAt: new Date(),
+                items: { create: [
+                    { id: itemAId, name: `High-End GPU ${i}`, quantity: 2, unitPrice: 1000 },
+                    { id: itemBId, name: `Power Supply Unit ${i}`, quantity: 5, unitPrice: 100 },
+                ]},
             },
         });
+        // This is a simplified score. The real app calculates this.
+        const createItemScores = (quoteId: string, scores: { [key: string]: number }) => {
+            return Object.entries(scores).map(([quoteItemId, finalScore]) => ({
+                 scoreSet: { create: { quotationId: quoteId, scorerId: '10', finalScore, committeeComment: 'Auto-seeded score' } },
+                 quoteItemId, finalScore
+            }));
+        }
 
         // Vendor 1: Good at Item A, bad at Item B
-        await prisma.quotation.create({
+        const quote1 = await prisma.quotation.create({
             data: {
-                id: `QUO-SPT-V1-${i}`,
-                transactionId: reqId,
-                requisition: { connect: { id: reqId } },
-                vendor: { connect: { id: 'VENDOR-001' } }, // Apple
-                vendorName: 'Apple Inc.',
-                status: 'Submitted',
-                finalAverageScore: 90, // Deceptive overall score
-                totalPrice: 1950 + i*20,
-                deliveryDate: new Date(),
-                items: {
-                    create: [
-                        // High score for this item
-                        { id: `QI-SPT-V1-A-${i}`, requisitionItemId: itemAId, name: `Server Rack ${i}`, quantity: 1, unitPrice: 1400 + i*10, leadTimeDays: 10 },
-                        // Low score for this item
-                        { id: `QI-SPT-V1-B-${i}`, requisitionItemId: itemBId, name: `Power Supply ${i}`, quantity: 5, unitPrice: 110 + i*2, leadTimeDays: 10 },
-                    ]
-                }
+                id: `QUO-SPT-V1-${i}`, transactionId: reqId, requisition: { connect: { id: reqId } },
+                vendor: { connect: { id: 'VENDOR-001' } }, vendorName: 'Apple Inc.', status: 'Submitted',
+                totalPrice: 2450, deliveryDate: new Date(),
+                items: { create: [
+                    { id: `QI-SPT-V1-A-${i}`, requisitionItemId: itemAId, name: `High-End GPU ${i}`, quantity: 2, unitPrice: 950, leadTimeDays: 10 },
+                    { id: `QI-SPT-V1-B-${i}`, requisitionItemId: itemBId, name: `Power Supply Unit ${i}`, quantity: 5, unitPrice: 110, leadTimeDays: 10 },
+                ]}
             }
         });
+        // Manually create simplified scores to represent item-level preference
+        await prisma.itemScore.createMany({ data: createItemScores(quote1.id, { [`QI-SPT-V1-A-${i}`]: 95, [`QI-SPT-V1-B-${i}`]: 70 }) });
+        
 
         // Vendor 2: Bad at Item A, good at Item B
-        await prisma.quotation.create({
+        const quote2 = await prisma.quotation.create({
             data: {
-                id: `QUO-SPT-V2-${i}`,
-                transactionId: reqId,
-                requisition: { connect: { id: reqId } },
-                vendor: { connect: { id: 'VENDOR-002' } }, // Dell
-                vendorName: 'Dell Technologies',
-                status: 'Submitted',
-                finalAverageScore: 88, // Deceptive overall score
-                totalPrice: 2100 + i*20,
-                deliveryDate: new Date(),
-                items: {
-                    create: [
-                        // Low score for this item
-                        { id: `QI-SPT-V2-A-${i}`, requisitionItemId: itemAId, name: `Server Rack ${i}`, quantity: 1, unitPrice: 1600 + i*10, leadTimeDays: 5 },
-                        // High score for this item
-                        { id: `QI-SPT-V2-B-${i}`, requisitionItemId: itemBId, name: `Power Supply ${i}`, quantity: 5, unitPrice: 100 + i*2, leadTimeDays: 5 },
-                    ]
-                }
+                id: `QUO-SPT-V2-${i}`, transactionId: reqId, requisition: { connect: { id: reqId } },
+                vendor: { connect: { id: 'VENDOR-002' } }, vendorName: 'Dell Technologies', status: 'Submitted',
+                totalPrice: 2500, deliveryDate: new Date(),
+                items: { create: [
+                    { id: `QI-SPT-V2-A-${i}`, requisitionItemId: itemAId, name: `High-End GPU ${i}`, quantity: 2, unitPrice: 1050, leadTimeDays: 5 },
+                    { id: `QI-SPT-V2-B-${i}`, requisitionItemId: itemBId, name: `Power Supply Unit ${i}`, quantity: 5, unitPrice: 90, leadTimeDays: 5 },
+                ]}
             }
         });
+        await prisma.itemScore.createMany({ data: createItemScores(quote2.id, { [`QI-SPT-V2-A-${i}`]: 75, [`QI-SPT-V2-B-${i}`]: 98 }) });
+
+        // Vendor 3: A viable standby for both
+         const quote3 = await prisma.quotation.create({
+            data: {
+                id: `QUO-SPT-V3-${i}`, transactionId: reqId, requisition: { connect: { id: reqId } },
+                vendor: { connect: { id: 'VENDOR-004' } }, vendorName: 'HP Inc.', status: 'Submitted',
+                totalPrice: 2600, deliveryDate: new Date(),
+                items: { create: [
+                    { id: `QI-SPT-V3-A-${i}`, requisitionItemId: itemAId, name: `High-End GPU ${i}`, quantity: 2, unitPrice: 1020, leadTimeDays: 8 },
+                    { id: `QI-SPT-V3-B-${i}`, requisitionItemId: itemBId, name: `Power Supply Unit ${i}`, quantity: 5, unitPrice: 115, leadTimeDays: 8 },
+                ]}
+            }
+        });
+        await prisma.itemScore.createMany({ data: createItemScores(quote3.id, { [`QI-SPT-V3-A-${i}`]: 85, [`QI-SPT-V3-B-${i}`]: 88 }) });
     }
-    console.log('Seeded 10 split-award scenarios.');
+    console.log('Seeded 3 split-award scenarios.');
 
-    // --- START: Seed data for standby promotion testing ---
-    console.log('Seeding data for standby promotion scenarios...');
-    for (let i = 1; i <= 10; i++) {
-        const reqId = `STANDBY-TEST-${i}`;
-        const itemAId = `STB-ITEM-A-${i}`;
-        const itemBId = `STB-ITEM-B-${i}`;
-
-        await prisma.purchaseRequisition.create({
-            data: {
-                id: reqId,
-                transactionId: reqId,
-                title: `Standby Promotion Test ${i}`,
-                requesterId: '1',
-                departmentId: 'DEPT-3',
-                status: 'Pending_Award',
-                urgency: 'Medium',
-                totalPrice: 5000,
-                justification: `Test standby promotion for per-item awards.`,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                items: {
-                    create: [
-                        { id: itemAId, name: `High-Performance CPU ${i}`, quantity: 10, unitPrice: 300 },
-                        { id: itemBId, name: `Bulk SSD Storage ${i}`, quantity: 20, unitPrice: 100 },
-                    ],
-                },
-            },
-        });
-
-        // Vendor A: Best at CPU, second-best at SSD
-        await prisma.quotation.create({
-            data: {
-                id: `QUO-STB-V1-${i}`,
-                transactionId: reqId,
-                requisitionId: reqId,
-                vendorId: 'VENDOR-001', // Apple
-                vendorName: 'Apple Inc.',
-                status: 'Pending_Award',
-                rank: 1,
-                finalAverageScore: 95,
-                totalPrice: 4900,
-                deliveryDate: new Date(),
-                items: {
-                    create: [
-                        { id: `QI-STB-V1-A-${i}`, requisitionItemId: itemAId, name: `Intel Core i9 (Proposed)`, quantity: 10, unitPrice: 290, leadTimeDays: 7 },
-                        { id: `QI-STB-V1-B-${i}`, requisitionItemId: itemBId, name: `Samsung 1TB SSD (Proposed)`, quantity: 20, unitPrice: 100, leadTimeDays: 7 },
-                    ]
-                }
-            }
-        });
-
-        // Vendor B: Second-best at CPU, Best at SSD
-        await prisma.quotation.create({
-            data: {
-                id: `QUO-STB-V2-${i}`,
-                transactionId: reqId,
-                requisitionId: reqId,
-                vendorId: 'VENDOR-002', // Dell
-                vendorName: 'Dell Technologies',
-                status: 'Standby',
-                rank: 2,
-                finalAverageScore: 92,
-                totalPrice: 5100,
-                deliveryDate: new Date(),
-                items: {
-                    create: [
-                        { id: `QI-STB-V2-A-${i}`, requisitionItemId: itemAId, name: `AMD Ryzen 9 (Proposed)`, quantity: 10, unitPrice: 320, leadTimeDays: 5 },
-                        { id: `QI-STB-V2-B-${i}`, requisitionItemId: itemBId, name: `Crucial 1TB SSD (Proposed)`, quantity: 20, unitPrice: 95, leadTimeDays: 5 },
-                    ]
-                }
-            }
-        });
-        
-         // Vendor C: Third-best, provides another alternative for standby
-        await prisma.quotation.create({
-            data: {
-                id: `QUO-STB-V3-${i}`,
-                transactionId: reqId,
-                requisitionId: reqId,
-                vendorId: 'VENDOR-004', // HP
-                vendorName: 'HP Inc.',
-                status: 'Standby',
-                rank: 3,
-                finalAverageScore: 88,
-                totalPrice: 5200,
-                deliveryDate: new Date(),
-                items: {
-                    create: [
-                        { id: `QI-STB-V3-A-${i}`, requisitionItemId: itemAId, name: `Intel Core i7 (Proposed)`, quantity: 10, unitPrice: 300, leadTimeDays: 10 },
-                        { id: `QI-STB-V3-B-${i}`, requisitionItemId: itemBId, name: `WD Blue 1TB SSD (Proposed)`, quantity: 20, unitPrice: 110, leadTimeDays: 10 },
-                    ]
-                }
-            }
-        });
-    }
-     console.log('Seeded 10 standby promotion scenarios.');
     // --- END: New Seed Data ---
 
 
@@ -738,5 +615,8 @@ main()
 
 
   
+
+    
+
 
     
