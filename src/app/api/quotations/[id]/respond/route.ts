@@ -56,6 +56,11 @@ export async function POST(
                 where: { id: { in: itemsToAccept.map(i => i.id) } },
                 data: { status: 'Accepted' }
             });
+
+            await tx.quotation.update({
+                where: { id: quote.id },
+                data: { status: 'Accepted' }
+            });
             
             await tx.requisitionItem.updateMany({
                 where: { id: { in: itemsToAccept.map(i => i.requisitionItemId) } },
@@ -105,9 +110,10 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            if (!declinedItemIds || declinedItemIds.length === 0) {
+             if (!declinedItemIds || declinedItemIds.length === 0) {
                 throw new Error("Specific item IDs must be provided for rejection.");
             }
+             // Call the centralized rejection handler
             return await handleItemAwardRejection(tx, quote, requisition, user, declinedItemIds);
         }
         

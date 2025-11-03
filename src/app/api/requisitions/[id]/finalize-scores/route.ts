@@ -54,12 +54,18 @@ export async function POST(
                     }
                 }
                 
+                // For single award, the entire quote for the winner becomes Pending_Award
+                const winningQuote = await tx.quotation.findFirst({ where: { vendorId: winnerVendorId, requisitionId: requisitionId }});
+                if (winningQuote) {
+                     await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 }});
+                }
+                
                 // Set the entire quotes for standby vendors to 'Standby'
                 for (let i = 0; i < standbyVendors.length; i++) {
                     const standby = standbyVendors[i];
                     await tx.quotation.updateMany({
                         where: { vendorId: standby.vendorId, requisitionId: requisitionId },
-                        data: { status: 'Standby', rank: i + 2 }
+                        data: { status: 'Standby', rank: (i + 2) as 2 | 3 }
                     });
                 }
 
@@ -93,8 +99,10 @@ export async function POST(
                 const quoteItems = await tx.quoteItem.findMany({ where: { quotationId: quote.id }});
                 const hasPending = quoteItems.some(qi => qi.status === 'Pending_Award');
                 const hasStandby = quoteItems.some(qi => qi.status === 'Standby');
-                if(hasPending) {
-                    await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Pending_Award'}});
+                if(hasPending && awardStrategy === 'all') {
+                     await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Pending_Award', rank: 1}});
+                } else if(hasPending) {
+                     await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Partially_Awarded'}});
                 } else if (hasStandby) {
                      await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Standby'}});
                 } else {

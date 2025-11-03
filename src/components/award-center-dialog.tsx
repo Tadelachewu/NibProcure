@@ -139,13 +139,15 @@ export const AwardCenterDialog = ({
             proposalsForItem.forEach(proposal => {
                  let totalItemScore = 0;
                  let scoreCount = 0;
-                 winningQuote!.scores?.forEach(scoreSet => {
-                     const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                     if (itemScore) {
-                         totalItemScore += itemScore.finalScore;
-                         scoreCount++;
-                     }
-                 });
+                 if(winningQuote!.scores){
+                    winningQuote!.scores.forEach(scoreSet => {
+                        const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
+                        if (itemScore) {
+                            totalItemScore += itemScore.finalScore;
+                            scoreCount++;
+                        }
+                    });
+                 }
                  const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
                  if (averageItemScore > bestItemScore) {
                      bestItemScore = averageItemScore;

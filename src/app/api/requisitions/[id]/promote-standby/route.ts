@@ -43,7 +43,6 @@ export async function POST(
         await tx.quotation.update({ where: { id: standbyQuote.id }, data: { status: 'Pending_Award', rank: 1 }});
 
         const newTotalPrice = standbyQuote.totalPrice;
-        const newAwardedItemIds = standbyQuote.items.map((i: any) => i.id);
 
         const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalPrice);
         
