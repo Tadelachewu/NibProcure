@@ -36,6 +36,7 @@ export async function POST(request: Request) {
 
     const newPO = await prisma.purchaseOrder.create({
         data: {
+            transactionId: requisition.transactionId,
             requisition: { connect: { id: requisition.id } },
             requisitionTitle: requisition.title,
             vendor: { connect: { id: vendor.id } },
@@ -54,17 +55,38 @@ export async function POST(request: Request) {
         }
     });
     
-    // Update requisition with PO ID
-    await prisma.purchaseRequisition.update({
-        where: { id: requisitionId },
-        data: {
-            purchaseOrderId: newPO.id,
-            status: 'PO_Created',
+    // Check if all awards are accepted to update the main requisition status
+    const otherPendingAwards = await prisma.quotation.count({
+        where: {
+            requisitionId: requisition.id,
+            status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
         }
     });
 
+    const allPOs = await prisma.purchaseOrder.findMany({ where: { requisitionId: requisition.id } });
+    const allItems = await prisma.requisitionItem.findMany({ where: { requisitionId: requisition.id } });
+    const allPOItems = await prisma.pOItem.findMany({ where: { po: { requisitionId: requisition.id } } });
+    const allAwardedItemsCount = new Set(allPOItems.map(pi => pi.requisitionItemId)).size;
+
+
+    if (otherPendingAwards === 0) {
+        if (allAwardedItemsCount === allItems.length) {
+             await prisma.purchaseRequisition.update({
+                where: { id: requisitionId },
+                data: { status: 'PO_Created' }
+            });
+        } else {
+             await prisma.purchaseRequisition.update({
+                where: { id: requisitionId },
+                data: { status: 'Partially_PO_Created' }
+            });
+        }
+    }
+
+
     await prisma.auditLog.create({
         data: {
+            transactionId: requisition.transactionId,
             timestamp: new Date(),
             user: { connect: { id: user.id } },
             action: 'CREATE_PO',

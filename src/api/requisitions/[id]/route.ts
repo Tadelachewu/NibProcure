@@ -76,7 +76,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'You are not authorized to delete this requisition.' }, { status: 403 });
     }
 
-    if (requisition.status !== 'Draft' && requisition.status !== 'Pending_Approval') {
+    if (requisition.status !== 'Draft' && requisition.status !== 'Rejected') {
       return NextResponse.json({ error: `Cannot delete a requisition with status "${requisition.status}".` }, { status: 403 });
     }
     

@@ -52,11 +52,15 @@ export type RequisitionStatus =
   | 'Scoring_In_Progress' // Deadline passed, committee is scoring
   | 'Scoring_Complete' // All scores are in, ready to finalize award
   | 'Awarded' // Award has been sent to vendor(s) and is pending response
+  | 'Partially_Awarded'
   | 'Award_Declined' // The winning vendor has declined the award
+  | 'Partially_Award_Declined'
   | 'PostApproved' // All hierarchical reviews complete, ready for vendor notification
   | 'PO_Created'
+  | 'Partially_PO_Created'
   | 'Fulfilled'
   | 'Closed'
+  | 'Partially_Closed'
   | 'Pending_Committee_B_Review'
   | 'Pending_Committee_A_Recommendation'
   | 'Pending_Managerial_Approval'
