@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -205,7 +206,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, isAwarded }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, isAwarded: boolean }) => {
+const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean }) => {
 
     if (quotes.length === 0) {
         return (
@@ -219,24 +220,22 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
     
     const getStatusVariant = (status: QuotationStatus) => {
         switch (status) {
-            case 'Awarded': return 'default';
+            case 'Pending_Award': return 'default';
             case 'Accepted': return 'default';
-            case 'Standby': return 'secondary';
             case 'Submitted': return 'outline';
             case 'Rejected': return 'destructive';
             case 'Declined': return 'destructive';
             case 'Failed': return 'destructive';
             case 'Invoice_Submitted': return 'outline';
             case 'Partially_Awarded': return 'default';
-            case 'Pending_Award': return 'secondary';
         }
     }
 
-    const getRankIcon = (rank?: number) => {
+    const getRankIcon = (rank: number) => {
         switch (rank) {
-            case 1: return <Crown className="h-5 w-5 text-amber-400" />;
-            case 2: return <Trophy className="h-5 w-5 text-slate-400" />;
-            case 3: return <Medal className="h-5 w-5 text-amber-600" />;
+            case 1: return <TrophyIcon className="h-5 w-5 text-amber-400" />;
+            case 2: return <Medal className="h-5 w-5 text-slate-400" />;
+            case 3: return <Award className="h-5 w-5 text-amber-600" />;
             default: return null;
         }
     }
@@ -244,18 +243,21 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
     const isTechnicalOnlyScorer = user.role === 'Committee_Member' && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
     const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
 
+    // A flag to check if any item has been awarded to any vendor
+    const isAwardProcessStarted = quotes.some(q => q.items.some(i => i.rank === 1));
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {quotes.sort((a, b) => (a.rank || 4) - (b.rank || 4)).map(quote => {
+            {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
-                const awardedItemsForThisQuote = quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
+                const awardedItems = quote.items.filter(item => item.rank === 1);
+                const standbyItems = quote.items.filter(item => item.rank === 2 || item.rank === 3);
+
                 return (
-                    <Card key={quote.id} className={cn("flex flex-col", (quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded') && 'border-primary ring-2 ring-primary')}>
+                    <Card key={quote.id} className={cn("flex flex-col", awardedItems.length > 0 && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
-                                 {isDeadlinePassed && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
                                <Badge variant={getStatusVariant(quote.status)}>{quote.status.replace(/_/g, ' ')}</Badge>
@@ -278,7 +280,28 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                         </>
                                     )}
 
-                                    
+                                    {awardedItems.length > 0 && (
+                                        <div className="text-sm space-y-2 pt-2 border-t">
+                                            <h4 className="font-semibold text-green-600 flex items-center gap-2"><TrophyIcon className="h-4 w-4"/> Winning Items:</h4>
+                                            {awardedItems.map(item => (
+                                                <div key={item.id} className="flex justify-between items-center text-muted-foreground">
+                                                    <span>{item.name} x {item.quantity}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                     {standbyItems.length > 0 && (
+                                        <div className="text-sm space-y-2 pt-2 border-t">
+                                            <h4 className="font-semibold text-amber-600 flex items-center gap-2"><Award className="h-4 w-4"/> Standby For:</h4>
+                                            {standbyItems.sort((a,b) => (a.rank || 4) - (b.rank || 4)).map(item => (
+                                                <div key={item.id} className="flex justify-between items-center text-muted-foreground">
+                                                    <span>{item.name}</span>
+                                                    <Badge variant="secondary">Rank {item.rank}</Badge>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
                                     {quote.cpoDocumentUrl && (
                                         <div className="text-sm space-y-1 pt-2 border-t">
                                             <h4 className="font-semibold">CPO Document</h4>
@@ -293,18 +316,6 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                             <Button asChild variant="link" className="p-0 h-auto">
                                                 <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer">{quote.experienceDocumentUrl.split('/').pop()}</a>
                                             </Button>
-                                        </div>
-                                    )}
-
-                                    {isAwarded && awardedItemsForThisQuote.length > 0 && (
-                                        <div className="text-sm space-y-2 pt-2 border-t">
-                                            <h4 className="font-semibold text-green-600">Winning Items:</h4>
-                                            {awardedItemsForThisQuote.map(item => (
-                                                <div key={item.id} className="flex justify-between items-center text-muted-foreground">
-                                                    <span>{item.name} x {item.quantity}</span>
-                                                    {!hidePrices && <span className="font-mono">{item.unitPrice.toFixed(2)} ETB ea.</span>}
-                                                </div>
-                                            ))}
                                         </div>
                                     )}
                                 </>
@@ -322,7 +333,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                     <p className="text-muted-foreground text-xs italic">{quote.notes}</p>
                                 </div>
                             )}
-                             {isAwarded && typeof quote.finalAverageScore === 'number' && (
+                             {isAwardProcessStarted && typeof quote.finalAverageScore === 'number' && (
                                  <div className="text-center pt-2 border-t">
                                     <h4 className="font-semibold text-sm">Final Score</h4>
                                     <p className="text-2xl font-bold text-primary">{quote.finalAverageScore.toFixed(2)}</p>
@@ -1859,19 +1870,17 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                 <p className="text-sm text-gray-500">Report Generated: {format(new Date(), 'PPpp')}</p>
                             </div>
 
-                            {quotations.sort((a, b) => (a.rank || 99) - (b.rank || 99)).map(quote => (
+                            {quotations.sort((a, b) => (a.finalAverageScore || 0) - (b.finalAverageScore || 0)).map(quote => (
                                 <Card key={quote.id} className="break-inside-avoid print:border-gray-300 print:shadow-none print:rounded-lg">
                                     <CardHeader className="print:bg-gray-100 print:rounded-t-lg">
                                         <div className="flex justify-between items-start">
                                             <div>
                                                 <CardTitle className="text-xl">{quote.vendorName}</CardTitle>
                                                 <CardDescription className="print:text-gray-700 pt-1">
-                                                    Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> | 
-                                                    Rank: <span className="font-bold">{quote.rank || 'N/A'}</span> |
-                                                    Total Price: <span className="font-bold">{quote.totalPrice.toLocaleString()} ETB</span>
+                                                    Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span>
                                                 </CardDescription>
                                             </div>
-                                            <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
+                                            <Badge variant={quote.status === 'Pending_Award' || quote.status === 'Accepted' ? 'default' : quote.status === 'Rejected' ? 'destructive' : 'secondary'}>{quote.status.replace(/_/g, ' ')}</Badge>
                                         </div>
                                     </CardHeader>
                                     <CardContent className="p-4 space-y-4">
@@ -2248,7 +2257,6 @@ export default function QuotationDetailsPage() {
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
-  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby', 'Pending_Award'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   
   const isDeadlinePassed = useMemo(() => {
@@ -2438,7 +2446,7 @@ export default function QuotationDetailsPage() {
       if (!requisition) return 'rfq';
       const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
 
-      if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
+      if (requisition.status === 'PreApproved') return 'rfq';
       if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
       if (requisition.status === 'Accepting_Quotes' && deadlinePassed) return 'committee';
 
@@ -2493,7 +2501,7 @@ export default function QuotationDetailsPage() {
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
   const isReadyForNotification = requisition.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
-  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
+  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
 
 
@@ -2639,7 +2647,7 @@ export default function QuotationDetailsPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 w-full sm:w-auto">
-                            {isAwarded && isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin') && (
+                            {currentStep !== 'committee' && isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin') && (
                                 <Button variant="secondary" onClick={() => setReportOpen(true)}>
                                     <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
                                 </Button>
@@ -2659,7 +2667,6 @@ export default function QuotationDetailsPage() {
                             user={user}
                             isDeadlinePassed={isDeadlinePassed}
                             isScoringDeadlinePassed={isScoringDeadlinePassed}
-                            isAwarded={isAwarded}
                         />
                     )}
                     </CardContent>
@@ -2864,5 +2871,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
+
 
 
