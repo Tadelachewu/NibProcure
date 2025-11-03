@@ -114,6 +114,7 @@ export async function POST(
 
             await tx.auditLog.create({
                 data: {
+                    timestamp: new Date(),
                     user: { connect: { id: userId } },
                     action: 'FINALIZE_AWARD',
                     entity: 'Requisition',
