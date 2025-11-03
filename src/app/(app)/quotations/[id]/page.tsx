@@ -1689,6 +1689,9 @@ const ScoringProgressTracker = ({
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
         }
+         if (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Award_Declined') {
+            return { text: "Re-Award Declined Items", disabled: false };
+        }
         if (requisition.status.startsWith('Pending_')) {
             return { text: "Award Pending Final Approval", disabled: true };
         }
@@ -1745,7 +1748,7 @@ const ScoringProgressTracker = ({
             <CardFooter>
                  <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
                     <DialogTrigger asChild>
-                         <Button disabled={buttonState.disabled}>
+                         <Button onClick={() => setAwardCenterOpen(true)} disabled={buttonState.disabled}>
                             {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             {buttonState.text}
                         </Button>
@@ -2241,7 +2244,6 @@ export default function QuotationDetailsPage() {
   const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
   const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
   const [lastPOCreated, setLastPOCreated] = useState<PurchaseOrder | null>(null);
-  const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
@@ -2493,7 +2495,6 @@ export default function QuotationDetailsPage() {
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
-  const awardProcessStarted = isAwarded || requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
 
 
   return (
@@ -2863,4 +2864,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
+
 

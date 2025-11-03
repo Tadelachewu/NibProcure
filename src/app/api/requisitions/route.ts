@@ -99,6 +99,7 @@ export async function GET(request: Request) {
             { status: 'Scoring_In_Progress' },
             { status: 'Scoring_Complete' },
             { status: 'Award_Declined' },
+            { status: 'Partially_Award_Declined' },
             { status: 'Awarded' },
         ];
     } else {
