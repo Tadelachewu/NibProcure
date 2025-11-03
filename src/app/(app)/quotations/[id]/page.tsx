@@ -1686,9 +1686,6 @@ const ScoringProgressTracker = ({
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
     const getButtonState = () => {
-        if (requisition.status === 'Partially_Award_Declined') {
-            return { text: "Re-Award Declined Items", disabled: false };
-        }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
         }
@@ -2866,3 +2863,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
+
