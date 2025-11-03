@@ -67,7 +67,7 @@ export async function POST(request: Request) {
             await prisma.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
-                // Do not link a single PO ID anymore as there can be multiple
+                // This status update indicates all parts of the req have a PO.
                 status: 'PO_Created',
             }
         });
