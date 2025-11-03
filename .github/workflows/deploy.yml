@@ -105,9 +105,9 @@ jobs:
         $sourcePath = "${{ github.workspace }}"  # The path of the code on the GitHub runner (do not change this).
         
         # --- (REQUIRED) UPDATE THE 3 VARIABLES BELOW ---
-        $destinationPath = "C:\inetpub\wwwroot\YourAppName" # The physical path on the IIS server where the app will be deployed.
-        $appPool = "YourAppPoolName" # The name of the IIS Application Pool for your site.
-        $siteName = "YourSiteName" # The name of the IIS Website.
+        $destinationPath = "C:\inetpub\wwwroot\NIBProcur" # The physical path on the IIS server where the app will be deployed.
+        $appPool = "NIBProcurment" # The name of the IIS Application Pool for your site.
+        $siteName = "NIBProcurment" # The name of the IIS Website.
         # -----------------------------------------------
 
         # Execute the script block on the remote server.
@@ -131,4 +131,3 @@ jobs:
           Send-MailMessage -To "tade2024bdu@gmail.com" -From "ci-cd@company.com" -Subject "Deployment Failed" -Body "Next.js app deployment failed!" -SmtpServer "smtp.yourserver.com"
           exit 1 
         }
-
