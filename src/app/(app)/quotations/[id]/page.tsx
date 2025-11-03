@@ -2367,12 +2367,19 @@ export default function QuotationDetailsPage() {
         });
 
         Object.values(awards).forEach((award: any) => {
-            award.items.forEach((item: any) => {
-                const quoteItem = awardedQuoteItems[item.quoteItemId];
-                if (quoteItem) {
+            if (award.items) { // This handles the single-vendor award case
+                award.items.forEach((item: any) => {
+                    const quoteItem = awardedQuoteItems[item.quoteItemId];
+                    if (quoteItem) {
+                        totalAwardValue += quoteItem.price * quoteItem.quantity;
+                    }
+                });
+            } else if (award.winner) { // This handles the per-item award case
+                 const quoteItem = awardedQuoteItems[award.winner.quoteItemId];
+                 if (quoteItem) {
                     totalAwardValue += quoteItem.price * quoteItem.quantity;
-                }
-            });
+                 }
+            }
         });
 
 
