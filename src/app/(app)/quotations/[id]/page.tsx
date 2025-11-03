@@ -62,7 +62,7 @@ import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
-import { AwardStandbyButton } from '@/components/award-standby-button';
+
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -1686,8 +1686,8 @@ const ScoringProgressTracker = ({
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
     const getButtonState = () => {
-        if (requisition.status === 'Award_Declined') {
-            return { text: "Finalize Scores & Award", disabled: true };
+        if (requisition.status === 'Partially_Award_Declined') {
+            return { text: "Re-Award Declined Items", disabled: false };
         }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
@@ -2000,7 +2000,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
                         <div className="flex gap-2">
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newDeadline && "text-muted-foreground")}>
+                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !newDeadline && "text-muted-foreground")}>
                                         <CalendarIcon className="mr-2 h-4 w-4" />
                                         {newDeadline ? format(newDeadline, "PPP") : <span>Pick a date</span>}
                                     </Button>
@@ -2305,26 +2305,8 @@ export default function QuotationDetailsPage() {
             const quoData = await quoResponse.json();
 
             if (currentReq) {
-                const awardedQuote = quoData.find((q: Quotation) => q.status === 'Awarded');
-                if (awardedQuote && currentReq.awardResponseDeadline && isPast(new Date(currentReq.awardResponseDeadline))) {
-                    toast({
-                        title: 'Deadline Missed',
-                        description: `Vendor ${awardedQuote.vendorName} missed the response deadline. Action required.`,
-                        variant: 'destructive',
-                    });
-                    // This now just reverts the state, does not auto-promote.
-                    await handleAwardChange();
-                    // Refetch after the change
-                    const [refetchedReqRes, refetchedQuoRes] = await Promise.all([
-                        fetch(`/api/requisitions/${id}`),
-                        fetch(`/api/quotations?requisitionId=${id}`)
-                    ]);
-                    setRequisition(await refetchedReqRes.json());
-                    setQuotations(await refetchedQuoRes.json());
-                } else {
-                    setRequisition(currentReq);
-                    setQuotations(quoData);
-                }
+                setRequisition(currentReq);
+                setQuotations(quoData);
             } else {
                 toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
             }
@@ -2410,38 +2392,6 @@ export default function QuotationDetailsPage() {
     }
 
 
-  const handleAwardChange = async () => {
-    if (!user || !id || !requisition) return;
-    
-    setIsChangingAward(true);
-    try {
-        const response = await fetch(`/api/requisitions/${id}/handle-award-change`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id }),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Failed to handle award change.' }));
-            throw new Error(errorData.error);
-        }
-
-        toast({
-            title: `Action Successful`,
-            description: `The award status has been updated.`
-        });
-        fetchRequisitionAndQuotes();
-    } catch (error) {
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: error instanceof Error ? error.message : 'An unknown error occurred.',
-        });
-    } finally {
-        setIsChangingAward(false);
-    }
-  }
-
   const handleNotifyVendor = async (deadline?: Date) => {
     if (!user || !requisition) return;
     setIsNotifying(true);
@@ -2493,7 +2443,7 @@ export default function QuotationDetailsPage() {
       if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
       if (requisition.status === 'Accepting_Quotes' && deadlinePassed) return 'committee';
 
-      const inScoringProcess = requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined';
+      const inScoringProcess = ['Scoring_In_Progress', 'Scoring_Complete', 'Award_Declined', 'Partially_Award_Declined'].includes(requisition.status);
       if (inScoringProcess) {
           return isScoringComplete ? 'award' : 'committee';
       }
@@ -2764,12 +2714,6 @@ export default function QuotationDetailsPage() {
                 isFinalizing={isFinalizing}
             />
         )}
-        
-        <AwardStandbyButton 
-            requisition={requisition}
-            quotations={quotations}
-            onSuccess={fetchRequisitionAndQuotes}
-        />
 
 
         {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
