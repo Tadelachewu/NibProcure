@@ -53,13 +53,13 @@ export async function POST(
                 data: { status: 'Accepted' }
             });
             
-            const awardedQuoteItems = quote.items.filter(item => 
-                requisition.awardedQuoteItemIds.includes(item.id)
-            );
+            // Logic for single award (awardedQuoteItemIds is empty) vs split award
+            const isSingleVendorAward = requisition.awardedQuoteItemIds.length === 0;
+            const awardedQuoteItems = isSingleVendorAward 
+                ? quote.items
+                : quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
 
-            const thisVendorAwardedItems = awardedQuoteItems.length > 0 ? awardedQuoteItems : quote.items;
-
-            const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
+            const totalPriceForThisPO = awardedQuoteItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
 
             const newPO = await tx.purchaseOrder.create({
                 data: {
@@ -68,7 +68,7 @@ export async function POST(
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
                     items: {
-                        create: thisVendorAwardedItems.map((item: any) => ({
+                        create: awardedQuoteItems.map((item: any) => ({
                             requisitionItemId: item.requisitionItemId,
                             name: item.name,
                             quantity: item.quantity,
@@ -114,9 +114,12 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.', quote: updatedQuote };
 
         } else if (action === 'reject') {
-            const declinedItemIds = quote.items
-                .filter((item: any) => requisition.awardedQuoteItemIds.includes(item.id))
-                .map((item: any) => item.requisitionItemId);
+            const isSingleVendorAward = requisition.awardedQuoteItemIds.length === 0;
+            const declinedItemIds = isSingleVendorAward
+                ? requisition.items.map((item: any) => item.id)
+                : quote.items
+                    .filter((item: any) => requisition.awardedQuoteItemIds.includes(item.id))
+                    .map((item: any) => item.requisitionItemId);
                 
             return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds);
         }

@@ -41,58 +41,36 @@ export async function POST(
                 throw new Error("No quotes found to process for this requisition.");
             }
             
-            // --- START: New Per-Item Ranking Logic ---
+            if (awardStrategy === 'all') {
+                // Single Vendor Award Logic
+                const sortedQuotes = allQuotes.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
 
-            // Step 1: Rank every proposal for every item
-            for (const reqItem of requisition.items) {
-                const proposalsForItem = allQuotes.flatMap(q => 
-                    q.items.filter(qi => qi.requisitionItemId === reqItem.id).map(qi => ({
-                        quoteItemId: qi.id,
-                        vendorId: q.vendorId,
-                        // **FIX START**: Safely calculate finalItemScore
-                        finalItemScore: (qi.itemScores && qi.itemScores.length > 0)
-                            ? qi.itemScores.reduce((sum, score) => sum + score.finalScore, 0) / qi.itemScores.length
-                            : 0
-                        // **FIX END**
-                    }))
-                );
+                for (let i = 0; i < sortedQuotes.length; i++) {
+                    const quote = sortedQuotes[i];
+                    let newStatus: any = 'Rejected';
+                    let newRank: number | null = null;
+                    if (i === 0) {
+                        newStatus = 'Pending_Award';
+                        newRank = 1;
+                    } else if (i === 1 || i === 2) {
+                        newStatus = 'Standby';
+                        newRank = i + 1;
+                    }
+                    await tx.quotation.update({ where: { id: quote.id }, data: { status: newStatus, rank: newRank } });
+                }
+            } else {
+                // Per-Item Award Logic
+                const awardedQuoteItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
 
-                proposalsForItem.sort((a, b) => b.finalItemScore - a.finalItemScore);
-                
-                for (let i = 0; i < proposalsForItem.length; i++) {
-                    const rank = i + 1;
-                    if (rank <= 3) { // We only care about ranks 1, 2, 3
-                        await tx.quoteItem.update({
-                            where: { id: proposalsForItem[i].quoteItemId },
-                            data: { rank: rank }
-                        });
+                for (const quote of allQuotes) {
+                    const hasWinningItem = quote.items.some(qi => awardedQuoteItemIds.includes(qi.id));
+                    if (hasWinningItem) {
+                         await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Pending_Award' } });
+                    } else {
+                         await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Rejected' } });
                     }
                 }
             }
-
-            // Step 2: Set quote statuses based on their items' ranks
-            const awardedQuoteItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
-
-            for (const quote of allQuotes) {
-                const hasWinningItem = quote.items.some(qi => awardedQuoteItemIds.includes(qi.id));
-                
-                if (hasWinningItem) {
-                     await tx.quotation.update({
-                        where: { id: quote.id },
-                        data: {
-                            status: 'Pending_Award',
-                        }
-                    });
-                } else {
-                     await tx.quotation.update({
-                        where: { id: quote.id },
-                        data: {
-                            status: 'Rejected', // If not a winner for any item, they are rejected outright
-                        }
-                    });
-                }
-            }
-            // --- END: New Per-Item Ranking Logic ---
             
             const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
             
@@ -101,7 +79,7 @@ export async function POST(
                 data: {
                     status: nextStatus as any,
                     currentApproverId: nextApproverId,
-                    awardedQuoteItemIds: awardedQuoteItemIds,
+                    awardedQuoteItemIds: awardStrategy === 'all' ? [] : Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId)),
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
                     totalPrice: totalAwardValue
                 }

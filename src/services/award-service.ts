@@ -140,10 +140,9 @@ export async function handleAwardRejection(
         }
     });
 
+    // If there are other active awards, it means it's a split award scenario.
+    // The PO should take manual action to re-source the declined items.
     if (otherActiveAwards > 0) {
-        // This is a partial decline in a split award scenario.
-        // The core logic here is just to set a status that the UI can react to.
-        // The actual re-sourcing of the declined items should be a separate, deliberate action by the PO.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Partially_Award_Declined' }
@@ -162,31 +161,24 @@ export async function handleAwardRejection(
         return { message: 'A part of the award has been declined. Manual action is required.' };
     }
 
-
+    // This is a single award scenario or the last part of a split award.
     const nextStandby = await tx.quotation.findFirst({
         where: { requisitionId: requisition.id, status: 'Standby' },
         orderBy: { rank: 'asc' },
-        include: { items: true } // *** FIX: Include items to prevent crash ***
     });
 
     if (nextStandby) {
         // A standby exists, so we promote them.
-        await tx.quotation.update({ where: { id: nextStandby.id }, data: { status: 'Pending_Award', rank: 1 }});
+        await tx.quotation.update({ where: { id: nextStandby.id }, data: { status: 'Awarded', rank: 1 }});
 
-        // The old price and awarded items might be different. We need to re-evaluate based on the new winner.
-        const newTotalPrice = nextStandby.totalPrice;
-        
-        // Ensure items are loaded before mapping
-        const newAwardedItemIds = nextStandby.items.map((i: any) => i.id);
-
-        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalPrice);
+        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, nextStandby.totalPrice);
         
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { 
                 status: nextStatus as any,
-                totalPrice: newTotalPrice,
-                awardedQuoteItemIds: newAwardedItemIds,
+                totalPrice: nextStandby.totalPrice,
+                awardedQuoteItemIds: [], // Reset for single vendor award
                 currentApproverId: nextApproverId
             }
         });
@@ -199,7 +191,7 @@ export async function handleAwardRejection(
                 entityId: requisition.id,
                 details: `Award declined by ${quote.vendorName}. Promoted standby vendor ${nextStandby.vendorName}. ${auditDetails}`,
                 transactionId: requisition.transactionId,
-                user: { connect: { id: actor.id } } // Connect actor to audit log
+                user: { connect: { id: actor.id } }
             }
         });
 
@@ -217,22 +209,10 @@ export async function handleAwardRejection(
                 entityId: requisition.id,
                 details: `All vendors declined award and no standby vendors were available. The RFQ process has been completely reset to 'PreApproved'.`,
                 transactionId: requisition.transactionId,
-                user: { connect: { id: actor.id } } // Connect actor to audit log
+                user: { connect: { id: actor.id } }
             }
         });
         
         return { message: 'Award declined. No more standby vendors. Requisition has been reset for a new RFQ process.' };
     }
-}
-
-
-/**
- * Promotes the next standby vendor and starts their approval workflow.
- * @param tx - Prisma transaction client.
- * @param requisitionId - The ID of the requisition.
- * @param actor - The user performing the action.
- * @returns A message indicating the result of the operation.
- */
-export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
-    throw new Error("promoteStandbyVendor function is deprecated. Use handleAwardRejection instead.");
 }
