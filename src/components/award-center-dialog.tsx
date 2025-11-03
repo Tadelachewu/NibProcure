@@ -55,6 +55,7 @@ export const AwardCenterDialog = ({
         return requisition.items.map(reqItem => {
             let bestScore = -1;
             let winner: { vendorId: string; vendorName: string; quoteItemId: string; } | null = null;
+            let standbys: { vendorId: string; vendorName: string; quoteItemId: string; score: number }[] = [];
 
             eligibleQuotes.forEach(quote => {
                 const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
@@ -67,30 +68,39 @@ export const AwardCenterDialog = ({
                     
                     quote.scores.forEach(scoreSet => {
                         const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                        // **FIX START**: Check if itemScore exists before accessing finalScore
                         if (itemScore) {
                             totalItemScore += itemScore.finalScore;
                             scoreCount++;
                         }
-                        // **FIX END**
                     });
                     
                     const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                    if (averageItemScore > bestScore) {
-                        bestScore = averageItemScore;
-                        winner = {
-                            vendorId: quote.vendorId,
-                            vendorName: quote.vendorName,
-                            quoteItemId: proposal.id
-                        };
-                    }
+                    standbys.push({
+                        vendorId: quote.vendorId,
+                        vendorName: quote.vendorName,
+                        quoteItemId: proposal.id,
+                        score: averageItemScore
+                    });
                 });
             });
+
+            standbys.sort((a,b) => b.score - a.score);
+            const topOffer = standbys[0];
+            if (topOffer && topOffer.score > 0) {
+                 winner = {
+                    vendorId: topOffer.vendorId,
+                    vendorName: topOffer.vendorName,
+                    quoteItemId: topOffer.quoteItemId,
+                };
+                bestScore = topOffer.score;
+            }
+
             return {
                 requisitionItemId: reqItem.id,
                 name: reqItem.name,
                 winner,
                 bestScore,
+                standbys: standbys.slice(1,3) // The next 2 are standbys
             }
         });
     }, [requisition, eligibleQuotes]);
@@ -101,8 +111,8 @@ export const AwardCenterDialog = ({
         let winningQuote: Quotation | null = null;
         
         eligibleQuotes.forEach(quote => {
-            if (quote.finalAverageScore && quote.finalAverageScore > bestOverallScore) {
-                bestOverallScore = quote.finalAverageScore;
+            if ((quote.finalAverageScore || 0) > bestOverallScore) {
+                bestOverallScore = quote.finalAverageScore!;
                 winningQuote = quote;
             }
         });
@@ -143,7 +153,7 @@ export const AwardCenterDialog = ({
                  }
             });
             return { requisitionItemId: reqItem.id, quoteItemId: bestProposalId };
-        }).filter(Boolean);
+        }).filter(Boolean) as { requisitionItemId: string, quoteItemId: string }[];
 
 
         return { 
@@ -156,22 +166,29 @@ export const AwardCenterDialog = ({
 
 
     const handleConfirmAward = () => {
-        let awards: { [vendorId: string]: { vendorName: string, items: { requisitionItemId: string, quoteItemId: string }[] } } = {};
+        let awards: any = {};
         
         if (awardStrategy === 'item') {
              itemWinners.forEach(item => {
                 if (item.winner) {
-                    if (!awards[item.winner.vendorId]) {
-                        awards[item.winner.vendorId] = { vendorName: item.winner.vendorName, items: [] };
-                    }
-                    awards[item.winner.vendorId].items.push({ requisitionItemId: item.requisitionItemId, quoteItemId: item.winner.quoteItemId });
+                    // Structure for per-item award
+                    awards[item.requisitionItemId] = {
+                        winner: item.winner,
+                        standbys: item.standbys,
+                    };
                 }
             });
         } else { // 'all'
            if (overallWinner?.vendorId) {
+                const standbys = eligibleQuotes
+                    .filter(q => q.vendorId !== overallWinner.vendorId)
+                    .sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0))
+                    .slice(0, 2);
+
                 awards[overallWinner.vendorId] = { 
                     vendorName: overallWinner.vendorName!, 
-                    items: overallWinner.items!
+                    items: overallWinner.items!,
+                    standbys: standbys.map(s => ({vendorId: s.vendorId, vendorName: s.vendorName}))
                 };
            }
         }

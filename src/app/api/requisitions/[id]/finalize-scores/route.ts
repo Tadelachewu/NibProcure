@@ -38,44 +38,51 @@ export async function POST(
 
             if (awardStrategy === 'all') {
                 const winnerVendorId = Object.keys(awards)[0];
-                const winningItems = awards[winnerVendorId]?.items || [];
+                const awardData = awards[winnerVendorId];
+                if (!awardData) {
+                    throw new Error("Invalid award data for single vendor strategy.");
+                }
+                const winningItems = awardData.items || [];
+                const standbyVendors = awardData.standbys || [];
 
                 for (const item of winningItems) {
-                    await tx.quoteItem.update({
-                        where: { id: item.quoteItemId },
-                        data: { status: 'Pending_Award', rank: 1 }
+                    if (item && item.quoteItemId) {
+                         await tx.quoteItem.update({
+                            where: { id: item.quoteItemId },
+                            data: { status: 'Pending_Award', rank: 1 }
+                        });
+                    }
+                }
+                
+                // Set the entire quotes for standby vendors to 'Standby'
+                for (let i = 0; i < standbyVendors.length; i++) {
+                    const standby = standbyVendors[i];
+                    await tx.quotation.updateMany({
+                        where: { vendorId: standby.vendorId, requisitionId: requisitionId },
+                        data: { status: 'Standby', rank: i + 2 }
                     });
                 }
-                // Set other quotes from the same vendor to rejected unless they are the winning one
-                await tx.quoteItem.updateMany({
-                    where: {
-                        quotation: { vendorId: winnerVendorId, requisitionId: requisitionId },
-                        id: { notIn: winningItems.map((i:any) => i.quoteItemId) }
-                    },
-                    data: { status: 'Rejected', rank: null }
-                });
 
 
             } else { // Per-item award
-                const allAwardedQuoteItems: string[] = [];
-
+                
                 for (const reqItemId in awards) {
                     const awardInfo = awards[reqItemId];
+                    if (!awardInfo || !awardInfo.winner) continue;
                     
-                    // Award the winner
+                    // Award the winner for this item
                     await tx.quoteItem.update({
                         where: { id: awardInfo.winner.quoteItemId },
                         data: { status: 'Pending_Award', rank: 1 }
                     });
-                    allAwardedQuoteItems.push(awardInfo.winner.quoteItemId);
 
-                    // Award standby vendors
+                    // Award standby vendors for this item
                     for (let i = 0; i < awardInfo.standbys.length; i++) {
+                        const standby = awardInfo.standbys[i];
                         await tx.quoteItem.update({
-                            where: { id: awardInfo.standbys[i].quoteItemId },
+                            where: { id: standby.quoteItemId },
                             data: { status: 'Standby', rank: i + 2 }
                         });
-                        allAwardedQuoteItems.push(awardInfo.standbys[i].quoteItemId);
                     }
                 }
             }
@@ -84,15 +91,18 @@ export async function POST(
             const allQuotes = await tx.quotation.findMany({ where: { requisitionId: requisitionId }});
             for (const quote of allQuotes) {
                 const quoteItems = await tx.quoteItem.findMany({ where: { quotationId: quote.id }});
-                const hasPending = quoteItems.some(qi => qi.status === 'Pending_Award' || qi.status === 'Standby');
+                const hasPending = quoteItems.some(qi => qi.status === 'Pending_Award');
+                const hasStandby = quoteItems.some(qi => qi.status === 'Standby');
                 if(hasPending) {
-                    await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Partially_Awarded'}});
+                    await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Pending_Award'}});
+                } else if (hasStandby) {
+                     await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Standby'}});
                 } else {
                      await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Rejected'}});
                 }
             }
             
-            // Mark requisition items as awarded
+            // Mark corresponding requisition items as being in an award process
             await tx.requisitionItem.updateMany({
                 where: {
                     quoteItems: { some: { status: 'Pending_Award' }}
