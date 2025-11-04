@@ -297,7 +297,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                             {standbyItems.sort((a,b) => (a.rank || 4) - (b.rank || 4)).map(item => (
                                                 <div key={item.id} className="flex justify-between items-center text-muted-foreground">
                                                     <span>{item.name}</span>
-                                                    <Badge variant="secondary">Rank {item.rank}</Badge>
+                                                    <span className="font-mono">{item.unitPrice.toFixed(2)} ETB ea. <Badge variant="secondary">Rank {item.rank}</Badge></span>
                                                 </div>
                                             ))}
                                         </div>
@@ -2366,15 +2366,23 @@ export default function QuotationDetailsPage() {
             });
         });
 
-        Object.values(awards).forEach((award: any) => {
-            award.items.forEach((item: any) => {
+        if (awardStrategy === 'all') {
+            const winnerVendorId = Object.keys(awards)[0];
+            const winningItems = awards[winnerVendorId]?.items || [];
+            winningItems.forEach((item: any) => {
                 const quoteItem = awardedQuoteItems[item.quoteItemId];
                 if (quoteItem) {
                     totalAwardValue += quoteItem.price * quoteItem.quantity;
                 }
             });
-        });
-
+        } else { // per-item
+            Object.values(awards).forEach((award: any) => {
+                const quoteItem = awardedQuoteItems[award.winner.quoteItemId];
+                if (quoteItem) {
+                    totalAwardValue += quoteItem.price * quoteItem.quantity;
+                }
+            });
+        }
 
         setIsFinalizing(true);
         try {
@@ -2445,7 +2453,7 @@ export default function QuotationDetailsPage() {
   }
 
   const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
-      if (!requisition) return 'rfq';
+      if (!requisition || !requisition.status) return 'rfq';
       const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
 
       if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
@@ -2879,3 +2887,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
+
