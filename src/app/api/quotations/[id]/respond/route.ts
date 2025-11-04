@@ -4,7 +4,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User, Quotation } from '@/lib/types';
+import { User, Quotation, PurchaseRequisition } from '@/lib/types';
 import { handleAwardRejection } from '@/services/award-service';
 
 export async function POST(
@@ -53,6 +53,19 @@ export async function POST(
                 data: { status: 'Accepted' }
             });
 
+            // In a per-item scenario, items are already marked.
+            // In a single-vendor scenario, all items in the quote are effectively awarded.
+            await tx.quoteItem.updateMany({
+                where: { quotationId: quoteId, status: 'Pending_Award' },
+                data: { status: 'Accepted' }
+            });
+
+            const acceptedItems = await tx.quoteItem.findMany({
+                where: { quotationId: quoteId, status: 'Accepted' }
+            });
+
+            const totalPriceForThisPO = acceptedItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+
             const newPO = await tx.purchaseOrder.create({
                 data: {
                     transactionId: requisition.transactionId,
@@ -60,7 +73,7 @@ export async function POST(
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
                     items: {
-                        create: quote.items.map((item) => ({
+                        create: acceptedItems.map((item) => ({
                             requisitionItemId: item.requisitionItemId,
                             name: item.name,
                             quantity: item.quantity,
@@ -69,15 +82,37 @@ export async function POST(
                             receivedQuantity: 0,
                         }))
                     },
-                    totalAmount: quote.totalPrice,
+                    totalAmount: totalPriceForThisPO,
                     status: 'Issued',
                 }
             });
+            
+            // Check if all items in the requisition are now covered by an accepted quote
+            const allReqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisition.id }});
+            const acceptedReqItemIds = new Set(
+                (await tx.quoteItem.findMany({
+                    where: {
+                        requisition: { id: requisition.id },
+                        status: 'Accepted'
+                    },
+                    select: { requisitionItemId: true }
+                })).map(i => i.requisitionItemId)
+            );
 
-            await tx.purchaseRequisition.update({
-                where: {id: requisition.id},
-                data: {status: 'PO_Created'}
-            });
+            const allItemsAccountedFor = allReqItems.every(item => acceptedReqItemIds.has(item.id));
+
+            if (allItemsAccountedFor) {
+                await tx.purchaseRequisition.update({
+                    where: {id: requisition.id},
+                    data: {status: 'PO_Created'}
+                });
+            } else {
+                 await tx.purchaseRequisition.update({
+                    where: {id: requisition.id},
+                    data: {status: 'Partially_Awarded'}
+                });
+            }
+
             
             await tx.auditLog.create({
                 data: {
@@ -95,7 +130,7 @@ export async function POST(
 
         } else if (action === 'reject') {
              // Handle the rejection using the centralized service
-            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds);
+            return await handleAwardRejection(tx, quote, requisition, actor);
         }
         
         throw new Error('Invalid action.');
@@ -109,12 +144,6 @@ export async function POST(
   } catch (error) {
     console.error('Failed to respond to award:', error);
     if (error instanceof Error) {
-      if ((error as any).code === 'P2014') {
-        return NextResponse.json({ error: 'Failed to process award acceptance due to a data conflict. The Purchase Order could not be linked to the Requisition.', details: (error as any).meta?.relation_name || 'Unknown relation' }, { status: 500 });
-      }
-       if ((error as any).code === 'P2003') {
-        return NextResponse.json({ error: 'Failed to reset requisition due to a data conflict. Could not delete related scores.', details: (error as any).meta || 'Unknown relation' }, { status: 500 });
-      }
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });

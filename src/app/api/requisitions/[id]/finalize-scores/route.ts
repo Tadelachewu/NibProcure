@@ -46,11 +46,6 @@ export async function POST(
                     const quote = sortedQuotes[i];
                     if (i === 0) { // The winner
                         await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Pending_Award', rank: 1 } });
-                        // For single-vendor award, all items in the winning quote are considered pending award
-                        await tx.quoteItem.updateMany({
-                            where: { quotationId: quote.id },
-                            data: { status: 'Pending_Award', rank: 1 }
-                        });
                     } else if (i === 1 || i === 2) { // Standbys
                         await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Standby', rank: (i + 1) as 2 | 3 } });
                     } else { // All others
@@ -58,17 +53,62 @@ export async function POST(
                     }
                 }
 
-                 // Mark all requisition items as awarded since it's a single-vendor award
-                await tx.requisitionItem.updateMany({
-                    where: { requisitionId: requisitionId },
-                    data: { status: 'Awarded' }
-                });
-
-
             } else { // Per-item award logic
-                // THIS LOGIC IS INTENTIONALLY DEFERRED PER USER REQUEST
-                // For now, we will only support the single-vendor award flow.
-                throw new Error("Per-item award strategy is not yet fully implemented in this path.");
+                 // For each item in the requisition that ISN'T already awarded
+                for (const reqItem of requisition.items.filter(i => i.status !== 'Awarded')) {
+                    const award = awards[reqItem.id];
+                    if (!award || !award.winner) continue;
+
+                    // Update winning quote item
+                    await tx.quoteItem.update({
+                        where: { id: award.winner.quoteItemId },
+                        data: { status: 'Pending_Award', rank: 1 }
+                    });
+
+                    // Update standby quote items
+                    for (let i = 0; i < award.standbys.length; i++) {
+                        const standby = award.standbys[i];
+                        await tx.quoteItem.update({
+                            where: { id: standby.quoteItemId },
+                            data: { status: 'Standby', rank: (i + 2) as 2 | 3 }
+                        });
+                    }
+
+                    // Mark the requisition item as awarded
+                    await tx.requisitionItem.update({
+                        where: { id: reqItem.id },
+                        data: { status: 'Awarded' }
+                    });
+                }
+                
+                // Update parent Quotation statuses based on their items
+                const allQuotes = await tx.quotation.findMany({
+                    where: { requisitionId: requisitionId },
+                    include: { items: true }
+                });
+                
+                for (const quote of allQuotes) {
+                    const hasPendingAward = quote.items.some(i => i.status === 'Pending_Award');
+                    const hasStandby = quote.items.some(i => i.status === 'Standby');
+
+                    if (hasPendingAward) {
+                        await tx.quotation.update({
+                            where: { id: quote.id },
+                            data: { status: 'Partially_Awarded' }
+                        });
+                    } else if (hasStandby) {
+                         await tx.quotation.update({
+                            where: { id: quote.id },
+                            data: { status: 'Standby' }
+                        });
+                    } else {
+                         await tx.quotation.update({
+                            where: { id: quote.id },
+                            data: { status: 'Rejected' }
+                        });
+                    }
+                }
+
             }
             
             const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
