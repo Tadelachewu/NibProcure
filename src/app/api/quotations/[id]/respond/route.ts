@@ -130,7 +130,7 @@ export async function POST(
 
         } else if (action === 'reject') {
              // Handle the rejection using the centralized service
-            return await handleAwardRejection(tx, quote, requisition, actor);
+            return await handleAwardRejection(tx, quote, requisition, user);
         }
         
         throw new Error('Invalid action.');

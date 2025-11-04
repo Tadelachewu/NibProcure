@@ -603,10 +603,12 @@ export default function VendorRequisitionPage() {
 
     const canEditQuote = submittedQuote?.status === 'Submitted' && !isAwardProcessStarted && !isDeadlinePassed && allowEdits;
 
-    const awardedItems = useMemo(() => {
+    const awardedItems: QuoteItem[] = useMemo(() => {
         if (!submittedQuote) return [];
-        return submittedQuote.items.filter(i => i.status === 'Pending_Award' || i.status === 'Accepted');
-    }, [submittedQuote]);
+        return submittedQuote.items.filter(i => 
+            requisition?.awardedQuoteItemIds?.includes(i.id)
+        );
+    }, [submittedQuote, requisition]);
 
 
     const fetchRequisitionData = async () => {
@@ -668,7 +670,6 @@ export default function VendorRequisitionPage() {
         };
 
         if (action === 'reject') {
-            // In a single-vendor award flow, declining means declining all awarded items.
             body.declinedItemIds = submittedQuote.items.map(item => item.id);
         }
 
@@ -822,7 +823,7 @@ export default function VendorRequisitionPage() {
                     <CardHeader>
                         <CardTitle className="text-green-600">Congratulations! You've Been Awarded!</CardTitle>
                         <CardDescription>
-                            Please review and respond to this award.
+                             You have been awarded the following item(s). Please review and respond.
                              {requisition.awardResponseDeadline && (
                                 <p className={cn("text-sm font-semibold mt-2 flex items-center gap-2", isResponseDeadlineExpired ? "text-destructive" : "text-amber-600")}>
                                     <Timer className="h-4 w-4" />
@@ -831,15 +832,24 @@ export default function VendorRequisitionPage() {
                              )}
                         </CardDescription>
                     </CardHeader>
-                    {isPartiallyAwarded && (
+                    {awardedItems.length > 0 && (
                         <CardContent>
-                            <Alert>
-                                <Info className="h-4 w-4" />
-                                <AlertTitle>Partial Award</AlertTitle>
-                                <AlertDescription>
-                                    You have been awarded the following item(s): {awardedItems.map(i => i.name).join(', ')}.
-                                </AlertDescription>
-                            </Alert>
+                             <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Winning Item</TableHead>
+                                        <TableHead className="text-right">Your Price</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {awardedItems.map(item => (
+                                        <TableRow key={item.id}>
+                                            <TableCell className="font-medium">{item.name}</TableCell>
+                                            <TableCell className="text-right">{item.unitPrice.toFixed(2)} ETB</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
                         </CardContent>
                     )}
                     <CardFooter className="gap-4">
