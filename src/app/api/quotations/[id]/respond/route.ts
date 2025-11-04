@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -92,7 +91,9 @@ export async function POST(
             const acceptedReqItemIds = new Set(
                 (await tx.quoteItem.findMany({
                     where: {
-                        requisition: { id: requisition.id },
+                        quotation: {
+                            requisitionId: requisition.id
+                        },
                         status: 'Accepted'
                     },
                     select: { requisitionItemId: true }
