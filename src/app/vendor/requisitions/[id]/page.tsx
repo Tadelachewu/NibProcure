@@ -604,18 +604,15 @@ export default function VendorRequisitionPage() {
     const canEditQuote = submittedQuote?.status === 'Submitted' && !isAwardProcessStarted && !isDeadlinePassed && allowEdits;
 
     const awardedItems = useMemo(() => {
-        if (!submittedQuote || !requisition?.awardedQuoteItemIds || requisition.awardedQuoteItemIds.length === 0) {
-            return submittedQuote?.items || [];
+        if (!submittedQuote) return [];
+        // If it's a partial award, only show items with a pending_award or accepted status for this quote
+        if (submittedQuote.status === 'Partially_Awarded' || submittedQuote.status === 'Accepted') {
+            const awardedItemIds = new Set(submittedQuote.items.filter(i => i.status === 'Pending_Award' || i.status === 'Accepted').map(i => i.id));
+            return submittedQuote.items.filter(item => awardedItemIds.has(item.id));
         }
-        
-        // For partial awards, filter the quote items to only those present in the requisition's awarded list
-        if (submittedQuote.status === 'Partially_Awarded' || submittedQuote.status === 'Accepted' || submittedQuote.status === 'Awarded') {
-             const awardedIds = new Set(requisition.awardedQuoteItemIds);
-            return submittedQuote.items.filter(item => awardedIds.has(item.id));
-        }
-
+        // For full awards or other statuses, show all items from the quote
         return submittedQuote.items;
-    }, [submittedQuote, requisition]);
+    }, [submittedQuote]);
 
 
     const fetchRequisitionData = async () => {
@@ -670,11 +667,22 @@ export default function VendorRequisitionPage() {
     const handleAwardResponse = async (action: 'accept' | 'reject') => {
         if (!submittedQuote || !user) return;
         setIsResponding(true);
+
+        const body: { userId: string; action: 'accept' | 'reject', declinedItemIds?: string[] } = {
+            userId: user.id,
+            action,
+        };
+
+        if (action === 'reject') {
+            // When declining a full award, we must specify all awarded items are being declined.
+            body.declinedItemIds = awardedItems.map(item => item.id);
+        }
+
         try {
             const response = await fetch(`/api/quotations/${submittedQuote.id}/respond`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, action })
+                body: JSON.stringify(body),
             });
 
             const result = await response.json();
