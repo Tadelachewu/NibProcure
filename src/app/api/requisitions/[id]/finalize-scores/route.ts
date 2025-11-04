@@ -40,21 +40,31 @@ export async function POST(
                 const winnerVendorId = Object.keys(awards)[0];
                 const winningItems = awards[winnerVendorId]?.items || [];
 
-                for (const item of winningItems) {
-                    await tx.quoteItem.update({
-                        where: { id: item.quoteItemId },
-                        data: { status: 'Pending_Award', rank: 1 }
-                    });
+                if (!winnerVendorId || winningItems.length === 0) {
+                    throw new Error("Invalid award data for single vendor strategy.");
                 }
-                // Set other quotes from the same vendor to rejected unless they are the winning one
-                await tx.quoteItem.updateMany({
-                    where: {
-                        quotation: { vendorId: winnerVendorId, requisitionId: requisitionId },
-                        id: { notIn: winningItems.map((i:any) => i.quoteItemId) }
-                    },
-                    data: { status: 'Rejected', rank: null }
+
+                // Get all quotes to rank them
+                const allQuotesForReq = await tx.quotation.findMany({
+                    where: { requisitionId: requisitionId }
                 });
 
+                const sortedQuotes = allQuotesForReq.sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
+
+                for (let i = 0; i < sortedQuotes.length; i++) {
+                    const quote = sortedQuotes[i];
+                    if (i === 0) { // The winner
+                        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Pending_Award', rank: 1 } });
+                         await tx.quoteItem.updateMany({
+                            where: { quotationId: quote.id, id: { in: winningItems.map((item: any) => item.quoteItemId) } },
+                            data: { status: 'Pending_Award', rank: 1 }
+                        });
+                    } else if (i === 1 || i === 2) { // Standbys
+                        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Standby', rank: (i + 1) as 2 | 3 } });
+                    } else { // All others
+                        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Rejected', rank: null } });
+                    }
+                }
 
             } else { // Per-item award
                 const allAwardedQuoteItems: string[] = [];
@@ -78,17 +88,16 @@ export async function POST(
                         allAwardedQuoteItems.push(awardInfo.standbys[i].quoteItemId);
                     }
                 }
-            }
-            
-            // Set parent Quotation statuses based on their items' statuses
-            const allQuotes = await tx.quotation.findMany({ where: { requisitionId: requisitionId }});
-            for (const quote of allQuotes) {
-                const quoteItems = await tx.quoteItem.findMany({ where: { quotationId: quote.id }});
-                const hasPending = quoteItems.some(qi => qi.status === 'Pending_Award' || qi.status === 'Standby');
-                if(hasPending) {
-                    await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Partially_Awarded'}});
-                } else {
-                     await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Rejected'}});
+                 // Set parent Quotation statuses based on their items' statuses for per-item awards
+                const allQuotes = await tx.quotation.findMany({ where: { requisitionId: requisitionId }});
+                for (const quote of allQuotes) {
+                    const quoteItems = await tx.quoteItem.findMany({ where: { quotationId: quote.id }});
+                    const hasPending = quoteItems.some(qi => qi.status === 'Pending_Award' || qi.status === 'Standby');
+                    if(hasPending) {
+                        await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Partially_Awarded'}});
+                    } else {
+                        await tx.quotation.update({ where: {id: quote.id}, data: {status: 'Rejected'}});
+                    }
                 }
             }
             
