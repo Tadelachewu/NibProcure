@@ -12,7 +12,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '.
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, TrophyIcon, Info } from 'lucide-react';
+import { CalendarIcon, TrophyIcon, Info, UserX } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -113,6 +113,7 @@ export const AwardCenterDialog = ({
             if (proposalsForItem.length === 0) return null;
             if (proposalsForItem.length === 1) return { requisitionItemId: reqItem.id, quoteItemId: proposalsForItem[0].id };
             
+            // If multiple proposals for the same item, find the one with the best score
             let bestItemScore = -1;
             let bestProposalId = proposalsForItem[0].id;
             proposalsForItem.forEach(proposal => {
@@ -221,14 +222,14 @@ export const AwardCenterDialog = ({
                     <Card>
                         <CardHeader>
                             <CardTitle>Re-Award Declined Items</CardTitle>
-                            <CardDescription>Some items were declined by the awarded vendor. Choose a new winner for these items from the standby list.</CardDescription>
+                            <CardDescription>This functionality has been moved. After an award is declined, use the "Promote Standby" button on the main page.</CardDescription>
                         </CardHeader>
                          <CardContent>
                             <Alert variant="default" className="border-amber-500/50">
-                                <Info className="h-4 w-4" />
-                                <AlertTitle>Action Required by Procurement Officer</AlertTitle>
+                                <UserX className="h-4 w-4" />
+                                <AlertTitle>Action Disabled</AlertTitle>
                                 <AlertDescription>
-                                    Please use the "Promote Standby" button on the main page to handle declined awards. This ensures the correct approval workflow is triggered.
+                                    To maintain a clear workflow, please close this dialog and use the "Promote Standby" button to proceed after a vendor declines an award.
                                 </AlertDescription>
                             </Alert>
                         </CardContent>

@@ -257,7 +257,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                 const isWinningQuote = winningStates.includes(quote.status);
 
                 const awardedItems = isWinningQuote
-                    ? quote.items
+                    ? quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id))
                     : [];
 
                 const standbyItems = quote.status === 'Standby' ? quote.items : [];
@@ -2897,3 +2897,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
+
