@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -63,7 +62,7 @@ export async function POST(
                     action: 'RESET_RFQ_NO_STANDBY',
                     entity: 'Requisition',
                     entityId: requisition.id,
-                    details: `All vendors declined and no standbys remain. RFQ process has been automatically reset to 'PreApproved'.`,
+                    details: `All vendors declined and no standbys remain. RFQ process has been automatically reset to 'PreApproved' (Ready for RFQ).`,
                     transactionId: requisition.transactionId,
                 }
             });
