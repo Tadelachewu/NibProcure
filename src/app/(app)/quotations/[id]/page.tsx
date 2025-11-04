@@ -222,6 +222,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
     const getStatusVariant = (status: QuotationStatus) => {
         switch (status) {
             case 'Pending_Award': return 'default';
+            case 'Awarded': return 'default';
             case 'Accepted': return 'default';
             case 'Submitted': return 'outline';
             case 'Rejected': return 'destructive';
@@ -251,11 +252,18 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
-                const awardedItems = quote.items.filter(item => item.rank === 1);
-                const standbyItems = quote.items.filter(item => item.rank === 2 || item.rank === 3);
+                
+                const winningStates = ['Awarded', 'Partially_Awarded', 'Accepted', 'Pending_Award'];
+                const isWinningQuote = winningStates.includes(quote.status);
+
+                const awardedItems = isWinningQuote
+                    ? quote.items
+                    : [];
+
+                const standbyItems = quote.status === 'Standby' ? quote.items : [];
 
                 return (
-                    <Card key={quote.id} className={cn("flex flex-col", awardedItems.length > 0 && 'border-primary ring-2 ring-primary')}>
+                    <Card key={quote.id} className={cn("flex flex-col", isWinningQuote && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
@@ -1702,7 +1710,7 @@ const ScoringProgressTracker = ({
             return { text: "Award Processed", disabled: true };
         }
          if (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Award_Declined') {
-            return { text: "Re-Award Declined Items", disabled: false };
+            return { text: "Promote Standby", disabled: false };
         }
         if (requisition.status.startsWith('Pending_')) {
             return { text: "Award Pending Final Approval", disabled: true };
@@ -2258,11 +2266,11 @@ export default function QuotationDetailsPage() {
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
-  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
+  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby', 'Pending_Award'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   
   const isDeadlinePassed = useMemo(() => {
-    if (!requisition) return false;
+    if (!requisition?.status) return false;
     return requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
   }, [requisition]);
 
