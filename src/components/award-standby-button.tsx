@@ -32,7 +32,9 @@ export function AwardStandbyButton({
     
     const hasStandby = quotations.some(q => q.status === 'Standby');
 
+    // This button should only appear if there is something actionable to do.
     if (!hasStandby) {
+        // If there's no standby, another process should handle the reset.
         return null;
     }
 
@@ -50,7 +52,8 @@ export function AwardStandbyButton({
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to promote standby vendor.');
             }
-            toast({ title: "Success", description: "Standby vendor promoted. The award is now in review."});
+            const result = await response.json();
+            toast({ title: "Success", description: result.message || "Standby promotion process initiated."});
             onSuccess();
         } catch (error) {
              toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
@@ -64,7 +67,7 @@ export function AwardStandbyButton({
             <CardHeader>
                 <CardTitle>Action Required: Award Declined</CardTitle>
                 <CardDescription>
-                    A vendor has declined their award. You can manually promote the next standby vendor.
+                    A vendor has declined their award. You can manually promote the next standby vendor(s).
                 </CardDescription>
             </CardHeader>
             <CardFooter className="pt-0">
@@ -72,14 +75,14 @@ export function AwardStandbyButton({
                     <AlertDialogTrigger asChild>
                         <Button disabled={isSubmitting}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Promote Standby Vendor
+                            Promote Standby Vendor(s)
                         </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>Confirm Standby Promotion</AlertDialogTitle>
                             <AlertDialogDescription>
-                                This will promote the next ranked vendor. The award will be re-routed through the required approval process based on the new vendor's quote.
+                                This will promote the next ranked vendor(s) for the declined items. The award(s) will be re-routed through the required approval process based on the new quote values.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
