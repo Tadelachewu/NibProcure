@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -60,9 +61,9 @@ import Image from 'next/image';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
+import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -1636,7 +1637,8 @@ const ScoringProgressTracker = ({
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<User | null>(null);
-    const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
+    const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
+    const [isItemAwardCenterOpen, setItemAwardCenterOpen] = useState(false);
     
     const { toast } = useToast();
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
@@ -1745,19 +1747,33 @@ const ScoringProgressTracker = ({
                     ))}
                 </ul>
             </CardContent>
-            <CardFooter>
-                 <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
+            <CardFooter className="gap-2">
+                 <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
                     <DialogTrigger asChild>
                          <Button disabled={buttonState.disabled}>
                             {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {buttonState.text}
+                            Award to Single Vendor
                         </Button>
                     </DialogTrigger>
                     <AwardCenterDialog 
                         requisition={requisition}
                         quotations={quotations}
                         onFinalize={onFinalize}
-                        onClose={() => setAwardCenterOpen(false)}
+                        onClose={() => setSingleAwardCenterOpen(false)}
+                    />
+                 </Dialog>
+                  <Dialog open={isItemAwardCenterOpen} onOpenChange={setItemAwardCenterOpen}>
+                    <DialogTrigger asChild>
+                         <Button disabled={buttonState.disabled} variant="outline">
+                            {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Award by Best Item
+                        </Button>
+                    </DialogTrigger>
+                    <BestItemAwardDialog
+                        requisition={requisition}
+                        quotations={quotations}
+                        onFinalize={onFinalize}
+                        onClose={() => setItemAwardCenterOpen(false)}
                     />
                  </Dialog>
             </CardFooter>
@@ -2366,23 +2382,18 @@ export default function QuotationDetailsPage() {
    const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
         
-        let totalAwardValue = 0;
-        const awardedQuoteItems: { [itemId: string]: { price: number, quantity: number } } = {};
-
+        const quoteItemsById: { [key: string]: { price: number; quantity: number } } = {};
         quotations.forEach(q => {
             q.items.forEach(i => {
-                awardedQuoteItems[i.id] = { price: i.unitPrice, quantity: i.quantity };
+                quoteItemsById[i.id] = { price: i.unitPrice, quantity: i.quantity };
             });
         });
 
-        Object.values(awards).forEach((award: any) => {
-            award.items.forEach((item: any) => {
-                const quoteItem = awardedQuoteItems[item.quoteItemId];
-                if (quoteItem) {
-                    totalAwardValue += quoteItem.price * quoteItem.quantity;
-                }
-            });
-        });
+        const totalAwardValue = Object.values(awards).flatMap((a: any) => a.items)
+            .reduce((sum, item: any) => {
+                const quoteItem = quoteItemsById[item.quoteItemId];
+                return sum + (quoteItem ? quoteItem.price * quoteItem.quantity : 0);
+            }, 0);
 
 
         setIsFinalizing(true);
