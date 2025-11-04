@@ -2365,20 +2365,17 @@ export default function QuotationDetailsPage() {
    const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
         
+        // This is the critical change: Calculate total based ONLY on awarded items.
         let totalAwardValue = 0;
-        const awardedQuoteItems: { [itemId: string]: { price: number, quantity: number } } = {};
-
-        quotations.forEach(q => {
-            q.items.forEach(i => {
-                awardedQuoteItems[i.id] = { price: i.unitPrice, quantity: i.quantity };
-            });
-        });
+        const allQuoteItemsById = new Map(
+            quotations.flatMap(q => q.items).map(i => [i.id, i])
+        );
 
         if (awardStrategy === 'all') {
             const winnerVendorId = Object.keys(awards)[0];
             const winningItems = awards[winnerVendorId]?.items || [];
             winningItems.forEach((item: any) => {
-                const quoteItem = awardedQuoteItems[item.quoteItemId];
+                const quoteItem = allQuoteItemsById.get(item.quoteItemId);
                 if (quoteItem) {
                     totalAwardValue += quoteItem.price * quoteItem.quantity;
                 }
@@ -2386,7 +2383,7 @@ export default function QuotationDetailsPage() {
         } else { // per-item
             Object.values(awards).forEach((award: any) => {
                 if (award.winner) {
-                    const quoteItem = awardedQuoteItems[award.winner.quoteItemId];
+                    const quoteItem = allQuoteItemsById.get(award.winner.quoteItemId);
                     if (quoteItem) {
                         totalAwardValue += quoteItem.price * quoteItem.quantity;
                     }
@@ -2897,5 +2894,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
+
 
 
