@@ -96,14 +96,8 @@ export async function POST(
         } else if (action === 'reject') {
             // When a single-vendor award is rejected, the entire quote is declined.
             await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Declined' }});
-
-            // Set the requisition status to indicate a decline has occurred and action is needed.
-            await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'Award_Declined' }
-            });
-
-            await tx.auditLog.create({
+            
+            const auditLogPromise = tx.auditLog.create({
                 data: {
                     timestamp: new Date(),
                     user: { connect: { id: user.id } },
@@ -115,7 +109,55 @@ export async function POST(
                 }
             });
 
-            return { message: 'Award declined. Procurement officer has been notified.' };
+            // Check if any other standby vendors exist for this requisition.
+            const standbyCount = await tx.quotation.count({
+                where: {
+                    requisitionId: requisition.id,
+                    status: 'Standby'
+                }
+            });
+
+            if (standbyCount > 0) {
+                // If standbys exist, set status to Award_Declined and wait for manual promotion.
+                await tx.purchaseRequisition.update({
+                    where: { id: requisition.id },
+                    data: { status: 'Award_Declined' }
+                });
+                await auditLogPromise;
+                return { message: 'Award declined. Procurement officer has been notified to promote a standby vendor.' };
+            } else {
+                // NO standbys exist. Automatically reset the RFQ process.
+                await tx.quotation.deleteMany({where: {requisitionId: requisition.id}});
+                await tx.committeeAssignment.deleteMany({where: {requisitionId: requisition.id}});
+
+                await tx.purchaseRequisition.update({
+                    where: { id: requisition.id },
+                    data: {
+                        status: 'PreApproved',
+                        deadline: null,
+                        scoringDeadline: null,
+                        committeeName: null,
+                        committeePurpose: null,
+                        financialCommitteeMembers: { set: [] },
+                        technicalCommitteeMembers: { set: [] },
+                        currentApproverId: null,
+                        totalPrice: requisition.items.reduce((acc, item) => acc + (item.unitPrice || 0) * item.quantity, 0),
+                    }
+                });
+
+                await tx.auditLog.create({
+                    data: {
+                        timestamp: new Date(),
+                        action: 'RESET_RFQ_NO_STANDBY',
+                        entity: 'Requisition',
+                        entityId: requisition.id,
+                        details: `All vendors declined and no standbys remain. RFQ process has been automatically reset to 'PreApproved' (Ready for RFQ).`,
+                        transactionId: requisition.transactionId,
+                    }
+                });
+                await auditLogPromise;
+                return { message: 'Award declined. No more standby vendors. Requisition has been reset for new RFQ process.' };
+            }
         }
         
         throw new Error('Invalid action.');
