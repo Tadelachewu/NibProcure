@@ -714,6 +714,95 @@ async function main() {
      console.log('Seeded 10 standby promotion scenarios.');
     // --- END: New Seed Data ---
 
+    // --- START: New E2E Decline/Promote/Reset Scenarios ---
+    console.log('Seeding E2E decline and reset scenarios...');
+
+    // Scenario 1: Simple Decline & Promote Standby
+    const reqDecline1Id = 'E2E-SINGLE-DECLINE-1';
+    await prisma.purchaseRequisition.create({
+        data: {
+            id: reqDecline1Id, transactionId: reqDecline1Id, title: 'E2E Test: Simple Decline & Promote',
+            requesterId: '1', departmentId: 'DEPT-1', status: 'Award_Declined', urgency: 'Medium', totalPrice: 8500,
+            justification: 'Test case for a single vendor decline, with a clear standby.', createdAt: new Date(), updatedAt: new Date(),
+            items: { create: [{ id: 'E2E-ITEM-D1', name: 'Office Chairs', quantity: 50, unitPrice: 200 }] }
+        }
+    });
+    await prisma.quotation.create({
+        data: {
+            id: `QUO-D1-V1`, transactionId: reqDecline1Id, requisitionId: reqDecline1Id, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.',
+            status: 'Declined', rank: 1, finalAverageScore: 95, totalPrice: 8500, deliveryDate: new Date(),
+            items: { create: [{ id: `QI-D1-V1`, requisitionItemId: 'E2E-ITEM-D1', name: 'Premium Office Chair', quantity: 50, unitPrice: 170, leadTimeDays: 10 }] }
+        }
+    });
+    await prisma.quotation.create({
+        data: {
+            id: `QUO-D1-V2`, transactionId: reqDecline1Id, requisitionId: reqDecline1Id, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies',
+            status: 'Standby', rank: 2, finalAverageScore: 92, totalPrice: 9000, deliveryDate: new Date(),
+            items: { create: [{ id: `QI-D1-V2`, requisitionItemId: 'E2E-ITEM-D1', name: 'Ergonomic Office Chair', quantity: 50, unitPrice: 180, leadTimeDays: 12 }] }
+        }
+    });
+    console.log('Seeded Scenario: Simple Decline & Promote.');
+
+    // Scenario 2: Double Decline & Final Promotion
+    const reqDecline2Id = 'E2E-SINGLE-DECLINE-2';
+    await prisma.purchaseRequisition.create({
+        data: {
+            id: reqDecline2Id, transactionId: reqDecline2Id, title: 'E2E Test: Double Decline & Promote',
+            requesterId: '1', departmentId: 'DEPT-2', status: 'Award_Declined', urgency: 'High', totalPrice: 25000,
+            justification: 'Test case for two vendors declining, promoting the third.', createdAt: new Date(), updatedAt: new Date(),
+            items: { create: [{ id: 'E2E-ITEM-D2', name: 'Projectors', quantity: 10, unitPrice: 2500 }] }
+        }
+    });
+    await prisma.quotation.create({
+        data: {
+            id: `QUO-D2-V1`, transactionId: reqDecline2Id, requisitionId: reqDecline2Id, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.',
+            status: 'Declined', rank: 1, finalAverageScore: 98, totalPrice: 24000, deliveryDate: new Date(),
+            items: { create: [{ id: `QI-D2-V1`, requisitionItemId: 'E2E-ITEM-D2', name: '4K Laser Projector', quantity: 10, unitPrice: 2400, leadTimeDays: 20 }] }
+        }
+    });
+    await prisma.quotation.create({
+        data: {
+            id: `QUO-D2-V2`, transactionId: reqDecline2Id, requisitionId: reqDecline2Id, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies',
+            status: 'Declined', rank: 2, finalAverageScore: 95, totalPrice: 25000, deliveryDate: new Date(),
+            items: { create: [{ id: `QI-D2-V2`, requisitionItemId: 'E2E-ITEM-D2', name: 'HD LED Projector', quantity: 10, unitPrice: 2500, leadTimeDays: 10 }] }
+        }
+    });
+     await prisma.quotation.create({
+        data: {
+            id: `QUO-D2-V3`, transactionId: reqDecline2Id, requisitionId: reqDecline2Id, vendorId: 'VENDOR-004', vendorName: 'HP Inc.',
+            status: 'Standby', rank: 3, finalAverageScore: 91, totalPrice: 25500, deliveryDate: new Date(),
+            items: { create: [{ id: `QI-D2-V3`, requisitionItemId: 'E2E-ITEM-D2', name: 'Business Projector', quantity: 10, unitPrice: 2550, leadTimeDays: 15 }] }
+        }
+    });
+    console.log('Seeded Scenario: Double Decline.');
+
+    // Scenario 3: All Decline & Auto-Reset
+    const reqResetId = 'E2E-ALL-DECLINE';
+    await prisma.purchaseRequisition.create({
+        data: {
+            id: reqResetId, transactionId: reqResetId, title: 'E2E Test: All Decline & Auto-Reset',
+            requesterId: '1', departmentId: 'DEPT-3', status: 'Award_Declined', urgency: 'Low', totalPrice: 1200,
+            justification: 'Test case where all vendors decline, forcing an RFQ reset.', createdAt: new Date(), updatedAt: new Date(),
+            items: { create: [{ id: 'E2E-ITEM-R1', name: 'Keyboards', quantity: 30, unitPrice: 40 }] }
+        }
+    });
+    await prisma.quotation.create({
+        data: {
+            id: `QUO-R1-V1`, transactionId: reqResetId, requisitionId: reqResetId, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.',
+            status: 'Declined', rank: 1, finalAverageScore: 94, totalPrice: 1150, deliveryDate: new Date(),
+            items: { create: [{ id: `QI-R1-V1`, requisitionItemId: 'E2E-ITEM-R1', name: 'Magic Keyboard', quantity: 30, unitPrice: 38.33, leadTimeDays: 5 }] }
+        }
+    });
+    await prisma.quotation.create({
+        data: {
+            id: `QUO-R1-V2`, transactionId: reqResetId, requisitionId: reqResetId, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies',
+            status: 'Declined', rank: 2, finalAverageScore: 90, totalPrice: 1200, deliveryDate: new Date(),
+            items: { create: [{ id: `QI-R1-V2`, requisitionItemId: 'E2E-ITEM-R1', name: 'Dell Keyboard', quantity: 30, unitPrice: 40, leadTimeDays: 7 }] }
+        }
+    });
+    console.log('Seeded Scenario: All Decline for Auto-Reset.');
+    // --- END: New E2E Scenarios ---
+
 
   console.log(`Seeding finished.`);
 }
@@ -738,5 +827,8 @@ main()
 
 
   
+
+    
+
 
     
