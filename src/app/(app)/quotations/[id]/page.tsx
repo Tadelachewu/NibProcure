@@ -2377,9 +2377,11 @@ export default function QuotationDetailsPage() {
             });
         } else { // per-item
             Object.values(awards).forEach((award: any) => {
-                const quoteItem = awardedQuoteItems[award.winner.quoteItemId];
-                if (quoteItem) {
-                    totalAwardValue += quoteItem.price * quoteItem.quantity;
+                if (award.winner) {
+                    const quoteItem = awardedQuoteItems[award.winner.quoteItemId];
+                    if (quoteItem) {
+                        totalAwardValue += quoteItem.price * quoteItem.quantity;
+                    }
                 }
             });
         }
@@ -2718,7 +2720,7 @@ export default function QuotationDetailsPage() {
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' && requisition.status !== 'Award_Declined'
+            requisition.status !== 'PreApproved'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2887,4 +2889,3 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
-
