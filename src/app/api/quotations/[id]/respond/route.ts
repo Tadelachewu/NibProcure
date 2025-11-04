@@ -1,10 +1,10 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User } from '@/lib/types';
-import { handleItemAwardRejection } from '@/services/award-service';
 
 
 export async function POST(
@@ -42,27 +42,16 @@ export async function POST(
         if (requisition.status === 'Closed' || requisition.status === 'Fulfilled') {
             throw new Error(`Cannot accept award because the parent requisition '${requisition.id}' is already closed.`);
         }
+        
+        if (quote.status !== 'Awarded') {
+            throw new Error('This quote is not currently in an awarded state.');
+        }
 
         if (action === 'accept') {
-            const itemsToAccept = await tx.quoteItem.findMany({
-                where: { quotationId: quote.id, status: 'Pending_Award' }
-            });
-            
-            if (itemsToAccept.length === 0) {
-                throw new Error("No items are currently pending award for this quote.");
-            }
-
-            await tx.quoteItem.updateMany({
-                where: { id: { in: itemsToAccept.map(i => i.id) } },
+            await tx.quotation.update({
+                where: { id: quoteId },
                 data: { status: 'Accepted' }
             });
-            
-            await tx.requisitionItem.updateMany({
-                where: { id: { in: itemsToAccept.map(i => i.requisitionItemId) } },
-                data: { status: 'Awarded' }
-            });
-
-            const totalPriceForThisPO = itemsToAccept.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
 
             const newPO = await tx.purchaseOrder.create({
                 data: {
@@ -71,7 +60,7 @@ export async function POST(
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
                     items: {
-                        create: itemsToAccept.map((item) => ({
+                        create: quote.items.map((item) => ({
                             requisitionItemId: item.requisitionItemId,
                             name: item.name,
                             quantity: item.quantity,
@@ -80,14 +69,14 @@ export async function POST(
                             receivedQuantity: 0,
                         }))
                     },
-                    totalAmount: totalPriceForThisPO,
+                    totalAmount: quote.totalPrice,
                     status: 'Issued',
                 }
             });
 
             await tx.purchaseRequisition.update({
                 where: {id: requisition.id},
-                data: {status: 'Partially_PO_Created'}
+                data: {status: 'PO_Created'}
             });
             
             await tx.auditLog.create({
@@ -97,7 +86,7 @@ export async function POST(
                     action: 'ACCEPT_AWARD',
                     entity: 'Quotation',
                     entityId: quoteId,
-                    details: `Vendor accepted award for ${itemsToAccept.length} item(s). PO ${newPO.id} auto-generated.`,
+                    details: `Vendor accepted award. PO ${newPO.id} auto-generated.`,
                     transactionId: requisition.transactionId,
                 }
             });
@@ -105,10 +94,28 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            if (!declinedItemIds || declinedItemIds.length === 0) {
-                throw new Error("Specific item IDs must be provided for rejection.");
-            }
-            return await handleItemAwardRejection(tx, quote, requisition, user, declinedItemIds);
+            // When a single-vendor award is rejected, the entire quote is declined.
+            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Declined' }});
+
+            // Set the requisition status to indicate a decline has occurred and action is needed.
+            await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: { status: 'Award_Declined' }
+            });
+
+            await tx.auditLog.create({
+                data: {
+                    timestamp: new Date(),
+                    user: { connect: { id: user.id } },
+                    action: 'REJECT_AWARD',
+                    entity: 'Quotation',
+                    entityId: quoteId,
+                    details: `Vendor declined award.`,
+                    transactionId: requisition.transactionId,
+                }
+            });
+
+            return { message: 'Award declined. Procurement officer has been notified.' };
         }
         
         throw new Error('Invalid action.');

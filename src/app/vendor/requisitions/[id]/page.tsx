@@ -605,13 +605,7 @@ export default function VendorRequisitionPage() {
 
     const awardedItems = useMemo(() => {
         if (!submittedQuote) return [];
-        // If it's a partial award, only show items with a pending_award or accepted status for this quote
-        if (submittedQuote.status === 'Partially_Awarded' || submittedQuote.status === 'Accepted') {
-            const awardedItemIds = new Set(submittedQuote.items.filter(i => i.status === 'Pending_Award' || i.status === 'Accepted').map(i => i.id));
-            return submittedQuote.items.filter(item => awardedItemIds.has(item.id));
-        }
-        // For full awards or other statuses, show all items from the quote
-        return submittedQuote.items;
+        return submittedQuote.items.filter(i => i.status === 'Pending_Award' || i.status === 'Accepted');
     }, [submittedQuote]);
 
 
@@ -674,7 +668,6 @@ export default function VendorRequisitionPage() {
         };
 
         if (action === 'reject') {
-            // When declining a full award, we must specify all awarded items are being declined.
             body.declinedItemIds = awardedItems.map(item => item.id);
         }
 
@@ -707,119 +700,113 @@ export default function VendorRequisitionPage() {
     if (error) return <div className="text-destructive text-center p-8">{error}</div>;
     if (!requisition) return <div className="text-center p-8">Requisition not found.</div>;
 
-    const isAwarded = submittedQuote?.status === 'Awarded' || submittedQuote?.status === 'Partially_Awarded';
+    const isAwarded = submittedQuote?.status === 'Awarded';
+    const isPartiallyAwarded = submittedQuote?.status === 'Partially_Awarded';
     const isAccepted = submittedQuote?.status === 'Accepted';
     const hasResponded = submittedQuote?.status === 'Accepted' || submittedQuote?.status === 'Declined';
     const hasSubmittedInvoice = submittedQuote?.status === 'Invoice_Submitted';
     const isResponseDeadlineExpired = requisition.awardResponseDeadline ? isPast(new Date(requisition.awardResponseDeadline)) : false;
     const isStandby = submittedQuote?.status === 'Standby';
 
-
-    const QuoteDisplayCard = ({ quote, itemsToShow }: { quote: Quotation, itemsToShow: QuoteItem[] }) => {
-         const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-         return (
-         <Card>
-            <CardHeader className="flex flex-row items-start justify-between">
-                <div>
-                    <CardTitle>Your Submitted Quote</CardTitle>
-                    <CardDescription>
-                        Status: <Badge variant={quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded' ? 'default' : 'secondary'}>{quote.status.replace(/_/g, ' ')}</Badge>
-                    </CardDescription>
-                </div>
-                {canEditQuote && (
-                    <Button variant="outline" size="sm" onClick={() => setIsEditingQuote(true)}>
-                        <FileEdit className="mr-2 h-4 w-4" /> Edit Quote
-                    </Button>
-                )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-                {quote.cpoDocumentUrl && (
-                     <div className="text-sm">
-                        <h3 className="font-semibold">CPO Document</h3>
-                        <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
-                            <FileText className="h-4 w-4 text-primary"/>
-                            <span>{quote.cpoDocumentUrl}</span>
-                        </div>
-                    </div>
-                )}
-                 {quote.experienceDocumentUrl && (
-                     <div className="text-sm">
-                        <h3 className="font-semibold">Experience Document</h3>
-                        <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
-                            <FileText className="h-4 w-4 text-primary"/>
-                            <span>{quote.experienceDocumentUrl}</span>
-                        </div>
-                    </div>
-                )}
-                <div className="space-y-2">
-                    {itemsToShow && itemsToShow.map((item, index) => (
-                        <Card key={`${item.requisitionItemId}-${index}`} className="p-3">
-                            <div className="flex justify-between">
-                                <div>
-                                    <p className="font-semibold">{item.name} x {item.quantity}</p>
-                                    <p className="text-xs text-muted-foreground">Unit Price: {item.unitPrice.toFixed(2)} ETB</p>
-                                </div>
-                                <p className="font-semibold text-lg">{(item.unitPrice * item.quantity).toFixed(2)} ETB</p>
-                            </div>
-                            {item.brandDetails && (
-                                <div className="mt-2 text-xs border-t pt-2">
-                                    <p className="font-bold">Brand/Model Details:</p>
-                                    <p className="text-muted-foreground italic">{item.brandDetails}</p>
-                                </div>
-                            )}
-                        </Card>
-                    ))}
-                </div>
-                {quote.notes && (
+    const QuoteDisplayCard = ({ quote }: { quote: Quotation }) => {
+        const totalQuotedPrice = quote.items.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+        return (
+            <Card>
+                <CardHeader className="flex flex-row items-start justify-between">
                     <div>
-                        <h3 className="font-semibold text-sm">Your Overall Notes</h3>
-                        <p className="text-muted-foreground text-sm p-3 border rounded-md bg-muted/50 italic">"{quote.notes}"</p>
+                        <CardTitle>Your Submitted Quote</CardTitle>
+                        <CardDescription>
+                            Status: <Badge variant={hasResponded ? (quote.status === 'Accepted' ? 'default' : 'destructive') : 'secondary'}>{quote.status.replace(/_/g, ' ')}</Badge>
+                        </CardDescription>
                     </div>
-                )}
-                 <Separator />
-                 <div className="text-right font-bold text-2xl">
-                    Total Quoted Price: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
-                 </div>
-                 {isAccepted && purchaseOrder && (
-                    <CardFooter className="p-0 pt-4">
-                         <Dialog open={isInvoiceFormOpen} onOpenChange={setInvoiceFormOpen}>
-                            <DialogTrigger asChild>
-                                <Button className="w-full" disabled={hasSubmittedInvoice}>
-                                    {hasSubmittedInvoice ? (
-                                        <><CircleCheck className="mr-2"/> Invoice Submitted</>
-                                    ) : (
-                                        <><FileUp className="mr-2"/> Submit Invoice</>
-                                    )}
-                                </Button>
-                            </DialogTrigger>
-                            <InvoiceSubmissionForm po={purchaseOrder} onInvoiceSubmitted={() => { setInvoiceFormOpen(false); fetchRequisitionData(); }} />
-                        </Dialog>
-                    </CardFooter>
-                 )}
-                 {!isAwarded && !hasResponded && (
-                     <CardFooter className="p-0 pt-4">
-                        <Alert variant="default" className="border-blue-500/50">
+                    {canEditQuote && (
+                        <Button variant="outline" size="sm" onClick={() => setIsEditingQuote(true)}>
+                            <FileEdit className="mr-2 h-4 w-4" /> Edit Quote
+                        </Button>
+                    )}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    {quote.cpoDocumentUrl && (
+                        <div className="text-sm">
+                            <h3 className="font-semibold">CPO Document</h3>
+                            <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
+                                <FileText className="h-4 w-4 text-primary"/>
+                                <span>{quote.cpoDocumentUrl}</span>
+                            </div>
+                        </div>
+                    )}
+                    {quote.experienceDocumentUrl && (
+                        <div className="text-sm">
+                            <h3 className="font-semibold">Experience Document</h3>
+                            <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
+                                <FileText className="h-4 w-4 text-primary"/>
+                                <span>{quote.experienceDocumentUrl}</span>
+                            </div>
+                        </div>
+                    )}
+                    <div className="space-y-2">
+                        {quote.items.map((item, index) => (
+                            <Card key={`${item.requisitionItemId}-${index}`} className="p-3">
+                                <div className="flex justify-between">
+                                    <div>
+                                        <p className="font-semibold">{item.name} x {item.quantity}</p>
+                                        <p className="text-xs text-muted-foreground">Unit Price: {item.unitPrice.toFixed(2)} ETB</p>
+                                    </div>
+                                    <p className="font-semibold text-lg">{(item.unitPrice * item.quantity).toFixed(2)} ETB</p>
+                                </div>
+                                {item.brandDetails && (
+                                    <div className="mt-2 text-xs border-t pt-2">
+                                        <p className="font-bold">Brand/Model Details:</p>
+                                        <p className="text-muted-foreground italic">{item.brandDetails}</p>
+                                    </div>
+                                )}
+                            </Card>
+                        ))}
+                    </div>
+                    {quote.notes && (
+                        <div>
+                            <h3 className="font-semibold text-sm">Your Overall Notes</h3>
+                            <p className="text-muted-foreground text-sm p-3 border rounded-md bg-muted/50 italic">"{quote.notes}"</p>
+                        </div>
+                    )}
+                    <Separator />
+                    <div className="text-right font-bold text-2xl">
+                        Total Quoted Price: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
+                    </div>
+                    {isAccepted && purchaseOrder && (
+                        <CardFooter className="p-0 pt-4">
+                            <Dialog open={isInvoiceFormOpen} onOpenChange={setInvoiceFormOpen}>
+                                <DialogTrigger asChild>
+                                    <Button className="w-full" disabled={hasSubmittedInvoice}>
+                                        {hasSubmittedInvoice ? <><CircleCheck className="mr-2"/> Invoice Submitted</> : <><FileUp className="mr-2"/> Submit Invoice</>}
+                                    </Button>
+                                </DialogTrigger>
+                                <InvoiceSubmissionForm po={purchaseOrder} onInvoiceSubmitted={() => { setInvoiceFormOpen(false); fetchRequisitionData(); }} />
+                            </Dialog>
+                        </CardFooter>
+                    )}
+                </CardContent>
+                 <CardFooter>
+                    {!hasResponded && (
+                        <Alert variant="default" className="w-full border-blue-500/50">
                             <Info className="h-4 w-4 text-blue-500" />
-                            <AlertTitle>{ isStandby ? "You are on Standby" : "Quote Under Review" }</AlertTitle>
+                            <AlertTitle>{isStandby ? "You are on Standby" : "Quote Under Review"}</AlertTitle>
                             <AlertDescription>
-                                { isStandby ? "Your quote is a backup option. You will be notified if the primary vendor declines." : (canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.')}
+                                {isStandby ? "Your quote is a backup option. You will be notified if the primary vendor declines." : (canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.')}
                             </AlertDescription>
                         </Alert>
-                     </CardFooter>
-                 )}
-                 {hasResponded && (
-                     <CardFooter className="p-0 pt-4">
-                        <Alert variant={quote.status === 'Accepted' ? 'default' : 'destructive'}>
+                    )}
+                    {hasResponded && (
+                        <Alert variant={quote.status === 'Accepted' ? 'default' : 'destructive'} className="w-full">
                             <AlertTitle>Response Recorded</AlertTitle>
                             <AlertDescription>
                                 You have {quote.status.toLowerCase()} this award.
                             </AlertDescription>
                         </Alert>
-                     </CardFooter>
-                 )}
-            </CardContent>
-        </Card>
-        )
+                    )}
+                </CardFooter>
+            </Card>
+        );
     };
 
     return (
@@ -829,7 +816,7 @@ export default function VendorRequisitionPage() {
                 Back to Dashboard
             </Button>
             
-            {isAwarded && (
+            {(isAwarded || isPartiallyAwarded) && !hasResponded && (
                  <Card>
                     <CardHeader>
                         <CardTitle className="text-green-600">Congratulations! You've Been Awarded!</CardTitle>
@@ -843,7 +830,7 @@ export default function VendorRequisitionPage() {
                              )}
                         </CardDescription>
                     </CardHeader>
-                    {submittedQuote?.status === 'Partially_Awarded' && (
+                    {isPartiallyAwarded && (
                         <CardContent>
                             <Alert>
                                 <Info className="h-4 w-4" />
@@ -978,7 +965,7 @@ export default function VendorRequisitionPage() {
                 </Card>
 
                 {submittedQuote && !isEditingQuote ? (
-                    <QuoteDisplayCard quote={submittedQuote} itemsToShow={awardedItems} />
+                    <QuoteDisplayCard quote={submittedQuote} />
                 ) : (
                     <QuoteSubmissionForm 
                         requisition={requisition} 

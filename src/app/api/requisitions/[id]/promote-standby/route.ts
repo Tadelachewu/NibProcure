@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -26,11 +27,11 @@ export async function POST(
             include: { quotations: { include: { items: true } } }
         });
 
-        if (!requisition || (requisition.status !== 'Award_Declined' && requisition.status !== 'Partially_Award_Declined')) {
+        if (!requisition || (requisition.status !== 'Award_Declined')) {
             throw new Error("This requisition is not in a state where a standby vendor can be promoted.");
         }
 
-        // This logic handles a single-vendor award that was declined
+        // Logic for single-vendor award promotion
         const standbyQuote = await tx.quotation.findFirst({
             where: { requisitionId: requisitionId, status: 'Standby' },
             orderBy: { rank: 'asc' },
@@ -38,7 +39,7 @@ export async function POST(
         });
 
         if (!standbyQuote) {
-            // No standby vendors left, reset the entire process.
+            // No standby vendors left, reset the entire process automatically.
             await tx.quotation.deleteMany({where: {requisitionId}});
             await tx.committeeAssignment.deleteMany({where: {requisitionId}});
 
@@ -52,6 +53,7 @@ export async function POST(
                     committeePurpose: null,
                     financialCommitteeMembers: { set: [] },
                     technicalCommitteeMembers: { set: [] },
+                    currentApproverId: null,
                 }
             });
              await tx.auditLog.create({
@@ -61,7 +63,7 @@ export async function POST(
                     action: 'RESET_RFQ_NO_STANDBY',
                     entity: 'Requisition',
                     entityId: requisition.id,
-                    details: `All vendors declined and no standbys remain. RFQ process has been reset.`,
+                    details: `All vendors declined and no standbys remain. RFQ process has been automatically reset to 'PreApproved'.`,
                     transactionId: requisition.transactionId,
                 }
             });
@@ -69,14 +71,8 @@ export async function POST(
             return updatedReq;
         }
         
-        // Promote the standby quote
+        // Promote the standby quote to pending
         await tx.quotation.update({ where: { id: standbyQuote.id }, data: { status: 'Pending_Award' }});
-
-        // Set all items in the newly promoted quote to 'Pending_Award'
-        await tx.quoteItem.updateMany({
-            where: { quotationId: standbyQuote.id },
-            data: { status: 'Pending_Award', rank: 1 }
-        });
 
         const newTotalPrice = standbyQuote.totalPrice;
 
