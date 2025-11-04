@@ -4,8 +4,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
-
+import { User, Quotation } from '@/lib/types';
+import { handleAwardRejection } from '@/services/award-service';
 
 export async function POST(
   request: Request,
@@ -26,7 +26,7 @@ export async function POST(
             where: { id: quoteId },
             include: { 
               items: true, 
-              requisition: { include: { items: true } } 
+              requisition: { include: { items: true, quotations: true } } 
             }
         });
 
@@ -43,7 +43,7 @@ export async function POST(
             throw new Error(`Cannot accept award because the parent requisition '${requisition.id}' is already closed.`);
         }
         
-        if (quote.status !== 'Awarded') {
+        if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded') {
             throw new Error('This quote is not currently in an awarded state.');
         }
 
@@ -94,70 +94,8 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            // When a single-vendor award is rejected, the entire quote is declined.
-            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Declined' }});
-            
-            const auditLogPromise = tx.auditLog.create({
-                data: {
-                    timestamp: new Date(),
-                    user: { connect: { id: user.id } },
-                    action: 'REJECT_AWARD',
-                    entity: 'Quotation',
-                    entityId: quoteId,
-                    details: `Vendor declined award.`,
-                    transactionId: requisition.transactionId,
-                }
-            });
-
-            // Check if any other standby vendors exist for this requisition.
-            const standbyCount = await tx.quotation.count({
-                where: {
-                    requisitionId: requisition.id,
-                    status: 'Standby'
-                }
-            });
-
-            if (standbyCount > 0) {
-                // If standbys exist, set status to Award_Declined and wait for manual promotion.
-                await tx.purchaseRequisition.update({
-                    where: { id: requisition.id },
-                    data: { status: 'Award_Declined' }
-                });
-                await auditLogPromise;
-                return { message: 'Award declined. Procurement officer has been notified to promote a standby vendor.' };
-            } else {
-                // NO standbys exist. Automatically reset the RFQ process.
-                await tx.quotation.deleteMany({where: {requisitionId: requisition.id}});
-                await tx.committeeAssignment.deleteMany({where: {requisitionId: requisition.id}});
-
-                await tx.purchaseRequisition.update({
-                    where: { id: requisition.id },
-                    data: {
-                        status: 'PreApproved',
-                        deadline: null,
-                        scoringDeadline: null,
-                        committeeName: null,
-                        committeePurpose: null,
-                        financialCommitteeMembers: { set: [] },
-                        technicalCommitteeMembers: { set: [] },
-                        currentApproverId: null,
-                        totalPrice: requisition.items.reduce((acc, item) => acc + (item.unitPrice || 0) * item.quantity, 0),
-                    }
-                });
-
-                await tx.auditLog.create({
-                    data: {
-                        timestamp: new Date(),
-                        action: 'RESET_RFQ_NO_STANDBY',
-                        entity: 'Requisition',
-                        entityId: requisition.id,
-                        details: `All vendors declined and no standbys remain. RFQ process has been automatically reset to 'PreApproved' (Ready for RFQ).`,
-                        transactionId: requisition.transactionId,
-                    }
-                });
-                await auditLogPromise;
-                return { message: 'Award declined. No more standby vendors. Requisition has been reset for new RFQ process.' };
-            }
+             // Handle the rejection using the centralized service
+            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds);
         }
         
         throw new Error('Invalid action.');
@@ -173,6 +111,9 @@ export async function POST(
     if (error instanceof Error) {
       if ((error as any).code === 'P2014') {
         return NextResponse.json({ error: 'Failed to process award acceptance due to a data conflict. The Purchase Order could not be linked to the Requisition.', details: (error as any).meta?.relation_name || 'Unknown relation' }, { status: 500 });
+      }
+       if ((error as any).code === 'P2003') {
+        return NextResponse.json({ error: 'Failed to reset requisition due to a data conflict. Could not delete related scores.', details: (error as any).meta || 'Unknown relation' }, { status: 500 });
       }
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }

@@ -668,7 +668,8 @@ export default function VendorRequisitionPage() {
         };
 
         if (action === 'reject') {
-            body.declinedItemIds = awardedItems.map(item => item.id);
+            // In a single-vendor award flow, declining means declining all awarded items.
+            body.declinedItemIds = submittedQuote.items.map(item => item.id);
         }
 
         try {

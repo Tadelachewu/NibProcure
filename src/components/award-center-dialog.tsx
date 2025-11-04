@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -11,11 +12,12 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '.
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, TrophyIcon } from 'lucide-react';
+import { CalendarIcon, TrophyIcon, Info } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
 import { PurchaseRequisition, Quotation } from '@/lib/types';
+import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 
 
 export const AwardCenterDialog = ({
@@ -29,7 +31,7 @@ export const AwardCenterDialog = ({
     onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
     onClose: () => void;
 }) => {
-    const [awardStrategy, setAwardStrategy] = useState<'item' | 'all'>('item');
+    const [awardStrategy, setAwardStrategy] = useState<'item' | 'all'>('all');
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
     const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
 
@@ -47,54 +49,49 @@ export const AwardCenterDialog = ({
         // Only consider quotes from vendors who are not on the exclusion list.
         return quotations.filter(q => !declinedVendorIds.has(q.vendorId));
     }, [quotations]);
-
+    
     // Per-item award logic
-    const itemWinners = useMemo(() => {
-        if (!requisition.items) return [];
+    const perItemAwards = useMemo(() => {
+        if (!requisition.items) return {};
 
-        return requisition.items.map(reqItem => {
-            let bestScore = -1;
-            let winner: { vendorId: string; vendorName: string; quoteItemId: string; } | null = null;
+        const awards: { [itemId: string]: { winner?: any, standbys: any[] } } = {};
+        
+        requisition.items.forEach(reqItem => {
+            if (reqItem.status === 'Awarded') return; // Skip already awarded items
 
-            eligibleQuotes.forEach(quote => {
-                const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
-
-                proposalsForItem.forEach(proposal => {
-                    if (!quote.scores) return;
-
-                    let totalItemScore = 0;
-                    let scoreCount = 0;
-                    
-                    quote.scores.forEach(scoreSet => {
-                        const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                        // **FIX START**: Check if itemScore exists before accessing finalScore
-                        if (itemScore) {
-                            totalItemScore += itemScore.finalScore;
-                            scoreCount++;
-                        }
-                        // **FIX END**
-                    });
-                    
-                    const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                    if (averageItemScore > bestScore) {
-                        bestScore = averageItemScore;
-                        winner = {
+            const rankedProposals = eligibleQuotes.flatMap(quote => 
+                quote.items
+                    .filter(item => item.requisitionItemId === reqItem.id)
+                    .map(proposal => {
+                        let totalItemScore = 0;
+                        let scoreCount = 0;
+                        quote.scores?.forEach(scoreSet => {
+                            const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
+                            if (itemScore) {
+                                totalItemScore += itemScore.finalScore;
+                                scoreCount++;
+                            }
+                        });
+                        const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                        return {
                             vendorId: quote.vendorId,
                             vendorName: quote.vendorName,
-                            quoteItemId: proposal.id
+                            quoteItemId: proposal.id,
+                            score: averageItemScore
                         };
-                    }
-                });
-            });
-            return {
-                requisitionItemId: reqItem.id,
-                name: reqItem.name,
-                winner,
-                bestScore,
-            }
+                    })
+            ).sort((a, b) => b.score - a.score);
+
+            awards[reqItem.id] = {
+                winner: rankedProposals[0],
+                standbys: rankedProposals.slice(1, 3)
+            };
         });
+
+        return awards;
     }, [requisition, eligibleQuotes]);
-    
+
+
     // Single vendor award logic
     const overallWinner = useMemo(() => {
         let bestOverallScore = -1;
@@ -111,21 +108,13 @@ export const AwardCenterDialog = ({
             return null;
         }
 
-        // Now, for the winning vendor, find their best proposal for each item.
         const bestItemsFromWinner = requisition.items.map(reqItem => {
             const proposalsForItem = winningQuote!.items.filter(i => i.requisitionItemId === reqItem.id);
-
-            if (proposalsForItem.length === 0) {
-                return null; // Vendor didn't quote this item
-            }
-            if (proposalsForItem.length === 1) {
-                return { requisitionItemId: reqItem.id, quoteItemId: proposalsForItem[0].id };
-            }
+            if (proposalsForItem.length === 0) return null;
+            if (proposalsForItem.length === 1) return { requisitionItemId: reqItem.id, quoteItemId: proposalsForItem[0].id };
             
-            // If multiple proposals, find the best-scored one
             let bestItemScore = -1;
             let bestProposalId = proposalsForItem[0].id;
-
             proposalsForItem.forEach(proposal => {
                  let totalItemScore = 0;
                  let scoreCount = 0;
@@ -145,7 +134,6 @@ export const AwardCenterDialog = ({
             return { requisitionItemId: reqItem.id, quoteItemId: bestProposalId };
         }).filter(Boolean);
 
-
         return { 
             vendorId: winningQuote.vendorId,
             vendorName: winningQuote.vendorName,
@@ -154,29 +142,20 @@ export const AwardCenterDialog = ({
         };
     }, [eligibleQuotes, requisition]);
 
-
     const handleConfirmAward = () => {
-        let awards: { [vendorId: string]: { vendorName: string, items: { requisitionItemId: string, quoteItemId: string }[] } } = {};
+        let awardsPayload: any = {};
         
         if (awardStrategy === 'item') {
-             itemWinners.forEach(item => {
-                if (item.winner) {
-                    if (!awards[item.winner.vendorId]) {
-                        awards[item.winner.vendorId] = { vendorName: item.winner.vendorName, items: [] };
-                    }
-                    awards[item.winner.vendorId].items.push({ requisitionItemId: item.requisitionItemId, quoteItemId: item.winner.quoteItemId });
-                }
-            });
+            awardsPayload = perItemAwards;
         } else { // 'all'
            if (overallWinner?.vendorId) {
-                awards[overallWinner.vendorId] = { 
-                    vendorName: overallWinner.vendorName!, 
-                    items: overallWinner.items!
+                awardsPayload[overallWinner.vendorId] = { 
+                    vendorName: overallWinner.vendorName, 
+                    items: overallWinner.items 
                 };
            }
         }
-
-        onFinalize(awardStrategy, awards, awardResponseDeadline);
+        onFinalize(awardStrategy, awardsPayload, awardResponseDeadline);
         onClose();
     }
 
@@ -194,7 +173,7 @@ export const AwardCenterDialog = ({
                     <TabsTrigger value="all">Award All to Single Vendor</TabsTrigger>
                 </TabsList>
                 <TabsContent value="item">
-                    <Card>
+                     <Card>
                         <CardHeader>
                             <CardTitle>Best Offer per Item</CardTitle>
                             <CardDescription>This strategy awards each item to the vendor with the highest score for that specific item. This may result in multiple Purchase Orders.</CardDescription>
@@ -209,13 +188,16 @@ export const AwardCenterDialog = ({
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {itemWinners.map(item => (
-                                        <TableRow key={item.requisitionItemId}>
-                                            <TableCell className="font-medium">{item.name}</TableCell>
-                                            <TableCell>{item.winner?.vendorName || 'N/A'}</TableCell>
-                                            <TableCell className="text-right font-mono">{item.bestScore > 0 ? item.bestScore.toFixed(2) : 'N/A'}</TableCell>
-                                        </TableRow>
-                                    ))}
+                                    {requisition.items.map(item => {
+                                        const awardInfo = perItemAwards[item.id];
+                                        return (
+                                            <TableRow key={item.id}>
+                                                <TableCell className="font-medium">{item.name}</TableCell>
+                                                <TableCell>{awardInfo?.winner?.vendorName || 'N/A'}</TableCell>
+                                                <TableCell className="text-right font-mono">{awardInfo?.winner?.score > 0 ? awardInfo.winner.score.toFixed(2) : 'N/A'}</TableCell>
+                                            </TableRow>
+                                        )
+                                    })}
                                 </TableBody>
                             </Table>
                         </CardContent>
@@ -232,6 +214,23 @@ export const AwardCenterDialog = ({
                             <p className="text-muted-foreground">Recommended Overall Winner:</p>
                             <p className="text-2xl font-bold">{overallWinner?.vendorName || 'N/A'}</p>
                             <p className="font-mono text-primary">{overallWinner?.score > 0 ? `${overallWinner.score.toFixed(2)} average score` : 'N/A'}</p>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                 <TabsContent value="declined">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Re-Award Declined Items</CardTitle>
+                            <CardDescription>Some items were declined by the awarded vendor. Choose a new winner for these items from the standby list.</CardDescription>
+                        </CardHeader>
+                         <CardContent>
+                            <Alert variant="default" className="border-amber-500/50">
+                                <Info className="h-4 w-4" />
+                                <AlertTitle>Action Required by Procurement Officer</AlertTitle>
+                                <AlertDescription>
+                                    Please use the "Promote Standby" button on the main page to handle declined awards. This ensures the correct approval workflow is triggered.
+                                </AlertDescription>
+                            </Alert>
                         </CardContent>
                     </Card>
                 </TabsContent>

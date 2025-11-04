@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -61,7 +62,6 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
 
 /**
  * Handles the logic when a vendor rejects an award for specific items.
- * For each declined item, it promotes a standby or resets the item for a new RFQ.
  * @param tx - Prisma transaction client.
  * @param quote - The quote from which items were rejected.
  * @param requisition - The associated requisition.
@@ -69,129 +69,84 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
  * @param declinedQuoteItemIds - The specific quote item IDs that were declined.
  * @returns A message indicating the result of the operation.
  */
-export async function handleItemAwardRejection(
+export async function handleAwardRejection(
     tx: Prisma.TransactionClient, 
-    quote: Quotation, 
+    quote: Quotation & { requisition: PurchaseRequisition & { quotations: Quotation[] } }, 
     requisition: PurchaseRequisition & { items: any[] },
     actor: User,
-    declinedQuoteItemIds: string[]
+    declinedQuoteItemIds?: string[]
 ) {
-    let itemsResetToRfqCount = 0;
-    let itemsPromotedCount = 0;
-
-    await tx.quoteItem.updateMany({
-        where: { id: { in: declinedQuoteItemIds } },
-        data: { status: 'Declined' }
-    });
-
-    await tx.auditLog.create({
-        data: {
-            timestamp: new Date(),
-            user: { connect: { id: actor.id } },
-            action: 'DECLINE_AWARD_ITEM',
-            entity: 'Quotation',
-            entityId: quote.id,
-            details: `Vendor ${quote.vendorName} declined award for ${declinedQuoteItemIds.length} item(s).`,
-            transactionId: requisition.transactionId,
-        }
-    });
-
-    const declinedItems = await tx.quoteItem.findMany({
-        where: { id: { in: declinedQuoteItemIds } }
-    });
-
-    for (const declinedItem of declinedItems) {
-        const nextStandby = await tx.quoteItem.findFirst({
-            where: { 
-                requisitionItemId: declinedItem.requisitionItemId, 
-                status: 'Standby' 
-            },
-            orderBy: { rank: 'asc' },
-            include: { quotation: { include: { vendor: true } } }
-        });
-
-        if (nextStandby) {
-            itemsPromotedCount++;
-            await tx.quoteItem.update({
-                where: { id: nextStandby.id },
-                data: { status: 'Pending_Award', rank: 1 } // Promote to winner
-            });
-
-            // Make sure the parent quote is actionable for the newly awarded vendor
-            await tx.quotation.update({
-                where: { id: nextStandby.quotationId },
-                data: { status: 'Partially_Awarded' }
-            });
-            
-            // Notify the newly promoted vendor
-            const standbyVendor = nextStandby.quotation.vendor;
-            if (standbyVendor.email) {
-                const emailHtml = `
-                    <h1>Good News! You've been awarded an item from standby!</h1>
-                    <p>Hello ${standbyVendor.name},</p>
-                    <p>A previously awarded vendor for an item in requisition <strong>${requisition.title}</strong> has declined. As a standby vendor, you are now awarded for item: <strong>${nextStandby.name}</strong>.</p>
-                    <p>Please log in to the vendor portal to review the award details and respond.</p>
-                    ${requisition.awardResponseDeadline ? `<p><strong>This award must be accepted by ${format(new Date(requisition.awardResponseDeadline), 'PPpp')}.</strong></p>` : ''}
-                    <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
-                    <p>Thank you,</p>
-                    <p>Nib InternationalBank Procurement</p>
-                `;
-                await sendEmail({ to: standbyVendor.email, subject: `Awarded from Standby: ${requisition.title}`, html: emailHtml });
-            }
-             await tx.auditLog.create({
-                data: {
-                    timestamp: new Date(),
-                    user: { connect: { id: actor.id } },
-                    action: 'PROMOTE_STANDBY_ITEM',
-                    entity: 'Requisition',
-                    entityId: requisition.id,
-                    details: `Item "${declinedItem.name}" was declined. Standby vendor ${standbyVendor.name} was automatically promoted and notified.`,
-                    transactionId: requisition.transactionId,
-                }
-            });
-
-
-        } else {
-            itemsResetToRfqCount++;
-            // No standby, reset the original requisition item
-            await tx.requisitionItem.update({
-                where: { id: declinedItem.requisitionItemId },
-                data: { status: 'Needs_RFQ' }
-            });
-             await tx.auditLog.create({
-                data: {
-                    timestamp: new Date(),
-                    user: { connect: { id: actor.id } },
-                    action: 'ITEM_NEEDS_RFQ',
-                    entity: 'Requisition',
-                    entityId: requisition.id,
-                    details: `Item "${declinedItem.name}" was declined and had no standby vendors. It has been reset and needs a new RFQ.`,
-                    transactionId: requisition.transactionId,
-                }
-            });
-        }
+    if (requisition.status === 'Partially_Awarded' && (!declinedQuoteItemIds || declinedQuoteItemIds.length === 0)) {
+        throw new Error("Specific item IDs must be provided for rejection.");
     }
     
-    // Finally, update the overall requisition status
-    const remainingPendingItems = await tx.requisitionItem.count({
-        where: { requisitionId: requisition.id, status: 'Pending' }
-    });
+    // Determine if it's a full or partial rejection
+    const isFullRejection = !declinedQuoteItemIds || declinedQuoteItemIds.length === quote.items.length;
 
-    if (remainingPendingItems === 0) {
-        const hasItemsNeedingRFQ = await tx.requisitionItem.count({ where: { requisitionId: requisition.id, status: 'Needs_RFQ' } });
-        if (hasItemsNeedingRFQ > 0) {
-             await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'Partially_Award_Declined' }
+    if (isFullRejection) {
+        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
+        await tx.auditLog.create({
+            data: {
+                timestamp: new Date(), user: { connect: { id: actor.id } },
+                action: 'REJECT_AWARD', entity: 'Quotation', entityId: quote.id,
+                details: `Vendor ${quote.vendorName} declined the entire award.`,
+                transactionId: requisition.transactionId,
+            }
+        });
+
+        // Check if there are ANY other standby vendors for this ENTIRE requisition
+        const standbyCount = await tx.quotation.count({
+            where: { requisitionId: requisition.id, status: 'Standby' }
+        });
+
+        if (standbyCount > 0) {
+            // If standbys exist, let the PO handle manual promotion
+            await tx.purchaseRequisition.update({
+                where: { id: requisition.id }, data: { status: 'Award_Declined' }
             });
+            return { message: 'Award declined. Procurement officer has been notified to promote a standby vendor.' };
         } else {
-             await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'Partially_PO_Created' }
+            // NO standbys exist for the whole req. Automatically reset.
+            const quotationsToDelete = await tx.quotation.findMany({
+                where: { requisitionId: requisition.id },
+                include: { scores: { include: { itemScores: { include: { scores: true } } } } }
             });
+
+            const scoreSetIds = quotationsToDelete.flatMap(q => q.scores.map(s => s.id));
+            if (scoreSetIds.length > 0) {
+                const itemScoreIds = quotationsToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
+                if (itemScoreIds.length > 0) {
+                    await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
+                }
+                await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
+                await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
+            }
+
+            await tx.quotation.deleteMany({where: {requisitionId: requisition.id}});
+            await tx.committeeAssignment.deleteMany({where: {requisitionId: requisition.id}});
+
+            await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: {
+                    status: 'PreApproved', deadline: null, scoringDeadline: null, committeeName: null,
+                    committeePurpose: null, financialCommitteeMembers: { set: [] }, technicalCommitteeMembers: { set: [] },
+                    currentApproverId: null, totalPrice: requisition.items.reduce((acc, item) => acc + (item.unitPrice || 0) * item.quantity, 0),
+                }
+            });
+
+            await tx.auditLog.create({
+                data: {
+                    timestamp: new Date(), user: { connect: { id: actor.id } },
+                    action: 'RESET_RFQ_NO_STANDBY', entity: 'Requisition', entityId: requisition.id,
+                    details: `All vendors declined and no standbys remain. RFQ process has been automatically reset to 'PreApproved' (Ready for RFQ).`,
+                    transactionId: requisition.transactionId,
+                }
+            });
+            return { message: 'Award declined. No more standby vendors. Requisition has been reset for new RFQ process.' };
         }
+    } else {
+        // This is a partial rejection (from a per-item award)
+        // This logic is complex and deferred per user request, will be handled in a future step.
+        throw new Error("Partial award rejection logic is not yet implemented.");
     }
-
-
-    return { message: `${itemsPromotedCount} item(s) promoted to standby, ${itemsResetToRfqCount} item(s) reset for new RFQ.` };
 }
