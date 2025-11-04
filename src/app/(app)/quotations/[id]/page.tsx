@@ -1710,7 +1710,7 @@ const ScoringProgressTracker = ({
             return { text: "Award Processed", disabled: true };
         }
          if (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Award_Declined') {
-            return { text: "Promote Standby", disabled: false };
+            return { text: "Waiting to Promote Standby...", disabled: true };
         }
         if (requisition.status.startsWith('Pending_')) {
             return { text: "Award Pending Final Approval", disabled: true };
