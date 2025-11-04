@@ -263,7 +263,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                 const standbyItems = quote.status === 'Standby' ? quote.items : [];
 
                 return (
-                    <Card key={quote.id} className={cn("flex flex-col", isWinningQuote && 'border-primary ring-2 ring-primary')}>
+                    <Card key={quote.id} className={cn("flex flex-col", isWinningQuote && 'border-primary ring-2 ring-primary', quote.status === 'Declined' && 'bg-destructive/5 border-destructive/50')}>
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
@@ -2897,4 +2897,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
+
 
