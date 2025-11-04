@@ -2365,20 +2365,20 @@ export default function QuotationDetailsPage() {
                 awardedQuoteItems[i.id] = { price: i.unitPrice, quantity: i.quantity };
             });
         });
-
+        
         Object.values(awards).forEach((award: any) => {
-            if (award.items) { // This handles the single-vendor award case
+            if (award.winner) { // Per-item
+                const quoteItem = awardedQuoteItems[award.winner.quoteItemId];
+                if (quoteItem) {
+                    totalAwardValue += quoteItem.price * quoteItem.quantity;
+                }
+            } else if (award.items) { // Single-vendor
                 award.items.forEach((item: any) => {
                     const quoteItem = awardedQuoteItems[item.quoteItemId];
                     if (quoteItem) {
                         totalAwardValue += quoteItem.price * quoteItem.quantity;
                     }
                 });
-            } else if (award.winner) { // This handles the per-item award case
-                 const quoteItem = awardedQuoteItems[award.winner.quoteItemId];
-                 if (quoteItem) {
-                    totalAwardValue += quoteItem.price * quoteItem.quantity;
-                 }
             }
         });
 
@@ -2717,7 +2717,7 @@ export default function QuotationDetailsPage() {
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' && requisition.status !== 'Award_Declined'
+            requisition.status !== 'PreApproved'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2886,3 +2886,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
+
