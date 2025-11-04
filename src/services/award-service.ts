@@ -97,7 +97,10 @@ export async function handleAwardRejection(
         // Automatically reset if no standbys are available
         const quotationsToDelete = await tx.quotation.findMany({
             where: { requisitionId: requisition.id },
-            include: { scores: { include: { itemScores: { include: { scores: true } } } } }
+            include: { 
+                scores: { include: { itemScores: { include: { scores: true } } } },
+                items: true,
+            }
         });
 
         // Deep delete of scores related to all quotes for this requisition
@@ -109,6 +112,7 @@ export async function handleAwardRejection(
                 await tx.itemScore.deleteMany({ where: { scoreSetId: scoreSet.id } });
             }
             await tx.committeeScoreSet.deleteMany({ where: { quotationId: q.id } });
+            await tx.quoteItem.deleteMany({ where: { quotationId: q.id } });
         }
         
         await tx.quotation.deleteMany({ where: { requisitionId: requisition.id } });

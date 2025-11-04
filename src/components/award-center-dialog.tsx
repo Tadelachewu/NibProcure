@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -12,11 +11,11 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '.
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, TrophyIcon, Info, UserX } from 'lucide-react';
+import { CalendarIcon, TrophyIcon, UserX } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
-import { PurchaseRequisition, Quotation } from '@/lib/types';
+import { PurchaseRequisition, Quotation, QuoteItem } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription } from './ui/alert';
 
 
@@ -42,45 +41,75 @@ export const AwardCenterDialog = ({
     }, [awardResponseDeadlineDate, awardResponseDeadlineTime]);
     
     const eligibleQuotes = useMemo(() => {
-        // Create an "exclusion list" of vendors who have already declined.
         const declinedVendorIds = new Set(
             quotations.filter(q => q.status === 'Declined').map(q => q.vendorId)
         );
-        // Only consider quotes from vendors who are not on the exclusion list.
         return quotations.filter(q => !declinedVendorIds.has(q.vendorId));
     }, [quotations]);
     
-    // Per-item award logic
+    // Per-item award logic - REFACTORED
     const perItemAwards = useMemo(() => {
         if (!requisition.items) return {};
 
         const awards: { [itemId: string]: { winner?: any, standbys: any[] } } = {};
         
         requisition.items.forEach(reqItem => {
-            if (reqItem.status === 'Awarded') return; // Skip already awarded items
+            if (reqItem.status === 'Awarded') return;
 
-            const rankedProposals = eligibleQuotes.flatMap(quote => 
-                quote.items
-                    .filter(item => item.requisitionItemId === reqItem.id)
-                    .map(proposal => {
-                        let totalItemScore = 0;
-                        let scoreCount = 0;
-                        quote.scores?.forEach(scoreSet => {
-                            const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                            if (itemScore) {
-                                totalItemScore += itemScore.finalScore;
-                                scoreCount++;
-                            }
-                        });
-                        const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                        return {
-                            vendorId: quote.vendorId,
-                            vendorName: quote.vendorName,
-                            quoteItemId: proposal.id,
-                            score: averageItemScore
-                        };
-                    })
-            ).sort((a, b) => b.score - a.score);
+            // Step 1: For each vendor, find their SINGLE best proposal for this item
+            const bestProposalPerVendor = eligibleQuotes.map(quote => {
+                const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
+                if (proposalsForItem.length === 0) return null;
+
+                // Find the best scoring proposal AMONG this vendor's own offerings for this item
+                const bestProposal = proposalsForItem.reduce((best, current) => {
+                     let currentTotalScore = 0;
+                     let currentScoreCount = 0;
+                     quote.scores?.forEach(scoreSet => {
+                         const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === current.id);
+                         if (itemScore) {
+                             currentTotalScore += itemScore.finalScore;
+                             currentScoreCount++;
+                         }
+                     });
+                     const currentAvgScore = currentScoreCount > 0 ? currentTotalScore / currentScoreCount : 0;
+
+                     let bestTotalScore = 0;
+                     let bestScoreCount = 0;
+                      quote.scores?.forEach(scoreSet => {
+                         const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === best.id);
+                         if (itemScore) {
+                             bestTotalScore += itemScore.finalScore;
+                             bestScoreCount++;
+                         }
+                     });
+                     const bestAvgScore = bestScoreCount > 0 ? bestTotalScore / bestScoreCount : 0;
+
+                     return currentAvgScore > bestAvgScore ? current : best;
+                }, proposalsForItem[0]);
+                
+                // Calculate the final average score for this single best proposal
+                let totalScore = 0;
+                let scoreCount = 0;
+                quote.scores?.forEach(scoreSet => {
+                    const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === bestProposal.id);
+                    if (itemScore) {
+                        totalScore += itemScore.finalScore;
+                        scoreCount++;
+                    }
+                });
+                const averageItemScore = scoreCount > 0 ? totalScore / scoreCount : 0;
+
+                return {
+                    vendorId: quote.vendorId,
+                    vendorName: quote.vendorName,
+                    quoteItemId: bestProposal.id,
+                    score: averageItemScore
+                };
+            }).filter(p => p !== null);
+
+            // Step 2: Rank the best proposals from all vendors
+            const rankedProposals = (bestProposalPerVendor as any[]).sort((a, b) => b.score - a.score);
 
             awards[reqItem.id] = {
                 winner: rankedProposals[0],
@@ -92,54 +121,41 @@ export const AwardCenterDialog = ({
     }, [requisition, eligibleQuotes]);
 
 
-    // Single vendor award logic
+    // Single vendor award logic - REFACTORED
     const overallWinner = useMemo(() => {
-        let bestOverallScore = -1;
-        let winningQuote: Quotation | null = null;
+        const winningQuote = eligibleQuotes.reduce((best, current) => {
+            return (current.finalAverageScore || 0) > (best?.finalAverageScore || 0) ? current : best;
+        }, null as Quotation | null);
         
-        eligibleQuotes.forEach(quote => {
-            if (quote.finalAverageScore && quote.finalAverageScore > bestOverallScore) {
-                bestOverallScore = quote.finalAverageScore;
-                winningQuote = quote;
-            }
-        });
+        if (!winningQuote) return null;
 
-        if (!winningQuote) {
-            return null;
-        }
-
+        // For each req item, find the single best proposal from the winning vendor
         const bestItemsFromWinner = requisition.items.map(reqItem => {
-            const proposalsForItem = winningQuote!.items.filter(i => i.requisitionItemId === reqItem.id);
+            const proposalsForItem = winningQuote.items.filter(i => i.requisitionItemId === reqItem.id);
             if (proposalsForItem.length === 0) return null;
-            if (proposalsForItem.length === 1) return { requisitionItemId: reqItem.id, quoteItemId: proposalsForItem[0].id };
             
-            // If multiple proposals for the same item, find the one with the best score
-            let bestItemScore = -1;
-            let bestProposalId = proposalsForItem[0].id;
-            proposalsForItem.forEach(proposal => {
-                 let totalItemScore = 0;
-                 let scoreCount = 0;
-                 winningQuote!.scores?.forEach(scoreSet => {
-                     const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                     if (itemScore) {
-                         totalItemScore += itemScore.finalScore;
-                         scoreCount++;
-                     }
-                 });
-                 const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                 if (averageItemScore > bestItemScore) {
-                     bestItemScore = averageItemScore;
-                     bestProposalId = proposal.id;
-                 }
-            });
-            return { requisitionItemId: reqItem.id, quoteItemId: bestProposalId };
-        }).filter(Boolean);
+            // If multiple proposals for same item, find the single best one based on score
+            const bestProposal = proposalsForItem.reduce((best, current) => {
+                const getAvgScore = (proposalId: string) => {
+                    let totalScore = 0, count = 0;
+                    winningQuote.scores?.forEach(scoreSet => {
+                        const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposalId);
+                        if (itemScore) { totalScore += itemScore.finalScore; count++; }
+                    });
+                    return count > 0 ? totalScore / count : 0;
+                };
+
+                return getAvgScore(current.id) > getAvgScore(best.id) ? current : best;
+            }, proposalsForItem[0]);
+            
+            return { requisitionItemId: reqItem.id, quoteItemId: bestProposal.id };
+        }).filter((item): item is { requisitionItemId: string; quoteItemId: string } => item !== null);
 
         return { 
             vendorId: winningQuote.vendorId,
             vendorName: winningQuote.vendorName,
             items: bestItemsFromWinner,
-            score: bestOverallScore 
+            score: winningQuote.finalAverageScore || 0 
         };
     }, [eligibleQuotes, requisition]);
 
@@ -218,16 +234,16 @@ export const AwardCenterDialog = ({
                         </CardContent>
                     </Card>
                 </TabsContent>
-                 <TabsContent value="declined">
+                <TabsContent value="declined">
                     <Card>
-                        <CardHeader>
+                         <CardHeader>
                             <CardTitle>Re-Award Declined Items</CardTitle>
-                            <CardDescription>This functionality has been moved. After an award is declined, use the "Promote Standby" button on the main page.</CardDescription>
+                            <CardDescription className="text-muted-foreground">This action is now handled by the "Promote Standby" button on the main quotations page after a vendor declines an award.</CardDescription>
                         </CardHeader>
                          <CardContent>
                             <Alert variant="default" className="border-amber-500/50">
                                 <UserX className="h-4 w-4" />
-                                <AlertTitle>Action Disabled</AlertTitle>
+                                <AlertTitle>Action Moved</AlertTitle>
                                 <AlertDescription>
                                     To maintain a clear workflow, please close this dialog and use the "Promote Standby" button to proceed after a vendor declines an award.
                                 </AlertDescription>
