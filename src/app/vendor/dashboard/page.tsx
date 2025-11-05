@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -22,7 +21,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
-const PAGE_SIZE = 9;
+const OPEN_PAGE_SIZE = 9;
+const ACTIVE_PAGE_SIZE = 6;
 
 type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed';
 
@@ -53,7 +53,8 @@ export default function VendorDashboardPage() {
     const [vendor, setVendor] = useState<Vendor | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [currentPage, setCurrentPage] = useState(1);
+    const [openCurrentPage, setOpenCurrentPage] = useState(1);
+    const [activeCurrentPage, setActiveCurrentPage] = useState(1);
 
     useEffect(() => {
         if (!token || !user?.vendorId) return;
@@ -145,17 +146,23 @@ export default function VendorDashboardPage() {
         
         return { 
             activeRequisitions: active.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
-            openForQuoting: open,
+            openForQuoting: open.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
         };
 
     }, [allRequisitions, user]);
 
 
-    const totalPages = Math.ceil(openForQuoting.length / PAGE_SIZE);
-    const paginatedData = useMemo(() => {
-        const startIndex = (currentPage - 1) * PAGE_SIZE;
-        return openForQuoting.slice(startIndex, startIndex + PAGE_SIZE);
-    }, [openForQuoting, currentPage]);
+    const openTotalPages = Math.ceil(openForQuoting.length / OPEN_PAGE_SIZE);
+    const paginatedOpenData = useMemo(() => {
+        const startIndex = (openCurrentPage - 1) * OPEN_PAGE_SIZE;
+        return openForQuoting.slice(startIndex, startIndex + OPEN_PAGE_SIZE);
+    }, [openForQuoting, openCurrentPage]);
+
+    const activeTotalPages = Math.ceil(activeRequisitions.length / ACTIVE_PAGE_SIZE);
+    const paginatedActiveData = useMemo(() => {
+        const startIndex = (activeCurrentPage - 1) * ACTIVE_PAGE_SIZE;
+        return activeRequisitions.slice(startIndex, startIndex + ACTIVE_PAGE_SIZE);
+    }, [activeRequisitions, activeCurrentPage]);
 
 
     return (
@@ -192,8 +199,73 @@ export default function VendorDashboardPage() {
 
                     {vendor?.kycStatus === 'Verified' && (
                         <>
+                             <div className="space-y-4">
+                                <div className="space-y-1">
+                                    <h2 className="text-3xl font-bold">Open for Quotation</h2>
+                                    <p className="text-muted-foreground">
+                                        The following requisitions are currently open for quotation.
+                                    </p>
+                                </div>
+                                {paginatedOpenData.length > 0 ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {paginatedOpenData.map((req) => (
+                                        <Card key={req.id} className="flex flex-col hover:shadow-md transition-shadow relative">
+                                            <CardHeader>
+                                                <CardTitle>{req.title}</CardTitle>
+                                                <CardDescription>From {req.department} Department</CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="flex-grow">
+                                                <div className="text-sm text-muted-foreground space-y-2">
+                                                    <div>
+                                                        <span className="font-semibold text-foreground">Requisition ID:</span> {req.id}
+                                                    </div>
+                                                    <div>
+                                                        <span className="font-semibold text-foreground">Posted:</span> {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
+                                                    </div>
+                                                    {req.deadline && (
+                                                        <div className="flex items-center gap-1.5 font-semibold text-destructive">
+                                                            <Timer className="h-4 w-4" />
+                                                            <span>Deadline: {format(new Date(req.deadline), 'PPpp')}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                            <CardFooter>
+                                                <Button asChild className="w-full">
+                                                    <Link href={`/vendor/requisitions/${req.id}`}>
+                                                        View & Quote <ArrowRight className="ml-2 h-4 w-4" />
+                                                    </Link>
+                                                </Button>
+                                            </CardFooter>
+                                        </Card>
+                                        )
+                                    )}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-lg bg-muted/30">
+                                        <ShoppingCart className="h-16 w-16 text-muted-foreground/50" />
+                                        <h3 className="mt-6 text-xl font-semibold">No Open Requisitions</h3>
+                                        <p className="mt-2 text-sm text-muted-foreground">There are no new requisitions currently available for quotation.</p>
+                                    </div>
+                                )}
+
+                                {openTotalPages > 1 && (
+                                    <div className="flex items-center justify-between mt-4">
+                                        <div className="text-sm text-muted-foreground">
+                                            Page {openCurrentPage} of {openTotalPages}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(1)} disabled={openCurrentPage === 1}><ChevronsLeft /></Button>
+                                            <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(p => Math.max(1, p - 1))} disabled={openCurrentPage === 1}><ChevronLeft /></Button>
+                                            <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(p => Math.min(openTotalPages, p + 1))} disabled={openCurrentPage === openTotalPages}><ChevronRight /></Button>
+                                            <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(openTotalPages)} disabled={openCurrentPage === openTotalPages}><ChevronsRight /></Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {activeRequisitions.length > 0 && (
-                                <div className="space-y-4">
+                                <div className="space-y-4 pt-8 border-t">
                                     <Alert className="border-primary/50 text-primary">
                                         <Award className="h-5 w-5 !text-primary" />
                                         <AlertTitle className="text-xl font-bold">Your Active Requisitions</AlertTitle>
@@ -202,8 +274,7 @@ export default function VendorDashboardPage() {
                                         </AlertDescription>
                                     </Alert>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {activeRequisitions.map(req => {
-                                            const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
+                                        {paginatedActiveData.map(req => {
                                             const status = getRequisitionCardStatus(req);
                                             const isExpired = req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline)) && (status === 'Awarded' || status === 'Partially Awarded');
                                             const isActionable = status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted' || status === 'Invoice Submitted';
@@ -239,76 +310,21 @@ export default function VendorDashboardPage() {
                                             )
                                         })}
                                     </div>
+                                    {activeTotalPages > 1 && (
+                                        <div className="flex items-center justify-between mt-4">
+                                            <div className="text-sm text-muted-foreground">
+                                                Page {activeCurrentPage} of {activeTotalPages}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Button variant="outline" size="icon" onClick={() => setActiveCurrentPage(1)} disabled={activeCurrentPage === 1}><ChevronsLeft /></Button>
+                                                <Button variant="outline" size="icon" onClick={() => setActiveCurrentPage(p => Math.max(1, p - 1))} disabled={activeCurrentPage === 1}><ChevronLeft /></Button>
+                                                <Button variant="outline" size="icon" onClick={() => setActiveCurrentPage(p => Math.min(activeTotalPages, p + 1))} disabled={activeCurrentPage === activeTotalPages}><ChevronRight /></Button>
+                                                <Button variant="outline" size="icon" onClick={() => setActiveCurrentPage(activeTotalPages)} disabled={activeCurrentPage === activeTotalPages}><ChevronsRight /></Button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
-
-                            <div className="space-y-4">
-                                <div className="space-y-1">
-                                    <h2 className="text-3xl font-bold">Open for Quotation</h2>
-                                    <p className="text-muted-foreground">
-                                        The following requisitions are currently open for quotation.
-                                    </p>
-                                </div>
-                                {paginatedData.length > 0 ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {paginatedData.map((req) => {
-                                        const status = getRequisitionCardStatus(req);
-                                        const isClickable = status !== 'Not Awarded';
-
-                                        return (
-                                            <Card key={req.id} className={cn("flex flex-col hover:shadow-md transition-shadow relative", !isClickable && "opacity-60")}>
-                                                <CardHeader>
-                                                    <CardTitle>{req.title}</CardTitle>
-                                                    <CardDescription>From {req.department} Department</CardDescription>
-                                                </CardHeader>
-                                                <CardContent className="flex-grow">
-                                                    <div className="text-sm text-muted-foreground space-y-2">
-                                                        <div>
-                                                            <span className="font-semibold text-foreground">Requisition ID:</span> {req.id}
-                                                        </div>
-                                                        <div>
-                                                            <span className="font-semibold text-foreground">Posted:</span> {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
-                                                        </div>
-                                                        {req.deadline && (
-                                                            <div>
-                                                                <span className="font-semibold text-foreground">Deadline:</span> {format(new Date(req.deadline), 'PPpp')}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </CardContent>
-                                                <CardFooter>
-                                                    <Button asChild className="w-full" disabled={!isClickable}>
-                                                        <Link href={`/vendor/requisitions/${req.id}`}>
-                                                            View & Quote <ArrowRight className="ml-2 h-4 w-4" />
-                                                        </Link>
-                                                    </Button>
-                                                </CardFooter>
-                                            </Card>
-                                        )}
-                                    )}
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-lg bg-muted/30">
-                                        <ShoppingCart className="h-16 w-16 text-muted-foreground/50" />
-                                        <h3 className="mt-6 text-xl font-semibold">No Open Requisitions</h3>
-                                        <p className="mt-2 text-sm text-muted-foreground">There are no new requisitions currently available for quotation.</p>
-                                    </div>
-                                )}
-
-                                {totalPages > 1 && (
-                                    <div className="flex items-center justify-between mt-4">
-                                        <div className="text-sm text-muted-foreground">
-                                            Page {currentPage} of {totalPages}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
-                                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft /></Button>
-                                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight /></Button>
-                                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronsRight /></Button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
                         </>
                     )}
                 </>
