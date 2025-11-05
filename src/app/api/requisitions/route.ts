@@ -129,6 +129,15 @@ export async function GET(request: Request) {
         financialCommitteeMembers: { select: { id: true } },
         technicalCommitteeMembers: { select: { id: true } },
         committeeAssignments: true,
+        items: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            quantity: true,
+            unitPrice: true,
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc',
