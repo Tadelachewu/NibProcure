@@ -59,7 +59,7 @@ export async function GET(request: Request) {
         } else if (isManagerialRole) {
              whereClause.OR = [
                 { currentApproverId: userId },
-                { reviews: { some: { userId: userId } } }
+                { reviews: { some: { reviewerId: userId } } }
             ];
         }
 
@@ -634,3 +634,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
