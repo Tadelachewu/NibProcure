@@ -17,7 +17,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, FileText, MessageSquare, User } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 
@@ -185,11 +185,9 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                     <h4 className="font-semibold text-lg">Original Request Details</h4>
                                     <div>
                                         <p className="font-medium mb-1">Business Justification</p>
-                                        <div className="h-48">
-                                            <ScrollArea className="h-full rounded-md border p-3">
-                                                <p className="text-sm text-muted-foreground">{requisition.justification}</p>
-                                            </ScrollArea>
-                                        </div>
+                                        <ScrollArea className="h-48 rounded-md border p-3">
+                                            <p className="text-sm text-muted-foreground">{requisition.justification}</p>
+                                        </ScrollArea>
                                     </div>
                                 </div>
 
@@ -200,23 +198,35 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                         <ScrollArea className="h-full pr-4">
                             <div className="relative pl-6 py-4">
                                 <div className="absolute left-6 top-0 h-full w-0.5 bg-border -translate-x-1/2"></div>
-                                {(requisition.auditTrail || []).length > 0 ? (requisition.auditTrail || []).map((log: AuditLogType, index: number) => (
+                                {(requisition.auditTrail || []).length > 0 ? (requisition.auditTrail || []).map((log: AuditLogType, index: number) => {
+                                     const commentMatch = log.details.match(/with comment: "([^"]+)"/i) || log.details.match(/Reason: "([^"]+)"/i);
+                                     const comment = commentMatch ? commentMatch[1] : null;
+                                     const mainDetail = log.details.split(/ with comment:| Reason:/)[0];
+                                    
+                                    return (
                                     <div key={log.id} className="relative mb-8">
-                                        <div className="absolute -left-3 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-secondary">
-                                            <div className="h-3 w-3 rounded-full bg-primary"></div>
+                                        <div className="absolute -left-3 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border-2 border-primary">
+                                            <CheckCircle className="h-4 w-4 text-primary" />
                                         </div>
                                         <div className="pl-8">
-                                            <div className="flex items-center justify-between">
-                                                <Badge variant="outline">{log.action.replace(/_/g, ' ')}</Badge>
-                                                <time className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}</time>
+                                            <p className="font-semibold">{log.action.replace(/_/g, ' ')}</p>
+                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                <User className="h-3 w-3" />
+                                                <span>By {log.user} ({log.role})</span>
+                                                <span>&bull;</span>
+                                                <time>{formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}</time>
                                             </div>
-                                            <p className="mt-2 text-sm text-muted-foreground">{log.details || log.approverComment}</p>
-                                            <p className="mt-2 text-xs text-muted-foreground">
-                                                By <span className="font-semibold text-foreground">{log.user}</span> ({log.role})
-                                            </p>
+                                            <p className="mt-2 text-sm text-muted-foreground">{mainDetail}</p>
+                                            {comment && (
+                                                <blockquote className="mt-2 pl-3 border-l-2 border-border text-sm italic flex items-start gap-2">
+                                                    <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                    "{comment}"
+                                                </blockquote>
+                                            )}
                                         </div>
                                     </div>
-                                )) : (
+                                    );
+                                }) : (
                                     <Alert>
                                         <AlertCircle className="h-4 w-4" />
                                         <AlertTitle>No History</AlertTitle>
