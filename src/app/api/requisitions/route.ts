@@ -123,7 +123,10 @@ export async function GET(request: Request) {
         quotations: {
           select: {
             vendorId: true,
-            status: true
+            status: true,
+            vendorName: true,
+            totalPrice: true,
+            finalAverageScore: true,
           }
         },
         financialCommitteeMembers: { select: { id: true } },
@@ -137,6 +140,20 @@ export async function GET(request: Request) {
             quantity: true,
             unitPrice: true,
           }
+        },
+        auditLog: {
+          include: {
+            user: { select: { name: true, role: true }}
+          },
+          orderBy: {
+            timestamp: 'desc'
+          }
+        },
+        minutes: {
+          include: {
+            author: true,
+            attendees: true
+          }
         }
       },
       orderBy: {
@@ -147,7 +164,12 @@ export async function GET(request: Request) {
     const formattedRequisitions = requisitions.map(req => ({
         ...req,
         requesterName: req.requester.name,
-        department: req.department?.name || 'N/A'
+        department: req.department?.name || 'N/A',
+        auditTrail: req.auditLog.map(log => ({
+          ...log,
+          user: log.user.name,
+          role: log.user.role,
+        })),
     }));
     
     return NextResponse.json(formattedRequisitions);
