@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -47,14 +46,20 @@ export async function GET(request: Request) {
              whereClause.status = statusToFind;
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
             const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
-            const allReviewStatuses = allCommitteeRoles.map(r => `Pending_${r.name}`);
-            allReviewStatuses.push('Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval', 'PostApproved');
+            const allManagerialRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Manager_' } } });
+            const allReviewStatuses = [
+                ...allCommitteeRoles.map(r => `Pending_${r.name}`),
+                ...allManagerialRoles.map(r => `Pending_${r.name}`),
+                'Pending_Director_Approval', 
+                'Pending_VP_Approval', 
+                'Pending_President_Approval',
+                'PostApproved'
+            ];
             whereClause.status = { in: allReviewStatuses };
         } else if (isManagerialRole) {
-            // Corrected Logic: Fetch items pending the user's approval OR items they have already approved/rejected.
              whereClause.OR = [
                 { currentApproverId: userId },
-                { approverId: userId }
+                { reviews: { some: { userId: userId } } }
             ];
         }
 
@@ -401,7 +406,7 @@ export async function PATCH(
                 await tx.review.create({
                     data: {
                         requisition: { connect: { id: id } },
-                        userId,
+                        reviewer: { connect: { id: userId } },
                         decision: 'APPROVED',
                         comments: comment,
                     }
