@@ -42,7 +42,10 @@ export async function GET(request: Request) {
         
         if (isCommitteeRole) {
              const statusToFind = `Pending_${userRole}`;
-             whereClause.status = statusToFind;
+             whereClause.OR = [
+                { status: statusToFind }, // Items currently pending this user's committee role
+                { reviews: { some: { reviewerId: userId } } } // Items this user has already reviewed
+            ];
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
             const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
             const allReviewStatuses = [
@@ -292,15 +295,18 @@ export async function PATCH(
         dataToUpdate.approverComment = comment;
 
     } else if (requisition.status.startsWith('Pending_')) {
-        const isCommitteeApproval = requisition.status.includes('_Committee_');
+        const requiredRole = requisition.status.replace('Pending_', '');
         let isDesignatedApprover = false;
-        
-        if (isCommitteeApproval) {
-            const requiredRole = requisition.status.replace('Pending_', '');
-            isDesignatedApprover = user.role === requiredRole;
-        } else {
-            isDesignatedApprover = requisition.currentApproverId === userId;
+
+        // Check if the user's role matches the required role for the committee step
+        if (user.role === requiredRole) {
+            isDesignatedApprover = true;
+        } 
+        // Check if the user is the specific current approver for hierarchical steps
+        else if (requisition.currentApproverId === userId) {
+            isDesignatedApprover = true;
         }
+
 
         if (!isDesignatedApprover) {
             return NextResponse.json({ error: 'You are not the designated approver for this item.' }, { status: 403 });
