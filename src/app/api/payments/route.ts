@@ -11,7 +11,7 @@ export async function POST(
   try {
     const body = await request.json();
     console.log('Request body:', body);
-    const { invoiceId, userId } = body;
+    const { invoiceId, userId, paymentEvidenceUrl } = body;
 
     const user = await prisma.user.findUnique({where: {id: userId}});
     if (!user) {
@@ -19,6 +19,10 @@ export async function POST(
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
+    if (!paymentEvidenceUrl) {
+      return NextResponse.json({ error: 'Payment evidence document is required.' }, { status: 400 });
+    }
+
     const invoiceToUpdate = await prisma.invoice.findUnique({ 
         where: { id: invoiceId },
         include: { po: true }
@@ -43,6 +47,7 @@ export async function POST(
                 status: 'Paid',
                 paymentDate: new Date(),
                 paymentReference: paymentReference,
+                paymentEvidenceUrl: paymentEvidenceUrl,
             }
         });
         console.log('Invoice updated to Paid status.');

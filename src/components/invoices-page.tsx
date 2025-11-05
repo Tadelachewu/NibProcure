@@ -573,14 +573,14 @@ export function InvoicesPage() {
       }
   }
 
-  const handlePayment = async (invoiceId: string) => {
+  const handlePayment = async (invoiceId: string, paymentEvidenceUrl: string) => {
     if (!user) return;
      setActiveAction(invoiceId);
      try {
         const response = await fetch(`/api/payments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ invoiceId, userId: user.id })
+            body: JSON.stringify({ invoiceId, userId: user.id, paymentEvidenceUrl })
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -697,27 +697,11 @@ export function InvoicesPage() {
                             </>
                         )}
                         {invoice.status === 'Approved_for_Payment' && (
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button size="sm" disabled={isActionLoading}>
-                                         {isActionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Banknote className="mr-2 h-4 w-4" />} Pay Invoice
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>Confirm Payment</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            This will simulate a payment for {invoice.totalAmount.toLocaleString()} ETB for invoice {invoice.id}. This action cannot be undone.
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handlePayment(invoice.id)}>
-                                            Confirm Payment
-                                        </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
+                            <PaymentDialog
+                                invoice={invoice}
+                                onConfirm={handlePayment}
+                                isLoading={isActionLoading}
+                             />
                         )}
                          {invoice.status === 'Paid' && invoice.paymentDate && (
                              <div className="flex items-center text-sm text-green-600">
@@ -754,3 +738,70 @@ export function InvoicesPage() {
     </>
   );
 }
+
+
+function PaymentDialog({ invoice, onConfirm, isLoading }: { invoice: Invoice, onConfirm: (invoiceId: string, evidenceUrl: string) => void, isLoading: boolean }) {
+    const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+    const { toast } = useToast();
+
+    const handleConfirm = async () => {
+        if (!evidenceFile) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please upload payment evidence.'});
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', evidenceFile);
+        formData.append('directory', 'payment-evidence');
+
+        try {
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || 'File upload failed');
+            }
+            
+            onConfirm(invoice.id, result.path);
+
+        } catch (error) {
+             toast({
+                variant: 'destructive',
+                title: 'Upload Failed',
+                description: error instanceof Error ? error.message : 'Could not upload payment evidence.',
+            });
+        }
+    };
+    
+    return (
+         <AlertDialog>
+            <AlertDialogTrigger asChild>
+                <Button size="sm" disabled={isLoading}>
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Banknote className="mr-2 h-4 w-4" />} Pay Invoice
+                </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Confirm Payment & Upload Evidence</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This will simulate a payment for {invoice.totalAmount.toLocaleString()} ETB for invoice {invoice.id}. Please upload proof of payment.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="payment-evidence">Payment Evidence Document (PDF/PNG/JPG)</Label>
+                    <Input id="payment-evidence" type="file" onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)} />
+                </div>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleConfirm} disabled={!evidenceFile || isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Confirm Payment
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    );
+}
+

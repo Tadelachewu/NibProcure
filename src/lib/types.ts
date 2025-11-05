@@ -349,6 +349,7 @@ export type Invoice = {
   documentUrl?: string;
   paymentDate?: Date;
   paymentReference?: string;
+  paymentEvidenceUrl?: string;
   po?: PurchaseOrder;
 };
 
