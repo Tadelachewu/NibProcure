@@ -1809,6 +1809,14 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
         return criteria?.find(c => c.id === criterionId)?.name || 'Unknown Criterion';
     }
 
+    const getItemName = (quoteItemId: string) => {
+        for (const quote of quotations) {
+            const item = quote.items.find(i => i.id === quoteItemId);
+            if (item) return item.name;
+        }
+        return 'Unknown Item';
+    }
+
     const handleGeneratePdf = async () => {
         const input = printRef.current;
         if (!input) return;
@@ -1911,32 +1919,40 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                         </div>
                                                     </div>
                                                     
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
-                                                        <div>
-                                                            <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
-                                                            {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'FINANCIAL').map(s => (
-                                                                <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
-                                                                    <div className="flex justify-between items-center font-medium">
-                                                                        <p>{getCriterionName(s.financialCriterionId!, 'FINANCIAL')}</p>
-                                                                        <p className="font-bold">{s.score}/100</p>
+                                                    <div className="space-y-4">
+                                                        {scoreSet.itemScores?.map(itemScore => (
+                                                            <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
+                                                                <h4 className="font-semibold text-sm mb-2 print:text-gray-800 border-b pb-1">Item: {getItemName(itemScore.quoteItemId)}</h4>
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 mt-2">
+                                                                    <div>
+                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-700">Financial ({requisition.evaluationCriteria?.financialWeight}%)</h5>
+                                                                        {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
+                                                                            <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                <div className="flex justify-between items-center font-medium">
+                                                                                    <p>{getCriterionName(s.financialCriterionId!, 'FINANCIAL')}</p>
+                                                                                    <p className="font-bold">{s.score}/100</p>
+                                                                                </div>
+                                                                                {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
-                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                </div>
-                                                            )))}
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
-                                                            {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'TECHNICAL').map(s => (
-                                                                <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
-                                                                    <div className="flex justify-between items-center font-medium">
-                                                                        <p>{getCriterionName(s.technicalCriterionId!, 'TECHNICAL')}</p>
-                                                                        <p className="font-bold">{s.score}/100</p>
+                                                                    <div>
+                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-700">Technical ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
+                                                                        {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
+                                                                            <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                <div className="flex justify-between items-center font-medium">
+                                                                                    <p>{getCriterionName(s.technicalCriterionId!, 'TECHNICAL')}</p>
+                                                                                    <p className="font-bold">{s.score}/100</p>
+                                                                                </div>
+                                                                                {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
-                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
                                                                 </div>
-                                                            )))}
-                                                        </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
+
 
                                                     {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
                                                 </div>
@@ -2936,3 +2952,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
+
+    
