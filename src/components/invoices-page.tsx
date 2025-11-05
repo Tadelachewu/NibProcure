@@ -48,6 +48,7 @@ import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Separator } from './ui/separator';
+import { Label } from './ui/label';
 
 
 const invoiceSchema = z.object({
@@ -804,4 +805,5 @@ function PaymentDialog({ invoice, onConfirm, isLoading }: { invoice: Invoice, on
         </AlertDialog>
     );
 }
+
 
