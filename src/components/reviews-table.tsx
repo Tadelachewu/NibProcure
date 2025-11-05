@@ -32,6 +32,7 @@ import {
   Users,
   X,
   FileText,
+  FileBarChart2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -50,6 +51,7 @@ import { Badge } from './ui/badge';
 import Link from 'next/link';
 import { ScrollArea } from './ui/scroll-area';
 import { Checkbox } from './ui/checkbox';
+import { CumulativeScoringReportDialog } from './quotations/[id]/page';
 
 
 const PAGE_SIZE = 10;
@@ -67,6 +69,7 @@ export function ReviewsTable() {
   const [attendees, setAttendees] = useState<string[]>([]);
   const [isActionDialogOpen, setActionDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
@@ -112,6 +115,11 @@ export function ReviewsTable() {
   const handleShowDetails = (req: PurchaseRequisition) => {
     setSelectedRequisition(req);
     setDetailsDialogOpen(true);
+  }
+
+   const handleShowReport = (req: PurchaseRequisition) => {
+    setSelectedRequisition(req);
+    setIsReportOpen(true);
   }
   
   const submitAction = async () => {
@@ -205,8 +213,17 @@ export function ReviewsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
-                  const isActionable = (req.currentApproverId === user?.id && req.status.startsWith('Pending')) || (req.status.startsWith('Pending_Committee') && (user?.committeeAssignments?.some(a => a.requisitionId === req.id))) || (req.status === 'PostApproved' && user?.role ==='Procurement_Officer');
                   
+                  let isActionable = false;
+                    if (user && req.status) {
+                        const requiredRole = req.status.replace('Pending_', '');
+                        if(user.role === requiredRole) {
+                            isActionable = true;
+                        } else if (req.currentApproverId === user.id) {
+                            isActionable = true;
+                        }
+                    }
+
                   return (
                     <TableRow key={req.id}>
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
@@ -220,10 +237,8 @@ export function ReviewsTable() {
                               <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
                                 <FileText className="mr-2 h-4 w-4" /> Summary
                               </Button>
-                              <Button variant="outline" size="sm" asChild>
-                                  <Link href={`/quotations/${req.id}`}>
-                                      <Eye className="mr-2 h-4 w-4" /> Review Bids
-                                  </Link>
+                               <Button variant="outline" size="sm" onClick={() => handleShowReport(req)}>
+                                  <FileBarChart2 className="mr-2 h-4 w-4" /> Review Bids
                               </Button>
                               <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={!isActionable || isLoadingAction}>
                                 {isLoadingAction && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4" />} 
@@ -305,6 +320,14 @@ export function ReviewsTable() {
             requisition={selectedRequisition} 
             isOpen={isDetailsDialogOpen} 
             onClose={() => setDetailsDialogOpen(false)} 
+        />
+    )}
+     {selectedRequisition && (
+        <CumulativeScoringReportDialog
+            requisition={selectedRequisition}
+            quotations={selectedRequisition.quotations || []}
+            isOpen={isReportOpen}
+            onClose={() => setIsReportOpen(false)}
         />
     )}
     </>
