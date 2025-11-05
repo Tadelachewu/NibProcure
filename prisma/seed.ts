@@ -23,6 +23,7 @@ async function main() {
   await prisma.quoteAnswer.deleteMany({});
   await prisma.itemScore.deleteMany({});
   await prisma.committeeScoreSet.deleteMany({});
+  await prisma.quoteItem.deleteMany({});
   await prisma.quotation.deleteMany({});
   await prisma.technicalCriterion.deleteMany({});
   await prisma.financialCriterion.deleteMany({});
@@ -42,6 +43,8 @@ async function main() {
   await prisma.user.deleteMany({});
   await prisma.department.deleteMany({});
   await prisma.role.deleteMany({});
+  await prisma.account.deleteMany({});
+  await prisma.session.deleteMany({});
   console.log('Existing data cleared.');
 
   console.log(`Start seeding ...`);
@@ -332,7 +335,7 @@ async function main() {
        const createdQuote = await prisma.quotation.create({
            data: {
                ...quoteData,
-               transactionId: requisition.transactionId, // Add the transactionId from the requisition
+               transactionId: requisition.transactionId!, // Correctly pass the transactionId
                status: quoteData.status.replace(/_/g, '_') as any,
                deliveryDate: new Date(quoteData.deliveryDate),
                createdAt: new Date(quoteData.createdAt),
