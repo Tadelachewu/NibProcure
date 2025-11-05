@@ -2239,6 +2239,204 @@ const NotifyVendorDialog = ({
     );
 };
 
+const ApprovalDashboard = ({ requisition, onAction }: { requisition: PurchaseRequisition; onAction: () => void }) => {
+    const { user, toast } = useAuth();
+    const [justification, setJustification] = useState('');
+    const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
+    const [isActionDialogOpen, setActionDialogOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    if (!user || !requisition) return null;
+
+    const winningQuotes = requisition.quotations?.filter(q => q.status === 'Pending_Award' || q.status === 'Awarded' || q.status === 'Accepted') || [];
+    const standbyQuotes = requisition.quotations?.filter(q => q.status === 'Standby').sort((a,b) => (a.rank || 99) - (b.rank || 99)) || [];
+
+    const handleOpenDialog = (type: 'approve' | 'reject') => {
+        setActionType(type);
+        setActionDialogOpen(true);
+    }
+    
+    const submitAction = async () => {
+        if (!requisition || !actionType || !user) return;
+    
+        if (!justification.trim()) {
+            toast({
+                variant: 'destructive',
+                title: 'Justification Required',
+                description: 'A justification for the decision is required for the minutes.',
+            });
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        const minute = {
+            decisionBody: requisition.status.replace(/_/g, ' '),
+            justification,
+            attendeeIds: [user.id],
+        }
+
+        try {
+            const response = await fetch(`/api/requisitions`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    id: requisition.id, 
+                    status: actionType === 'approve' ? 'Approved' : 'Rejected', 
+                    userId: user.id, 
+                    comment: justification,
+                    minute,
+                }),
+            });
+            if (!response.ok) throw new Error(`Failed to ${actionType} requisition award`);
+            toast({
+                title: "Success",
+                description: `Award for requisition ${requisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
+            });
+            onAction();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: "Error",
+                description: error instanceof Error ? error.message : "An unknown error occurred.",
+            });
+        } finally {
+            setIsSubmitting(false);
+            setActionDialogOpen(false);
+            setJustification('');
+            setActionType(null);
+        }
+    }
+
+    return (
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Approval Decision Dashboard</CardTitle>
+                    <CardDescription>Review the summary below and make your approval decision for requisition <span className="font-bold">{requisition.id}</span>.</CardDescription>
+                </CardHeader>
+                <CardFooter className="gap-4">
+                    <Button size="lg" onClick={() => handleOpenDialog('approve')} disabled={isSubmitting}>
+                        <Check className="mr-2"/>Approve Award
+                    </Button>
+                    <Button size="lg" variant="destructive" onClick={() => handleOpenDialog('reject')} disabled={isSubmitting}>
+                        <XCircle className="mr-2"/>Reject Award
+                    </Button>
+                </CardFooter>
+            </Card>
+
+            <div className="grid lg:grid-cols-3 gap-6 items-start">
+                <div className="lg:col-span-2 space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Award Recommendation</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                             <div className="flex justify-around p-4 bg-muted/50 rounded-lg text-center">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Winning Vendor(s)</p>
+                                    <p className="text-lg font-bold">{winningQuotes.map(q => q.vendorName).join(', ')}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Final Award Value</p>
+                                    <p className="text-lg font-bold">{requisition.totalPrice.toLocaleString()} ETB</p>
+                                </div>
+                            </div>
+                             <h4 className="font-semibold text-md">Bid Comparison</h4>
+                             <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Vendor</TableHead>
+                                        <TableHead>Final Score</TableHead>
+                                        <TableHead>Total Price</TableHead>
+                                        <TableHead>Status</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {winningQuotes.map(q => (
+                                        <TableRow key={q.id} className="bg-green-500/10">
+                                            <TableCell className="font-bold">{q.vendorName}</TableCell>
+                                            <TableCell>{q.finalAverageScore?.toFixed(2)}</TableCell>
+                                            <TableCell>{q.totalPrice.toLocaleString()} ETB</TableCell>
+                                            <TableCell><Badge variant="default">Winner</Badge></TableCell>
+                                        </TableRow>
+                                    ))}
+                                     {standbyQuotes.map(q => (
+                                        <TableRow key={q.id}>
+                                            <TableCell>{q.vendorName}</TableCell>
+                                            <TableCell>{q.finalAverageScore?.toFixed(2)}</TableCell>
+                                            <TableCell>{q.totalPrice.toLocaleString()} ETB</TableCell>
+                                            <TableCell><Badge variant="secondary">Standby (Rank {q.rank})</Badge></TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                             </Table>
+                        </CardContent>
+                    </Card>
+                </div>
+                 <div className="space-y-6">
+                    <Card>
+                        <CardHeader><CardTitle>Requisition Summary</CardTitle></CardHeader>
+                        <CardContent className="space-y-3 text-sm">
+                            <p><span className="font-semibold">Requester:</span> {requisition.requesterName}</p>
+                            <p><span className="font-semibold">Department:</span> {requisition.department}</p>
+                            <p><span className="font-semibold">Justification:</span> {requisition.justification}</p>
+                        </CardContent>
+                    </Card>
+                     <Card>
+                        <CardHeader><CardTitle>Requested Items</CardTitle></CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Item</TableHead>
+                                        <TableHead className="text-right">Qty</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {requisition.items.map(item => (
+                                         <TableRow key={item.id}>
+                                            <TableCell>
+                                                <p className="font-medium">{item.name}</p>
+                                                {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
+                                            </TableCell>
+                                            <TableCell className="text-right">{item.quantity}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+             <Dialog open={isActionDialogOpen} onOpenChange={setActionDialogOpen}>
+                <DialogContent className="sm:max-w-xl">
+                <DialogHeader>
+                    <DialogTitle>Record Minute for {actionType === 'approve' ? 'Approval' : 'Rejection'}</DialogTitle>
+                    <DialogDescription>Record the official minute for this decision. This is a formal record for auditing purposes.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="justification">Justification / Remarks</Label>
+                    <Textarea 
+                        id="justification" 
+                        value={justification}
+                        onChange={(e) => setJustification(e.target.value)}
+                        placeholder="Provide a detailed rationale for your decision..."
+                        rows={6}
+                    />
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => setActionDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={submitAction} variant={actionType === 'approve' ? 'default' : 'destructive'} disabled={isSubmitting}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                        Submit {actionType === 'approve' ? 'Approval' : 'Rejection'}
+                    </Button>
+                </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
 
 export default function QuotationDetailsPage() {
   const router = useRouter();
@@ -2382,18 +2580,23 @@ export default function QuotationDetailsPage() {
    const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
         
-        const quoteItemsById: { [key: string]: { price: number; quantity: number } } = {};
+        let totalAwardValue = 0;
+        const awardedQuoteItems: { [itemId: string]: { price: number, quantity: number } } = {};
+
         quotations.forEach(q => {
             q.items.forEach(i => {
-                quoteItemsById[i.id] = { price: i.unitPrice, quantity: i.quantity };
+                awardedQuoteItems[i.id] = { price: i.unitPrice, quantity: i.quantity };
             });
         });
 
-        const totalAwardValue = Object.values(awards).flatMap((a: any) => a.items)
-            .reduce((sum, item: any) => {
-                const quoteItem = quoteItemsById[item.quoteItemId];
-                return sum + (quoteItem ? quoteItem.price * quoteItem.quantity : 0);
-            }, 0);
+        Object.values(awards).forEach((award: any) => {
+            award.items.forEach((item: any) => {
+                const quoteItem = awardedQuoteItems[item.quoteItemId];
+                if (quoteItem) {
+                    totalAwardValue += quoteItem.price * quoteItem.quantity;
+                }
+            });
+        });
 
 
         setIsFinalizing(true);
@@ -2557,8 +2760,15 @@ export default function QuotationDetailsPage() {
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
-  const awardProcessStarted = isAwarded || requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
 
+  const isUserAnApproverForThis = 
+        (requisition.currentApproverId === user.id) || 
+        (requisition.status.startsWith('Pending_') && user.role === requisition.status.replace('Pending_', ''));
+  
+
+  if (isUserAnApproverForThis) {
+      return <ApprovalDashboard requisition={requisition} onAction={fetchRequisitionAndQuotes} />;
+  }
 
   return (
     <div className="space-y-6">

@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -26,6 +27,29 @@ export async function GET(
         financialCommitteeMembers: { select: { id: true, name: true, email: true } },
         technicalCommitteeMembers: { select: { id: true, name: true, email: true } },
         requester: true,
+        quotations: {
+          include: {
+            scores: {
+              include: {
+                scorer: true,
+                itemScores: {
+                  include: {
+                    scores: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        minutes: {
+          include: {
+            author: true,
+            attendees: true,
+          },
+           orderBy: {
+            createdAt: 'desc',
+          }
+        }
       }
     });
 
@@ -108,4 +132,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
 

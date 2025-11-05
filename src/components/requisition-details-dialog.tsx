@@ -16,6 +16,8 @@ import { Badge } from './ui/badge';
 import { format } from 'date-fns';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import React from 'react';
+
 
 interface RequisitionDetailsDialogProps {
   reuisition: PurchaseRequisition;
