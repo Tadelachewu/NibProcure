@@ -212,7 +212,7 @@ export function ManagerialApprovalsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
-                  const isActionable = req.currentApproverId === user?.id && req.status.startsWith('Pending');
+                  const isActionable = (req.currentApproverId === user?.id && req.status.startsWith('Pending')) || (req.status === 'PostApproved' && user?.role ==='Procurement_Officer');
                   
                   return (
                     <TableRow key={req.id}>

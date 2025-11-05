@@ -53,13 +53,7 @@ export async function GET(request: Request) {
             // Show items currently pending this manager's approval OR items they have already approved/rejected in this chain.
             whereClause.OR = [
                 { currentApproverId: userId },
-                { 
-                    reviews: { 
-                        some: { 
-                            userId: userId 
-                        } 
-                    } 
-                }
+                { reviews: { some: { userId: userId } } }
             ];
         }
 
