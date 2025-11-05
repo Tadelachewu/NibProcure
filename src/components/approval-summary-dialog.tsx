@@ -19,6 +19,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
+
 
 interface ApprovalSummaryDialogProps {
   requisition: PurchaseRequisition;
@@ -35,7 +37,37 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
   
   const winningVendor = winner?.vendorName || 'N/A';
 
-  const awardedItems = winner?.items.filter(item => requisition.awardedQuoteItemIds?.includes(item.id)) || [];
+  const isItemAwarded = (item: any, winningQuotes: Quotation[]) => {
+    if (!requisition.awardedQuoteItemIds) return false;
+    // Check if any of the awarded item IDs belong to this original requisition item
+    return requisition.awardedQuoteItemIds.some(awardedId => {
+        for (const quote of winningQuotes) {
+            if (!quote.items) continue; // Safety check
+            for (const quoteItem of quote.items) {
+                if (quoteItem.id === awardedId && quoteItem.requisitionItemId === item.id) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    });
+  };
+
+  const getWinningProposal = (item: any, winningQuotes: Quotation[]) => {
+      if (!requisition.awardedQuoteItemIds) return null;
+
+      for(const awardedId of requisition.awardedQuoteItemIds) {
+          for (const quote of winningQuotes) {
+              if (!quote.items) continue;
+              const foundItem = quote.items.find(quoteItem => quoteItem.id === awardedId && quoteItem.requisitionItemId === item.id);
+              if (foundItem) {
+                  return foundItem;
+              }
+          }
+      }
+      return null;
+  };
+
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -117,23 +149,29 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                                 <TableRow>
                                                     <TableHead>Item</TableHead>
                                                     <TableHead>Quantity</TableHead>
+                                                    <TableHead>Winning Vendor</TableHead>
                                                     <TableHead className="text-right">Unit Price</TableHead>
                                                     <TableHead className="text-right">Total</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {awardedItems.length > 0 ? (
-                                                    awardedItems.map(item => (
-                                                        <TableRow key={item.id}>
-                                                            <TableCell>{item.name}</TableCell>
-                                                            <TableCell>{item.quantity}</TableCell>
-                                                            <TableCell className="text-right">{item.unitPrice.toLocaleString()}</TableCell>
-                                                            <TableCell className="text-right">{(item.unitPrice * item.quantity).toLocaleString()}</TableCell>
-                                                        </TableRow>
-                                                    ))
+                                                {requisition.items.length > 0 ? (
+                                                    requisition.items.map(item => {
+                                                        const winningProposal = getWinningProposal(item, sortedQuotes);
+                                                        const vendorName = winningProposal ? sortedQuotes.find(q => q.items.some(qi => qi.id === winningProposal.id))?.vendorName : 'N/A';
+                                                        return (
+                                                            <TableRow key={item.id} className={isItemAwarded(item, sortedQuotes) ? "bg-green-500/5" : ""}>
+                                                                <TableCell>{item.name}</TableCell>
+                                                                <TableCell>{item.quantity}</TableCell>
+                                                                <TableCell>{vendorName}</TableCell>
+                                                                <TableCell className="text-right">{winningProposal ? winningProposal.unitPrice.toLocaleString() : 'N/A'}</TableCell>
+                                                                <TableCell className="text-right">{winningProposal ? (winningProposal.unitPrice * item.quantity).toLocaleString() : 'N/A'}</TableCell>
+                                                            </TableRow>
+                                                        )
+                                                    })
                                                 ) : (
                                                     <TableRow>
-                                                        <TableCell colSpan={4} className="h-24 text-center">No items in winning quote.</TableCell>
+                                                        <TableCell colSpan={5} className="h-24 text-center">No items in winning quote.</TableCell>
                                                     </TableRow>
                                                 )}
                                             </TableBody>
@@ -172,7 +210,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                                 <Badge variant="outline">{log.action.replace(/_/g, ' ')}</Badge>
                                                 <time className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}</time>
                                             </div>
-                                            <p className="mt-2 text-sm text-muted-foreground">{log.details}</p>
+                                            <p className="mt-2 text-sm text-muted-foreground">{log.details || log.approverComment}</p>
                                             <p className="mt-2 text-xs text-muted-foreground">
                                                 By <span className="font-semibold text-foreground">{log.user}</span> ({log.role})
                                             </p>
