@@ -45,7 +45,7 @@ import {
 } from './ui/dialog';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
-import { RequisitionDetailsDialog } from './requisition-details-dialog';
+import { ApprovalSummaryDialog } from './approval-summary-dialog';
 import { Badge } from './ui/badge';
 import Link from 'next/link';
 import { ScrollArea } from './ui/scroll-area';
@@ -124,10 +124,19 @@ export function ManagerialApprovalsTable() {
   const submitAction = async () => {
     if (!selectedRequisition || !actionType || !user) return;
     
+    if (!justification.trim()) {
+        toast({
+            variant: 'destructive',
+            title: 'Justification Required',
+            description: 'A justification for the decision is required for the minutes.',
+        });
+        return;
+    }
+
     setActiveActionId(selectedRequisition.id);
 
     const minute = {
-        decisionBody: user.role.replace(/_/g, ' '),
+        decisionBody: selectedRequisition.status.replace(/_/g, ' '),
         justification,
         attendeeIds: attendees,
     }
@@ -144,10 +153,10 @@ export function ManagerialApprovalsTable() {
             minute,
         }),
       });
-      if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
+      if (!response.ok) throw new Error(`Failed to ${actionType} requisition award`);
       toast({
         title: "Success",
-        description: `Requisition award for ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
+        description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       fetchRequisitions();
     } catch (error) {
@@ -241,7 +250,7 @@ export function ManagerialApprovalsTable() {
                       <Inbox className="h-16 w-16 text-muted-foreground/50" />
                       <div className="space-y-1">
                         <p className="font-semibold">All Caught Up!</p>
-                        <p className="text-muted-foreground">No items are currently pending your approval.</p>
+                        <p className="text-muted-foreground">No award recommendations are currently pending your review.</p>
                       </div>
                     </div>
                   </TableCell>
@@ -297,7 +306,7 @@ export function ManagerialApprovalsTable() {
       </Dialog>
     </Card>
     {selectedRequisition && (
-        <RequisitionDetailsDialog 
+        <ApprovalSummaryDialog
             requisition={selectedRequisition} 
             isOpen={isDetailsDialogOpen} 
             onClose={() => setDetailsDialogOpen(false)} 
