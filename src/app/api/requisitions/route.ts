@@ -79,12 +79,11 @@ export async function GET(request: Request) {
                     },
                 ]
             },
-            // Condition B: Vendor has an active relation to this req (Awarded, Accepted, etc.)
+            // Condition B: Vendor has submitted a quote, so they should always see it.
             {
                 quotations: {
                     some: {
-                        vendorId: userPayload.user.vendorId,
-                        status: { in: ['Awarded', 'Partially_Awarded', 'Accepted', 'Invoice_Submitted', 'Standby'] }
+                        vendorId: userPayload.user.vendorId
                     }
                 }
             }

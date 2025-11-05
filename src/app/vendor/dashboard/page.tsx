@@ -24,7 +24,7 @@ import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 9;
 
-type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby';
+type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed';
 
 const VendorStatusBadge = ({ status }: { status: RequisitionCardStatus }) => {
   const statusInfo: Record<RequisitionCardStatus, {text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline', className: string}> = {
@@ -33,6 +33,8 @@ const VendorStatusBadge = ({ status }: { status: RequisitionCardStatus }) => {
     'Accepted': { text: 'You Accepted', variant: 'default', className: 'bg-blue-600 hover:bg-blue-700' },
     'Invoice Submitted': { text: 'Invoice Submitted', variant: 'default', className: 'bg-purple-600 hover:bg-purple-700' },
     'Submitted': { text: 'Submitted', variant: 'secondary', className: '' },
+    'Processing': { text: 'Processing', variant: 'secondary', className: '' },
+    'Closed': { text: 'Closed', variant: 'outline', className: '' },
     'Not Awarded': { text: 'Not Awarded', variant: 'destructive', className: 'bg-gray-500 hover:bg-gray-600' },
     'Action Required': { text: 'Action Required', variant: 'default', className: '' },
     'Standby': { text: 'On Standby', variant: 'outline', className: 'border-amber-500 text-amber-600' },
@@ -47,8 +49,7 @@ const VendorStatusBadge = ({ status }: { status: RequisitionCardStatus }) => {
 export default function VendorDashboardPage() {
     const { token, user } = useAuth();
     const router = useRouter();
-    const [openRequisitions, setOpenRequisitions] = useState<PurchaseRequisition[]>([]);
-    const [awardedRequisitions, setAwardedRequisitions] = useState<PurchaseRequisition[]>([]);
+    const [allRequisitions, setAllRequisitions] = useState<PurchaseRequisition[]>([]);
     const [vendor, setVendor] = useState<Vendor | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -70,8 +71,7 @@ export default function VendorDashboardPage() {
 
                 // If vendor is not verified, don't fetch requisitions
                 if (currentVendor?.kycStatus !== 'Verified') {
-                    setOpenRequisitions([]);
-                    setAwardedRequisitions([]);
+                    setAllRequisitions([]);
                     return;
                 }
 
@@ -86,28 +86,8 @@ export default function VendorDashboardPage() {
                     }
                     throw new Error('Failed to fetch requisitions.');
                 }
-                const allRequisitions: PurchaseRequisition[] = await response.json();
-
-                const vendorAwards: PurchaseRequisition[] = [];
-                const availableForQuoting: PurchaseRequisition[] = [];
-                
-                const awardStatuses: Array<QuotationStatus> = ['Awarded', 'Partially_Awarded', 'Accepted', 'Invoice_Submitted', 'Standby'];
-
-                allRequisitions.forEach(req => {
-                    const vendorQuote = req.quotations?.find(
-                        (q: Quotation) => q.vendorId === user.vendorId
-                    );
-
-                    if (vendorQuote && awardStatuses.includes(vendorQuote.status)) {
-                        vendorAwards.push(req);
-                    } else if (req.status === 'Accepting_Quotes' && !vendorQuote) {
-                        // Only show requisitions for quoting if the vendor has NOT already submitted a quote.
-                        availableForQuoting.push(req);
-                    }
-                });
-
-                setAwardedRequisitions(vendorAwards.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
-                setOpenRequisitions(availableForQuoting);
+                const requisitionsData: PurchaseRequisition[] = await response.json();
+                setAllRequisitions(requisitionsData);
 
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -121,32 +101,61 @@ export default function VendorDashboardPage() {
 
     const getRequisitionCardStatus = (req: PurchaseRequisition): RequisitionCardStatus => {
         if (!user?.vendorId) return 'Action Required';
-
         const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
-        
-        if (vendorQuote) {
-          if (vendorQuote.status === 'Awarded') return 'Awarded';
-          if (vendorQuote.status === 'Partially_Awarded') return 'Partially Awarded';
-          if (vendorQuote.status === 'Accepted') return 'Accepted';
-          if (vendorQuote.status === 'Invoice_Submitted') return 'Invoice Submitted';
-          if (vendorQuote.status === 'Submitted') return 'Submitted';
-          if (vendorQuote.status === 'Standby') return 'Standby';
-        }
-        
-        const anAwardedQuote = req.quotations?.find(q => ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status));
-        if (anAwardedQuote && (!vendorQuote || vendorQuote.status === 'Rejected')) {
-            return 'Not Awarded';
-        }
 
+        if (vendorQuote) {
+            if (vendorQuote.status === 'Awarded') return 'Awarded';
+            if (vendorQuote.status === 'Partially_Awarded') return 'Partially Awarded';
+            if (vendorQuote.status === 'Accepted') return 'Accepted';
+            if (vendorQuote.status === 'Invoice_Submitted') return 'Invoice Submitted';
+            if (vendorQuote.status === 'Standby') return 'Standby';
+            
+            const isClosedOrFulfilled = req.status === 'Closed' || req.status === 'Fulfilled';
+            const wasAwardedToThisVendor = req.quotations?.some(q => q.vendorId === user.vendorId && (q.status === 'Accepted' || q.status === 'Awarded' || q.status === 'Partially_Awarded'));
+
+            if (isClosedOrFulfilled && wasAwardedToThisVendor) {
+                return 'Closed';
+            }
+            if (vendorQuote.status === 'Submitted') {
+                const isAnyQuoteAwarded = req.quotations?.some(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Partially_Awarded');
+                if (isAnyQuoteAwarded) return 'Not Awarded';
+                return 'Submitted';
+            }
+            
+            return 'Processing'; // Default for other statuses like Rejected, Declined, Failed
+        }
+        
+        // This case should not happen if the API is correct, but as a fallback
         return 'Action Required';
     }
 
 
-    const totalPages = Math.ceil(openRequisitions.length / PAGE_SIZE);
+    const { activeRequisitions, openForQuoting } = useMemo(() => {
+        const active: PurchaseRequisition[] = [];
+        const open: PurchaseRequisition[] = [];
+
+        allRequisitions.forEach(req => {
+            const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
+            if (vendorQuote) {
+                active.push(req);
+            } else {
+                open.push(req);
+            }
+        });
+        
+        return { 
+            activeRequisitions: active.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+            openForQuoting: open,
+        };
+
+    }, [allRequisitions, user]);
+
+
+    const totalPages = Math.ceil(openForQuoting.length / PAGE_SIZE);
     const paginatedData = useMemo(() => {
         const startIndex = (currentPage - 1) * PAGE_SIZE;
-        return openRequisitions.slice(startIndex, startIndex + PAGE_SIZE);
-    }, [openRequisitions, currentPage]);
+        return openForQuoting.slice(startIndex, startIndex + PAGE_SIZE);
+    }, [openForQuoting, currentPage]);
 
 
     return (
@@ -183,21 +192,21 @@ export default function VendorDashboardPage() {
 
                     {vendor?.kycStatus === 'Verified' && (
                         <>
-                            {awardedRequisitions.length > 0 && (
+                            {activeRequisitions.length > 0 && (
                                 <div className="space-y-4">
                                     <Alert className="border-primary/50 text-primary">
                                         <Award className="h-5 w-5 !text-primary" />
                                         <AlertTitle className="text-xl font-bold">Your Active Requisitions</AlertTitle>
                                         <AlertDescription className="text-primary/90">
-                                            These are requisitions where you are awarded, on standby, or have submitted a quote.
+                                            This includes requisitions you have quoted on, been awarded, or are on standby for.
                                         </AlertDescription>
                                     </Alert>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {awardedRequisitions.map(req => {
-                                            const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
+                                        {activeRequisitions.map(req => {
+                                            const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
                                             const status = getRequisitionCardStatus(req);
                                             const isExpired = req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline)) && (status === 'Awarded' || status === 'Partially Awarded');
-                                            const isActionable = status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted';
+                                            const isActionable = status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted' || status === 'Invoice Submitted';
                                             return (
                                                 <Card key={req.id} className={cn("relative flex flex-col", (status === 'Awarded' || status === 'Partially Awarded') && "border-primary ring-2 ring-primary/50 bg-primary/5", isExpired && "opacity-60")}>
                                                     <VendorStatusBadge status={status} />
@@ -282,7 +291,7 @@ export default function VendorDashboardPage() {
                                     <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-lg bg-muted/30">
                                         <ShoppingCart className="h-16 w-16 text-muted-foreground/50" />
                                         <h3 className="mt-6 text-xl font-semibold">No Open Requisitions</h3>
-                                        <p className="mt-2 text-sm text-muted-foreground">There are no requisitions currently available for quotation.</p>
+                                        <p className="mt-2 text-sm text-muted-foreground">There are no new requisitions currently available for quotation.</p>
                                     </div>
                                 )}
 
