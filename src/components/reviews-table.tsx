@@ -84,7 +84,7 @@ export function ReviewsTable() {
     try {
       setLoading(true);
       // Use forReview=true to fetch all items in any review state relevant to the user
-      const response = await fetch(`/api/requisitions?forReview=true`, {
+      const response = await fetch(`/api/reviews`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for review');
