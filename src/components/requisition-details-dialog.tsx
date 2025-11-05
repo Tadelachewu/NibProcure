@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { PurchaseRequisition } from '@/lib/types';
@@ -43,7 +42,7 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div><p className="font-medium">Title</p><p className="text-muted-foreground">{requisition.title}</p></div>
                         <div><p className="font-medium">Department</p><p className="text-muted-foreground">{requisition.department}</p></div>
-                        <div><p className="font-medium">Created</p><p className="text-muted-foreground">{format(new Date(requisition.createdAt), 'PP')}</p></div>
+                        <div><p className="font-medium">Created</p><p className="text-muted-foreground">{requisition.createdAt ? format(new Date(requisition.createdAt), 'PP') : 'N/A'}</p></div>
                         <div><p className="font-medium">Status</p><div><Badge>{requisition.status.replace(/_/g, ' ')}</Badge></div></div>
                         <div><p className="font-medium">Urgency</p><div><Badge variant={requisition.urgency === 'High' || requisition.urgency === 'Critical' ? 'destructive' : 'secondary'}>{requisition.urgency}</Badge></div></div>
                          {requisition.deadline && (
