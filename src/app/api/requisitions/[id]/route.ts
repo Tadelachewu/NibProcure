@@ -51,20 +51,18 @@ export async function GET(
             createdAt: 'desc',
           }
         },
-        auditLog: {
-          include: {
-            user: true,
-          },
-          orderBy: {
-            timestamp: 'desc'
-          }
-        }
       }
     });
 
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
+
+    const auditTrail = await prisma.auditLog.findMany({
+        where: { transactionId: requisition.transactionId },
+        include: { user: true },
+        orderBy: { timestamp: 'desc' }
+    });
     
     // Formatting data to match client-side expectations
     const formatted = {
@@ -73,7 +71,7 @@ export async function GET(
         requesterName: requisition.requester.name || 'Unknown',
         financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
         technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
-        auditTrail: requisition.auditLog.map(log => ({ // Add this mapping
+        auditTrail: auditTrail.map(log => ({ // Add this mapping
           ...log,
           user: log.user?.name || 'System',
           role: log.user?.role.replace(/_/g, ' ') || 'System',
@@ -146,6 +144,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
 
 
 
