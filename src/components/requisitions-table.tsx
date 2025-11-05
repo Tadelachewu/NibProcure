@@ -434,7 +434,7 @@ export function RequisitionsTable() {
         <RequisitionDetailsDialog
             isOpen={isDetailsOpen}
             onClose={() => setIsDetailsOpen(false)}
-            reuisition={selectedRequisition}
+            requisition={selectedRequisition}
         />
     )}
     </>
