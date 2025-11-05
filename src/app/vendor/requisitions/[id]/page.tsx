@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -924,10 +923,7 @@ export default function VendorRequisitionPage() {
                             <h3 className="font-semibold text-sm">Title</h3>
                             <p className="text-muted-foreground">{requisition.title}</p>
                         </div>
-                        <div>
-                            <h3 className="font-semibold text-sm">Justification</h3>
-                            <p className="text-muted-foreground">{requisition.justification}</p>
-                        </div>
+                        
                         <Separator />
                         <div>
                             <h3 className="font-semibold text-sm mb-2">Items Requested</h3>
