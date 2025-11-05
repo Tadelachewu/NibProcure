@@ -242,10 +242,10 @@ export default function VendorDashboardPage() {
                                     )}
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed rounded-lg bg-muted/30">
-                                        <ShoppingCart className="h-16 w-16 text-muted-foreground/50" />
-                                        <h3 className="mt-6 text-xl font-semibold">No Open Requisitions</h3>
-                                        <p className="mt-2 text-sm text-muted-foreground">There are no new requisitions currently available for quotation.</p>
+                                    <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-lg bg-muted/30">
+                                        <ShoppingCart className="h-12 w-12 text-muted-foreground/50" />
+                                        <h3 className="mt-4 text-lg font-semibold">No Open Requisitions</h3>
+                                        <p className="mt-1 text-sm text-muted-foreground">There are no new requisitions currently available for quotation.</p>
                                     </div>
                                 )}
 
