@@ -29,6 +29,7 @@ export async function GET(
         requester: true,
         quotations: {
           include: {
+            vendor: true,
             scores: {
               include: {
                 scorer: true,
@@ -49,6 +50,14 @@ export async function GET(
            orderBy: {
             createdAt: 'desc',
           }
+        },
+        auditLog: {
+          include: {
+            user: true,
+          },
+          orderBy: {
+            timestamp: 'desc'
+          }
         }
       }
     });
@@ -64,6 +73,11 @@ export async function GET(
         requesterName: requisition.requester.name || 'Unknown',
         financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
         technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
+        auditTrail: requisition.auditLog.map(log => ({ // Add this mapping
+          ...log,
+          user: log.user?.name || 'System',
+          role: log.user?.role.replace(/_/g, ' ') || 'System',
+        }))
     };
 
     return NextResponse.json(formatted);
@@ -132,5 +146,6 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
 
 

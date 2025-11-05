@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { PurchaseRequisition } from '@/lib/types';
@@ -65,7 +66,7 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                                   requisition.items.map(item => (
                                      <React.Fragment key={item.id}>
                                         <TableRow>
-                                            <TableCell>{item.name}</TableCell>
+                                            <TableCell className="font-medium">{item.name}</TableCell>
                                             <TableCell className="text-right">{item.quantity}</TableCell>
                                         </TableRow>
                                         {item.description && (

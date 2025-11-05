@@ -37,7 +37,7 @@ import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem } from '@/lib/types';
+import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem, AuditLog } from '@/lib/types';
 import { format, formatDistanceToNow, isBefore, isPast, setHours, setMinutes } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -2239,7 +2239,7 @@ const NotifyVendorDialog = ({
     );
 };
 
-const ApprovalDashboard = ({ requisition, onAction }: { requisition: PurchaseRequisition; onAction: () => void }) => {
+const ApprovalDashboard = ({ requisition, onAction, onOpenReport }: { requisition: PurchaseRequisition; onAction: () => void; onOpenReport: () => void; }) => {
     const { user, toast } = useAuth();
     const [justification, setJustification] = useState('');
     const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
@@ -2329,7 +2329,10 @@ const ApprovalDashboard = ({ requisition, onAction }: { requisition: PurchaseReq
                 <div className="lg:col-span-2 space-y-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Award Recommendation</CardTitle>
+                             <div className="flex justify-between items-center">
+                                <CardTitle>Award Recommendation</CardTitle>
+                                <Button variant="secondary" size="sm" onClick={onOpenReport}><FileBarChart2 className="mr-2"/>View Scoring Report</Button>
+                            </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
                              <div className="flex justify-around p-4 bg-muted/50 rounded-lg text-center">
@@ -2386,7 +2389,7 @@ const ApprovalDashboard = ({ requisition, onAction }: { requisition: PurchaseReq
                      <Card>
                         <CardHeader><CardTitle>Requested Items</CardTitle></CardHeader>
                         <CardContent>
-                            <Table>
+                             <Table>
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Item</TableHead>
@@ -2395,7 +2398,7 @@ const ApprovalDashboard = ({ requisition, onAction }: { requisition: PurchaseReq
                                 </TableHeader>
                                 <TableBody>
                                     {requisition.items.map(item => (
-                                         <TableRow key={item.id}>
+                                        <TableRow key={item.id}>
                                             <TableCell>
                                                 <p className="font-medium">{item.name}</p>
                                                 {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
@@ -2407,6 +2410,27 @@ const ApprovalDashboard = ({ requisition, onAction }: { requisition: PurchaseReq
                             </Table>
                         </CardContent>
                     </Card>
+                    {requisition.auditTrail && requisition.auditTrail.length > 0 && (
+                        <Card>
+                            <CardHeader><CardTitle>Approval History</CardTitle></CardHeader>
+                            <CardContent>
+                                <ScrollArea className="h-48">
+                                <div className="relative pl-6">
+                                    <div className="absolute left-3 top-0 h-full w-px bg-border"></div>
+                                    {requisition.auditTrail.filter(log => log.action.includes('APPROVE') || log.action.includes('REJECT') || log.action.includes('SUBMIT')).map(log => (
+                                        <div key={log.id} className="relative mb-4">
+                                            <div className="absolute -left-1.5 top-1.5 h-3 w-3 rounded-full bg-primary"></div>
+                                            <div className="pl-4">
+                                                <p className="text-sm font-semibold">{log.action.replace(/_/g, ' ')}</p>
+                                                <p className="text-xs text-muted-foreground">by {log.user} on {format(new Date(log.timestamp), 'PP')}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                </ScrollArea>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </div>
              <Dialog open={isActionDialogOpen} onOpenChange={setActionDialogOpen}>
@@ -2767,7 +2791,7 @@ export default function QuotationDetailsPage() {
   
 
   if (isUserAnApproverForThis) {
-      return <ApprovalDashboard requisition={requisition} onAction={fetchRequisitionAndQuotes} />;
+      return <ApprovalDashboard requisition={requisition} onAction={fetchRequisitionAndQuotes} onOpenReport={() => setReportOpen(true)} />;
   }
 
   return (
@@ -3025,7 +3049,7 @@ export default function QuotationDetailsPage() {
         )}
          {requisition && (
             <RequisitionDetailsDialog 
-                reuisition={requisition} 
+                requisition={requisition} 
                 isOpen={isDetailsOpen} 
                 onClose={() => setIsDetailsOpen(false)} 
             />
@@ -3143,3 +3167,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
+
