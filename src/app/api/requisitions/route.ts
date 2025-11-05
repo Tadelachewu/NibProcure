@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
             whereClause.status = { in: allReviewStatuses };
         } else if (isManagerialRole) {
             // Corrected Logic: Fetch items pending the user's approval OR items they have already approved/rejected.
-            whereClause.OR = [
+             whereClause.OR = [
                 { currentApproverId: userId },
                 { approverId: userId }
             ];
@@ -399,7 +400,7 @@ export async function PATCH(
                 // Also create a "Review" record to track this specific approval action
                 await tx.review.create({
                     data: {
-                        requisitionId: id,
+                        requisition: { connect: { id: id } },
                         userId,
                         decision: 'APPROVED',
                         comments: comment,
