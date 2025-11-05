@@ -26,26 +26,59 @@ export async function GET(
         financialCommitteeMembers: { select: { id: true, name: true, email: true } },
         technicalCommitteeMembers: { select: { id: true, name: true, email: true } },
         requester: true,
+        quotations: {
+          include: {
+            vendor: true,
+            scores: {
+              include: {
+                scorer: true,
+                itemScores: {
+                  include: {
+                    scores: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        minutes: {
+            include: {
+                author: true,
+                attendees: true
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        },
       }
     });
 
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
+
+    // Separate query for audit logs using transactionId
+    const auditLog = await prisma.auditLog.findMany({
+        where: { transactionId: requisition.transactionId },
+        include: { user: true },
+        orderBy: { timestamp: 'desc' }
+    });
     
     // Formatting data to match client-side expectations
     const formatted = {
         ...requisition,
+        status: requisition.status.replace(/_/g, ' '),
         requesterName: requisition.requester.name || 'Unknown',
         financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
         technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
+        auditLog: auditLog.map(log => ({...log, user: log.user.name, role: log.user.role})),
     };
 
     return NextResponse.json(formatted);
   } catch (error) {
      console.error('Failed to fetch requisition:', error);
      if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
@@ -107,4 +140,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-

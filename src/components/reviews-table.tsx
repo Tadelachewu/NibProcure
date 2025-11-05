@@ -49,6 +49,7 @@ import { Badge } from './ui/badge';
 import Link from 'next/link';
 import { ScrollArea } from './ui/scroll-area';
 import { Checkbox } from './ui/checkbox';
+import { useRouter } from 'next/navigation';
 
 
 const PAGE_SIZE = 10;
@@ -59,6 +60,7 @@ export function ReviewsTable() {
   const [error, setError] = useState<string | null>(null);
   const { user, token, allUsers } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
@@ -205,7 +207,7 @@ export function ReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   return (
-                    <TableRow key={req.id}>
+                    <TableRow key={req.id} className="cursor-pointer" onClick={() => router.push(`/reviews/${req.id}`)}>
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                         <TableCell className="font-medium text-primary">{req.id}</TableCell>
                         <TableCell>{req.title}</TableCell>
@@ -213,21 +215,9 @@ export function ReviewsTable() {
                         <TableCell><Badge variant="secondary">{req.status.replace(/_/g, ' ')}</Badge></TableCell>
                         <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
                         <TableCell>
-                        <div className="flex gap-2">
-                              <Button variant="outline" size="sm" asChild>
-                                  <Link href={`/quotations/${req.id}`}>
-                                      <Eye className="mr-2 h-4 w-4" /> Review Bids
-                                  </Link>
-                              </Button>
-                              <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={isLoadingAction}>
-                                {isLoadingAction && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4" />} 
-                                Approve
-                            </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={isLoadingAction}>
-                                {isLoadingAction && actionType === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className="mr-2 h-4 w-4" />} 
-                                Reject
-                            </Button>
-                        </div>
+                          <Button variant="outline" size="sm">
+                            <Eye className="mr-2 h-4 w-4" /> Review
+                          </Button>
                         </TableCell>
                     </TableRow>
                   )
