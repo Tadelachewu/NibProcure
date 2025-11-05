@@ -120,6 +120,7 @@ export async function GET(request: Request) {
       include: {
         requester: true,
         department: true,
+        approver: true,
         quotations: {
           select: {
             id: true,
@@ -163,7 +164,6 @@ export async function GET(request: Request) {
       },
     });
     
-    // Fetch all audit logs in a separate query
     const transactionIds = requisitions.map(r => r.transactionId).filter(Boolean) as string[];
     const auditLogs = await prisma.auditLog.findMany({
       where: {
@@ -177,7 +177,6 @@ export async function GET(request: Request) {
       }
     });
 
-    // Group logs by transactionId for efficient lookup
     const logsByTransaction = new Map<string, any[]>();
     auditLogs.forEach(log => {
       if (log.transactionId) {
@@ -194,7 +193,7 @@ export async function GET(request: Request) {
 
     const formattedRequisitions = requisitions.map(req => ({
         ...req,
-        requesterName: req.requester.name,
+        requesterName: req.requester?.name || 'Unknown',
         department: req.department?.name || 'N/A',
         auditTrail: logsByTransaction.get(req.transactionId!) || [],
     }));
@@ -597,3 +596,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
