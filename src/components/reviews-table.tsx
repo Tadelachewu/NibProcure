@@ -31,6 +31,7 @@ import {
   Loader2,
   Users,
   X,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -44,7 +45,7 @@ import {
 } from './ui/dialog';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
-import { RequisitionDetailsDialog } from './requisition-details-dialog';
+import { ApprovalSummaryDialog } from './approval-summary-dialog';
 import { Badge } from './ui/badge';
 import Link from 'next/link';
 import { ScrollArea } from './ui/scroll-area';
@@ -204,6 +205,8 @@ export function ReviewsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
+                  const isActionable = (req.currentApproverId === user?.id && req.status.startsWith('Pending')) || (req.status.startsWith('Pending_Committee') && (user?.committeeAssignments?.some(a => a.requisitionId === req.id))) || (req.status === 'PostApproved' && user?.role ==='Procurement_Officer');
+                  
                   return (
                     <TableRow key={req.id}>
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
@@ -214,16 +217,19 @@ export function ReviewsTable() {
                         <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
                         <TableCell>
                         <div className="flex gap-2">
+                              <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
+                                <FileText className="mr-2 h-4 w-4" /> Summary
+                              </Button>
                               <Button variant="outline" size="sm" asChild>
                                   <Link href={`/quotations/${req.id}`}>
                                       <Eye className="mr-2 h-4 w-4" /> Review Bids
                                   </Link>
                               </Button>
-                              <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={isLoadingAction}>
+                              <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={!isActionable || isLoadingAction}>
                                 {isLoadingAction && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4" />} 
                                 Approve
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={isLoadingAction}>
+                            <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={!isActionable || isLoadingAction}>
                                 {isLoadingAction && actionType === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className="mr-2 h-4 w-4" />} 
                                 Reject
                             </Button>
@@ -295,8 +301,8 @@ export function ReviewsTable() {
       </Dialog>
     </Card>
     {selectedRequisition && (
-        <RequisitionDetailsDialog 
-            reuisition={selectedRequisition} 
+        <ApprovalSummaryDialog
+            requisition={selectedRequisition} 
             isOpen={isDetailsDialogOpen} 
             onClose={() => setDetailsDialogOpen(false)} 
         />
