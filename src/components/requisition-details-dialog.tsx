@@ -20,33 +20,33 @@ import React from 'react';
 
 
 interface RequisitionDetailsDialogProps {
-  reuisition: PurchaseRequisition;
+  requisition: PurchaseRequisition;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function RequisitionDetailsDialog({ reuisition, isOpen, onClose }: RequisitionDetailsDialogProps) {
-  if (!reuisition) return null;
+export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: RequisitionDetailsDialogProps) {
+  if (!requisition) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-2xl">
             <DialogHeader>
-            <DialogTitle>Details for Requisition: {reuisition.id}</DialogTitle>
+            <DialogTitle>Details for Requisition: {requisition.id}</DialogTitle>
             <DialogDescription>
-                A read-only view of the requisition submitted by {reuisition.requesterName}.
+                A read-only view of the requisition submitted by {requisition.requesterName}.
             </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[70vh] pr-4">
                 <div className="space-y-4 py-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div><p className="font-medium">Title</p><p className="text-muted-foreground">{reuisition.title}</p></div>
-                        <div><p className="font-medium">Department</p><p className="text-muted-foreground">{reuisition.department}</p></div>
-                        <div><p className="font-medium">Created</p><p className="text-muted-foreground">{format(new Date(reuisition.createdAt), 'PP')}</p></div>
-                        <div><p className="font-medium">Status</p><div><Badge>{reuisition.status.replace(/_/g, ' ')}</Badge></div></div>
-                        <div><p className="font-medium">Urgency</p><div><Badge variant={reuisition.urgency === 'High' || reuisition.urgency === 'Critical' ? 'destructive' : 'secondary'}>{reuisition.urgency}</Badge></div></div>
-                         {reuisition.deadline && (
-                            <div className="md:col-span-2"><p className="font-medium">Quotation Deadline</p><p className="text-muted-foreground">{format(new Date(reuisition.deadline), 'PPpp')}</p></div>
+                        <div><p className="font-medium">Title</p><p className="text-muted-foreground">{requisition.title}</p></div>
+                        <div><p className="font-medium">Department</p><p className="text-muted-foreground">{requisition.department}</p></div>
+                        <div><p className="font-medium">Created</p><p className="text-muted-foreground">{format(new Date(requisition.createdAt), 'PP')}</p></div>
+                        <div><p className="font-medium">Status</p><div><Badge>{requisition.status.replace(/_/g, ' ')}</Badge></div></div>
+                        <div><p className="font-medium">Urgency</p><div><Badge variant={requisition.urgency === 'High' || requisition.urgency === 'Critical' ? 'destructive' : 'secondary'}>{requisition.urgency}</Badge></div></div>
+                         {requisition.deadline && (
+                            <div className="md:col-span-2"><p className="font-medium">Quotation Deadline</p><p className="text-muted-foreground">{format(new Date(requisition.deadline), 'PPpp')}</p></div>
                          )}
                     </div>
                     <Separator />
@@ -61,8 +61,8 @@ export function RequisitionDetailsDialog({ reuisition, isOpen, onClose }: Requis
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {reuisition.items && reuisition.items.length > 0 ? (
-                                  reuisition.items.map(item => (
+                                {requisition.items && requisition.items.length > 0 ? (
+                                  requisition.items.map(item => (
                                      <React.Fragment key={item.id}>
                                         <TableRow>
                                             <TableCell>{item.name}</TableCell>
@@ -88,21 +88,21 @@ export function RequisitionDetailsDialog({ reuisition, isOpen, onClose }: Requis
                     </div>
                     <div>
                         <h4 className="font-medium mb-2">Justification</h4>
-                        <p className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md">{reuisition.justification}</p>
+                        <p className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md">{requisition.justification}</p>
                     </div>
 
-                    {reuisition.customQuestions && reuisition.customQuestions.length > 0 && (
+                    {requisition.customQuestions && requisition.customQuestions.length > 0 && (
                         <>
                             <Separator />
                             <div>
                                 <h4 className="font-medium mb-2">Custom Questions for Vendors</h4>
                                 <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground">
-                                    {reuisition.customQuestions.map(q => <li key={q.id}>{q.questionText}</li>)}
+                                    {requisition.customQuestions.map(q => <li key={q.id}>{q.questionText}</li>)}
                                 </ul>
                             </div>
                         </>
                     )}
-                    {reuisition.evaluationCriteria && (
+                    {requisition.evaluationCriteria && (
                         <>
                             <Separator />
                             <div>
@@ -110,11 +110,11 @@ export function RequisitionDetailsDialog({ reuisition, isOpen, onClose }: Requis
                                 <div className="text-sm space-y-4">
                                     <div className="flex justify-around p-2 bg-muted/50 rounded-md">
                                         <div className="text-center">
-                                            <p className="font-semibold">{reuisition.evaluationCriteria.financialWeight}%</p>
+                                            <p className="font-semibold">{requisition.evaluationCriteria.financialWeight}%</p>
                                             <p className="text-muted-foreground">Financial Weight</p>
                                         </div>
                                         <div className="text-center">
-                                            <p className="font-semibold">{reuisition.evaluationCriteria.technicalWeight}%</p>
+                                            <p className="font-semibold">{requisition.evaluationCriteria.technicalWeight}%</p>
                                             <p className="text-muted-foreground">Technical Weight</p>
                                         </div>
                                     </div>
@@ -122,13 +122,13 @@ export function RequisitionDetailsDialog({ reuisition, isOpen, onClose }: Requis
                                         <div>
                                             <h5 className="font-semibold mb-1">Financial Criteria</h5>
                                             <ul className="list-disc pl-5 text-muted-foreground">
-                                                {reuisition.evaluationCriteria.financialCriteria.map(c => <li key={c.id}>{c.name} ({c.weight}%)</li>)}
+                                                {requisition.evaluationCriteria.financialCriteria.map(c => <li key={c.id}>{c.name} ({c.weight}%)</li>)}
                                             </ul>
                                         </div>
                                         <div>
                                             <h5 className="font-semibold mb-1">Technical Criteria</h5>
                                             <ul className="list-disc pl-5 text-muted-foreground">
-                                                {reuisition.evaluationCriteria.technicalCriteria.map(c => <li key={c.id}>{c.name} ({c.weight}%)</li>)}
+                                                {requisition.evaluationCriteria.technicalCriteria.map(c => <li key={c.id}>{c.name} ({c.weight}%)</li>)}
                                             </ul>
                                         </div>
                                     </div>
