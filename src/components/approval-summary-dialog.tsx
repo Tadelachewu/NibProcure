@@ -1,7 +1,7 @@
 
 'use client';
 
-import { AuditLog as AuditLogType, PurchaseRequisition, Quotation } from '@/lib/types';
+import { AuditLog as AuditLogType, Minute, PurchaseRequisition, Quotation } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -35,205 +35,192 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
   
   const winningVendor = winner?.vendorName || 'N/A';
 
-  const isAwardedItem = (item: any) => {
-    if (!requisition.awardedQuoteItemIds || requisition.awardedQuoteItemIds.length === 0) return false;
-    const winningQuotes = requisition.quotations?.filter(q => q.status === 'Pending_Award' || q.status === 'Awarded' || q.status === 'Accepted') || [];
-    
-    return requisition.awardedQuoteItemIds?.some(awardedId => {
-        for (const quote of winningQuotes) {
-            // Make sure quote.items is iterable
-            if (quote.items && Array.isArray(quote.items)) {
-                for (const quoteItem of quote.items) {
-                    if (quoteItem.id === awardedId && quoteItem.requisitionItemId === item.id) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    });
-  }
-
   const awardedItems = winner?.items.filter(item => requisition.awardedQuoteItemIds?.includes(item.id)) || [];
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
             <DialogHeader>
                 <DialogTitle>Approval Summary: {requisition.id}</DialogTitle>
                 <DialogDescription>
                     Executive brief for the award recommendation on: <span className="font-semibold">{requisition.title}</span>
                 </DialogDescription>
             </DialogHeader>
-            <Tabs defaultValue="summary" className="min-h-[60vh]">
-                <TabsList>
-                    <TabsTrigger value="summary">Summary</TabsTrigger>
-                    <TabsTrigger value="history">Workflow History</TabsTrigger>
-                    <TabsTrigger value="minutes">Minutes</TabsTrigger>
-                </TabsList>
-                <TabsContent value="summary" className="mt-4">
-                    <ScrollArea className="max-h-[65vh] pr-4">
-                        <div className="space-y-4 py-4">
-                            {/* Financial Impact */}
-                            <div className="space-y-2">
-                                <h4 className="font-semibold text-lg">Financial Overview</h4>
-                                <div className="p-4 bg-muted/50 rounded-md grid grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">Total Award Value</p>
-                                        <p className="text-2xl font-bold">{requisition.totalPrice.toLocaleString()} ETB</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">Winning Vendor(s)</p>
-                                        <p className="text-lg font-semibold">{winningVendor}</p>
+            <div className="flex-1 overflow-hidden">
+                <Tabs defaultValue="summary" className="h-full flex flex-col">
+                    <TabsList>
+                        <TabsTrigger value="summary">Summary</TabsTrigger>
+                        <TabsTrigger value="history">Workflow History</TabsTrigger>
+                        <TabsTrigger value="minutes">Minutes</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="summary" className="mt-4 flex-1 overflow-hidden">
+                        <ScrollArea className="h-full pr-4">
+                            <div className="space-y-4 py-4">
+                                {/* Financial Impact */}
+                                <div className="space-y-2">
+                                    <h4 className="font-semibold text-lg">Financial Overview</h4>
+                                    <div className="p-4 bg-muted/50 rounded-md grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Total Award Value</p>
+                                            <p className="text-2xl font-bold">{requisition.totalPrice.toLocaleString()} ETB</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Winning Vendor(s)</p>
+                                            <p className="text-lg font-semibold">{winningVendor}</p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <Separator />
-                            {/* Award Details */}
-                            <div>
-                                <h4 className="font-semibold text-lg mb-2">Vendor Comparison</h4>
-                                <div className="border rounded-md">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Rank</TableHead>
-                                            <TableHead>Vendor</TableHead>
-                                            <TableHead className="text-right">Final Score</TableHead>
-                                            <TableHead className="text-right">Total Price</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {topThree.length > 0 ? (
-                                            topThree.map((quote, index) => (
-                                            <TableRow key={quote.id} className={index === 0 ? 'bg-green-500/10' : ''}>
-                                                <TableCell className="font-bold">{index + 1}</TableCell>
-                                                <TableCell>{quote.vendorName}</TableCell>
-                                                <TableCell className="text-right font-mono">{quote.finalAverageScore?.toFixed(2) || 'N/A'}</TableCell>
-                                                <TableCell className="text-right font-mono">{quote.totalPrice.toLocaleString()} ETB</TableCell>
-                                            </TableRow>
-                                            ))
-                                        ) : (
-                                            <TableRow>
-                                                <TableCell colSpan={4} className="text-center h-24">No quotations found.</TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-2">
-                                    The winner is recommended based on the combined evaluation criteria: 
-                                    <strong> {requisition.evaluationCriteria?.financialWeight}% Financial</strong> and 
-                                    <strong> {requisition.evaluationCriteria?.technicalWeight}% Technical</strong>.
-                                </p>
-                            </div>
-                             <Separator />
-                              <div>
-                                <h4 className="font-semibold text-lg mb-2">Awarded Items</h4>
-                                 <div className="border rounded-md">
+                                <Separator />
+                                {/* Award Details */}
+                                <div>
+                                    <h4 className="font-semibold text-lg mb-2">Vendor Comparison</h4>
+                                    <div className="border rounded-md">
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead>Item</TableHead>
-                                                <TableHead>Quantity</TableHead>
-                                                <TableHead className="text-right">Unit Price</TableHead>
-                                                <TableHead className="text-right">Total</TableHead>
+                                                <TableHead>Rank</TableHead>
+                                                <TableHead>Vendor</TableHead>
+                                                <TableHead className="text-right">Final Score</TableHead>
+                                                <TableHead className="text-right">Total Price</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {awardedItems.length > 0 ? (
-                                                awardedItems.map(item => (
-                                                    <TableRow key={item.id}>
-                                                        <TableCell>{item.name}</TableCell>
-                                                        <TableCell>{item.quantity}</TableCell>
-                                                        <TableCell className="text-right">{item.unitPrice.toLocaleString()}</TableCell>
-                                                        <TableCell className="text-right">{(item.unitPrice * item.quantity).toLocaleString()}</TableCell>
-                                                    </TableRow>
+                                            {topThree.length > 0 ? (
+                                                topThree.map((quote, index) => (
+                                                <TableRow key={quote.id} className={index === 0 ? 'bg-green-500/10' : ''}>
+                                                    <TableCell className="font-bold">{index + 1}</TableCell>
+                                                    <TableCell>{quote.vendorName}</TableCell>
+                                                    <TableCell className="text-right font-mono">{quote.finalAverageScore?.toFixed(2) || 'N/A'}</TableCell>
+                                                    <TableCell className="text-right font-mono">{quote.totalPrice.toLocaleString()} ETB</TableCell>
+                                                </TableRow>
                                                 ))
                                             ) : (
                                                 <TableRow>
-                                                    <TableCell colSpan={4} className="h-24 text-center">No items in winning quote.</TableCell>
+                                                    <TableCell colSpan={4} className="text-center h-24">No quotations found.</TableCell>
                                                 </TableRow>
                                             )}
                                         </TableBody>
                                     </Table>
-                                 </div>
-                              </div>
-
-                            <Separator />
-                            {/* Requisition Snapshot */}
-                            <div className="space-y-4">
-                                <h4 className="font-semibold text-lg">Original Request Details</h4>
-                                <div>
-                                    <p className="font-medium mb-1">Business Justification</p>
-                                    <p className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md max-h-48 overflow-y-auto">{requisition.justification}</p>
-                                </div>
-                            </div>
-
-                        </div>
-                    </ScrollArea>
-                </TabsContent>
-                <TabsContent value="history" className="mt-4">
-                    <ScrollArea className="max-h-[65vh] pr-4">
-                        <div className="relative pl-6 py-4">
-                            <div className="absolute left-6 top-0 h-full w-0.5 bg-border -translate-x-1/2"></div>
-                            {(requisition.auditTrail || []).length > 0 ? (requisition.auditTrail || []).map((log: AuditLogType, index: number) => (
-                                <div key={log.id} className="relative mb-8">
-                                    <div className="absolute -left-3 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-secondary">
-                                        <div className="h-3 w-3 rounded-full bg-primary"></div>
                                     </div>
-                                    <div className="pl-8">
-                                        <div className="flex items-center justify-between">
-                                            <Badge variant="outline">{log.action.replace(/_/g, ' ')}</Badge>
-                                            <time className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}</time>
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        The winner is recommended based on the combined evaluation criteria: 
+                                        <strong> {requisition.evaluationCriteria?.financialWeight}% Financial</strong> and 
+                                        <strong> {requisition.evaluationCriteria?.technicalWeight}% Technical</strong>.
+                                    </p>
+                                </div>
+                                 <Separator />
+                                  <div>
+                                    <h4 className="font-semibold text-lg mb-2">Awarded Items</h4>
+                                     <div className="border rounded-md">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Item</TableHead>
+                                                    <TableHead>Quantity</TableHead>
+                                                    <TableHead className="text-right">Unit Price</TableHead>
+                                                    <TableHead className="text-right">Total</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {awardedItems.length > 0 ? (
+                                                    awardedItems.map(item => (
+                                                        <TableRow key={item.id}>
+                                                            <TableCell>{item.name}</TableCell>
+                                                            <TableCell>{item.quantity}</TableCell>
+                                                            <TableCell className="text-right">{item.unitPrice.toLocaleString()}</TableCell>
+                                                            <TableCell className="text-right">{(item.unitPrice * item.quantity).toLocaleString()}</TableCell>
+                                                        </TableRow>
+                                                    ))
+                                                ) : (
+                                                    <TableRow>
+                                                        <TableCell colSpan={4} className="h-24 text-center">No items in winning quote.</TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                     </div>
+                                  </div>
+
+                                <Separator />
+                                {/* Requisition Snapshot */}
+                                <div className="space-y-4">
+                                    <h4 className="font-semibold text-lg">Original Request Details</h4>
+                                    <div>
+                                        <p className="font-medium mb-1">Business Justification</p>
+                                        <div className="h-48">
+                                            <ScrollArea className="h-full rounded-md border p-3">
+                                                <p className="text-sm text-muted-foreground">{requisition.justification}</p>
+                                            </ScrollArea>
                                         </div>
-                                        <p className="mt-2 text-sm text-muted-foreground">{log.details}</p>
-                                        <p className="mt-2 text-xs text-muted-foreground">
-                                            By <span className="font-semibold text-foreground">{log.user}</span> ({log.role})
-                                        </p>
                                     </div>
                                 </div>
-                            )) : (
-                                <Alert>
-                                    <AlertCircle className="h-4 w-4" />
-                                    <AlertTitle>No History</AlertTitle>
-                                    <AlertDescription>
-                                        No audit trail events were found for this requisition's transaction ID.
-                                    </AlertDescription>
-                                </Alert>
+
+                            </div>
+                        </ScrollArea>
+                    </TabsContent>
+                    <TabsContent value="history" className="mt-4 flex-1 overflow-hidden">
+                        <ScrollArea className="h-full pr-4">
+                            <div className="relative pl-6 py-4">
+                                <div className="absolute left-6 top-0 h-full w-0.5 bg-border -translate-x-1/2"></div>
+                                {(requisition.auditTrail || []).length > 0 ? (requisition.auditTrail || []).map((log: AuditLogType, index: number) => (
+                                    <div key={log.id} className="relative mb-8">
+                                        <div className="absolute -left-3 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-secondary">
+                                            <div className="h-3 w-3 rounded-full bg-primary"></div>
+                                        </div>
+                                        <div className="pl-8">
+                                            <div className="flex items-center justify-between">
+                                                <Badge variant="outline">{log.action.replace(/_/g, ' ')}</Badge>
+                                                <time className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}</time>
+                                            </div>
+                                            <p className="mt-2 text-sm text-muted-foreground">{log.details}</p>
+                                            <p className="mt-2 text-xs text-muted-foreground">
+                                                By <span className="font-semibold text-foreground">{log.user}</span> ({log.role})
+                                            </p>
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <Alert>
+                                        <AlertCircle className="h-4 w-4" />
+                                        <AlertTitle>No History</AlertTitle>
+                                        <AlertDescription>
+                                            No audit trail events were found for this requisition's transaction ID.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                            </div>
+                        </ScrollArea>
+                    </TabsContent>
+                    <TabsContent value="minutes" className="mt-4 flex-1 overflow-hidden">
+                        <ScrollArea className="h-full pr-4">
+                            {requisition.minutes && requisition.minutes.length > 0 ? (
+                                <div className="space-y-4 py-4">
+                                {requisition.minutes.map(minute => (
+                                    <Card key={minute.id}>
+                                        <CardHeader>
+                                            <CardTitle className="flex justify-between items-center text-base">
+                                                <span>Minute: {minute.decisionBody}</span>
+                                                <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
+                                            </CardTitle>
+                                            <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <h4 className="font-semibold text-sm">Justification</h4>
+                                            <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50 mt-1">{minute.justification}</p>
+                                            <h4 className="font-semibold text-sm mt-4">Attendees</h4>
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                {minute.attendees.map(attendee => <Badge key={attendee.id} variant="outline">{attendee.name}</Badge>)}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                                </div>
+                            ): (
+                                <div className="text-center h-48 flex items-center justify-center text-muted-foreground">No meeting minutes found for this requisition.</div>
                             )}
-                        </div>
-                    </ScrollArea>
-                </TabsContent>
-                 <TabsContent value="minutes" className="mt-4">
-                    <ScrollArea className="max-h-[65vh] pr-4">
-                        {requisition.minutes && requisition.minutes.length > 0 ? (
-                            <div className="space-y-4 py-4">
-                            {requisition.minutes.map(minute => (
-                                <Card key={minute.id}>
-                                    <CardHeader>
-                                        <CardTitle className="flex justify-between items-center text-base">
-                                            <span>Minute: {minute.decisionBody}</span>
-                                            <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
-                                        </CardTitle>
-                                        <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <h4 className="font-semibold text-sm">Justification</h4>
-                                        <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50 mt-1">{minute.justification}</p>
-                                        <h4 className="font-semibold text-sm mt-4">Attendees</h4>
-                                        <div className="flex flex-wrap gap-2 mt-2">
-                                            {minute.attendees.map(attendee => <Badge key={attendee.id} variant="outline">{attendee.name}</Badge>)}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                            </div>
-                        ): (
-                            <div className="text-center h-48 flex items-center justify-center text-muted-foreground">No meeting minutes found for this requisition.</div>
-                        )}
-                    </ScrollArea>
-                 </TabsContent>
-            </Tabs>
+                        </ScrollArea>
+                    </TabsContent>
+                </Tabs>
+            </div>
             <DialogFooter>
                 <Button onClick={onClose}>Close</Button>
             </DialogFooter>
