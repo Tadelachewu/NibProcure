@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -32,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, FileUp, TrophyIcon } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -64,6 +63,10 @@ import { Switch } from '@/components/ui/switch';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+
+const PAGE_SIZE = 6;
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -245,10 +248,12 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
     const isTechnicalOnlyScorer = user.role === 'Committee_Member' && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
     const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
 
+    const isAssigned = requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id);
+
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {quotes.sort((a, b) => (a.rank || 4) - (b.rank || 4)).map(quote => {
+            {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
                 const awardedItemsForThisQuote = quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
                 return (
@@ -331,7 +336,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                              )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
-                            {user.role === 'Committee_Member' && (
+                            {user.role === 'Committee_Member' && isAssigned && (
                                 <Button className="w-full" variant={hasUserScored ? "secondary" : "outline"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
                                     {hasUserScored ? 'View Your Score' : 'Score this Quote'}
@@ -1980,7 +1985,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
 const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess }: { isOpen: boolean, onClose: () => void, member: User, requisition: PurchaseRequisition, onSuccess: () => void }) => {
     const { toast } = useToast();
     const { user } = useAuth();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadline, setNewDeadline] = useState<Date|undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
 
@@ -2270,7 +2275,6 @@ export default function QuotationDetailsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAddFormOpen, setAddFormOpen] = useState(false);
   const [isCommitteeDialogOpen, setCommitteeDialogOpen] = useState(false);
   const [isScoringFormOpen, setScoringFormOpen] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
@@ -2278,11 +2282,11 @@ export default function QuotationDetailsPage() {
   const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
   const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
   const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
-  const [lastPOCreated, setLastPOCreated] = useState<PurchaseOrder | null>(null);
-  const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
+  const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
+  const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
 
   const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby', 'Pending_Award'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
@@ -2325,53 +2329,35 @@ export default function QuotationDetailsPage() {
     return false;
   }, [user, role, rfqSenderSetting]);
 
-    const fetchRequisitionAndQuotes = async () => {
-        if (!id) return;
-        setLoading(true);
-        setLastPOCreated(null);
-        try {
-            const [reqResponse, venResponse, quoResponse] = await Promise.all([
-                fetch(`/api/requisitions/${id}`),
-                fetch('/api/vendors'),
-                fetch(`/api/quotations?requisitionId=${id}`),
-            ]);
-            const currentReq = await reqResponse.json();
-            const venData = await venResponse.json();
-            const quoData = await quoResponse.json();
+  const fetchRequisitionAndQuotes = async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+          const [reqResponse, venResponse, quoResponse] = await Promise.all([
+              fetch(`/api/requisitions/${id}`),
+              fetch('/api/vendors'),
+              fetch(`/api/quotations?requisitionId=${id}`),
+          ]);
+          const currentReq = await reqResponse.json();
+          const venData = await venResponse.json();
+          const quoData: Quotation[] = await quoResponse.json();
 
-            if (currentReq) {
-                const awardedQuote = quoData.find((q: Quotation) => q.status === 'Awarded');
-                if (awardedQuote && currentReq.awardResponseDeadline && isPast(new Date(currentReq.awardResponseDeadline))) {
-                    toast({
-                        title: 'Deadline Missed',
-                        description: `Vendor ${awardedQuote.vendorName} missed the response deadline. Action required.`,
-                        variant: 'destructive',
-                    });
-                    // This now just reverts the state, does not auto-promote.
-                    await handleAwardChange();
-                    // Refetch after the change
-                    const [refetchedReqRes, refetchedQuoRes] = await Promise.all([
-                        fetch(`/api/requisitions/${id}`),
-                        fetch(`/api/quotations?requisitionId=${id}`)
-                    ]);
-                    setRequisition(await refetchedReqRes.json());
-                    setQuotations(await refetchedQuoRes.json());
-                } else {
-                    setRequisition(currentReq);
-                    setQuotations(quoData);
-                }
-            } else {
-                toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
-            }
-            
-            setVendors(venData || []);
+          setVendors(venData || []);
 
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
-        } finally {
-            setLoading(false);
-        }
-    };
+          if (currentReq) {
+              setRequisition(currentReq);
+              // Sort quotations by creation date descending
+              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          } else {
+              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
+          }
+          
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
+      } finally {
+          setLoading(false);
+      }
+  };
 
 
   useEffect(() => {
@@ -2379,26 +2365,8 @@ export default function QuotationDetailsPage() {
         fetchRequisitionAndQuotes();
     }
   }, [id, user]);
-
-  const handleRfqSent = () => {
-    fetchRequisitionAndQuotes();
-  }
-
-  const handleQuoteAdded = () => {
-    setAddFormOpen(false);
-    fetchRequisitionAndQuotes();
-  }
   
-  const handleContractFinalized = () => {
-    fetchRequisitionAndQuotes();
-  }
-  
-  const handlePOCreated = (po: PurchaseOrder) => {
-    fetchRequisitionAndQuotes();
-    setLastPOCreated(po);
-  }
-  
-   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
+  const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
         
         const quoteItemsById: { [key: string]: { price: number; quantity: number } } = {};
@@ -2438,39 +2406,6 @@ export default function QuotationDetailsPage() {
             setIsFinalizing(false);
         }
     }
-
-
-  const handleAwardChange = async () => {
-    if (!user || !id || !requisition) return;
-    
-    setIsChangingAward(true);
-    try {
-        const response = await fetch(`/api/requisitions/${id}/handle-award-change`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id }),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Failed to handle award change.' }));
-            throw new Error(errorData.error);
-        }
-
-        toast({
-            title: `Action Successful`,
-            description: `The award status has been updated.`
-        });
-        fetchRequisitionAndQuotes();
-    } catch (error) {
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: error instanceof Error ? error.message : 'An unknown error occurred.',
-        });
-    } finally {
-        setIsChangingAward(false);
-    }
-  }
 
   const handleNotifyVendor = async (deadline?: Date) => {
     if (!user || !requisition) return;
@@ -2512,6 +2447,7 @@ export default function QuotationDetailsPage() {
   const handleScoreSubmitted = () => {
       setScoringFormOpen(false);
       setSelectedQuoteForScoring(null);
+      setCommitteeTab('scored'); // Switch to scored tab after submission
       fetchRequisitionAndQuotes();
   }
 
@@ -2563,6 +2499,21 @@ export default function QuotationDetailsPage() {
       return `${financialPart}\n\n${technicalPart}`;
   };
 
+  const { pendingQuotes, scoredQuotes } = useMemo(() => {
+    if (role !== 'Committee_Member' || !user) return { pendingQuotes: quotations, scoredQuotes: [] };
+    const pending = quotations.filter(q => !q.scores?.some(s => s.scorerId === user.id));
+    const scored = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id));
+    return { pendingQuotes: pending, scoredQuotes: scored };
+  }, [quotations, user, role]);
+
+  const quotesForDisplay = (role === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (role === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
+  const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
+  const paginatedQuotes = useMemo(() => {
+    const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
+    return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [quotesForDisplay, currentQuotesPage]);
+
+
   if (loading || !user) {
      return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -2570,17 +2521,25 @@ export default function QuotationDetailsPage() {
   if (!requisition) {
      return <div className="text-center p-8">Requisition not found.</div>;
   }
+
+  // A committee member can only see this page if they are assigned
+  const isAssignedCommitteeMember = user.role === 'Committee_Member' && (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id));
+  if (user.role === 'Committee_Member' && !isAssignedCommitteeMember) {
+      return (
+          <Card>
+              <CardHeader>
+                  <CardTitle>Access Denied</CardTitle>
+                  <CardDescription>You are not assigned to the evaluation committee for this requisition.</CardDescription>
+              </CardHeader>
+          </Card>
+      );
+  }
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
   const isReadyForNotification = requisition.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
-  const awardProcessStarted = isAwarded || requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
-
-  const isManagerialApprover = role?.startsWith('Manager') || role?.startsWith('Director') || role?.startsWith('VP') || role?.startsWith('President');
-  const canViewReport = isAwarded && isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin' || isManagerialApprover);
-
 
   return (
     <div className="space-y-6">
@@ -2724,30 +2683,45 @@ export default function QuotationDetailsPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 w-full sm:w-auto">
-                           {canViewReport && (
+                           {(isAwarded && isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin' || role.startsWith('Manager_') || role.startsWith('Director_'))) && (
                                 <Button variant="secondary" onClick={() => setReportOpen(true)}>
                                     <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
                                 </Button>
                             )}
                         </div>
                     </CardHeader>
-                    <CardContent>
-                    {loading ? (
-                        <div className="flex items-center justify-center h-24">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        </div>
-                    ) : (
-                        <QuoteComparison 
-                            quotes={quotations} 
-                            requisition={requisition}
-                            onScore={handleScoreButtonClick}
-                            user={user}
-                            isDeadlinePassed={isDeadlinePassed}
-                            isScoringDeadlinePassed={isScoringDeadlinePassed}
-                            isAwarded={isAwarded}
-                        />
-                    )}
+                     <CardContent>
+                        {loading ? (
+                            <div className="flex items-center justify-center h-24">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        ) : (
+                             <Tabs value={committeeTab} onValueChange={(value) => setCommitteeTab(value as any)} defaultValue="pending">
+                                {role === 'Committee_Member' && <TabsList className="mb-4">
+                                    <TabsTrigger value="pending">Pending Your Score ({pendingQuotes.length})</TabsTrigger>
+                                    <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
+                                </TabsList>}
+                                <TabsContent value="pending">
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} />
+                                </TabsContent>
+                                <TabsContent value="scored">
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} />
+                                </TabsContent>
+                                {role !== 'Committee_Member' && <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} />}
+                             </Tabs>
+                        )}
                     </CardContent>
+
+                    {totalQuotePages > 1 && (
+                        <CardFooter className="flex items-center justify-end gap-2 pt-4">
+                            <span className="text-sm text-muted-foreground">Page {currentQuotesPage} of {totalQuotePages}</span>
+                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(1)} disabled={currentQuotesPage === 1}><ChevronsLeft /></Button>
+                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p - 1)} disabled={currentQuotesPage === 1}><ChevronLeft /></Button>
+                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p + 1)} disabled={currentQuotesPage === totalQuotePages}><ChevronRight /></Button>
+                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(totalQuotePages)} disabled={currentQuotesPage === totalQuotePages}><ChevronsRight /></Button>
+                        </CardFooter>
+                    )}
+
                     <Dialog open={isScoringFormOpen} onOpenChange={setScoringFormOpen}>
                         {selectedQuoteForScoring && requisition && user && (
                             <ScoringDialog 
@@ -2775,7 +2749,7 @@ export default function QuotationDetailsPage() {
             </>
         )}
         
-        {(currentStep === 'committee' || currentStep === 'award') && user.role === 'Committee_Member' && (
+        {(currentStep === 'committee' || currentStep === 'award') && user.role === 'Committee_Member' && isAssignedCommitteeMember && (
              <CommitteeActions 
                 user={user}
                 requisition={requisition}
@@ -2833,7 +2807,7 @@ export default function QuotationDetailsPage() {
         )}
         
         {isAccepted && requisition.status !== 'PO_Created' && role !== 'Committee_Member' && (
-            <ContractManagement requisition={requisition} onContractFinalized={handleContractFinalized} />
+            <ContractManagement requisition={requisition} onContractFinalized={fetchRequisitionAndQuotes} />
         )}
          {requisition && (
             <RequisitionDetailsDialog 
@@ -2957,3 +2931,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
  
 
     
+
