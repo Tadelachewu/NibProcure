@@ -17,7 +17,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { AlertCircle, CheckCircle, FileText, MessageSquare, User } from 'lucide-react';
+import { AlertCircle, CheckCircle, FileText, MessageSquare, User, Trophy, Crown, Medal } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 
@@ -32,7 +32,13 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
   if (!requisition) return null;
   
   const sortedQuotes = requisition.quotations?.sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)) || [];
-  const winner = sortedQuotes[0];
+  
+  const declinedQuote = sortedQuotes.find(q => q.status === 'Declined');
+  const isPromotedStandby = !!declinedQuote;
+  
+  // The winner is the one currently pending award, not necessarily the top-scored one if they declined.
+  const winner = sortedQuotes.find(q => q.status === 'Pending_Award' || q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Partially_Awarded');
+  
   const topThree = sortedQuotes.slice(0, 3);
   
   const winningVendor = winner?.vendorName || 'N/A';
@@ -67,6 +73,15 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
       }
       return null;
   };
+  
+  const getRankIcon = (rank?: number) => {
+    switch(rank) {
+      case 1: return <Crown className="h-4 w-4 text-amber-400" />;
+      case 2: return <Trophy className="h-4 w-4 text-slate-400" />;
+      case 3: return <Medal className="h-4 w-4 text-amber-600" />;
+      default: return null;
+    }
+  }
 
 
   return (
@@ -75,11 +90,15 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
             <DialogHeader>
                 <DialogTitle>Approval Summary: {requisition.id}</DialogTitle>
                 <DialogDescription>
-                    Executive brief for the award recommendation on: <span className="font-semibold">{requisition.title}</span>
+                    {isPromotedStandby 
+                        ? `Executive brief for the promoted standby award on: ` 
+                        : `Executive brief for the award recommendation on: `
+                    }
+                    <span className="font-semibold">{requisition.title}</span>
                 </DialogDescription>
             </DialogHeader>
-            <div className="flex-1 overflow-hidden">
-                <Tabs defaultValue="summary" className="h-full flex flex-col">
+             <div className="flex-1 overflow-hidden flex flex-col">
+                <Tabs defaultValue="summary" className="flex-1 flex flex-col min-h-0">
                     <TabsList>
                         <TabsTrigger value="summary">Summary</TabsTrigger>
                         <TabsTrigger value="history">Workflow History</TabsTrigger>
@@ -88,6 +107,15 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                     <TabsContent value="summary" className="mt-4 flex-1 overflow-hidden">
                         <ScrollArea className="h-full pr-4">
                             <div className="space-y-4 py-4">
+                                {isPromotedStandby && (
+                                    <Alert variant="destructive">
+                                        <AlertCircle className="h-4 w-4" />
+                                        <AlertTitle>Promoted Standby Vendor</AlertTitle>
+                                        <AlertDescription>
+                                            The original winning vendor, <strong>{declinedQuote.vendorName}</strong>, has declined the award. This recommendation is for the next vendor in line.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
                                 {/* Financial Impact */}
                                 <div className="space-y-2">
                                     <h4 className="font-semibold text-lg">Financial Overview</h4>
@@ -97,7 +125,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                             <p className="text-2xl font-bold">{requisition.totalPrice.toLocaleString()} ETB</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-muted-foreground">Winning Vendor(s)</p>
+                                            <p className="text-sm text-muted-foreground">{isPromotedStandby ? 'Promoted Winning Vendor' : 'Recommended Winning Vendor'}</p>
                                             <p className="text-lg font-semibold">{winningVendor}</p>
                                         </div>
                                     </div>
@@ -114,21 +142,23 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                                 <TableHead>Vendor</TableHead>
                                                 <TableHead className="text-right">Final Score</TableHead>
                                                 <TableHead className="text-right">Total Price</TableHead>
+                                                <TableHead>Status</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
                                             {topThree.length > 0 ? (
-                                                topThree.map((quote, index) => (
-                                                <TableRow key={quote.id} className={index === 0 ? 'bg-green-500/10' : ''}>
-                                                    <TableCell className="font-bold">{index + 1}</TableCell>
+                                                topThree.map((quote) => (
+                                                <TableRow key={quote.id} className={quote.id === winner?.id ? 'bg-green-500/10' : ''}>
+                                                    <TableCell className="font-bold flex items-center gap-1">{getRankIcon(quote.rank)} {quote.rank || 'N/A'}</TableCell>
                                                     <TableCell>{quote.vendorName}</TableCell>
                                                     <TableCell className="text-right font-mono">{quote.finalAverageScore?.toFixed(2) || 'N/A'}</TableCell>
                                                     <TableCell className="text-right font-mono">{quote.totalPrice.toLocaleString()} ETB</TableCell>
+                                                    <TableCell><Badge variant={quote.status === 'Declined' ? 'destructive' : 'outline'}>{quote.status.replace(/_/g, ' ')}</Badge></TableCell>
                                                 </TableRow>
                                                 ))
                                             ) : (
                                                 <TableRow>
-                                                    <TableCell colSpan={4} className="text-center h-24">No quotations found.</TableCell>
+                                                    <TableCell colSpan={5} className="text-center h-24">No quotations found.</TableCell>
                                                 </TableRow>
                                             )}
                                         </TableBody>
@@ -183,12 +213,12 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                 {/* Requisition Snapshot */}
                                 <div className="space-y-4">
                                     <h4 className="font-semibold text-lg">Original Request Details</h4>
-                                    <div>
-                                        <p className="font-medium mb-1">Business Justification</p>
-                                        <ScrollArea className="h-48 rounded-md border p-3">
+                                     <ScrollArea className="h-48 rounded-md border p-3">
+                                        <div>
+                                            <p className="font-medium mb-1">Business Justification</p>
                                             <p className="text-sm text-muted-foreground">{requisition.justification}</p>
-                                        </ScrollArea>
-                                    </div>
+                                        </div>
+                                    </ScrollArea>
                                 </div>
 
                             </div>
