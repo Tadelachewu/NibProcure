@@ -55,16 +55,31 @@ export function RequisitionDetailsDialog({ reuisition, isOpen, onClose }: Requis
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Item Name</TableHead>
-                                    <TableHead className="text-right">Quantity</TableHead>
+                                    <TableHead className="w-[100px] text-right">Quantity</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {reuisition.items && reuisition.items.map(item => (
-                                     <TableRow key={item.id}>
-                                        <TableCell>{item.name}</TableCell>
-                                        <TableCell className="text-right">{item.quantity}</TableCell>
-                                     </TableRow>
-                                ))}
+                                {reuisition.items && reuisition.items.length > 0 ? (
+                                  reuisition.items.map(item => (
+                                     <React.Fragment key={item.id}>
+                                        <TableRow>
+                                            <TableCell>{item.name}</TableCell>
+                                            <TableCell className="text-right">{item.quantity}</TableCell>
+                                        </TableRow>
+                                        {item.description && (
+                                            <TableRow>
+                                                <TableCell colSpan={2} className="py-2 px-4 bg-muted/50">
+                                                    <p className="text-xs text-muted-foreground italic">{item.description}</p>
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                     </React.Fragment>
+                                  ))
+                                ) : (
+                                  <TableRow>
+                                    <TableCell colSpan={2} className="text-center h-24">No items listed.</TableCell>
+                                  </TableRow>
+                                )}
                             </TableBody>
                         </Table>
                         </div>
