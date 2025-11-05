@@ -215,18 +215,10 @@ export function ReviewsTable() {
                         <TableCell>
                         <div className="flex gap-2">
                               <Button variant="outline" size="sm" asChild>
-                                  <Link href={`/quotations/${req.id}`}>
+                                  <Link href={`/reviews/${req.id}`}>
                                       <Eye className="mr-2 h-4 w-4" /> Review Bids
                                   </Link>
                               </Button>
-                              <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={isLoadingAction}>
-                                {isLoadingAction && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4" />} 
-                                Approve
-                            </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={isLoadingAction}>
-                                {isLoadingAction && actionType === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className="mr-2 h-4 w-4" />} 
-                                Reject
-                            </Button>
                         </div>
                         </TableCell>
                     </TableRow>
@@ -263,44 +255,7 @@ export function ReviewsTable() {
             </div>
         )}
       </CardContent>
-       <Dialog open={isActionDialogOpen} onOpenChange={setActionDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              Record Minute for {actionType === 'approve' ? 'Approval' : 'Rejection'}
-            </DialogTitle>
-            <DialogDescription>
-                Record the official minute for the decision on the award for {selectedRequisition?.id}. This is a formal record for auditing purposes.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="justification">Justification / Remarks</Label>
-              <Textarea 
-                id="justification" 
-                value={justification}
-                onChange={(e) => setJustification(e.target.value)}
-                placeholder="Provide a detailed rationale for the committee's decision..."
-                rows={6}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setActionDialogOpen(false)}>Cancel</Button>
-            <Button onClick={submitAction} variant={actionType === 'approve' ? 'default' : 'destructive'}>
-                Submit {actionType === 'approve' ? 'Approval' : 'Rejection'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
-    {selectedRequisition && (
-        <RequisitionDetailsDialog 
-            reuisition={selectedRequisition} 
-            isOpen={isDetailsDialogOpen} 
-            onClose={() => setDetailsDialogOpen(false)} 
-        />
-    )}
     </>
   );
 }

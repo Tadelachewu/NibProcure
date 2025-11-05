@@ -26,6 +26,30 @@ export async function GET(
         financialCommitteeMembers: { select: { id: true, name: true, email: true } },
         technicalCommitteeMembers: { select: { id: true, name: true, email: true } },
         requester: true,
+        quotations: {
+          include: {
+            vendor: true,
+            scores: {
+              include: {
+                scorer: true,
+                itemScores: {
+                  include: {
+                    scores: true
+                  }
+                }
+              }
+            }
+          }
+        },
+        minutes: {
+          include: {
+            author: true,
+            attendees: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
       }
     });
 
@@ -33,12 +57,24 @@ export async function GET(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
     
-    // Formatting data to match client-side expectations
+    // Manually fetch audit logs using transactionId
+    const auditLog = await prisma.auditLog.findMany({
+      where: { transactionId: requisition.id },
+      include: {
+        user: true,
+      },
+      orderBy: {
+        timestamp: 'desc',
+      },
+    });
+
     const formatted = {
         ...requisition,
+        status: requisition.status.replace(/_/g, ' '),
         requesterName: requisition.requester.name || 'Unknown',
         financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
         technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
+        auditLog: auditLog.map(l => ({ ...l, user: l.user?.name || 'System', role: l.user?.role || 'System' })),
     };
 
     return NextResponse.json(formatted);
@@ -107,4 +143,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
