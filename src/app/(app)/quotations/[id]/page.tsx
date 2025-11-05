@@ -2540,6 +2540,17 @@ export default function QuotationDetailsPage() {
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
+  
+  const canViewCumulativeReport = isAwarded && isScoringComplete && (
+      role === 'Procurement_Officer' || 
+      role === 'Admin' || 
+      role?.startsWith('Manager_') || 
+      role?.startsWith('Director_') ||
+      role?.startsWith('VP_') ||
+      role === 'President' ||
+      role?.startsWith('Committee_')
+  );
+
 
   return (
     <div className="space-y-6">
@@ -2683,7 +2694,7 @@ export default function QuotationDetailsPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 w-full sm:w-auto">
-                           {(isAwarded && isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin' || role.startsWith('Manager_') || role.startsWith('Director_'))) && (
+                           {canViewCumulativeReport && (
                                 <Button variant="secondary" onClick={() => setReportOpen(true)}>
                                     <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
                                 </Button>
