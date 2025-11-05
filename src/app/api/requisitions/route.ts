@@ -50,10 +50,10 @@ export async function GET(request: Request) {
             allReviewStatuses.push('Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval', 'PostApproved');
             whereClause.status = { in: allReviewStatuses };
         } else if (isManagerialRole) {
-            // Show items currently pending this manager's approval OR items they have already approved/rejected in this chain.
+            // Corrected Logic: Fetch items pending the user's approval OR items they have already approved/rejected.
             whereClause.OR = [
                 { currentApproverId: userId },
-                { reviews: { some: { userId: userId } } }
+                { approverId: userId }
             ];
         }
 
