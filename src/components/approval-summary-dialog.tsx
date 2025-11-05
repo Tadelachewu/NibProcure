@@ -36,9 +36,12 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
     // This logic assumes `awardedQuoteItemIds` on the requisition correctly holds the `QuoteItem` IDs
     return requisition.awardedQuoteItemIds?.some(awardedId => {
         for (const quote of winningQuotes) {
-            for (const quoteItem of quote.items) {
-                if (quoteItem.id === awardedId && quoteItem.requisitionItemId === item.id) {
-                    return true;
+            // Fix: Ensure quote.items exists and is an array before iterating
+            if (Array.isArray(quote.items)) {
+                for (const quoteItem of quote.items) {
+                    if (quoteItem.id === awardedId && quoteItem.requisitionItemId === item.id) {
+                        return true;
+                    }
                 }
             }
         }
