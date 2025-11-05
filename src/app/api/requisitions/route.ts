@@ -141,14 +141,6 @@ export async function GET(request: Request) {
             unitPrice: true,
           }
         },
-        auditLog: {
-          include: {
-            user: { select: { name: true, role: true }}
-          },
-          orderBy: {
-            timestamp: 'desc'
-          }
-        },
         minutes: {
           include: {
             author: true,
@@ -160,16 +152,41 @@ export async function GET(request: Request) {
         createdAt: 'desc',
       },
     });
+    
+    // Fetch all audit logs in a separate query
+    const transactionIds = requisitions.map(r => r.transactionId).filter(Boolean) as string[];
+    const auditLogs = await prisma.auditLog.findMany({
+      where: {
+        transactionId: { in: transactionIds }
+      },
+      include: {
+        user: { select: { name: true, role: true } }
+      },
+      orderBy: {
+        timestamp: 'desc'
+      }
+    });
+
+    // Group logs by transactionId for efficient lookup
+    const logsByTransaction = new Map<string, any[]>();
+    auditLogs.forEach(log => {
+      if (log.transactionId) {
+        if (!logsByTransaction.has(log.transactionId)) {
+          logsByTransaction.set(log.transactionId, []);
+        }
+        logsByTransaction.get(log.transactionId)!.push({
+          ...log,
+          user: log.user.name,
+          role: log.user.role,
+        });
+      }
+    });
 
     const formattedRequisitions = requisitions.map(req => ({
         ...req,
         requesterName: req.requester.name,
         department: req.department?.name || 'N/A',
-        auditTrail: req.auditLog.map(log => ({
-          ...log,
-          user: log.user.name,
-          role: log.user.role,
-        })),
+        auditTrail: logsByTransaction.get(req.transactionId!) || [],
     }));
     
     return NextResponse.json(formattedRequisitions);
