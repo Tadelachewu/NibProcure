@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -297,21 +296,8 @@ export async function PATCH(
         let isDesignatedApprover = false;
         
         if (isCommitteeApproval) {
-            const userIsCommitteeMember = await prisma.purchaseRequisition.count({
-                where: {
-                    id: requisition.id,
-                    OR: [
-                        { financialCommitteeMembers: { some: { id: userId } } },
-                        { technicalCommitteeMembers: { some: { id: userId } } }
-                    ]
-                }
-            }) > 0;
-            // For committee roles, we check if the user is part of the committee
-            // rather than if the role name matches exactly.
-            if(userIsCommitteeMember) {
-                isDesignatedApprover = true;
-            }
-            
+            const requiredRole = requisition.status.replace('Pending_', '');
+            isDesignatedApprover = user.role === requiredRole;
         } else {
             isDesignatedApprover = requisition.currentApproverId === userId;
         }
