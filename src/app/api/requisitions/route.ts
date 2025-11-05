@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -38,25 +39,23 @@ export async function GET(request: Request) {
         const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
         const userId = userPayload.user.id;
 
-        const isCommitteeRole = userRole.startsWith('Committee_');
-        const isManagerialRole = !isCommitteeRole && userRole !== 'Admin' && userRole !== 'Procurement_Officer';
-
+        const isCommitteeRole = userRole.startsWith('Committee_') && userRole.endsWith('_Member');
+        
         if (isCommitteeRole) {
              const statusToFind = `Pending_${userRole}`;
              whereClause.status = statusToFind;
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
             const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
-            const allManagerialRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Manager_' } } });
             const allReviewStatuses = [
                 ...allCommitteeRoles.map(r => `Pending_${r.name}`),
-                ...allManagerialRoles.map(r => `Pending_${r.name}`),
+                'Pending_Managerial_Approval', 
                 'Pending_Director_Approval', 
                 'Pending_VP_Approval', 
                 'Pending_President_Approval',
                 'PostApproved'
             ];
             whereClause.status = { in: allReviewStatuses };
-        } else if (isManagerialRole) {
+        } else { // This handles hierarchical roles
              whereClause.OR = [
                 { currentApproverId: userId },
                 { reviews: { some: { reviewerId: userId } } }
@@ -103,16 +102,42 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-         whereClause.OR = [
-            { status: 'PreApproved' },
-            { status: 'PostApproved' },
-            { status: { startsWith: 'Pending_' } },
-            { status: 'Accepting_Quotes' },
-            { status: 'Scoring_In_Progress' },
-            { status: 'Scoring_Complete' },
-            { status: 'Award_Declined' },
-            { status: 'Awarded' },
-        ];
+        if (userPayload?.role === 'Committee_Member') {
+            // **SECURITY FIX**: Committee members ONLY see requisitions they are assigned to.
+            whereClause.OR = [
+                { financialCommitteeMembers: { some: { id: userPayload.user.id } } },
+                { technicalCommitteeMembers: { some: { id: userPayload.user.id } } },
+            ];
+            // And they should only see items that are actually in a scoring state
+            whereClause.AND = [
+                ...(whereClause.AND || []),
+                {
+                    status: {
+                        in: [
+                            'Accepting_Quotes',
+                            'Scoring_In_Progress',
+                            'Scoring_Complete',
+                            'Award_Declined',
+                            'Awarded',
+                            'PostApproved',
+                            'PO_Created'
+                        ],
+                    },
+                },
+            ];
+        } else {
+            // Procurement/Admin see all items in the quoting lifecycle
+             whereClause.OR = [
+                { status: 'PreApproved' },
+                { status: 'PostApproved' },
+                { status: { startsWith: 'Pending_' } },
+                { status: 'Accepting_Quotes' },
+                { status: 'Scoring_In_Progress' },
+                { status: 'Scoring_Complete' },
+                { status: 'Award_Declined' },
+                { status: 'Awarded' },
+            ];
+        }
     } else {
       if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
       if (approverId) {
@@ -634,5 +659,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    

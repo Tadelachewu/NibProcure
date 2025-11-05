@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -198,7 +199,7 @@ export function RequisitionsForQuotingTable() {
                         <p className="text-muted-foreground">
                             {role === 'Committee_Member'
                                 ? 'There are no requisitions currently assigned to you for scoring.'
-                                : 'There are no requisitions assigned to you in the RFQ process.'
+                                : 'There are no requisitions in the RFQ lifecycle stage.'
                             }
                         </p>
                       </div>
