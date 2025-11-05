@@ -59,7 +59,8 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {requisition.items && requisition.items.map(item => (
+                                {requisition.items && requisition.items.length > 0 ? (
+                                    requisition.items.map(item => (
                                      <TableRow key={item.id}>
                                         <TableCell>
                                             <p className="font-medium">{item.name}</p>
@@ -67,7 +68,12 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                                         </TableCell>
                                         <TableCell className="text-right">{item.quantity}</TableCell>
                                      </TableRow>
-                                ))}
+                                    ))
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={2} className="text-center h-24">No items listed for this requisition.</TableCell>
+                                    </TableRow>
+                                )}
                             </TableBody>
                         </Table>
                         </div>
