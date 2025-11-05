@@ -36,18 +36,31 @@ export async function GET(request: Request) {
     
     if (forReview === 'true' && userPayload) {
         const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
-        const statusToFind = `Pending_${userRole}`;
+        const userId = userPayload.user.id;
 
-        if (userRole.startsWith('Committee_')) {
+        const isCommitteeRole = userRole.startsWith('Committee_');
+        const isManagerialRole = !isCommitteeRole && userRole !== 'Admin' && userRole !== 'Procurement_Officer';
+
+        if (isCommitteeRole) {
+             const statusToFind = `Pending_${userRole}`;
              whereClause.status = statusToFind;
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
             const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
             const allReviewStatuses = allCommitteeRoles.map(r => `Pending_${r.name}`);
             allReviewStatuses.push('Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval', 'PostApproved');
             whereClause.status = { in: allReviewStatuses };
-        } else {
-            // For hierarchical approvers, find items assigned to them
-            whereClause.currentApproverId = userPayload.user.id;
+        } else if (isManagerialRole) {
+            // Show items currently pending this manager's approval OR items they have already approved/rejected in this chain.
+            whereClause.OR = [
+                { currentApproverId: userId },
+                { 
+                    reviews: { 
+                        some: { 
+                            userId: userId 
+                        } 
+                    } 
+                }
+            ];
         }
 
     } else if (forVendor === 'true') {
@@ -259,7 +272,21 @@ export async function PATCH(
         let isDesignatedApprover = false;
         
         if (isCommitteeApproval) {
-            isDesignatedApprover = user.role === requisition.status.replace('Pending_', '');
+            const userIsCommitteeMember = await prisma.purchaseRequisition.count({
+                where: {
+                    id: requisition.id,
+                    OR: [
+                        { financialCommitteeMembers: { some: { id: userId } } },
+                        { technicalCommitteeMembers: { some: { id: userId } } }
+                    ]
+                }
+            }) > 0;
+            // For committee roles, we check if the user is part of the committee
+            // rather than if the role name matches exactly.
+            if(userIsCommitteeMember) {
+                isDesignatedApprover = true;
+            }
+            
         } else {
             isDesignatedApprover = requisition.currentApproverId === userId;
         }
@@ -374,6 +401,16 @@ export async function PATCH(
                     });
                     auditDetails += ` Minute recorded.`;
                 }
+
+                // Also create a "Review" record to track this specific approval action
+                await tx.review.create({
+                    data: {
+                        requisitionId: id,
+                        userId,
+                        decision: 'APPROVED',
+                        comments: comment,
+                    }
+                });
 
                  await tx.auditLog.create({
                     data: {

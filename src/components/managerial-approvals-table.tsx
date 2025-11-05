@@ -203,7 +203,7 @@ export function ManagerialApprovalsTable() {
                 <TableHead>Req. ID</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Award Value</TableHead>
-                <TableHead>Required Approval</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Created At</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -212,6 +212,8 @@ export function ManagerialApprovalsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
+                  const isActionable = req.currentApproverId === user?.id && req.status.startsWith('Pending');
+                  
                   return (
                     <TableRow key={req.id}>
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
@@ -230,11 +232,11 @@ export function ManagerialApprovalsTable() {
                                       <Eye className="mr-2 h-4 w-4" /> Review Bids
                                   </Link>
                               </Button>
-                              <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={isLoadingAction}>
+                              <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={!isActionable || isLoadingAction}>
                                 {isLoadingAction && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4" />} 
                                 Approve
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={isLoadingAction}>
+                            <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={!isActionable || isLoadingAction}>
                                 {isLoadingAction && actionType === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className="mr-2 h-4 w-4" />} 
                                 Reject
                             </Button>
