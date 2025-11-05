@@ -2574,7 +2574,7 @@ export default function QuotationDetailsPage() {
             <Card className="border-amber-500">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> RFQ Closed: No Bids Received</CardTitle>
-                    <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardHeader>
+                    <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardDescription>
                 </CardHeader>
                 <CardFooter className="gap-2">
                     <Button onClick={() => setActionDialog({isOpen: true, type: 'restart'})}>
@@ -2707,7 +2707,6 @@ export default function QuotationDetailsPage() {
                                 <TabsContent value="scored">
                                     <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} />
                                 </TabsContent>
-                                {role !== 'Committee_Member' && <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} />}
                              </Tabs>
                         )}
                     </CardContent>
