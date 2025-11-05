@@ -49,9 +49,6 @@ import { Label } from './ui/label';
 import { ApprovalSummaryDialog } from './approval-summary-dialog';
 import { Badge } from './ui/badge';
 import Link from 'next/link';
-import { ScrollArea } from './ui/scroll-area';
-import { Checkbox } from './ui/checkbox';
-import { CumulativeScoringReportDialog } from './quotations/[id]/page';
 
 
 const PAGE_SIZE = 10;
@@ -66,19 +63,11 @@ export function ReviewsTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
   const [justification, setJustification] = useState('');
-  const [attendees, setAttendees] = useState<string[]>([]);
   const [isActionDialogOpen, setActionDialogOpen] = useState(false);
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
-  const [isReportOpen, setIsReportOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
-
-  useEffect(() => {
-    if(user) {
-        setAttendees([user.id]);
-    }
-  }, [user]);
 
   const fetchRequisitions = async () => {
     if (!user || !token) {
@@ -87,7 +76,6 @@ export function ReviewsTable() {
     }
     try {
       setLoading(true);
-      // Use forReview=true to fetch all items in any review state relevant to the user
       const response = await fetch(`/api/requisitions?forReview=true`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -116,11 +104,6 @@ export function ReviewsTable() {
     setSelectedRequisition(req);
     setDetailsDialogOpen(true);
   }
-
-   const handleShowReport = (req: PurchaseRequisition) => {
-    setSelectedRequisition(req);
-    setIsReportOpen(true);
-  }
   
   const submitAction = async () => {
     if (!selectedRequisition || !actionType || !user) return;
@@ -139,7 +122,7 @@ export function ReviewsTable() {
     const minute = {
         decisionBody: selectedRequisition.status.replace(/_/g, ' '),
         justification,
-        attendeeIds: [user.id], // Always just the current user
+        attendeeIds: [user.id],
     }
 
     try {
@@ -172,7 +155,6 @@ export function ReviewsTable() {
         setJustification('');
         setSelectedRequisition(null);
         setActionType(null);
-        setAttendees([]);
     }
   }
 
@@ -237,8 +219,10 @@ export function ReviewsTable() {
                               <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
                                 <FileText className="mr-2 h-4 w-4" /> Summary
                               </Button>
-                               <Button variant="outline" size="sm" onClick={() => handleShowReport(req)}>
-                                  <FileBarChart2 className="mr-2 h-4 w-4" /> Review Bids
+                              <Button variant="outline" size="sm" asChild>
+                                  <Link href={`/quotations/${req.id}`}>
+                                      <Eye className="mr-2 h-4 w-4" /> Review Bids
+                                  </Link>
                               </Button>
                               <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={!isActionable || isLoadingAction}>
                                 {isLoadingAction && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4" />} 
@@ -320,14 +304,6 @@ export function ReviewsTable() {
             requisition={selectedRequisition} 
             isOpen={isDetailsDialogOpen} 
             onClose={() => setDetailsDialogOpen(false)} 
-        />
-    )}
-     {selectedRequisition && (
-        <CumulativeScoringReportDialog
-            requisition={selectedRequisition}
-            quotations={selectedRequisition.quotations || []}
-            isOpen={isReportOpen}
-            onClose={() => setIsReportOpen(false)}
         />
     )}
     </>
