@@ -1394,11 +1394,11 @@ const ScoringDialog = ({
                 return {
                     quoteItemId: item.id,
                     financialScores: requisition.evaluationCriteria?.financialCriteria.map(c => {
-                        const existing = existingItemScore?.scores.find(s => s.criterionId === c.id);
+                        const existing = existingItemScore?.scores.find(s => s.financialCriterionId === c.id);
                         return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
                     }) || [],
                     technicalScores: requisition.evaluationCriteria?.technicalCriteria.map(c => {
-                        const existing = existingItemScore?.scores.find(s => s.criterionId === c.id);
+                        const existing = existingItemScore?.scores.find(s => s.technicalCriterionId === c.id);
                         return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
                     }) || [],
                 }
@@ -2578,6 +2578,9 @@ export default function QuotationDetailsPage() {
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
   const awardProcessStarted = isAwarded || requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved';
 
+  const isManagerialApprover = role?.startsWith('Manager') || role?.startsWith('Director') || role?.startsWith('VP') || role?.startsWith('President');
+  const canViewReport = isAwarded && isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin' || isManagerialApprover);
+
 
   return (
     <div className="space-y-6">
@@ -2721,7 +2724,7 @@ export default function QuotationDetailsPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 w-full sm:w-auto">
-                            {isAwarded && isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin') && (
+                           {canViewReport && (
                                 <Button variant="secondary" onClick={() => setReportOpen(true)}>
                                     <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
                                 </Button>
