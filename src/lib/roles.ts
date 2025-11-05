@@ -110,8 +110,8 @@ export const rolePermissions: Record<UserRole, string[]> = {
       '/quotations',
       '/records',
   ],
-  'Manager_Procurement_Division': ['/dashboard', '/approving', '/records'],
-  'Director_Supply_Chain_and_Property_Management': ['/dashboard', '/approving', '/records'],
-  'VP_Resources_and_Facilities': ['/dashboard', '/approving', '/records'],
-  'President': ['/dashboard', '/approving', '/records'],
+  'Manager_Procurement_Division': ['/dashboard', '/reviews', '/approving', '/records'],
+  'Director_Supply_Chain_and_Property_Management': ['/dashboard', '/reviews', '/approving', '/records'],
+  'VP_Resources_and_Facilities': ['/dashboard', '/reviews', '/approving', '/records'],
+  'President': ['/dashboard', '/reviews', '/approving', '/records'],
 };
