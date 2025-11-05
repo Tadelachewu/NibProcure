@@ -97,8 +97,7 @@ export async function POST(
                 }
             });
 
-            await tx.score.createMany({
-              data: allScores.map((s: any) => {
+            const scoresToCreate = allScores.map((s: any) => {
                 const isFinancial = requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId);
                 return {
                   itemScoreId: createdItemScore.id,
@@ -108,8 +107,13 @@ export async function POST(
                   financialCriterionId: isFinancial ? s.criterionId : null,
                   technicalCriterionId: !isFinancial ? s.criterionId : null,
                 };
-              })
             });
+
+            if (scoresToCreate.length > 0) {
+              await tx.score.createMany({
+                data: scoresToCreate
+              });
+            }
         }
         
         const finalAverageScoreForThisScorer = totalItems > 0 ? totalWeightedScore / totalItems : 0;

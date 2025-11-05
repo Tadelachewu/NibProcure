@@ -1802,7 +1802,10 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     const printRef = useRef<HTMLDivElement>(null);
     const { toast } = useToast();
 
-    const getCriterionName = (criterionId: string, criteria?: EvaluationCriterion[]) => {
+    const getCriterionName = (criterionId: string, type: 'FINANCIAL' | 'TECHNICAL') => {
+        const criteria = type === 'FINANCIAL'
+          ? requisition.evaluationCriteria?.financialCriteria
+          : requisition.evaluationCriteria?.technicalCriteria;
         return criteria?.find(c => c.id === criterionId)?.name || 'Unknown Criterion';
     }
 
@@ -1914,7 +1917,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                             {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'FINANCIAL').map(s => (
                                                                 <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
                                                                     <div className="flex justify-between items-center font-medium">
-                                                                        <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                        <p>{getCriterionName(s.financialCriterionId!, 'FINANCIAL')}</p>
                                                                         <p className="font-bold">{s.score}/100</p>
                                                                     </div>
                                                                     {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
@@ -1926,7 +1929,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                             {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'TECHNICAL').map(s => (
                                                                 <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
                                                                     <div className="flex justify-between items-center font-medium">
-                                                                        <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
+                                                                        <p>{getCriterionName(s.technicalCriterionId!, 'TECHNICAL')}</p>
                                                                         <p className="font-bold">{s.score}/100</p>
                                                                     </div>
                                                                     {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
