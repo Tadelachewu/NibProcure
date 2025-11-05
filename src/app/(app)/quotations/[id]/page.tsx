@@ -2497,7 +2497,7 @@ export default function QuotationDetailsPage() {
   }
 
   const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
-      if (!requisition) return 'rfq';
+      if (!requisition || !requisition.status) return 'rfq';
       const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
 
       if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
@@ -2815,7 +2815,7 @@ export default function QuotationDetailsPage() {
         )}
          {requisition && (
             <RequisitionDetailsDialog 
-                reuisition={requisition} 
+                requisition={requisition} 
                 isOpen={isDetailsOpen} 
                 onClose={() => setIsDetailsOpen(false)} 
             />
