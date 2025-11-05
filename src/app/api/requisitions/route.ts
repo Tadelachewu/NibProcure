@@ -408,7 +408,7 @@ export async function PATCH(
                         requisition: { connect: { id: id } },
                         reviewer: { connect: { id: userId } },
                         decision: 'APPROVED',
-                        comments: comment,
+                        comment: comment,
                     }
                 });
 
