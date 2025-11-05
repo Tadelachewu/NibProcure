@@ -18,38 +18,21 @@ import {
   CardDescription,
 } from './ui/card';
 import { Button } from './ui/button';
-import { PurchaseRequisition, User } from '@/lib/types';
+import { PurchaseRequisition } from '@/lib/types';
 import { format } from 'date-fns';
 import {
-  Check,
+  Eye,
+  Inbox,
+  Loader2,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  Eye,
-  Inbox,
-  Loader2,
-  Users,
-  X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
-import { Textarea } from './ui/textarea';
-import { Label } from './ui/label';
-import { RequisitionDetailsDialog } from './requisition-details-dialog';
 import { Badge } from './ui/badge';
 import Link from 'next/link';
-import { ScrollArea } from './ui/scroll-area';
-import { Checkbox } from './ui/checkbox';
-
 
 const PAGE_SIZE = 10;
 
@@ -57,24 +40,8 @@ export function ReviewsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, token, allUsers } = useAuth();
-  const { toast } = useToast();
-
+  const { user, token } = useAuth();
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
-  const [justification, setJustification] = useState('');
-  const [attendees, setAttendees] = useState<string[]>([]);
-  const [isActionDialogOpen, setActionDialogOpen] = useState(false);
-  const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
-  const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
-  const [activeActionId, setActiveActionId] = useState<string | null>(null);
-  
-
-  useEffect(() => {
-    if(user) {
-        setAttendees([user.id]);
-    }
-  }, [user]);
 
   const fetchRequisitions = async () => {
     if (!user || !token) {
@@ -83,7 +50,6 @@ export function ReviewsTable() {
     }
     try {
       setLoading(true);
-      // Use forReview=true to fetch all items in any review state relevant to the user
       const response = await fetch(`/api/reviews`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -101,71 +67,6 @@ export function ReviewsTable() {
   useEffect(() => {
     fetchRequisitions();
   }, [user, token]);
-
-  const handleAction = (req: PurchaseRequisition, type: 'approve' | 'reject') => {
-    setSelectedRequisition(req);
-    setActionType(type);
-    setActionDialogOpen(true);
-  }
-
-  const handleShowDetails = (req: PurchaseRequisition) => {
-    setSelectedRequisition(req);
-    setDetailsDialogOpen(true);
-  }
-  
-  const submitAction = async () => {
-    if (!selectedRequisition || !actionType || !user) return;
-    
-    if (!justification.trim()) {
-        toast({
-            variant: 'destructive',
-            title: 'Justification Required',
-            description: 'A justification for the decision is required for the minutes.',
-        });
-        return;
-    }
-
-    setActiveActionId(selectedRequisition.id);
-
-    const minute = {
-        decisionBody: selectedRequisition.status.replace(/_/g, ' '),
-        justification,
-        attendeeIds: [user.id], // Always just the current user
-    }
-
-    try {
-      const response = await fetch(`/api/requisitions`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            id: selectedRequisition.id, 
-            status: actionType === 'approve' ? 'Approved' : 'Rejected', 
-            userId: user.id, 
-            comment: justification,
-            minute,
-        }),
-      });
-      if (!response.ok) throw new Error(`Failed to ${actionType} requisition award`);
-      toast({
-        title: "Success",
-        description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
-      });
-      fetchRequisitions();
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: "Error",
-        description: error instanceof Error ? error.message : "An unknown error occurred.",
-      });
-    } finally {
-        setActiveActionId(null);
-        setActionDialogOpen(false);
-        setJustification('');
-        setSelectedRequisition(null);
-        setActionType(null);
-        setAttendees([]);
-    }
-  }
 
   const totalPages = Math.ceil(requisitions.length / PAGE_SIZE);
   const paginatedRequisitions = useMemo(() => {
@@ -202,9 +103,7 @@ export function ReviewsTable() {
             </TableHeader>
             <TableBody>
               {paginatedRequisitions.length > 0 ? (
-                paginatedRequisitions.map((req, index) => {
-                  const isLoadingAction = activeActionId === req.id;
-                  return (
+                paginatedRequisitions.map((req, index) => (
                     <TableRow key={req.id}>
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                         <TableCell className="font-medium text-primary">{req.id}</TableCell>
@@ -213,25 +112,15 @@ export function ReviewsTable() {
                         <TableCell><Badge variant="secondary">{req.status.replace(/_/g, ' ')}</Badge></TableCell>
                         <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
                         <TableCell>
-                        <div className="flex gap-2">
-                              <Button variant="outline" size="sm" asChild>
-                                  <Link href={`/quotations/${req.id}`}>
-                                      <Eye className="mr-2 h-4 w-4" /> Review Bids
-                                  </Link>
-                              </Button>
-                              <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={isLoadingAction}>
-                                {isLoadingAction && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4" />} 
-                                Approve
-                            </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={isLoadingAction}>
-                                {isLoadingAction && actionType === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className="mr-2 h-4 w-4" />} 
-                                Reject
-                            </Button>
-                        </div>
+                          <Button variant="outline" size="sm" asChild>
+                              <Link href={`/reviews/${req.id}`}>
+                                  <Eye className="mr-2 h-4 w-4" /> Review
+                              </Link>
+                          </Button>
                         </TableCell>
                     </TableRow>
                   )
-                })
+                )
               ) : (
                 <TableRow>
                   <TableCell colSpan={7} className="h-48 text-center">
@@ -263,44 +152,7 @@ export function ReviewsTable() {
             </div>
         )}
       </CardContent>
-       <Dialog open={isActionDialogOpen} onOpenChange={setActionDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              Record Minute for {actionType === 'approve' ? 'Approval' : 'Rejection'}
-            </DialogTitle>
-            <DialogDescription>
-                Record the official minute for the decision on the award for {selectedRequisition?.id}. This is a formal record for auditing purposes.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="justification">Justification / Remarks</Label>
-              <Textarea 
-                id="justification" 
-                value={justification}
-                onChange={(e) => setJustification(e.target.value)}
-                placeholder="Provide a detailed rationale for the committee's decision..."
-                rows={6}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setActionDialogOpen(false)}>Cancel</Button>
-            <Button onClick={submitAction} variant={actionType === 'approve' ? 'default' : 'destructive'}>
-                Submit {actionType === 'approve' ? 'Approval' : 'Rejection'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
-    {selectedRequisition && (
-        <RequisitionDetailsDialog 
-            reuisition={selectedRequisition} 
-            isOpen={isDetailsDialogOpen} 
-            onClose={() => setDetailsDialogOpen(false)} 
-        />
-    )}
     </>
   );
 }
