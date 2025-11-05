@@ -352,7 +352,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
 
 const ContractManagement = ({ requisition, onContractFinalized }: { requisition: PurchaseRequisition, onContractFinalized: () => void }) => {
     const [isSubmitting, setSubmitting] = useState(false);
-    const { toast } } from useToast();
+    const { toast } = useToast();
     const { user } = useAuth();
     const [file, setFile] = useState<File | null>(null);
 
@@ -816,8 +816,8 @@ const RFQActionDialog = ({
     onClose: () => void,
     onSuccess: () => void,
 }) => {
-    const { user } } = useAuth();
-    const { toast } } = useToast();
+    const { user } = useAuth();
+    const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
@@ -952,8 +952,8 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     
     const [allowQuoteEdits, setAllowQuoteEdits] = useState(requisition.rfqSettings?.allowQuoteEdits ?? true);
     const [experienceDocumentRequired, setExperienceDocumentRequired] = useState(requisition.rfqSettings?.experienceDocumentRequired ?? false);
-    const { user } } = useAuth();
-    const { toast } } = useToast();
+    const { user } = useAuth();
+    const { toast } = useToast();
     
     const isSent = requisition.status === 'Accepting_Quotes' || requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
 
@@ -1384,7 +1384,7 @@ const ScoringDialog = ({
     isScoringDeadlinePassed: boolean;
     hidePrices: boolean;
 }) => {
-    const { toast } } = useToast();
+    const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
     
     const form = useForm<ScoreFormValues>({
@@ -1645,7 +1645,7 @@ const ScoringProgressTracker = ({
     const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
     const [isItemAwardCenterOpen, setItemAwardCenterOpen] = useState(false);
     
-    const { toast } } = useToast();
+    const { toast } = useToast();
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
 
     const assignedCommitteeMembers = useMemo(() => {
@@ -1805,7 +1805,7 @@ const ScoringProgressTracker = ({
 const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClose }: { requisition: PurchaseRequisition; quotations: Quotation[], isOpen: boolean, onClose: () => void }) => {
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const printRef = useRef<HTMLDivElement>(null);
-    const { toast } } = useToast();
+    const { toast } = useToast();
 
     const getCriterionName = (criterionId: string, type: 'FINANCIAL' | 'TECHNICAL') => {
         const criteria = type === 'FINANCIAL'
@@ -1983,8 +1983,8 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
 
 
 const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess }: { isOpen: boolean, onClose: () => void, member: User, requisition: PurchaseRequisition, onSuccess: () => void }) => {
-    const { toast } } = useToast();
-    const { user } } = useAuth();
+    const { toast } = useToast();
+    const { user } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadline, setNewDeadline] = useState<Date|undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
@@ -2102,7 +2102,7 @@ const CommitteeActions = ({
     onFinalScoresSubmitted: () => void,
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const { toast } } = useToast();
+    const { toast } = useToast();
     
     const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
     const allQuotesScored = quotations.length > 0 && userScoredQuotesCount === quotations.length;
@@ -2267,7 +2267,7 @@ const NotifyVendorDialog = ({
 export default function QuotationDetailsPage() {
   const router = useRouter();
   const params = useParams();
-  const { toast } } = useToast();
+  const { toast } = useToast();
   const { user, allUsers, role, rfqSenderSetting, committeeQuorum } = useAuth();
   const id = params.id as string;
   
@@ -2574,7 +2574,7 @@ export default function QuotationDetailsPage() {
             <Card className="border-amber-500">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> RFQ Closed: No Bids Received</CardTitle>
-                    <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardDescription>
+                    <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardHeader>
                 </CardHeader>
                 <CardFooter className="gap-2">
                     <Button onClick={() => setActionDialog({isOpen: true, type: 'restart'})}>
@@ -2836,8 +2836,8 @@ export default function QuotationDetailsPage() {
 }
 
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
-    const { user } } = useAuth();
-    const { toast } } = useToast();
+    const { user } = useAuth();
+    const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
@@ -2929,9 +2929,12 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
  
+    
 
     
 
 
+
+    
 
     
