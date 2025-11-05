@@ -29,7 +29,9 @@ import {
   Eye,
   Inbox,
   Loader2,
+  Users,
   X,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -211,6 +213,9 @@ export function ManagerialApprovalsTable() {
                         <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
                         <TableCell>
                         <div className="flex gap-2">
+                              <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
+                                <FileText className="mr-2 h-4 w-4" /> Summary
+                              </Button>
                               <Button variant="outline" size="sm" asChild>
                                   <Link href={`/quotations/${req.id}`}>
                                       <Eye className="mr-2 h-4 w-4" /> Review Bids
@@ -281,25 +286,6 @@ export function ManagerialApprovalsTable() {
                 rows={6}
               />
             </div>
-            <div className="grid gap-2">
-                <Label>Attendees</Label>
-                <ScrollArea className="h-40 w-full rounded-md border p-2">
-                    <div className="space-y-2">
-                    {potentialAttendees.map(attendee => (
-                        <div key={attendee.id} className="flex items-center space-x-2">
-                            <Checkbox 
-                                id={`attendee-${attendee.id}`} 
-                                checked={attendees.includes(attendee.id)}
-                                onCheckedChange={(checked) => {
-                                    setAttendees(prev => checked ? [...prev, attendee.id] : prev.filter(id => id !== attendee.id))
-                                }}
-                            />
-                            <Label htmlFor={`attendee-${attendee.id}`} className="font-normal">{attendee.name}</Label>
-                        </div>
-                    ))}
-                    </div>
-                </ScrollArea>
-            </div>
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setActionDialogOpen(false)}>Cancel</Button>
@@ -312,7 +298,7 @@ export function ManagerialApprovalsTable() {
     </Card>
     {selectedRequisition && (
         <RequisitionDetailsDialog 
-            reuisition={selectedRequisition} 
+            requisition={selectedRequisition} 
             isOpen={isDetailsDialogOpen} 
             onClose={() => setDetailsDialogOpen(false)} 
         />
