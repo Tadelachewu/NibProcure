@@ -326,7 +326,7 @@ export function ApprovalsTable() {
     </Card>
     {selectedRequisition && (
         <RequisitionDetailsDialog 
-            reuisition={selectedRequisition} 
+            requisition={selectedRequisition} 
             isOpen={isDetailsDialogOpen} 
             onClose={() => setDetailsDialogOpen(false)} 
         />
