@@ -185,8 +185,9 @@ export async function GET(request: Request) {
         }
         logsByTransaction.get(log.transactionId)!.push({
           ...log,
-          user: log.user.name,
-          role: log.user.role,
+          user: log.user?.name || 'System',
+          role: log.user?.role?.replace(/_/g, ' ') || 'System',
+          approverComment: log.details, // Use details for comment
         });
       }
     });
@@ -596,5 +597,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
