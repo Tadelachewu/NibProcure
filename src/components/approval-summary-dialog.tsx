@@ -1,7 +1,7 @@
 
 'use client';
 
-import { AuditLog as AuditLogType, PurchaseRequisition } from '@/lib/types';
+import { AuditLog as AuditLogType, PurchaseRequisition, Quotation } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -17,6 +17,8 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 interface ApprovalSummaryDialogProps {
   requisition: PurchaseRequisition;
@@ -32,6 +34,27 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
   const topThree = sortedQuotes.slice(0, 3);
   
   const winningVendor = winner?.vendorName || 'N/A';
+
+  const isAwardedItem = (item: any) => {
+    if (!requisition.awardedQuoteItemIds || requisition.awardedQuoteItemIds.length === 0) return false;
+    const winningQuotes = requisition.quotations?.filter(q => q.status === 'Pending_Award' || q.status === 'Awarded' || q.status === 'Accepted') || [];
+    
+    return requisition.awardedQuoteItemIds?.some(awardedId => {
+        for (const quote of winningQuotes) {
+            // Make sure quote.items is iterable
+            if (quote.items && Array.isArray(quote.items)) {
+                for (const quoteItem of quote.items) {
+                    if (quoteItem.id === awardedId && quoteItem.requisitionItemId === item.id) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    });
+  }
+
+  const awardedItems = winner?.items.filter(item => requisition.awardedQuoteItemIds?.includes(item.id)) || [];
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -82,7 +105,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                     <TableBody>
                                         {topThree.length > 0 ? (
                                             topThree.map((quote, index) => (
-                                            <TableRow key={quote.vendorId} className={index === 0 ? 'bg-green-500/10' : ''}>
+                                            <TableRow key={quote.id} className={index === 0 ? 'bg-green-500/10' : ''}>
                                                 <TableCell className="font-bold">{index + 1}</TableCell>
                                                 <TableCell>{quote.vendorName}</TableCell>
                                                 <TableCell className="text-right font-mono">{quote.finalAverageScore?.toFixed(2) || 'N/A'}</TableCell>
@@ -103,13 +126,46 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                     <strong> {requisition.evaluationCriteria?.technicalWeight}% Technical</strong>.
                                 </p>
                             </div>
+                             <Separator />
+                              <div>
+                                <h4 className="font-semibold text-lg mb-2">Awarded Items</h4>
+                                 <div className="border rounded-md">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Item</TableHead>
+                                                <TableHead>Quantity</TableHead>
+                                                <TableHead className="text-right">Unit Price</TableHead>
+                                                <TableHead className="text-right">Total</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {awardedItems.length > 0 ? (
+                                                awardedItems.map(item => (
+                                                    <TableRow key={item.id}>
+                                                        <TableCell>{item.name}</TableCell>
+                                                        <TableCell>{item.quantity}</TableCell>
+                                                        <TableCell className="text-right">{item.unitPrice.toLocaleString()}</TableCell>
+                                                        <TableCell className="text-right">{(item.unitPrice * item.quantity).toLocaleString()}</TableCell>
+                                                    </TableRow>
+                                                ))
+                                            ) : (
+                                                <TableRow>
+                                                    <TableCell colSpan={4} className="h-24 text-center">No items in winning quote.</TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                 </div>
+                              </div>
+
                             <Separator />
                             {/* Requisition Snapshot */}
                             <div className="space-y-4">
                                 <h4 className="font-semibold text-lg">Original Request Details</h4>
                                 <div>
                                     <p className="font-medium mb-1">Business Justification</p>
-                                    <p className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md">{requisition.justification}</p>
+                                    <p className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md max-h-48 overflow-y-auto">{requisition.justification}</p>
                                 </div>
                             </div>
 
@@ -120,7 +176,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                     <ScrollArea className="max-h-[65vh] pr-4">
                         <div className="relative pl-6 py-4">
                             <div className="absolute left-6 top-0 h-full w-0.5 bg-border -translate-x-1/2"></div>
-                            {(requisition.auditTrail || []).map((log: AuditLogType, index: number) => (
+                            {(requisition.auditTrail || []).length > 0 ? (requisition.auditTrail || []).map((log: AuditLogType, index: number) => (
                                 <div key={log.id} className="relative mb-8">
                                     <div className="absolute -left-3 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-secondary">
                                         <div className="h-3 w-3 rounded-full bg-primary"></div>
@@ -136,7 +192,15 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                         </p>
                                     </div>
                                 </div>
-                            ))}
+                            )) : (
+                                <Alert>
+                                    <AlertCircle className="h-4 w-4" />
+                                    <AlertTitle>No History</AlertTitle>
+                                    <AlertDescription>
+                                        No audit trail events were found for this requisition's transaction ID.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
                         </div>
                     </ScrollArea>
                 </TabsContent>

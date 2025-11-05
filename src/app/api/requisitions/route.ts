@@ -43,7 +43,7 @@ export async function GET(request: Request) {
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
             const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
             const allReviewStatuses = allCommitteeRoles.map(r => `Pending_${r.name}`);
-            allReviewStatuses.push('Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval');
+            allReviewStatuses.push('Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval', 'PostApproved');
             whereClause.status = { in: allReviewStatuses };
         } else {
             // For hierarchical approvers, find items assigned to them
@@ -122,11 +122,21 @@ export async function GET(request: Request) {
         department: true,
         quotations: {
           select: {
+            id: true,
             vendorId: true,
             status: true,
             vendorName: true,
             totalPrice: true,
             finalAverageScore: true,
+            items: {
+              select: {
+                id: true,
+                requisitionItemId: true,
+                name: true,
+                quantity: true,
+                unitPrice: true,
+              }
+            }
           }
         },
         financialCommitteeMembers: { select: { id: true } },
