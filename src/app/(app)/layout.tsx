@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
@@ -89,43 +88,6 @@ export default function AppLayout({
     }
   }, [user, loading, router]);
   
-  // Page-level access check
-  useEffect(() => {
-    if (loading || !role) return;
-
-    const allowedPaths = rolePermissions[role] || [];
-    if (allowedPaths.length === 0 && role !== 'Admin') { // Admin might have implicit access
-        // No paths are allowed for this role, redirect to login
-        router.push('/login');
-        return;
-    }
-    
-    const currentPath = pathname.split('?')[0];
-
-    // Check if the current path is either directly in the allowed list
-    // or is a sub-path of an allowed route (e.g., /requisitions/[id] is a sub-path of /requisitions)
-    const isAllowed = allowedPaths.some(p => {
-        if (p === currentPath) return true;
-        // Check for dynamic routes. e.g. if allowed is '/requisitions' and current is '/requisitions/123'
-        if (p.endsWith('s')) { // A simple heuristic
-             return currentPath.startsWith(p + '/');
-        }
-        return false;
-    });
-
-    if (!isAllowed) {
-        // If not allowed, redirect to the first available path for that role.
-        const defaultPath = allowedPaths[0];
-        if (defaultPath) {
-            router.push(defaultPath);
-        } else {
-            // Fallback if somehow a role has no default path
-            router.push('/login');
-        }
-    }
-  }, [pathname, loading, role, router, rolePermissions]);
-
-
   if (loading || !user || !role) {
     return (
       <div className="flex h-screen w-full items-center justify-center">

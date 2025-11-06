@@ -16,21 +16,21 @@ export default function HomePage() {
       return;
     }
 
-    // If there's no user, redirect to login
+    // If there's no user after loading, they need to log in.
     if (!user) {
       router.replace('/login');
       return;
     }
     
-    // If user and role are present, but permissions aren't loaded yet, wait.
-    if (role && Object.keys(rolePermissions).length === 0) {
+    // If the user is present but role/permissions are not yet loaded, wait.
+    if (!role || Object.keys(rolePermissions).length === 0) {
       return;
     }
 
-    // Redirect based on role
+    // Now we have a user, role, and permissions, so we can safely redirect.
     if (role === 'Vendor') {
       router.replace('/vendor/dashboard');
-    } else if (role) {
+    } else {
       const allowedPaths = rolePermissions[role] || [];
       const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
 
@@ -38,15 +38,14 @@ export default function HomePage() {
         router.replace(defaultPath);
       } else {
         // This is a fallback for roles with no defined paths.
+        // It's better to log out than to loop.
         console.error(`Role ${role} has no default path. Logging out.`);
         router.replace('/login');
       }
-    } else {
-      // Fallback if role is somehow null after loading
-       router.replace('/login');
     }
   }, [user, loading, role, router, rolePermissions]);
 
+  // Render a loading spinner while the logic runs.
   return (
     <div className="flex h-screen w-full items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
