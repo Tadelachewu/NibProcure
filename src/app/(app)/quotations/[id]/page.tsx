@@ -1673,8 +1673,12 @@ const ScoringProgressTracker = ({
                     submissionDate = new Date(latestScore.submittedAt);
                 }
             }
+            
+            const individualDeadline = assignment?.individualDeadline ? new Date(assignment.individualDeadline) : null;
+            const mainDeadline = requisition.scoringDeadline ? new Date(requisition.scoringDeadline) : null;
+            const effectiveDeadline = individualDeadline || mainDeadline;
+            const isOverdue = effectiveDeadline ? isPast(effectiveDeadline) && !hasSubmittedFinalScores : false;
 
-            const isOverdue = isScoringDeadlinePassed && !hasSubmittedFinalScores;
 
             return {
                 ...member,
@@ -1688,7 +1692,7 @@ const ScoringProgressTracker = ({
              if (b.submittedAt) return 1;
              return 0;
         });
-    }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id]);
+    }, [assignedCommitteeMembers, quotations, requisition.id, requisition.scoringDeadline]);
     
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
@@ -2002,12 +2006,12 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
-            const response = await fetch(`/api/requisitions/${requisition.id}/extend-scoring-deadline`, {
+            const response = await fetch(`/api/requisitions/${requisition.id}/extend-member-deadline`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, newDeadline: finalNewDeadline })
+                body: JSON.stringify({ actorUserId: user.id, memberId: member.id, newDeadline: finalNewDeadline })
             });
 
             if (!response.ok) {
@@ -2015,14 +2019,14 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
                 throw new Error(errorData.error || 'Failed to extend deadline.');
             }
 
-            toast({ title: 'Success', description: 'Scoring deadline has been extended for all committee members.' });
+            toast({ title: 'Success', description: `Scoring deadline has been extended for ${member.name}.` });
             onSuccess();
             onClose();
 
         } catch (error) {
              toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     }
 
@@ -2031,8 +2035,8 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Extend Scoring Deadline</DialogTitle>
-                    <DialogDescription>Set a new scoring deadline for all committee members of this requisition.</DialogDescription>
+                    <DialogTitle>Extend Scoring Deadline for {member.name}</DialogTitle>
+                    <DialogDescription>Set a new scoring deadline for this specific committee member.</DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
                     <div className="space-y-2">
@@ -2948,3 +2952,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
