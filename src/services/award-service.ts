@@ -293,6 +293,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
     
     await tx.auditLog.create({
         data: {
+            timestamp: new Date(),
             user: { connect: { id: actor.id } },
             action: 'PROMOTE_STANDBY_AWARD',
             entity: 'Requisition',
