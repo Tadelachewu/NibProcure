@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -1352,18 +1353,18 @@ const WorkflowStepper = ({ step }: { step: 'rfq' | 'committee' | 'award' | 'fina
 };
 
 const scoreFormSchema = z.object({
-  committeeComment: z.string().optional(),
+  committeeComment: z.string().min(1, "An overall comment is required."),
   itemScores: z.array(z.object({
       quoteItemId: z.string(),
       financialScores: z.array(z.object({
           criterionId: z.string(),
           score: z.coerce.number().min(0).max(100),
-          comment: z.string().optional(),
+          comment: z.string().min(1, "A comment is required for each criterion."),
       })),
       technicalScores: z.array(z.object({
           criterionId: z.string(),
           score: z.coerce.number().min(0).max(100),
-          comment: z.string().optional(),
+          comment: z.string().min(1, "A comment is required for each criterion."),
       })),
   }))
 });
@@ -1484,7 +1485,7 @@ const ScoringDialog = ({
                     render={({ field }) => (
                          <FormItem>
                              <FormControl>
-                                <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScore} />
+                                <Textarea placeholder="A comment is required for this criterion..." {...field} rows={2} disabled={!!existingScore} />
                              </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -2540,7 +2541,7 @@ export default function QuotationDetailsPage() {
   }
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
-  const isReadyForNotification = requisition.status === 'PostApproved';
+  const isReadyForNotification = requisition.status === 'PostApproved' && isAuthorized;
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
@@ -2793,7 +2794,7 @@ export default function QuotationDetailsPage() {
         />
 
 
-        {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
+        {isReadyForNotification && (
             <Card className="mt-6 border-amber-500">
                  <CardHeader>
                     <CardTitle>Action Required: Notify Vendor</CardTitle>
@@ -2952,4 +2953,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
