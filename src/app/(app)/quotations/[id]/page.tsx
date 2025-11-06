@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, FileUp, TrophyIcon } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -61,13 +61,10 @@ import Image from 'next/image';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-
-
-const PAGE_SIZE = 6;
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -2512,11 +2509,8 @@ export default function QuotationDetailsPage() {
   }, [quotations, user, role]);
 
   const quotesForDisplay = (role === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (role === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
-  const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
-  const paginatedQuotes = useMemo(() => {
-    const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
-    return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [quotesForDisplay, currentQuotesPage]);
+  const totalQuotePages = 1; // Simplified for now
+  const paginatedQuotes = quotesForDisplay;
 
 
   if (loading || !user) {
@@ -2726,16 +2720,6 @@ export default function QuotationDetailsPage() {
                              </Tabs>
                         )}
                     </CardContent>
-
-                    {totalQuotePages > 1 && (
-                        <CardFooter className="flex items-center justify-end gap-2 pt-4">
-                            <span className="text-sm text-muted-foreground">Page {currentQuotesPage} of {totalQuotePages}</span>
-                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(1)} disabled={currentQuotesPage === 1}><ChevronsLeft /></Button>
-                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p - 1)} disabled={currentQuotesPage === 1}><ChevronLeft /></Button>
-                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p + 1)} disabled={currentQuotesPage === totalQuotePages}><ChevronRight /></Button>
-                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(totalQuotePages)} disabled={currentQuotesPage === totalQuotePages}><ChevronsRight /></Button>
-                        </CardFooter>
-                    )}
 
                     <Dialog open={isScoringFormOpen} onOpenChange={setScoringFormOpen}>
                         {selectedQuoteForScoring && requisition && user && (
@@ -2953,5 +2937,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
