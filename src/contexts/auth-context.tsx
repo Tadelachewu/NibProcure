@@ -170,19 +170,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
-      await Promise.all([
-        fetchAllSettings(),
-        fetchAllUsers(),
-        fetchAllDepartments()
-      ]);
+      // Fetch settings first, as they are crucial for roles and permissions
+      await fetchAllSettings();
+
       try {
           const storedToken = localStorage.getItem('authToken');
-          const users = await fetchAllUsers(); // re-fetch to ensure we have the latest list
-          
           if (storedToken) {
               const decoded = jwtDecode<{ exp: number, iat: number } & User>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
-                  const fullUser = users.find((u: User) => u.id === decoded.id) || decoded;
+                  // Fetch all users inside to get the full user object
+                  const usersResponse = await fetch('/api/users');
+                  const usersData = await usersResponse.json();
+                  setAllUsers(usersData);
+                  const fullUser = usersData.find((u: User) => u.id === decoded.id) || decoded;
                   setUser(fullUser);
                   setToken(storedToken);
                   setRole(fullUser.role);
@@ -197,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     };
     initializeAuth();
-  }, [fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
+  }, []); // Removed dependencies to only run once on mount
 
   const login = (newToken: string, loggedInUser: User, loggedInRole: UserRole) => {
     localStorage.setItem('authToken', newToken);
@@ -215,7 +215,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
   
   const switchUser = async (userId: string) => {
-      const targetUser = allUsers.find(u => u.id === userId);
+      const usersToSwitch = allUsers.length > 0 ? allUsers : await fetchAllUsers();
+      const targetUser = usersToSwitch.find(u => u.id === userId);
       if (targetUser) {
           const response = await fetch('/api/auth/login', {
             method: 'POST',
@@ -226,7 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if(response.ok) {
               const result = await response.json();
               login(result.token, result.user, result.role);
-              window.location.href = '/';
+              window.location.href = '/dashboard';
           } else {
               console.error("Failed to switch user.")
           }

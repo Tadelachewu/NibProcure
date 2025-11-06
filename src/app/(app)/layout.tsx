@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
@@ -39,10 +38,15 @@ export default function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, logout, loading, role, rolePermissions } = useAuth();
+  const { user, logout, loading, role, rolePermissions, fetchAllUsers } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Fetch users if not already populated, e.g., on a hard refresh inside the app
+    fetchAllUsers();
+  }, [fetchAllUsers]);
 
   const accessibleNavItems = useMemo(() => {
     if (!role) return [];
@@ -91,39 +95,38 @@ export default function AppLayout({
   
   // Page-level access check
   useEffect(() => {
-    if (loading || !role) return;
+    if (loading || !role || !user) return;
+
+    if (role === 'Vendor') {
+      router.push('/vendor/dashboard');
+      return;
+    }
 
     const allowedPaths = rolePermissions[role] || [];
     if (allowedPaths.length === 0 && role !== 'Admin') { // Admin might have implicit access
-        // No paths are allowed for this role, redirect to login
         router.push('/login');
         return;
     }
     
     const currentPath = pathname.split('?')[0];
 
-    // Check if the current path is either directly in the allowed list
-    // or is a sub-path of an allowed route (e.g., /requisitions/[id] is a sub-path of /requisitions)
     const isAllowed = allowedPaths.some(p => {
         if (p === currentPath) return true;
-        // Check for dynamic routes. e.g. if allowed is '/requisitions' and current is '/requisitions/123'
-        if (p.endsWith('s')) { // A simple heuristic
+        if (p.endsWith('s')) {
              return currentPath.startsWith(p + '/');
         }
         return false;
     });
 
-    if (!isAllowed) {
-        // If not allowed, redirect to the first available path for that role.
-        const defaultPath = allowedPaths[0];
+    if (!isAllowed && currentPath !== '/dashboard') {
+        const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
         if (defaultPath) {
             router.push(defaultPath);
         } else {
-            // Fallback if somehow a role has no default path
             router.push('/login');
         }
     }
-  }, [pathname, loading, role, router, rolePermissions]);
+  }, [pathname, loading, role, user, router, rolePermissions]);
 
 
   if (loading || !user || !role) {
