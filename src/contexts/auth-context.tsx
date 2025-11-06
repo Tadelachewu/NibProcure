@@ -105,33 +105,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [rfqQuorum, setRfqQuorum] = useState<number>(3);
   const [committeeQuorum, setCommitteeQuorum] = useState<number>(3);
 
-  const fetchAllDepartments = useCallback(async () => {
-    try {
-      const response = await fetch('/api/departments');
-      if (response.ok) {
-        const deptsData = await response.json();
-        setDepartments(deptsData);
-      }
-    } catch (error) {
-      console.error("Failed to fetch departments", error);
-    }
-  }, []);
-
-  const fetchAllUsers = useCallback(async () => {
-    try {
-        const response = await fetch('/api/users');
-        if (response.ok) {
-            const usersData = await response.json();
-            setAllUsers(usersData);
-            return usersData;
-        }
-        return [];
-    } catch (error) {
-        console.error("Failed to fetch all users", error);
-        return [];
-    }
-  }, []);
-
   const fetchAllSettings = useCallback(async () => {
     try {
       const settingsRes = await fetch('/api/settings');
@@ -166,50 +139,90 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const fetchAllDepartments = useCallback(async () => {
+    try {
+      const response = await fetch('/api/departments');
+      if (response.ok) {
+        const deptsData = await response.json();
+        setDepartments(deptsData);
+      }
+    } catch (error) {
+      console.error("Failed to fetch departments", error);
+    }
+  }, []);
+
+  const fetchAllUsers = useCallback(async () => {
+    try {
+        const response = await fetch('/api/users');
+        if (response.ok) {
+            const usersData = await response.json();
+            setAllUsers(usersData);
+            return usersData;
+        }
+        return [];
+    } catch (error) {
+        console.error("Failed to fetch all users", error);
+        return [];
+    }
+  }, []);
+  
+  const loadData = useCallback(async () => {
+    await Promise.all([
+        fetchAllSettings(),
+        fetchAllDepartments(),
+        fetchAllUsers()
+    ]);
+  }, [fetchAllSettings, fetchAllDepartments, fetchAllUsers]);
+
   useEffect(() => {
     const initializeAuth = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
-        // Fetch all critical settings first
-        await fetchAllSettings();
-        await fetchAllDepartments();
-        const usersData = await fetchAllUsers();
-
         const storedToken = localStorage.getItem('authToken');
         if (storedToken) {
-          const decoded = jwtDecode<{ exp: number } & User>(storedToken);
+          const decoded = jwtDecode<{ exp: number; id: string; role: UserRole }>(storedToken);
           if (decoded && decoded.exp * 1000 > Date.now()) {
+            await loadData(); // Load all necessary data
+            // Refetch all users to ensure we have the most current list after loading settings
+            const usersData = await fetchAllUsers();
             const fullUser = usersData.find((u: User) => u.id === decoded.id);
+            
             if (fullUser) {
               setUser(fullUser);
               setToken(storedToken);
               setRole(fullUser.role);
             } else {
-              logout(); // User in token not found in DB
+              logout(); // User from token not found
             }
           } else {
-            logout(); // Token expired
+            logout(); // Expired token
           }
+        } else {
+            // No token, but still fetch public settings if needed
+            await fetchAllSettings();
         }
       } catch (error) {
         console.error("Auth initialization error:", error);
-        // Ensure logout happens on error
         logout();
       } finally {
         setLoading(false);
       }
     };
-
+  
     initializeAuth();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
-  const login = (newToken: string, loggedInUser: User, loggedInRole: UserRole) => {
+  const login = async (newToken: string, loggedInUser: User, loggedInRole: UserRole) => {
+    setLoading(true);
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
     setRole(loggedInRole);
+    // After logging in, fetch all the necessary application data
+    await loadData();
+    setLoading(false);
   };
 
   const logout = () => {
@@ -217,16 +230,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
     setRole(null);
-    // Redirecting here can cause issues during initialization.
-    // Let components handle redirection based on auth state.
-    if (window.location.pathname !== '/login') {
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
         window.location.href = '/login';
     }
   };
   
   const switchUser = async (userId: string) => {
-      const usersToSwitch = allUsers.length > 0 ? allUsers : await fetchAllUsers();
-      const targetUser = usersToSwitch.find(u => u.id === userId);
+      const targetUser = allUsers.find(u => u.id === userId);
       if (targetUser) {
           const response = await fetch('/api/auth/login', {
             method: 'POST',
@@ -236,8 +246,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if(response.ok) {
               const result = await response.json();
-              login(result.token, result.user, result.role);
-              window.location.href = '/dashboard';
+              await login(result.token, result.user, result.role); // use await here
+              if (typeof window !== 'undefined') {
+                window.location.href = '/dashboard';
+              }
           } else {
               console.error("Failed to switch user.")
           }
@@ -331,7 +343,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetchAllUsers,
       fetchAllSettings,
       fetchAllDepartments
-  }), [user, token, role, loading, allUsers, departments, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
+  }), [user, token, role, loading, allUsers, departments, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments, loadData]);
 
 
   return (
