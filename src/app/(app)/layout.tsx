@@ -19,10 +19,6 @@ import {
   LogOut,
   Loader2,
 } from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useAuth } from '@/contexts/auth-context';
-import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ThemeSwitcher } from '@/components/theme-switcher';
@@ -30,6 +26,10 @@ import { navItems } from '@/lib/roles';
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { useToast } from '@/hooks/use-toast';
 import { RoleSwitcher } from '@/components/role-switcher';
+import { useAuth } from '@/contexts/auth-context';
+import { useRouter, usePathname } from 'next/navigation';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+
 
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 
@@ -38,15 +38,18 @@ export default function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, logout, loading, role, rolePermissions, fetchAllUsers } = useAuth();
+  const { user, logout, loading, role, rolePermissions, fetchAllUsers, fetchAllDepartments } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Fetch users if not already populated, e.g., on a hard refresh inside the app
-    fetchAllUsers();
-  }, [fetchAllUsers]);
+    // Fetch non-critical data after the initial auth check
+    if(user) {
+      fetchAllUsers();
+      fetchAllDepartments();
+    }
+  }, [user, fetchAllUsers, fetchAllDepartments]);
 
   const accessibleNavItems = useMemo(() => {
     if (!role) return [];
@@ -103,28 +106,22 @@ export default function AppLayout({
     }
 
     const allowedPaths = rolePermissions[role] || [];
-    if (allowedPaths.length === 0 && role !== 'Admin') { // Admin might have implicit access
-        router.push('/login');
-        return;
-    }
-    
     const currentPath = pathname.split('?')[0];
 
+    // Grant access to specific ID-based sub-routes if the parent is accessible
+    // e.g., if '/requisitions' is allowed, also allow '/requisitions/some-id/edit'
     const isAllowed = allowedPaths.some(p => {
         if (p === currentPath) return true;
-        if (p.endsWith('s')) {
-             return currentPath.startsWith(p + '/');
+        // Check if the path is a parent of the current path (e.g., /requisitions for /requisitions/123)
+        if (currentPath.startsWith(p + '/')) {
+            return true;
         }
         return false;
     });
 
     if (!isAllowed && currentPath !== '/dashboard') {
-        const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
-        if (defaultPath) {
-            router.push(defaultPath);
-        } else {
-            router.push('/login');
-        }
+        const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : (allowedPaths[0] || '/login');
+        router.push(defaultPath);
     }
   }, [pathname, loading, role, user, router, rolePermissions]);
 
@@ -152,7 +149,7 @@ export default function AppLayout({
                 <SidebarMenuItem key={item.path}>
                     <Link href={item.path}>
                         <SidebarMenuButton
-                        isActive={item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)}
+                        isActive={pathname.startsWith(item.path)}
                         tooltip={item.label}
                         >
                         <item.icon />

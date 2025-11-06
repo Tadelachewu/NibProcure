@@ -73,7 +73,7 @@ interface AuthContextType {
   settings: Setting[];
   rfqQuorum: number;
   committeeQuorum: number;
-  login: (token: string, user: User, role: UserRole) => void;
+  login: (token: string, user: User, role: UserRole) => Promise<void>;
   logout: () => void;
   loading: boolean;
   switchUser: (userId: string) => void;
@@ -166,49 +166,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
   
-  const loadData = useCallback(async () => {
-    await Promise.all([
-        fetchAllSettings(),
-        fetchAllDepartments(),
-        fetchAllUsers()
-    ]);
-  }, [fetchAllSettings, fetchAllDepartments, fetchAllUsers]);
 
   useEffect(() => {
     const initializeAuth = async () => {
-      setLoading(true);
-      try {
-        const storedToken = localStorage.getItem('authToken');
-        if (storedToken) {
-          const decoded = jwtDecode<{ exp: number; id: string; role: UserRole }>(storedToken);
-          if (decoded && decoded.exp * 1000 > Date.now()) {
-            await loadData(); // Load all necessary data
-            // Refetch all users to ensure we have the most current list after loading settings
-            const usersData = await fetchAllUsers();
-            const fullUser = usersData.find((u: User) => u.id === decoded.id);
-            
-            if (fullUser) {
-              setUser(fullUser);
-              setToken(storedToken);
-              setRole(fullUser.role);
-            } else {
-              logout(); // User from token not found
+        setLoading(true);
+        try {
+            const storedToken = localStorage.getItem('authToken');
+            if (storedToken) {
+                const decoded = jwtDecode<{ id: string; role: UserRole; exp: number }>(storedToken);
+                if (decoded && decoded.exp * 1000 > Date.now()) {
+                    setToken(storedToken);
+                    
+                    // Fetch settings first to get roles
+                    await fetchAllSettings();
+                    
+                    const usersResponse = await fetch('/api/users');
+                    const usersData: User[] = await usersResponse.json();
+                    setAllUsers(usersData);
+                    
+                    const currentUser = usersData.find(u => u.id === decoded.id);
+                    if (currentUser) {
+                        setUser(currentUser);
+                        setRole(currentUser.role);
+                    } else {
+                       logout();
+                    }
+                } else {
+                    logout();
+                }
             }
-          } else {
-            logout(); // Expired token
-          }
-        } else {
-            // No token, but still fetch public settings if needed
-            await fetchAllSettings();
+        } catch (error) {
+            console.error("Auth init error:", error);
+            logout();
+        } finally {
+            setLoading(false);
         }
-      } catch (error) {
-        console.error("Auth initialization error:", error);
-        logout();
-      } finally {
-        setLoading(false);
-      }
     };
-  
     initializeAuth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -220,8 +213,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(newToken);
     setUser(loggedInUser);
     setRole(loggedInRole);
-    // After logging in, fetch all the necessary application data
-    await loadData();
+    // Fetch all critical data needed for the app to function after login
+    await Promise.all([
+      fetchAllSettings(),
+      fetchAllDepartments(),
+      fetchAllUsers(),
+    ]);
     setLoading(false);
   };
 
@@ -343,7 +340,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetchAllUsers,
       fetchAllSettings,
       fetchAllDepartments
-  }), [user, token, role, loading, allUsers, departments, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments, loadData]);
+  }), [user, token, role, loading, allUsers, departments, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
 
 
   return (
