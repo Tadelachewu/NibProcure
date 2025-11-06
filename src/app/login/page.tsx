@@ -47,7 +47,7 @@ export default function LoginPage() {
           title: 'Login Successful',
           description: `Welcome back, ${result.user.name}!`,
         });
-        router.push('/');
+        router.push('/dashboard');
       } else {
         throw new Error(result.error || 'Invalid email or password.');
       }
