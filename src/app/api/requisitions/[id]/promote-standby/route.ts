@@ -1,9 +1,11 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { promoteStandbyVendor } from '@/services/award-service';
+import { User } from '@/lib/types';
 
 export async function POST(
   request: Request,
@@ -14,8 +16,23 @@ export async function POST(
     const body = await request.json();
     const { userId } = body;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Admin')) {
+    const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Corrected Authorization Logic
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    if (user.role === 'Admin') {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value?.type === 'specific') {
+        isAuthorized = rfqSenderSetting.value.userId === userId;
+    } else if (rfqSenderSetting?.value?.type === 'all') {
+        isAuthorized = user.role === 'Procurement_Officer';
+    }
+
+    if (!isAuthorized) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
