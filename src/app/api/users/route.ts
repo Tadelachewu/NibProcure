@@ -50,7 +50,7 @@ export async function POST(request: Request) {
             name,
             email,
             password: hashedPassword,
-            role: role.replace(/ /g, '_'),
+            role: { connect: { name: role.replace(/ /g, '_') } },
             department: { connect: { id: departmentId } },
         }
     });
@@ -98,7 +98,7 @@ export async function PATCH(request: Request) {
     const updateData: any = {
         name,
         email,
-        role: role.replace(/ /g, '_'),
+        role: { connect: { name: role.replace(/ /g, '_') } },
         department: { connect: { id: departmentId } },
     };
     
