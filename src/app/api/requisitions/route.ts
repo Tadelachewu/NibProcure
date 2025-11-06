@@ -322,40 +322,35 @@ export async function PATCH(
         
         if (newStatus === 'Rejected') {
              return await prisma.$transaction(async (tx) => {
-                const quotationsToDelete = await tx.quotation.findMany({
-                    where: { requisitionId: id },
-                    include: { scores: { include: { itemScores: { include: { scores: true } } } } }
-                });
-
-                const scoreSetIds = quotationsToDelete.flatMap(q => q.scores.map(s => s.id));
-                const itemScoreIds = quotationsToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
-
-                if (itemScoreIds.length > 0) {
-                    await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
-                }
-                if (scoreSetIds.length > 0) {
-                    await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
-                }
-                if (scoreSetIds.length > 0) {
-                    await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
-                }
-                await tx.quotation.deleteMany({ where: { requisitionId: id } });
+                const approvalMatrix = await tx.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
+                const totalValue = requisition.totalPrice;
+                const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
+                if (!relevantTier) throw new Error('No approval tier found.');
                 
-                await tx.committeeAssignment.deleteMany({ where: { requisitionId: id }});
+                const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getNextStatusFromRole(step.role));
 
+                if (currentStepIndex > 0) {
+                    const previousStep = relevantTier.steps[currentStepIndex - 1];
+                    dataToUpdate.status = getNextStatusFromRole(previousStep.role);
+                    
+                    if (!previousStep.role.includes('Committee')) {
+                        const previousApprover = await tx.user.findFirst({ where: { role: previousStep.role }});
+                        dataToUpdate.currentApproverId = previousApprover?.id || null;
+                    } else {
+                        dataToUpdate.currentApproverId = null; // Committee steps don't have a single approver
+                    }
+                    auditDetails = `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. Routing back to ${previousStep.role.replace(/_/g, ' ')}. Reason: "${comment}".`;
+                } else {
+                    // First step of approval chain, reject back to procurement officer
+                    dataToUpdate.status = 'Scoring_Complete';
+                    dataToUpdate.currentApproverId = null;
+                    auditDetails = `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. Returning to Procurement Officer for re-evaluation. Reason: "${comment}".`;
+                }
+                
+                auditAction = 'REJECT_AWARD_STEP';
                 const updatedReq = await tx.purchaseRequisition.update({
                     where: { id: id },
-                    data: {
-                        status: 'Rejected',
-                        currentApproverId: null,
-                        committeeName: null,
-                        committeePurpose: null,
-                        scoringDeadline: null,
-                        awardedQuoteItemIds: [],
-                        awardResponseDeadline: null,
-                        financialCommitteeMembers: { set: [] },
-                        technicalCommitteeMembers: { set: [] },
-                    }
+                    data: dataToUpdate
                 });
 
                 await tx.auditLog.create({
@@ -363,12 +358,13 @@ export async function PATCH(
                         transactionId: requisition.transactionId,
                         user: { connect: { id: user.id } },
                         timestamp: new Date(),
-                        action: 'REJECT_AWARD',
+                        action: auditAction,
                         entity: 'Requisition',
                         entityId: id,
-                        details: `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. All quotes and scores have been reset. Reason: "${comment}".`,
+                        details: auditDetails,
                     }
                 });
+
                 return NextResponse.json(updatedReq);
              });
         } else if (newStatus === 'Approved') { // Using "Approved" as the action from the frontend
