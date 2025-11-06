@@ -159,14 +159,17 @@ async function main() {
 
   // Seed non-vendor users first
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
-    const { committeeAssignments, department, vendorId, password, ...userData } = user;
+    const { committeeAssignments, department, vendorId, password, role, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
+    const roleName = user.role.replace(/ /g, '_');
 
     await prisma.user.create({
       data: {
           ...userData,
           password: hashedPassword,
-          role: userData.role.replace(/ /g, '_'), // Pass role as a string
+          role: {
+            connect: { name: roleName }
+          },
           departmentId: user.departmentId,
       },
     });
@@ -196,6 +199,7 @@ async function main() {
       }
       
       const hashedPassword = await bcrypt.hash(vendorUser.password || 'password123', 10);
+      const roleName = vendorUser.role.replace(/ /g, '_');
       
       // Create user for the vendor first
       const createdUser = await prisma.user.create({
@@ -204,7 +208,9 @@ async function main() {
               name: vendorUser.name,
               email: vendorUser.email,
               password: hashedPassword,
-              role: vendorUser.role.replace(/ /g, '_'),
+              role: {
+                connect: { name: roleName }
+              },
           }
       });
       
