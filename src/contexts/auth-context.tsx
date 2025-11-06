@@ -170,34 +170,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
-      // Fetch settings first, as they are crucial for roles and permissions
-      await fetchAllSettings();
-
+      await fetchAllSettings(); // Ensure settings are available
+      
       try {
           const storedToken = localStorage.getItem('authToken');
           if (storedToken) {
-              const decoded = jwtDecode<{ exp: number, iat: number } & User>(storedToken);
+              const decoded = jwtDecode<{ exp: number } & User>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
-                  // Fetch all users inside to get the full user object
-                  const usersResponse = await fetch('/api/users');
-                  const usersData = await usersResponse.json();
-                  setAllUsers(usersData);
+                  // Fetch the specific user's full data upon load
+                  const usersData = await fetchAllUsers();
                   const fullUser = usersData.find((u: User) => u.id === decoded.id) || decoded;
                   setUser(fullUser);
                   setToken(storedToken);
                   setRole(fullUser.role);
               } else {
-                  localStorage.removeItem('authToken');
+                  logout(); // Clear expired token
               }
           }
       } catch (error) {
           console.error("Failed to initialize auth from localStorage", error);
-          localStorage.clear();
+          logout();
+      } finally {
+          // THIS IS THE CRITICAL FIX: ensure loading is always set to false
+          setLoading(false);
       }
-      setLoading(false);
     };
     initializeAuth();
-  }, []); // Removed dependencies to only run once on mount
+  }, []);
 
   const login = (newToken: string, loggedInUser: User, loggedInRole: UserRole) => {
     localStorage.setItem('authToken', newToken);
