@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const forVendor = searchParams.get('forVendor');
   const approverId = searchParams.get('approverId');
   const forQuoting = searchParams.get('forQuoting');
-  const forReview = searchParams.get('forReview');
+  const forAwardReview = searchParams.get('forAwardReview');
 
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.split(' ')[1];
@@ -34,35 +34,43 @@ export async function GET(request: Request) {
   try {
     let whereClause: any = {};
     
-    if (forReview === 'true' && userPayload) {
+    if (forAwardReview === 'true' && userPayload) {
         const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
         const userId = userPayload.user.id;
-
+        
         const isCommitteeRole = userRole.startsWith('Committee_') && userRole.endsWith('_Member');
         
+        const orConditions = [];
+
+        // Condition 1: The user is the specific `currentApproverId` (for hierarchical roles)
+        orConditions.push({ currentApproverId: userId });
+
+        // Condition 2: The status matches a committee role this user has
         if (isCommitteeRole) {
-             const statusToFind = `Pending_${userRole}`;
-             whereClause.OR = [
-                { status: statusToFind }, // Items currently pending this user's committee role
-                { reviews: { some: { reviewerId: userId } } } // Items this user has already reviewed
-            ];
-        } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-            const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
-            const allReviewStatuses = [
-                ...allCommitteeRoles.map(r => `Pending_${r.name}`),
-                'Pending_Managerial_Approval', 
-                'Pending_Director_Approval', 
-                'Pending_VP_Approval', 
-                'Pending_President_Approval',
-                'PostApproved'
-            ];
-            whereClause.status = { in: allReviewStatuses };
-        } else { // This handles hierarchical roles
-             whereClause.OR = [
-                { currentApproverId: userId },
-                { reviews: { some: { reviewerId: userId } } }
-            ];
+            orConditions.push({ status: `Pending_${userRole}` });
         }
+        
+        // For Admins and Procurement Officers, show all items pending any form of award review
+        if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
+            const allReviewStatuses = await prisma.role.findMany({
+                where: { name: { startsWith: 'Pending_' } }
+            }).then(roles => roles.map(r => r.name));
+            
+             orConditions.push({ status: { in: [
+                'Pending_Committee_A_Recommendation',
+                'Pending_Committee_B_Review',
+                'Pending_Managerial_Approval',
+                'Pending_Director_Approval',
+                'Pending_VP_Approval',
+                'Pending_President_Approval',
+                'PostApproved',
+             ] } });
+        }
+        
+        // Condition 3: Show items the user has already reviewed for historical context
+        orConditions.push({ reviews: { some: { reviewerId: userId } } });
+
+        whereClause.OR = orConditions;
 
     } else if (forVendor === 'true') {
         if (!userPayload || !userPayload.user.vendorId) {

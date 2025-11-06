@@ -18,6 +18,7 @@ import {
   Wallet,
   ClipboardCheck,
   Users,
+  Trophy,
 } from 'lucide-react';
 import { ComponentType } from 'react';
 
@@ -32,8 +33,7 @@ export const navItems: NavItem[] = [
   { path: '/new-requisition', label: 'New Requisition', icon: FilePlus },
   { path: '/requisitions', label: 'Requisitions', icon: FileText },
   { path: '/approvals', label: 'Approvals', icon: GanttChartSquare },
-  { path: '/reviews', label: 'Committee Reviews', icon: Users },
-  { path: '/approving', label: 'Managerial Approvals', icon: ClipboardCheck },
+  { path: '/award-reviews', label: 'Award Reviews', icon: Trophy },
   { path: '/vendors', label: 'Vendors', icon: Building2 },
   { path: '/vendor-verification', label: 'Vendor Verification', icon: ShieldCheck },
   { path: '/quotations', label: 'Quotations', icon: FileBadge },
@@ -61,8 +61,7 @@ export const rolePermissions: Record<UserRole, string[]> = {
     '/records',
     '/audit-log',
     '/settings',
-    '/reviews',
-    '/approving',
+    '/award-reviews',
   ],
   'Committee': [
     '/dashboard',
@@ -100,18 +99,18 @@ export const rolePermissions: Record<UserRole, string[]> = {
   ],
   'Committee_A_Member': [
       '/dashboard',
-      '/reviews',
+      '/award-reviews',
       '/quotations',
       '/records',
   ],
   'Committee_B_Member': [
       '/dashboard',
-      '/reviews',
+      '/award-reviews',
       '/quotations',
       '/records',
   ],
-  'Manager_Procurement_Division': ['/dashboard', '/approving', '/records'],
-  'Director_Supply_Chain_and_Property_Management': ['/dashboard', '/approving', '/records'],
-  'VP_Resources_and_Facilities': ['/dashboard', '/approving', '/records'],
-  'President': ['/dashboard', '/approving', '/records'],
+  'Manager_Procurement_Division': ['/dashboard', '/award-reviews', '/records'],
+  'Director_Supply_Chain_and_Property_Management': ['/dashboard', '/award-reviews', '/records'],
+  'VP_Resources_and_Facilities': ['/dashboard', '/award-reviews', '/records'],
+  'President': ['/dashboard', '/award-reviews', '/records'],
 };
