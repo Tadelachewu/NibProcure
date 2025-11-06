@@ -49,44 +49,32 @@ export default function AppLayout({
     return navItems.filter(item => allowedPaths.includes(item.path));
   }, [role, rolePermissions]);
 
-  const handleLogout = useCallback(() => {
-    toast({
-      title: 'Session Expired',
-      description: 'You have been logged out due to inactivity.',
-    });
-    logout();
-  }, [logout, toast]);
-
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
 
     const resetTimeout = () => {
       clearTimeout(timeoutId);
-      timeoutId = setTimeout(handleLogout, SESSION_TIMEOUT);
+      timeoutId = setTimeout(() => {
+        toast({
+          title: 'Session Expired',
+          description: 'You have been logged out due to inactivity.',
+        });
+        logout();
+      }, SESSION_TIMEOUT);
     };
 
     const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
 
-    const resetTimerOnActivity = () => {
-      resetTimeout();
-    };
-
     if (user) {
       resetTimeout(); // Initialize timeout on login
-      events.forEach(event => window.addEventListener(event, resetTimerOnActivity));
+      events.forEach(event => window.addEventListener(event, resetTimeout));
     }
 
     return () => {
       clearTimeout(timeoutId);
-      events.forEach(event => window.removeEventListener(event, resetTimerOnActivity));
+      events.forEach(event => window.removeEventListener(event, resetTimeout));
     };
-  }, [user, handleLogout]);
-
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
-    }
-  }, [user, loading, router]);
+  }, [user, logout, toast]);
   
   if (loading || !user || !role) {
     return (
