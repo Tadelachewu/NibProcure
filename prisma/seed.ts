@@ -168,7 +168,7 @@ async function main() {
           ...userData,
           password: hashedPassword,
           role: { connect: { name: roleName } },
-          department: { connect: { id: departmentId } },
+          department: departmentId ? { connect: { id: departmentId } } : undefined,
       },
     });
   }
@@ -195,16 +195,15 @@ async function main() {
           console.warn(`Skipping vendor ${vendor.name} because its user was not found.`);
           continue;
       }
-
-      const hashedPassword = await bcrypt.hash(vendorUser.password || 'password123', 10);
-      const roleName = vendorUser.role.replace(/ /g, '_');
+      
+      const { committeeAssignments, department, departmentId, password, ...userData } = vendorUser;
+      const hashedPassword = await bcrypt.hash(password || 'password123', 10);
+      const roleName = userData.role.replace(/ /g, '_');
 
       // Create user for the vendor first
       const createdUser = await prisma.user.create({
           data: {
-              id: vendorUser.id,
-              name: vendorUser.name,
-              email: vendorUser.email,
+              ...userData,
               password: hashedPassword,
               role: { connect: { name: roleName } },
           }
