@@ -2540,7 +2540,7 @@ export default function QuotationDetailsPage() {
       );
   }
   
-  const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
+  const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee');
   const isReadyForNotification = requisition.status === 'PostApproved' && isAuthorized;
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;

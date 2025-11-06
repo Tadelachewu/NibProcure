@@ -49,21 +49,23 @@ export default function AppLayout({
     return navItems.filter(item => allowedPaths.includes(item.path));
   }, [role, rolePermissions]);
 
+  const handleSessionTimeout = useCallback(() => {
+    toast({
+      title: 'Session Expired',
+      description: 'You have been logged out due to inactivity.',
+    });
+    logout();
+  }, [logout, toast]);
+
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
 
     const resetTimeout = () => {
       clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        toast({
-          title: 'Session Expired',
-          description: 'You have been logged out due to inactivity.',
-        });
-        logout();
-      }, SESSION_TIMEOUT);
+      timeoutId = setTimeout(handleSessionTimeout, SESSION_TIMEOUT);
     };
 
-    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    const events: (keyof WindowEventMap)[] = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
 
     if (user) {
       resetTimeout(); // Initialize timeout on login
@@ -74,7 +76,7 @@ export default function AppLayout({
       clearTimeout(timeoutId);
       events.forEach(event => window.removeEventListener(event, resetTimeout));
     };
-  }, [user, logout, toast]);
+  }, [user, handleSessionTimeout]);
   
   if (loading || !user || !role) {
     return (
