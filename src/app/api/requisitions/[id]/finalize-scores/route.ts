@@ -15,7 +15,7 @@ export async function POST(
     try {
         const body = await request.json();
         const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue } = body;
-        console.log(`[FINALIZE-SCORES] Award Value: ${totalAwardValue}`);
+        console.log(`[FINALIZE-SCORES] Award Value: ${totalAwardValue}, Strategy: ${awardStrategy}`);
 
         const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
         if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Admin' && user.role !== 'Committee')) {
@@ -75,6 +75,7 @@ export async function POST(
                 data: {
                     status: nextStatus as any,
                     currentApproverId: nextApproverId,
+                    awardStrategy: awardStrategy, // Save the selected strategy
                     awardedQuoteItemIds: awardedItemIds,
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
                     totalPrice: totalAwardValue
@@ -89,7 +90,7 @@ export async function POST(
                     action: 'FINALIZE_AWARD',
                     entity: 'Requisition',
                     entityId: requisitionId,
-                    details: auditDetails,
+                    details: `Award finalized with strategy '${awardStrategy}'. ${auditDetails}`,
                     transactionId: requisitionId,
                 }
             });
