@@ -19,45 +19,41 @@ export async function POST(request: Request) {
             }
         });
 
-        if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
+            return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
         }
 
-        if (user && user.password && await bcrypt.compare(password, user.password)) {
-            const { password: _, ...userWithoutPassword } = user;
-            
-            const finalUser: User = {
-                ...userWithoutPassword,
-                role: user.role as UserRole, // Use the role directly from the DB
-                department: user.department?.name,
-            };
-
-            const jwtSecret = process.env.JWT_SECRET;
-            if (!jwtSecret) {
-                throw new Error('JWT_SECRET is not defined in environment variables.');
-            }
-
-            const token = jwt.sign(
-                { 
-                    id: finalUser.id, 
-                    name: finalUser.name,
-                    email: finalUser.email,
-                    role: finalUser.role, // This will have underscores, e.g., 'Procurement_Officer'
-                    vendorId: finalUser.vendorId,
-                    department: finalUser.department,
-                }, 
-                jwtSecret, 
-                { expiresIn: '1d' } // Token expires in 1 day
-            );
-            
-            return NextResponse.json({ 
-                user: finalUser, 
-                token, 
-                role: finalUser.role
-            });
-        }
+        const { password: _, ...userWithoutPassword } = user;
         
-        return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
+        const finalUser: User = {
+            ...userWithoutPassword,
+            role: user.role as UserRole,
+            department: user.department?.name,
+        };
+
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+            throw new Error('JWT_SECRET is not defined in environment variables.');
+        }
+
+        const token = jwt.sign(
+            { 
+                id: finalUser.id, 
+                name: finalUser.name,
+                email: finalUser.email,
+                role: finalUser.role,
+                vendorId: finalUser.vendorId,
+                department: finalUser.department,
+            }, 
+            jwtSecret, 
+            { expiresIn: '1d' } // Token expires in 1 day
+        );
+        
+        return NextResponse.json({ 
+            user: finalUser, 
+            token, 
+            role: finalUser.role
+        });
 
     } catch (error) {
         console.error('Login error:', error);
