@@ -47,6 +47,7 @@ export default function LoginPage() {
           title: 'Login Successful',
           description: `Welcome back, ${result.user.name}!`,
         });
+        // Instead of '/', push to '/dashboard' to ensure the main app layout handles the auth state correctly.
         router.push('/dashboard');
       } else {
         throw new Error(result.error || 'Invalid email or password.');

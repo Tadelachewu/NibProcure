@@ -105,6 +105,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [rfqQuorum, setRfqQuorum] = useState<number>(3);
   const [committeeQuorum, setCommitteeQuorum] = useState<number>(3);
 
+  const fetchAllDepartments = useCallback(async () => {
+    try {
+      const response = await fetch('/api/departments');
+      if (response.ok) {
+        const deptsData = await response.json();
+        setDepartments(deptsData);
+      }
+    } catch (error) {
+      console.error("Failed to fetch departments", error);
+    }
+  }, []);
 
   const fetchAllUsers = useCallback(async () => {
     try {
@@ -121,18 +132,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const fetchAllDepartments = useCallback(async () => {
-    try {
-      const response = await fetch('/api/departments');
-      if (response.ok) {
-        const deptsData = await response.json();
-        setDepartments(deptsData);
-      }
-    } catch (error) {
-      console.error("Failed to fetch departments", error);
-    }
-  }, []);
-  
   const fetchAllSettings = useCallback(async () => {
     try {
       const settingsRes = await fetch('/api/settings');
@@ -169,34 +168,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      setLoading(true);
-      await fetchAllSettings(); // Ensure settings are available
-      
       try {
-          const storedToken = localStorage.getItem('authToken');
-          if (storedToken) {
-              const decoded = jwtDecode<{ exp: number } & User>(storedToken);
-              if (decoded && decoded.exp * 1000 > Date.now()) {
-                  // Fetch the specific user's full data upon load
-                  const usersData = await fetchAllUsers();
-                  const fullUser = usersData.find((u: User) => u.id === decoded.id) || decoded;
-                  setUser(fullUser);
-                  setToken(storedToken);
-                  setRole(fullUser.role);
-              } else {
-                  logout(); // Clear expired token
-              }
+        setLoading(true);
+        // Fetch all critical settings first
+        await fetchAllSettings();
+        await fetchAllDepartments();
+        const usersData = await fetchAllUsers();
+
+        const storedToken = localStorage.getItem('authToken');
+        if (storedToken) {
+          const decoded = jwtDecode<{ exp: number } & User>(storedToken);
+          if (decoded && decoded.exp * 1000 > Date.now()) {
+            const fullUser = usersData.find((u: User) => u.id === decoded.id);
+            if (fullUser) {
+              setUser(fullUser);
+              setToken(storedToken);
+              setRole(fullUser.role);
+            } else {
+              logout(); // User in token not found in DB
+            }
+          } else {
+            logout(); // Token expired
           }
+        }
       } catch (error) {
-          console.error("Failed to initialize auth from localStorage", error);
-          logout();
+        console.error("Auth initialization error:", error);
+        // Ensure logout happens on error
+        logout();
       } finally {
-          // THIS IS THE CRITICAL FIX: ensure loading is always set to false
-          setLoading(false);
+        setLoading(false);
       }
     };
+
     initializeAuth();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
 
   const login = (newToken: string, loggedInUser: User, loggedInRole: UserRole) => {
     localStorage.setItem('authToken', newToken);
@@ -210,7 +217,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
     setRole(null);
-    window.location.href = '/login';
+    // Redirecting here can cause issues during initialization.
+    // Let components handle redirection based on auth state.
+    if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+    }
   };
   
   const switchUser = async (userId: string) => {
