@@ -43,21 +43,12 @@ export async function GET(request: Request) {
         if (isCommitteeRole) {
              const statusToFind = `Pending_${userRole}`;
              whereClause.OR = [
-                { status: statusToFind }, // Items currently pending this user's committee role
-                { reviews: { some: { reviewerId: userId } } } // Items this user has already reviewed
+                { status: statusToFind },
+                { reviews: { some: { reviewerId: userId } } } 
             ];
         } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-            const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
-            const allReviewStatuses = [
-                ...allCommitteeRoles.map(r => `Pending_${r.name}`),
-                'Pending_Managerial_Approval', 
-                'Pending_Director_Approval', 
-                'Pending_VP_Approval', 
-                'Pending_President_Approval',
-                'PostApproved'
-            ];
-            whereClause.status = { in: allReviewStatuses };
-        } else { // This handles hierarchical roles
+            whereClause.currentApproverId = { not: null };
+        } else { 
              whereClause.OR = [
                 { currentApproverId: userId },
                 { reviews: { some: { reviewerId: userId } } }
@@ -258,7 +249,7 @@ export async function PATCH(
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
 
-    const user = await prisma.user.findUnique({where: {id: userId}});
+    const user = await prisma.user.findUnique({where: {id: userId}, include: {role: true}});
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -283,12 +274,12 @@ export async function PATCH(
             dataToUpdate.status = 'Rejected';
             dataToUpdate.currentApprover = { disconnect: true };
             auditAction = 'REJECT_REQUISITION';
-            auditDetails = `Requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
+            auditDetails = `Requisition ${id} was rejected by ${user.role.name.replace(/_/g, ' ')} with comment: "${comment}".`;
         } else { // Department head approves
              dataToUpdate.status = 'PreApproved'; 
              dataToUpdate.currentApprover = { disconnect: true };
              auditAction = 'PRE_APPROVE_REQUISITION';
-             auditDetails = `Requisition ${id} was pre-approved by ${user.role.replace(/_/g, ' ')} with comment: "${comment}". Ready for RFQ.`;
+             auditDetails = `Requisition ${id} was pre-approved by ${user.role.name.replace(/_/g, ' ')} with comment: "${comment}". Ready for RFQ.`;
         }
         // Set the approver who took the action
         dataToUpdate.approver = { connect: { id: userId } };
@@ -299,7 +290,7 @@ export async function PATCH(
         let isDesignatedApprover = false;
 
         // Check if the user's role matches the required role for the committee step
-        if (user.role === requiredRole) {
+        if (user.role.name === requiredRole) {
             isDesignatedApprover = true;
         } 
         // Check if the user is the specific current approver for hierarchical steps
@@ -358,7 +349,7 @@ export async function PATCH(
                         action: 'REJECT_AWARD',
                         entity: 'Requisition',
                         entityId: id,
-                        details: `Award for requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. All quotes and scores have been reset. Reason: "${comment}".`,
+                        details: `Award for requisition ${id} was rejected by ${user.role.name.replace(/_/g, ' ')}. All quotes and scores have been reset. Reason: "${comment}".`,
                     }
                 });
                 return NextResponse.json(updatedReq);
@@ -380,7 +371,7 @@ export async function PATCH(
                     dataToUpdate.status = getNextStatusFromRole(nextStep.role);
 
                     if (!nextStep.role.includes('Committee')) {
-                        const nextApprover = await tx.user.findFirst({ where: { role: nextStep.role }});
+                        const nextApprover = await tx.user.findFirst({ where: { role: { name: nextStep.role } }});
                         if (nextApprover) {
                           dataToUpdate.currentApprover = { connect: { id: nextApprover.id } };
                         } else {
@@ -389,12 +380,12 @@ export async function PATCH(
                     } else {
                         dataToUpdate.currentApprover = { disconnect: true };
                     }
-                    auditDetails = `Award approved by ${user.role.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
+                    auditDetails = `Award approved by ${user.role.name.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
                 } else {
                     // This is the final approval. Set to PostApproved to await manual notification.
                     dataToUpdate.status = 'PostApproved';
                     dataToUpdate.currentApprover = { disconnect: true };
-                    auditDetails = `Final award approval for requisition ${id} granted by ${user.role.replace(/_/g, ' ')}. Ready for vendor notification.`;
+                    auditDetails = `Final award approval for requisition ${id} granted by ${user.role.name.replace(/_/g, ' ')}. Ready for vendor notification.`;
                 }
                 auditAction = 'APPROVE_AWARD_STEP';
 
@@ -409,7 +400,7 @@ export async function PATCH(
                             requisition: { connect: { id: id } },
                             author: { connect: { id: userId } },
                             decision: 'APPROVED',
-                            decisionBody: user.role.replace(/_/g, ' '),
+                            decisionBody: user.role.name.replace(/_/g, ' '),
                             justification: minute.justification,
                             attendees: {
                                 connect: minute.attendeeIds.map((id: string) => ({ id }))
@@ -593,7 +584,7 @@ export async function DELETE(
     const body = await request.json();
     const { id, userId } = body;
 
-    const user = await prisma.user.findUnique({where: {id: userId}});
+    const user = await prisma.user.findUnique({where: {id: userId}, include: {role: true}});
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -604,7 +595,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const canDelete = (requisition.requesterId === userId) || (user.role === 'Procurement_Officer' || user.role === 'Admin');
+    const canDelete = (requisition.requesterId === userId) || (user.role.name === 'Procurement_Officer' || user.role.name === 'Admin');
 
     if (!canDelete) {
       return NextResponse.json({ error: 'You are not authorized to delete this requisition.' }, { status: 403 });

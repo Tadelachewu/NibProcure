@@ -18,6 +18,7 @@ import {
   Wallet,
   ClipboardCheck,
   Users,
+  Trophy,
 } from 'lucide-react';
 import { ComponentType } from 'react';
 
@@ -33,6 +34,7 @@ export const navItems: NavItem[] = [
   { path: '/requisitions', label: 'Requisitions', icon: FileText },
   { path: '/approvals', label: 'Approvals', icon: GanttChartSquare },
   { path: '/reviews', label: 'Committee Reviews', icon: Users },
+  { path: '/award-reviews', label: 'Award Reviews', icon: Trophy },
   { path: '/approving', label: 'Managerial Approvals', icon: ClipboardCheck },
   { path: '/vendors', label: 'Vendors', icon: Building2 },
   { path: '/vendor-verification', label: 'Vendor Verification', icon: ShieldCheck },
@@ -62,7 +64,7 @@ export const rolePermissions: Record<UserRole, string[]> = {
     '/audit-log',
     '/settings',
     '/reviews',
-    '/approving',
+    '/award-reviews',
   ],
   'Committee': [
     '/dashboard',
@@ -103,15 +105,17 @@ export const rolePermissions: Record<UserRole, string[]> = {
       '/reviews',
       '/quotations',
       '/records',
+      '/award-reviews',
   ],
   'Committee_B_Member': [
       '/dashboard',
       '/reviews',
       '/quotations',
       '/records',
+      '/award-reviews',
   ],
-  'Manager_Procurement_Division': ['/dashboard', '/approving', '/records'],
-  'Director_Supply_Chain_and_Property_Management': ['/dashboard', '/approving', '/records'],
-  'VP_Resources_and_Facilities': ['/dashboard', '/approving', '/records'],
-  'President': ['/dashboard', '/approving', '/records'],
+  'Manager_Procurement_Division': ['/dashboard', '/award-reviews', '/records'],
+  'Director_Supply_Chain_and_Property_Management': ['/dashboard', '/award-reviews', '/records'],
+  'VP_Resources_and_Facilities': ['/dashboard', '/award-reviews', '/records'],
+  'President': ['/dashboard', '/award-reviews', '/records'],
 };
