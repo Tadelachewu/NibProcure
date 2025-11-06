@@ -197,14 +197,18 @@ export function AwardReviewsTable() {
                   const isLoadingAction = activeActionId === req.id;
                   
                   let isActionable = false;
-                    if (user && req.status) {
-                        const requiredRole = req.status.replace('Pending_', '');
-                        if(user.role === requiredRole) {
-                            isActionable = true;
-                        } else if (req.currentApproverId === user.id) {
-                            isActionable = true;
-                        }
-                    }
+                  if (user && req.status) {
+                      const requiredRoleForStatus = req.status.replace('Pending_', '');
+                      // Condition 1: The user's role matches the pending status (for committees)
+                      if (user.role === requiredRoleForStatus) {
+                          isActionable = true;
+                      }
+                      // Condition 2: The user is the specific current approver (for hierarchical roles)
+                      else if (req.currentApproverId === user.id) {
+                          isActionable = true;
+                      }
+                  }
+
 
                   return (
                     <TableRow key={req.id}>
