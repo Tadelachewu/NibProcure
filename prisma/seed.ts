@@ -159,7 +159,7 @@ async function main() {
 
   // Seed non-vendor users first
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
-    const { committeeAssignments, department, vendorId, password, role, ...userData } = user;
+    const { committeeAssignments, department, vendorId, password, role, departmentId, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
     const roleName = user.role.replace(/ /g, '_');
 
@@ -171,7 +171,7 @@ async function main() {
             connect: { name: roleName }
           },
           department: {
-            connect: { id: user.departmentId }
+            connect: { id: departmentId }
           },
       },
     });
