@@ -19,7 +19,6 @@ import {
   LogOut,
   Loader2,
 } from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/auth-context';
 import { useRouter, usePathname } from 'next/navigation';
@@ -42,12 +41,6 @@ export default function AppLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
-
-  const accessibleNavItems = useMemo(() => {
-    if (!role) return [];
-    const allowedPaths = rolePermissions[role] || [];
-    return navItems.filter(item => allowedPaths.includes(item.path));
-  }, [role, rolePermissions]);
 
   const handleSessionTimeout = useCallback(() => {
     toast({
@@ -78,13 +71,40 @@ export default function AppLayout({
     };
   }, [user, handleSessionTimeout]);
   
-  if (loading || !user || !role) {
+  console.log('[App Layout] Rendering. State:', { loading, user: !!user, role });
+  
+  const accessibleNavItems = useMemo(() => {
+    if (!role || !rolePermissions[role]) {
+      console.log(`[App Layout] No permissions found for role: ${role}`);
+      return [];
+    }
+    const allowedPaths = rolePermissions[role];
+    const items = navItems.filter(item => allowedPaths.includes(item.path));
+    console.log(`[App Layout] Accessible nav items for role ${role}:`, items.map(i => i.label));
+    return items;
+  }, [role, rolePermissions]);
+  
+  if (loading) {
+    console.log('[App Layout] Showing loading spinner because `loading` is true.');
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
+
+  if (!user || !role) {
+    console.log('[App Layout] No user or role found after loading. This should be handled by /page.tsx, but showing spinner as a fallback.');
+    // This state should ideally not be reached if the root page.tsx handles redirection correctly.
+    // But as a fallback, we show a loader to prevent a flash of an empty layout.
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  console.log('[App Layout] Rendering full layout for user:', user.name);
 
   return (
     <SidebarProvider>

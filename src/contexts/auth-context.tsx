@@ -108,37 +108,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchAllUsers = useCallback(async () => {
     try {
+        console.log('[AuthContext] Fetching all users...');
         const response = await fetch('/api/users');
         if (response.ok) {
             const usersData = await response.json();
             setAllUsers(usersData);
+            console.log(`[AuthContext] Fetched ${usersData.length} users.`);
             return usersData;
         }
         return [];
     } catch (error) {
-        console.error("Failed to fetch all users", error);
+        console.error("[AuthContext] Failed to fetch all users", error);
         return [];
     }
   }, []);
 
   const fetchAllDepartments = useCallback(async () => {
     try {
+      console.log('[AuthContext] Fetching all departments...');
       const response = await fetch('/api/departments');
       if (response.ok) {
         const deptsData = await response.json();
         setDepartments(deptsData);
+        console.log(`[AuthContext] Fetched ${deptsData.length} departments.`);
       }
     } catch (error) {
-      console.error("Failed to fetch departments", error);
+      console.error("[AuthContext] Failed to fetch departments", error);
     }
   }, []);
   
   const fetchAllSettings = useCallback(async () => {
     try {
+      console.log('[AuthContext] Fetching all settings...');
       const settingsRes = await fetch('/api/settings');
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
         setSettings(settingsData);
+        console.log(`[AuthContext] Fetched ${settingsData.length} settings.`);
         
         const rfqSetting = settingsData.find((s:any) => s.key === 'rfqSenderSetting');
         if (rfqSetting) setRfqSenderSetting(rfqSetting.value);
@@ -160,61 +166,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (approvalMatrixRes.ok) {
         const matrixData = await approvalMatrixRes.json();
         setApprovalThresholds(matrixData);
+        console.log('[AuthContext] Fetched approval matrix.');
       }
 
     } catch (error) {
-        console.error("Failed to fetch settings", error);
+        console.error("[AuthContext] Failed to fetch settings", error);
     }
   }, []);
 
   useEffect(() => {
     const initializeAuth = async () => {
+      console.log('[AuthContext] Initializing auth...');
       setLoading(true);
       await Promise.all([
         fetchAllSettings(),
-        fetchAllUsers(),
+        // fetchAllUsers is called below after we have a token potentially
         fetchAllDepartments()
       ]);
       try {
           const storedToken = localStorage.getItem('authToken');
-          const users = await fetchAllUsers(); // re-fetch to ensure we have the latest list
+          console.log(`[AuthContext] Found token in localStorage: ${!!storedToken}`);
           
           if (storedToken) {
               const decoded = jwtDecode<{ exp: number, iat: number } & User>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
+                  console.log(`[AuthContext] Token is valid. User ID: ${decoded.id}`);
+                  const users = await fetchAllUsers(); // re-fetch to ensure we have the latest list
                   const fullUser = users.find((u: User) => u.id === decoded.id) || decoded;
                   setUser(fullUser);
                   setToken(storedToken);
                   setRole(fullUser.role);
+                  console.log(`[AuthContext] User set from token. Name: ${fullUser.name}, Role: ${fullUser.role}`);
               } else {
+                  console.log('[AuthContext] Token is expired or invalid. Removing from localStorage.');
                   localStorage.removeItem('authToken');
               }
           }
       } catch (error) {
-          console.error("Failed to initialize auth from localStorage", error);
+          console.error("[AuthContext] Failed to initialize auth from localStorage", error);
           localStorage.clear();
       }
+      console.log('[AuthContext] Initialization complete. Setting loading to false.');
       setLoading(false);
     };
     initializeAuth();
   }, [fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
 
   const login = (newToken: string, loggedInUser: User, loggedInRole: UserRole) => {
+    console.log(`[AuthContext] login function called for user: ${loggedInUser.name}`);
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
     setRole(loggedInRole);
+    console.log('[AuthContext] User, token, and role have been set in state.');
   };
 
-  const logout = () => {
+  const logout = useCallback(() => {
+    console.log('[AuthContext] logout function called.');
     localStorage.removeItem('authToken');
     setToken(null);
     setUser(null);
     setRole(null);
     window.location.href = '/login';
-  };
+  },[]);
   
   const switchUser = async (userId: string) => {
+      console.log(`[AuthContext] Attempting to switch to user ID: ${userId}`);
       const targetUser = allUsers.find(u => u.id === userId);
       if (targetUser) {
           const response = await fetch('/api/auth/login', {
@@ -225,10 +242,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if(response.ok) {
               const result = await response.json();
+              console.log(`[AuthContext] Successfully switched user to ${result.user.name}.`);
               login(result.token, result.user, result.role);
               window.location.href = '/';
           } else {
-              console.error("Failed to switch user.")
+              console.error("[AuthContext] Failed to switch user via API call.");
           }
       }
   };
@@ -320,7 +338,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetchAllUsers,
       fetchAllSettings,
       fetchAllDepartments
-  }), [user, token, role, loading, allUsers, departments, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
+  }), [user, token, role, loading, allUsers, departments, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments, logout]);
 
 
   return (

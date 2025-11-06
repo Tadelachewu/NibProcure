@@ -29,6 +29,7 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[Login Page] handleLogin started.');
     setLoading(true);
     try {
       const response = await fetch('/api/auth/login', {
@@ -39,19 +40,24 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
+      console.log(`[Login Page] API response status: ${response.status}`);
       const result = await response.json();
 
       if (response.ok) {
+        console.log('[Login Page] Login API call successful. Calling authLogin context function.');
         authLogin(result.token, result.user, result.role);
         toast({
           title: 'Login Successful',
           description: `Welcome back, ${result.user.name}!`,
         });
+        console.log('[Login Page] Redirecting to /');
         router.push('/');
       } else {
+        console.error('[Login Page] Login API call failed:', result.error);
         throw new Error(result.error || 'Invalid email or password.');
       }
     } catch (error) {
+      console.error('[Login Page] An error occurred in handleLogin:', error);
        toast({
         variant: 'destructive',
         title: 'Login Failed',
