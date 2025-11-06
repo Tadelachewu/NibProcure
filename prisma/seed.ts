@@ -161,13 +161,14 @@ async function main() {
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
     const { committeeAssignments, department, vendorId, password, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
-
+    const roleName = userData.role.replace(/ /g, '_');
+    
     await prisma.user.create({
       data: {
           ...userData,
           password: hashedPassword,
-          role: userData.role.replace(/ /g, '_'), // Pass role as a string
-          departmentId: user.departmentId,
+          role: { connect: { name: roleName } },
+          department: { connect: { id: user.departmentId } },
       },
     });
   }
@@ -196,6 +197,7 @@ async function main() {
       }
       
       const hashedPassword = await bcrypt.hash(vendorUser.password || 'password123', 10);
+      const roleName = vendorUser.role.replace(/ /g, '_');
       
       // Create user for the vendor first
       const createdUser = await prisma.user.create({
@@ -204,7 +206,7 @@ async function main() {
               name: vendorUser.name,
               email: vendorUser.email,
               password: hashedPassword,
-              role: vendorUser.role.replace(/ /g, '_'),
+              role: { connect: { name: roleName } },
           }
       });
       
@@ -218,14 +220,14 @@ async function main() {
           phone: vendor.phone,
           address: vendor.address,
           kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
-          userId: createdUser.id, // Explicitly provide the userId
+          user: { connect: { id: createdUser.id }},
       },
     });
 
     // Now, update the user with the vendorId
     await prisma.user.update({
         where: { id: createdUser.id },
-        data: { vendorId: createdVendor.id }
+        data: { vendor: { connect: { id: createdVendor.id } } }
     });
 
     if (kycDocuments) {
@@ -434,7 +436,7 @@ async function main() {
             data: {
                 ...grnData,
                 receivedDate: new Date(grnData.receivedDate),
-                receivedById: grnData.receivedById,
+                receivedBy: { connect: { id: grnData.receivedById }},
                 items: {
                     create: items.map(item => ({
                         poItemId: item.poItemId,
