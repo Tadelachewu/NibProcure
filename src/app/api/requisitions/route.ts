@@ -547,10 +547,10 @@ export async function POST(request: Request) {
                     financialWeight: body.evaluationCriteria.financialWeight,
                     technicalWeight: body.evaluationCriteria.technicalWeight,
                     financialCriteria: {
-                        create: body.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: c.weight }))
+                        create: body.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) }))
                     },
                     technicalCriteria: {
-                        create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: c.weight }))
+                        create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) }))
                     }
                 }
             },
