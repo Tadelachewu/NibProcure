@@ -69,11 +69,15 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     const scoreSetIds = quotationsToDelete.flatMap(q => q.scores.map(s => s.id));
     const itemScoreIds = quotationsToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
 
-    if (itemScoreIds.length > 0) {
-        await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
+    const scoreIds = itemScoreIds.length > 0
+        ? (await tx.score.findMany({ where: { itemScoreId: { in: itemScoreIds } }, select: { id: true } })).map(s => s.id)
+        : [];
+
+    if (scoreIds.length > 0) {
+        await tx.score.deleteMany({ where: { id: { in: scoreIds } } });
     }
-    if (scoreSetIds.length > 0) {
-        await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
+    if (itemScoreIds.length > 0) {
+        await tx.itemScore.deleteMany({ where: { id: { in: itemScoreIds } } });
     }
     if (scoreSetIds.length > 0) {
         await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
@@ -91,6 +95,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
             scoringDeadline: null,
             awardResponseDeadline: null,
             awardedQuoteItemIds: [],
+            failedAwardItemIds: [],
             committeeName: null,
             committeePurpose: null,
             financialCommitteeMembers: { set: [] },
@@ -129,6 +134,8 @@ export async function handleAwardRejection(
             transactionId: requisition.transactionId,
         }
     });
+
+    const failedIds = [...(requisition.failedAwardItemIds || []), ...declinedItemIds];
     
     const otherActiveAwards = await tx.quotation.count({
         where: {
@@ -141,7 +148,7 @@ export async function handleAwardRejection(
     if (otherActiveAwards > 0) {
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
+            data: { status: 'Award_Declined', failedAwardItemIds: { set: failedIds } }
         });
          await tx.auditLog.create({
             data: {
@@ -166,7 +173,7 @@ export async function handleAwardRejection(
     if (nextStandby) {
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
+            data: { status: 'Award_Declined', failedAwardItemIds: { set: failedIds } }
         });
 
         await tx.auditLog.create({
@@ -233,9 +240,13 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         throw new Error('Associated requisition not found.');
     }
 
+    const itemsToAward = requisition.failedAwardItemIds && requisition.failedAwardItemIds.length > 0
+        ? requisition.failedAwardItemIds
+        : requisition.items.map(i => i.id);
+
     // --- START: Intelligent Item Selection Logic ---
-    const bestItemsFromNewWinner = requisition.items.map(reqItem => {
-        const proposalsForItem = nextStandby.items.filter(i => i.requisitionItemId === reqItem.id);
+    const bestItemsFromNewWinner = itemsToAward.map(reqItemId => {
+        const proposalsForItem = nextStandby.items.filter(i => i.requisitionItemId === reqItemId);
 
         if (proposalsForItem.length === 0) return null;
         if (proposalsForItem.length === 1) return proposalsForItem[0];
@@ -278,6 +289,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             totalPrice: newTotalPrice, // Update price to the new winner's
             awardedQuoteItemIds: newAwardedItemIds, // Update awarded items
             currentApproverId: nextApproverId, // Set the first approver in the new chain
+            failedAwardItemIds: [], // Clear the failed items list
         }
     });
     

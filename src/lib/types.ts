@@ -160,6 +160,7 @@ export type PurchaseRequisition = {
   purchaseOrderId?: string;
   allowedVendorIds: string[];
   awardedQuoteItemIds: string[];
+  failedAwardItemIds?: string[];
   customQuestions?: CustomQuestion[];
   deadline?: Date;
   scoringDeadline?: Date;
@@ -236,6 +237,8 @@ export type Score = {
   score: number; // 0-100
   comment?: string;
   type: 'FINANCIAL' | 'TECHNICAL';
+  financialCriterionId?: string;
+  technicalCriterionId?: string;
 }
 
 export type ItemScore = {

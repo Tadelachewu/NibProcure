@@ -3,9 +3,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { handleAwardRejection } from '@/services/award-service';
-
-type AwardAction = 'promote_second' | 'promote_third' | 'restart_rfq';
+import { handleAwardRejection, promoteStandbyVendor } from '@/services/award-service';
+import { User } from '@/lib/types';
 
 export async function POST(
   request: Request,
@@ -14,53 +13,27 @@ export async function POST(
   const requisitionId = params.id;
   try {
     const body = await request.json();
-    const { userId, action } = body as { userId: string; action: AwardAction };
+    const { userId } = body as { userId: string };
 
-    const user = await prisma.user.findUnique({where: {id: userId}});
+    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
+    
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    if (user.role === 'Admin' || (rfqSenderSetting?.value as any)?.type === 'all' && user.role === 'Procurement_Officer') {
+        isAuthorized = true;
+    } else if ((rfqSenderSetting?.value as any)?.type === 'specific' && (rfqSenderSetting.value as any).userId === userId) {
+        isAuthorized = true;
+    }
 
-    // The logic is complex and state-dependent, so we wrap it in a transaction
-    // and use our dedicated service.
+    if (!isAuthorized) {
+        return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
+    }
+
     const transactionResult = await prisma.$transaction(async (tx) => {
-        const requisition = await tx.purchaseRequisition.findUnique({ where: { id: requisitionId }});
-        if (!requisition) {
-          throw new Error('Requisition not found');
-        }
-
-        // The "award change" is always triggered because a vendor declined or failed.
-        // We find the quote that caused the "Award_Declined" state.
-        const failedQuote = await tx.quotation.findFirst({
-            where: {
-                requisitionId: requisitionId,
-                status: 'Declined'
-            },
-            orderBy: {
-                updatedAt: 'desc'
-            }
-        });
-
-        if (failedQuote) {
-            // We use the rejection logic, as promoting is a consequence of the current winner "failing"
-            return await handleAwardRejection(tx, failedQuote, requisition, user);
-        } else {
-            // Fallback for cases where status is Award_Declined but no quote is marked 'Declined'
-             await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'Scoring_Complete' }
-            });
-            await tx.auditLog.create({
-                data: {
-                    user: { connect: { id: user.id }},
-                    action: 'RESET_AWARD_STATE',
-                    entity: 'Requisition',
-                    entityId: requisition.id,
-                    details: 'Award status was reset to Scoring Complete due to an inconsistent state.'
-                }
-            })
-            return { message: 'Requisition award status was inconsistent and has been reset. Please re-award.'};
-        }
+        return await promoteStandbyVendor(tx, requisitionId, user);
     });
 
     return NextResponse.json({ message: 'Award change handled successfully.', details: transactionResult });
