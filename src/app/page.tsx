@@ -5,15 +5,15 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { Loader2 } from 'lucide-react';
-import { rolePermissions } from '@/lib/roles';
 
 export default function HomePage() {
-  const { user, loading, role, rolePermissions: permissions } = useAuth();
+  const { user, loading, role, rolePermissions } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) {
-      return; // Wait until authentication state is fully loaded
+    // Wait until authentication is fully loaded and permissions are available.
+    if (loading || (user && Object.keys(rolePermissions).length === 0)) {
+      return; 
     }
 
     if (!user || !role) {
@@ -21,10 +21,11 @@ export default function HomePage() {
       return;
     }
 
+    // Now that we're sure permissions are loaded, proceed with redirection.
     if (role === 'Vendor') {
       router.push('/vendor/dashboard');
     } else {
-      const allowedPaths = permissions[role] || [];
+      const allowedPaths = rolePermissions[role] || [];
       // Prefer dashboard if available, otherwise take the first available path.
       const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
 
@@ -35,7 +36,7 @@ export default function HomePage() {
         router.push('/login');
       }
     }
-  }, [user, loading, role, router, permissions]);
+  }, [user, loading, role, router, rolePermissions]);
 
   return (
     <div className="flex h-screen w-full items-center justify-center">
