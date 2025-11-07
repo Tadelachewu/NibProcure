@@ -64,24 +64,26 @@ export async function POST(
                 const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
 
                 for (const reqItem of reqItems) {
-                    let proposals = [];
+                    let proposals: { quoteId: string; quoteItemId: string; vendorId: string; averageScore: number; }[] = [];
                     for (const quote of allQuotes) {
-                         const quoteItem = quote.items.find(i => i.requisitionItemId === reqItem.id);
-                         if (quoteItem) {
-                             let totalScore = 0;
-                             let scoreCount = 0;
-                             quote.scores?.forEach(scoreSet => {
-                                 const score = scoreSet.itemScores?.find(s => s.quoteItemId === quoteItem.id);
-                                 if (score) {
-                                     totalScore += score.finalScore;
-                                     scoreCount++;
-                                 }
-                             });
-                             proposals.push({
-                                 quoteId: quote.id,
-                                 quoteItemId: quoteItem.id,
-                                 vendorId: quote.vendorId,
-                                 averageScore: scoreCount > 0 ? totalScore / scoreCount : 0
+                         const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
+                         if (proposalsForItem.length > 0) {
+                             proposalsForItem.forEach(proposal => {
+                                 let totalScore = 0;
+                                 let scoreCount = 0;
+                                 quote.scores?.forEach(scoreSet => {
+                                     const score = scoreSet.itemScores?.find(s => s.quoteItemId === proposal.id);
+                                     if (score) {
+                                         totalScore += score.finalScore;
+                                         scoreCount++;
+                                     }
+                                 });
+                                 proposals.push({
+                                     quoteId: quote.id,
+                                     quoteItemId: proposal.id,
+                                     vendorId: quote.vendorId,
+                                     averageScore: scoreCount > 0 ? totalScore / scoreCount : 0
+                                 });
                              });
                          }
                     }

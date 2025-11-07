@@ -56,48 +56,28 @@ export const BestItemAwardDialog = ({
                 const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
                 if (!proposalsForItem.length) return;
 
-                let bestProposalForVendor = proposalsForItem[0];
-                if (proposalsForItem.length > 1) {
-                    let bestProposalScore = -1;
-                    proposalsForItem.forEach(proposal => {
-                        let totalItemScore = 0;
-                        let scoreCount = 0;
-                        quote.scores?.forEach(scoreSet => {
-                            const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                            if (itemScore) {
-                                totalItemScore += itemScore.finalScore;
-                                scoreCount++;
-                            }
-                        });
-                        const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                        if (avgScore > bestProposalScore) {
-                            bestProposalScore = avgScore;
-                            bestProposalForVendor = proposal;
+                proposalsForItem.forEach(proposal => {
+                    let totalItemScore = 0;
+                    let scoreCount = 0;
+                    quote.scores?.forEach(scoreSet => {
+                        const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
+                        if (itemScore) {
+                            totalItemScore += itemScore.finalScore;
+                            scoreCount++;
                         }
                     });
-                }
-                
-                let finalProposalScore = 0;
-                let scoreCount = 0;
-                 quote.scores?.forEach(scoreSet => {
-                    const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === bestProposalForVendor.id);
-                    if (itemScore) {
-                        finalProposalScore += itemScore.finalScore;
-                        scoreCount++;
+                    const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                    
+                    if (averageItemScore > bestScore) {
+                        bestScore = averageItemScore;
+                        winner = {
+                            vendorId: quote.vendorId,
+                            vendorName: quote.vendorName,
+                            quoteItemId: proposal.id,
+                            unitPrice: proposal.unitPrice,
+                        };
                     }
                 });
-
-                const averageItemScore = scoreCount > 0 ? finalProposalScore / scoreCount : 0;
-
-                if (averageItemScore > bestScore) {
-                    bestScore = averageItemScore;
-                    winner = {
-                        vendorId: quote.vendorId,
-                        vendorName: quote.vendorName,
-                        quoteItemId: bestProposalForVendor.id,
-                        unitPrice: bestProposalForVendor.unitPrice,
-                    };
-                }
             });
             return {
                 requisitionItemId: reqItem.id,
