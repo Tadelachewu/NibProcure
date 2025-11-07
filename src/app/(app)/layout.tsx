@@ -39,10 +39,16 @@ export default function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, logout, loading, role, rolePermissions } = useAuth();
+  const { user, logout, loading, role, rolePermissions, allUsers, fetchAllUsers } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
+  
+  useEffect(() => {
+    if (allUsers.length === 0) {
+      fetchAllUsers();
+    }
+  }, [allUsers, fetchAllUsers]);
 
   const accessibleNavItems = useMemo(() => {
     if (!role) return [];
@@ -91,35 +97,30 @@ export default function AppLayout({
   
   // Page-level access check
   useEffect(() => {
-    if (loading || !role) return;
+    if (loading || !role || !rolePermissions[role]) return;
 
     const allowedPaths = rolePermissions[role] || [];
-    if (allowedPaths.length === 0 && role !== 'Admin') { // Admin might have implicit access
-        // No paths are allowed for this role, redirect to login
+    if (allowedPaths.length === 0 && role !== 'Admin') {
         router.push('/login');
         return;
     }
     
     const currentPath = pathname.split('?')[0];
 
-    // Check if the current path is either directly in the allowed list
-    // or is a sub-path of an allowed route (e.g., /requisitions/[id] is a sub-path of /requisitions)
+    // More robust check for dynamic routes.
     const isAllowed = allowedPaths.some(p => {
+        // Exact match (e.g., /dashboard)
         if (p === currentPath) return true;
-        // Check for dynamic routes. e.g. if allowed is '/requisitions' and current is '/requisitions/123'
-        if (p.endsWith('s')) { // A simple heuristic
-             return currentPath.startsWith(p + '/');
-        }
+        // Check for dynamic sub-routes (e.g., if /requisitions is allowed, /requisitions/123 should also be)
+        if (currentPath.startsWith(`${p}/`)) return true;
         return false;
     });
 
-    if (!isAllowed) {
-        // If not allowed, redirect to the first available path for that role.
-        const defaultPath = allowedPaths[0];
+    if (!isAllowed && currentPath !== '/dashboard') { // Allow dashboard as a common landing page
+        const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
         if (defaultPath) {
             router.push(defaultPath);
         } else {
-            // Fallback if somehow a role has no default path
             router.push('/login');
         }
     }
