@@ -855,7 +855,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -876,7 +876,7 @@ const RFQActionDialog = ({
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
             onClose();
         }
     };
@@ -2964,6 +2964,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
