@@ -58,68 +58,61 @@ export async function POST(
     }
     
     const transactionResult = await prisma.$transaction(async (tx) => {
-        // Find or create the main score set for this user and this quote.
-        const scoreSet = await tx.committeeScoreSet.upsert({
-            where: {
-                quotationId_scorerId: {
-                    quotationId: quoteId,
-                    scorerId: userId,
-                }
-            },
-            update: {
-                committeeComment: scores.committeeComment,
-            },
-            create: {
-                quotation: { connect: { id: quoteId } },
-                scorer: { connect: { id: user.id } },
-                committeeComment: scores.committeeComment,
-                finalScore: 0, // Will be updated later
-            }
+        // Delete previous scores from this user for this quote to ensure clean update.
+        const previousScoreSet = await tx.committeeScoreSet.findUnique({
+            where: { quotationId_scorerId: { quotationId: quoteId, scorerId: userId } },
+            include: { itemScores: { include: { scores: true } } }
         });
+
+        if (previousScoreSet) {
+            const itemScoreIds = previousScoreSet.itemScores.map(is => is.id);
+            if (itemScoreIds.length > 0) {
+                await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
+                await tx.itemScore.deleteMany({ where: { id: { in: itemScoreIds } } });
+            }
+            await tx.committeeScoreSet.delete({ where: { id: previousScoreSet.id } });
+        }
+
 
         let totalWeightedScore = 0;
         const totalItems = scores.itemScores.length;
+
+        // Create the main score set for this user and this quote.
+        const scoreSet = await tx.committeeScoreSet.create({
+            data: {
+                quotation: { connect: { id: quoteId } },
+                scorer: { connect: { id: user.id } },
+                committeeComment: scores.committeeComment,
+                finalScore: 0, // Placeholder, will be updated later
+            }
+        });
 
         for (const itemScoreData of scores.itemScores) {
             const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
             totalWeightedScore += finalScore;
 
-            // Find or create ONE ItemScore for this quote item. This is the shared record.
-            const itemScoreRecord = await tx.itemScore.upsert({
-                where: { quoteItemId: itemScoreData.quoteItemId },
-                update: {},
-                create: {
+            // Create the ItemScore record linked to the main CommitteeScoreSet.
+            const itemScoreRecord = await tx.itemScore.create({
+                data: {
                     quoteItemId: itemScoreData.quoteItemId,
-                    finalScore: 0, // This final score is an average and will be updated later
-                },
-                include: { scores: true }
+                    scoreSet: { connect: { id: scoreSet.id } }, // Connect to the parent set
+                    finalScore: finalScore,
+                    // Create individual scores nested within this ItemScore.
+                    scores: {
+                        create: allScores.map((s: any) => {
+                            const isFinancial = requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId);
+                            return {
+                                scorerId: userId,
+                                score: s.score,
+                                comment: s.comment,
+                                type: isFinancial ? 'FINANCIAL' as const : 'TECHNICAL' as const,
+                                financialCriterionId: isFinancial ? s.criterionId : null,
+                                technicalCriterionId: !isFinancial ? s.criterionId : null,
+                            };
+                        })
+                    }
+                }
             });
-
-            // Delete any previous scores FROM THIS USER for this specific ItemScore.
-            const previousUserScores = itemScoreRecord.scores.filter(s => s.scorerId === userId).map(s => s.id);
-            if (previousUserScores.length > 0) {
-                await tx.score.deleteMany({ where: { id: { in: previousUserScores } } });
-            }
-
-            // Create the new individual score records for THIS USER.
-            const scoresToCreate = allScores.map((s: any) => {
-                const isFinancial = requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId);
-                return {
-                    itemScoreId: itemScoreRecord.id,
-                    scorerId: userId, // Link this specific score to the user
-                    score: s.score,
-                    comment: s.comment,
-                    type: isFinancial ? 'FINANCIAL' as const : 'TECHNICAL' as const,
-                    financialCriterionId: isFinancial ? s.criterionId : null,
-                    technicalCriterionId: !isFinancial ? s.criterionId : null,
-                };
-            });
-
-            if (scoresToCreate.length > 0) {
-              await tx.score.createMany({
-                data: scoresToCreate
-              });
-            }
         }
         
         const finalAverageScoreForThisScorer = totalItems > 0 ? totalWeightedScore / totalItems : 0;
@@ -144,7 +137,7 @@ export async function POST(
                 action: 'SCORE_QUOTE',
                 entity: 'Quotation',
                 entityId: quoteId,
-                details: `Submitted/updated scores for quote from ${quoteToUpdate.vendorName}. Scorer's average: ${finalAverageScoreForThisScorer.toFixed(2)}.`,
+                details: `Submitted scores for quote from ${quoteToUpdate.vendorName}. Scorer's average: ${finalAverageScoreForThisScorer.toFixed(2)}.`,
             }
         });
 
