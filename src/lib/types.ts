@@ -132,6 +132,15 @@ export type Minute = {
     createdAt: Date;
 }
 
+export type StandbyAssignment = {
+    id: string;
+    requisitionId: string;
+    requisitionItemId: string;
+    requisitionItem?: RequisitionItem;
+    quotationId: string;
+    rank: number;
+}
+
 
 export type PurchaseRequisition = {
   id:string; // Will be UUID
@@ -178,6 +187,7 @@ export type PurchaseRequisition = {
       [key: string]: any;
   };
   minutes?: Minute[];
+  standbyAssignments?: StandbyAssignment[];
 };
 
 export type AuditLog = {
@@ -265,6 +275,7 @@ export type Quotation = {
     totalPrice: number;
     deliveryDate: Date;
     createdAt: Date;
+    updatedAt: Date;
     status: QuotationStatus;
     notes?: string;
     rank?: 1 | 2 | 3;

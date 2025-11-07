@@ -37,7 +37,7 @@ import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem } from '@/lib/types';
+import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem, StandbyAssignment } from '@/lib/types';
 import { format, formatDistanceToNow, isBefore, isPast, setHours, setMinutes } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -257,6 +257,8 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
                 const awardedItemsForThisQuote = quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
+                const standbyItems = requisition.standbyAssignments?.filter(sa => sa.quotationId === quote.id);
+                
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded') && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
@@ -310,6 +312,18 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                                 <div key={item.id} className="flex justify-between items-center text-muted-foreground">
                                                     <span>{item.name} x {item.quantity}</span>
                                                     {!hidePrices && <span className="font-mono">{item.unitPrice.toFixed(2)} ETB ea.</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {isAwarded && standbyItems && standbyItems.length > 0 && (
+                                        <div className="text-sm space-y-2 pt-2 border-t">
+                                            <h4 className="font-semibold text-amber-600">Standby For:</h4>
+                                            {standbyItems.map(item => (
+                                                <div key={item.id} className="flex justify-between items-center text-muted-foreground">
+                                                    <span>{item.requisitionItem?.name}</span>
+                                                    <Badge variant="outline">Rank {item.rank}</Badge>
                                                 </div>
                                             ))}
                                         </div>
@@ -819,7 +833,7 @@ const RFQActionDialog = ({
 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
@@ -841,7 +855,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -862,7 +876,7 @@ const RFQActionDialog = ({
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
             onClose();
         }
     };
@@ -1987,7 +2001,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
 const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess }: { isOpen: boolean, onClose: () => void, member: User, requisition: PurchaseRequisition, onSuccess: () => void }) => {
     const { toast } = useToast();
     const { user } = useAuth();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [newDeadline, setNewDeadline] = useState<Date|undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
 
@@ -2004,7 +2018,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/extend-scoring-deadline`, {
                 method: 'POST',
@@ -2024,7 +2038,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
         } catch (error) {
              toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
         }
     }
 
@@ -2138,7 +2152,7 @@ const CommitteeActions = ({
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
         }
     };
 
@@ -2850,7 +2864,7 @@ export default function QuotationDetailsPage() {
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
     
@@ -2867,7 +2881,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
@@ -2950,5 +2964,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 

@@ -56,11 +56,11 @@ This is a comprehensive, full-stack procurement management system built with Nex
 npm install
 ```
 
-### 4. Apply the Database Schema
-This command applies any pending schema changes defined in `prisma/schema.prisma` to your database without deleting existing data.
+### 4. Create and Apply the Database Schema
+This command creates a new migration file based on your `prisma/schema.prisma` changes and applies it to the database.
 
 ```bash
-npx prisma migrate deploy
+npm run db:migrate
 ```
 
 This will also automatically generate the Prisma Client based on your schema.
