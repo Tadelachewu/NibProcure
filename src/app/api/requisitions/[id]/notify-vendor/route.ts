@@ -33,7 +33,7 @@ export async function POST(
     }
 
     const transactionResult = await prisma.$transaction(async (tx) => {
-        // Update the main requisition status from PostApproved to Awarded
+        // Update the main requisition status from PostApproved to Awarded, which signifies the offers are out.
         const updatedRequisition = await tx.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
@@ -42,11 +42,11 @@ export async function POST(
             }
         });
 
-        // The quotes are already in 'Pending_Award'. Now we find them to update and notify.
+        // Find all quotes that are ready for award (either for a full or partial award)
         const winningQuotes = await tx.quotation.findMany({
             where: {
                 requisitionId: requisitionId,
-                status: 'Pending_Award'
+                status: { in: ['Pending_Award', 'Partially_Awarded'] }
             },
             include: {
                 vendor: true
@@ -54,13 +54,13 @@ export async function POST(
         });
 
         if (winningQuotes.length === 0) {
-            throw new Error("No winning quote in 'Pending Award' status found to notify. The requisition might be in an inconsistent state.");
+            throw new Error("No winning quote in 'Pending Award' or 'Partially Awarded' status found to notify. The requisition might be in an inconsistent state.");
         }
         
-        // Notify all winning vendors (for split awards)
+        // Notify all winning vendors (for single or split awards)
         for (const winningQuote of winningQuotes) {
             
-            // CRITICAL FIX: Update the quote status to 'Awarded'
+            // CRITICAL FIX: Update the quote status to 'Awarded'. This is the official offer.
             await tx.quotation.update({
                 where: { id: winningQuote.id },
                 data: { status: 'Awarded' }
