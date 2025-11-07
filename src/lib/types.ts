@@ -271,16 +271,25 @@ export type Quotation = {
     totalPrice: number;
     deliveryDate: Date;
     createdAt: Date;
+    updatedAt: Date;
     status: QuotationStatus;
     notes?: string;
     rank?: 1 | 2 | 3;
-    standbyForItemId?: string;
+    standbyAssignments?: StandbyAssignment[];
     answers?: QuoteAnswer[];
     scores?: CommitteeScoreSet[];
     finalAverageScore?: number;
     cpoDocumentUrl?: string;
     experienceDocumentUrl?: string;
 };
+
+export type StandbyAssignment = {
+  id: string;
+  quotationId: string;
+  requisitionItemId: string;
+  rank: number;
+}
+
 
 export type POItem = {
     id: string;

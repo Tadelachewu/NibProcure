@@ -38,6 +38,7 @@ export async function POST(
 
             const awardedVendorIds = Object.keys(awards);
             
+            // Set awarded quotes to Pending_Award
             for (const quote of allQuotes) {
                 if (awardedVendorIds.includes(quote.vendorId)) {
                     await tx.quotation.update({
@@ -47,9 +48,14 @@ export async function POST(
                 }
             }
 
-            // Set up to 2 standby vendors for each awarded item
+            // Set standby vendors for each awarded item
             const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.requisitionItemId));
             const uniqueAwardedItemIds = [...new Set(awardedItemIds)];
+
+            // Clear previous standby assignments for this requisition to avoid duplicates
+            const quotesForReq = await tx.quotation.findMany({ where: { requisitionId: requisitionId }, select: { id: true }});
+            await tx.standbyAssignment.deleteMany({ where: { quotationId: { in: quotesForReq.map(q => q.id) } } });
+
 
             for (const reqItemId of uniqueAwardedItemIds) {
                 const quotesWithItem = allQuotes
@@ -62,14 +68,21 @@ export async function POST(
 
                 for (let i = 0; i < Math.min(2, standbyCandidates.length); i++) {
                     const standbyQuote = standbyCandidates[i];
-                    await tx.quotation.update({
-                        where: { id: standbyQuote.id },
+                    await tx.standbyAssignment.create({
                         data: {
-                            status: 'Standby',
-                            standbyForItemId: reqItemId, // Link standby status to a specific item
-                            rank: (i + 2) as 2 | 3
+                            quotationId: standbyQuote.id,
+                            requisitionItemId: reqItemId,
+                            rank: i + 2,
                         }
                     });
+                    // Also update the quote status itself if it's not already awarded for another item
+                    const currentStatus = await tx.quotation.findUnique({ where: { id: standbyQuote.id }, select: { status: true } });
+                    if(currentStatus?.status !== 'Pending_Award') {
+                       await tx.quotation.update({
+                           where: { id: standbyQuote.id },
+                           data: { status: 'Standby' }
+                       });
+                    }
                 }
             }
             

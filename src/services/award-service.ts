@@ -81,6 +81,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     }
 
     await tx.committeeScoreSet.deleteMany({ where: { quotationId: { in: quotationsToDelete.map(q => q.id) } } });
+    await tx.standbyAssignment.deleteMany({ where: { quotationId: { in: quotationsToDelete.map(q => q.id) } } });
     await tx.quotation.deleteMany({ where: { requisitionId } });
     
     await tx.committeeAssignment.deleteMany({ where: { requisitionId }});
@@ -160,13 +161,15 @@ export async function handleAwardRejection(
         return { message: 'A part of the award has been declined. Manual action is required.' };
     }
 
-
-    const nextStandby = await tx.quotation.findFirst({
-        where: { requisitionId: requisition.id, status: 'Standby' },
+    const standbyAssignments = await tx.standbyAssignment.findMany({
+        where: {
+            requisitionItemId: { in: declinedItemIds.length > 0 ? declinedItemIds : requisition.items.map((i: any) => i.id) }
+        },
         orderBy: { rank: 'asc' },
+        include: { quotation: true }
     });
 
-    if (nextStandby) {
+    if (standbyAssignments.length > 0) {
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }
@@ -213,84 +216,101 @@ export async function handleAwardRejection(
  * @returns A message indicating the result of the operation.
  */
 export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: User) {
-    const nextStandby = await tx.quotation.findFirst({
-        where: {
-            requisitionId,
-            status: 'Standby'
-        },
-        orderBy: { rank: 'asc' },
-        include: { items: true, scores: { include: { itemScores: true } } }
-    });
 
-    if (!nextStandby) {
-        throw new Error('No standby vendor found to promote.');
-    }
-    
-    // Fetch the original requisition to get the list of requested items
-    const requisition = await tx.purchaseRequisition.findUnique({
+    const declinedRequisition = await tx.purchaseRequisition.findUnique({
         where: { id: requisitionId },
-        include: { items: true }
+        include: { quotations: { where: { status: 'Declined' } } }
     });
 
-    if (!requisition) {
-        throw new Error('Associated requisition not found.');
+    if (!declinedRequisition || declinedRequisition.quotations.length === 0) {
+        throw new Error('No declined quote found to trigger standby promotion.');
+    }
+    
+    const allDeclinedItemIds = declinedRequisition.quotations.flatMap(q => q.awardedQuoteItemIds);
+
+    const bestStandbyAssignments = await tx.standbyAssignment.findMany({
+        where: {
+            requisitionItemId: { in: allDeclinedItemIds },
+            rank: 2, // Promote the first standby
+        },
+        include: {
+            quotation: { include: { items: true } }
+        }
+    });
+
+    if (bestStandbyAssignments.length === 0) {
+        // Logic to re-open RFQ for specific items
+        // This is a placeholder for a more complex feature
+        await tx.purchaseRequisition.update({
+            where: { id: requisitionId },
+            data: { status: 'Partially_Declined' }
+        });
+        await tx.auditLog.create({
+            data: {
+                user: { connect: { id: actor.id } },
+                action: 'NO_STANDBY_FOUND',
+                entity: 'Requisition',
+                entityId: requisitionId,
+                details: 'A vendor declined, but no standby vendor was found for the declined items. Manual intervention required.'
+            }
+        });
+        throw new Error('No standby vendor found for the declined items. Manual action is required.');
+    }
+    
+    // Group assignments by vendor
+    const promotionsByVendor: Record<string, { vendorName: string, items: any[], quoteIds: Set<string> }> = {};
+    for (const assignment of bestStandbyAssignments) {
+        const vendorId = assignment.quotation.vendorId;
+        if (!promotionsByVendor[vendorId]) {
+            promotionsByVendor[vendorId] = {
+                vendorName: assignment.quotation.vendorName,
+                items: [],
+                quoteIds: new Set()
+            };
+        }
+        const promotedItem = assignment.quotation.items.find(i => i.requisitionItemId === assignment.requisitionItemId);
+        if (promotedItem) {
+            promotionsByVendor[vendorId].items.push(promotedItem);
+            promotionsByVendor[vendorId].quoteIds.add(assignment.quotationId);
+        }
+    }
+    
+    let totalPromotedValue = 0;
+    const allPromotedQuoteItemIds: string[] = [];
+
+    for (const vendorId in promotionsByVendor) {
+        const promotion = promotionsByVendor[vendorId];
+        const vendorTotalPrice = promotion.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+        totalPromotedValue += vendorTotalPrice;
+
+        promotion.items.forEach(item => allPromotedQuoteItemIds.push(item.id));
+        
+        // Update status for all quotes involved in this promotion
+        for (const quoteId of promotion.quoteIds) {
+            await tx.quotation.update({
+                where: { id: quoteId },
+                data: { status: 'Pending_Award', rank: 1 }
+            });
+        }
     }
 
-    // --- START: Intelligent Item Selection Logic ---
-    const bestItemsFromNewWinner = requisition.items.map(reqItem => {
-        const proposalsForItem = nextStandby.items.filter(i => i.requisitionItemId === reqItem.id);
 
-        if (proposalsForItem.length === 0) return null;
-        if (proposalsForItem.length === 1) return proposalsForItem[0];
-        
-        // If multiple proposals, find the best-scored one
-        let bestItemScore = -1;
-        let bestProposal = proposalsForItem[0];
-
-        proposalsForItem.forEach(proposal => {
-             let totalItemScore = 0;
-             let scoreCount = 0;
-             nextStandby.scores.forEach(scoreSet => {
-                 const itemScore = scoreSet.itemScores.find(i => i.quoteItemId === proposal.id);
-                 if (itemScore) {
-                     totalItemScore += itemScore.finalScore;
-                     scoreCount++;
-                 }
-             });
-             const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-             if (averageItemScore > bestItemScore) {
-                 bestItemScore = averageItemScore;
-                 bestProposal = proposal;
-             }
-        });
-        return bestProposal;
-    }).filter((item): item is NonNullable<typeof item> => item !== null);
-    // --- END: Intelligent Item Selection Logic ---
-
-    const newTotalPrice = bestItemsFromNewWinner.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-    const newAwardedItemIds = bestItemsFromNewWinner.map(item => item.id);
+    const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalPromotedValue);
     
-    // Get the next approval step based on the NEW standby vendor's total price
-    const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalPrice);
-    
-    // Update the requisition to start the new approval workflow.
+    // Update the requisition to start the new approval workflow for the promoted items
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
         data: {
             status: nextStatus as any,
-            totalPrice: newTotalPrice, // Update price to the new winner's
-            awardedQuoteItemIds: newAwardedItemIds, // Update awarded items
-            currentApproverId: nextApproverId, // Set the first approver in the new chain
-        }
-    });
-    
-    // Update the promoted quote's status to 'Pending_Award'.
-    // It is NOT 'Awarded' yet. It will become 'Awarded' only after passing the full approval chain.
-    await tx.quotation.update({
-        where: { id: nextStandby.id },
-        data: { 
-            status: 'Pending_Award',
-            rank: 1 // They are now the primary candidate.
+            // Append new promoted items to existing awarded items (if any)
+            awardedQuoteItemIds: {
+                push: allPromotedQuoteItemIds
+            },
+            // Add the new value to the existing total price
+            totalPrice: {
+                increment: totalPromotedValue,
+            },
+            currentApproverId: nextApproverId,
         }
     });
     
@@ -301,11 +321,10 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             action: 'PROMOTE_STANDBY_AWARD',
             entity: 'Requisition',
             entityId: requisitionId,
-            details: `Promoted standby vendor ${nextStandby.vendorName}. ${auditDetails}`,
+            details: `Promoted standby vendors: ${Object.values(promotionsByVendor).map(p => p.vendorName).join(', ')}. New approval cycle initiated. ${auditDetails}`,
             transactionId: requisitionId,
         }
     });
 
-    return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
+    return { message: `Promoted standby vendors. The new award is now being routed for approval.` };
 }
-
