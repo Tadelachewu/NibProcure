@@ -47,7 +47,9 @@ export default function LoginPage() {
           title: 'Login Successful',
           description: `Welcome back, ${result.user.name}!`,
         });
-        router.push('/');
+        // The root page ('/') will handle redirection, so we simply reload to trigger it.
+        // This avoids the race condition of redirecting before the auth state is fully set.
+        window.location.href = '/';
       } else {
         throw new Error(result.error || 'Invalid email or password.');
       }
