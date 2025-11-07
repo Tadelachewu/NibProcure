@@ -226,17 +226,15 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         throw new Error('No declined quote found to trigger standby promotion.');
     }
     
-    const allDeclinedQuoteItemIds = declinedRequisition.quotations.flatMap(q => q.items.map(item => item.id));
+    // Correctly identify the original requisition item IDs that were declined.
+    const declinedRequisitionItemIds = declinedRequisition.quotations.flatMap(q => 
+        q.items.map(item => item.requisitionItemId)
+    );
+    const uniqueDeclinedReqItemIds = [...new Set(declinedRequisitionItemIds)];
 
     const standbyAssignments = await tx.standbyAssignment.findMany({
         where: {
-            quotation: {
-                items: {
-                    some: {
-                        id: { in: allDeclinedQuoteItemIds }
-                    }
-                }
-            },
+            requisitionItemId: { in: uniqueDeclinedReqItemIds },
             rank: 2, // Promote the first standby
         },
         include: {
