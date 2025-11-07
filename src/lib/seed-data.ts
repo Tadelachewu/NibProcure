@@ -105,6 +105,60 @@ const seedData: AppData = {
             financialCommitteeMemberIds: ['9'],
             technicalCommitteeMemberIds: ['10'],
         },
+        {
+            id: 'REQ-SINGLE-AWARD',
+            requesterId: '1',
+            title: 'Single Award Test Case (Computers & Monitors)',
+            department: 'IT',
+            departmentId: 'DEPT-3',
+            items: [
+                { id: 'SA-ITEM-1', name: 'High-End Video Editing PC', quantity: 2, unitPrice: 3500 },
+                { id: 'SA-ITEM-2', name: 'Professional 4K Monitor', quantity: 2, unitPrice: 800 }
+            ],
+            totalPrice: 8600,
+            justification: 'New setup for the marketing video production team.',
+            status: 'Scoring_Complete',
+            urgency: 'Medium',
+            createdAt: new Date('2024-05-10T09:00:00Z'),
+            updatedAt: new Date('2024-05-20T14:00:00Z'),
+            deadline: new Date('2024-05-15T23:59:00Z'),
+            scoringDeadline: new Date('2024-05-20T23:59:00Z'),
+            quotations: [],
+            financialCommitteeMemberIds: ['9'], // Fiona
+            technicalCommitteeMemberIds: ['10'], // George
+            evaluationCriteria: {
+                financialWeight: 40, technicalWeight: 60,
+                financialCriteria: [{ id: 'fc1', name: 'Price', weight: 100 }],
+                technicalCriteria: [{ id: 'tc1', name: 'Performance', weight: 70 }, { id: 'tc2', name: 'Warranty', weight: 30 }]
+            }
+        },
+        {
+            id: 'REQ-SPLIT-AWARD',
+            requesterId: '1',
+            title: 'Split Award Test Case (Workstations & Peripherals)',
+            department: 'Operations',
+            departmentId: 'DEPT-2',
+            items: [
+                { id: 'SP-ITEM-1', name: 'Standard Office Workstation', quantity: 5, unitPrice: 1200 },
+                { id: 'SP-ITEM-2', name: 'Ergonomic Keyboard', quantity: 5, unitPrice: 150 }
+            ],
+            totalPrice: 6750,
+            justification: 'Equipping new project managers.',
+            status: 'Scoring_Complete',
+            urgency: 'Medium',
+            createdAt: new Date('2024-05-11T09:00:00Z'),
+            updatedAt: new Date('2024-05-21T14:00:00Z'),
+            deadline: new Date('2024-05-16T23:59:00Z'),
+            scoringDeadline: new Date('2024-05-21T23:59:00Z'),
+            quotations: [],
+            financialCommitteeMemberIds: ['9'], // Fiona
+            technicalCommitteeMemberIds: ['10'], // George
+            evaluationCriteria: {
+                financialWeight: 50, technicalWeight: 50,
+                financialCriteria: [{ id: 'fc2', name: 'Price', weight: 100 }],
+                technicalCriteria: [{ id: 'tc3', name: 'Reliability', weight: 60 }, { id: 'tc4', name: 'Support', weight: 40 }]
+            }
+        }
     ],
 
     auditLogs: [
@@ -112,7 +166,95 @@ const seedData: AppData = {
     ],
 
     quotations: [
-        // Empty as the linked requisitions were removed
+        // --- QUOTES FOR SINGLE AWARD TEST ---
+        {
+            id: 'Q-SA-001', requisitionId: 'REQ-SINGLE-AWARD', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', totalPrice: 8500, deliveryDate: new Date('2024-06-10T00:00:00Z'), createdAt: new Date(), status: 'Submitted',
+            items: [
+                { id: 'Q-SA-001-I1', name: 'Custom Mac Pro', quantity: 2, unitPrice: 3400, requisitionItemId: 'SA-ITEM-1' },
+                { id: 'Q-SA-001-I2', name: 'Studio Display', quantity: 2, unitPrice: 850, requisitionItemId: 'SA-ITEM-2' }
+            ],
+            scores: [
+                // Fiona (Financial Scorer)
+                {
+                    scorerId: '9', finalScore: 89.5, submittedAt: new Date(),
+                    itemScores: [
+                        { quoteItemId: 'Q-SA-001-I1', finalScore: 90, scores: [{ type: 'FINANCIAL', score: 90 }] }, // Good price
+                        { quoteItemId: 'Q-SA-001-I2', finalScore: 89, scores: [{ type: 'FINANCIAL', score: 89 }] }  // Okay price
+                    ]
+                },
+                // George (Technical Scorer)
+                {
+                    scorerId: '10', finalScore: 95.5, submittedAt: new Date(),
+                    itemScores: [
+                        { quoteItemId: 'Q-SA-001-I1', finalScore: 98, scores: [{ type: 'TECHNICAL', score: 98 }] }, // Excellent perf
+                        { quoteItemId: 'Q-SA-001-I2', finalScore: 93, scores: [{ type: 'TECHNICAL', score: 93 }] }  // Excellent monitor
+                    ]
+                }
+            ],
+            finalAverageScore: 92.5 // (89.5 + 95.5) / 2
+        },
+        {
+            id: 'Q-SA-002', requisitionId: 'REQ-SINGLE-AWARD', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', totalPrice: 8200, deliveryDate: new Date('2024-06-12T00:00:00Z'), createdAt: new Date(), status: 'Submitted',
+            items: [
+                { id: 'Q-SA-002-I1', name: 'Dell Precision Tower', quantity: 2, unitPrice: 3300, requisitionItemId: 'SA-ITEM-1' },
+                { id: 'Q-SA-002-I2', name: 'Dell UltraSharp Monitor', quantity: 2, unitPrice: 800, requisitionItemId: 'SA-ITEM-2' }
+            ],
+            scores: [
+                {
+                    scorerId: '9', finalScore: 95, submittedAt: new Date(),
+                    itemScores: [
+                        { quoteItemId: 'Q-SA-002-I1', finalScore: 95, scores: [{ type: 'FINANCIAL', score: 95 }] }, // Excellent price
+                        { quoteItemId: 'Q-SA-002-I2', finalScore: 95, scores: [{ type: 'FINANCIAL', score: 95 }] }
+                    ]
+                },
+                {
+                    scorerId: '10', finalScore: 85, submittedAt: new Date(),
+                    itemScores: [
+                        { quoteItemId: 'Q-SA-002-I1', finalScore: 88, scores: [{ type: 'TECHNICAL', score: 88 }] }, // Good perf
+                        { quoteItemId: 'Q-SA-002-I2', finalScore: 82, scores: [{ type: 'TECHNICAL', score: 82 }] }  // Good monitor
+                    ]
+                }
+            ],
+            finalAverageScore: 90 // (95 + 85) / 2
+        },
+
+        // --- QUOTES FOR SPLIT AWARD TEST ---
+        {
+            id: 'Q-SP-001', requisitionId: 'REQ-SPLIT-AWARD', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', totalPrice: 6500, deliveryDate: new Date('2024-06-15T00:00:00Z'), createdAt: new Date(), status: 'Submitted',
+            items: [
+                { id: 'Q-SP-001-I1', name: 'Dell OptiPlex', quantity: 5, unitPrice: 1150, requisitionItemId: 'SP-ITEM-1' },
+                { id: 'Q-SP-001-I2', name: 'Dell Premier Keyboard', quantity: 5, unitPrice: 150, requisitionItemId: 'SP-ITEM-2' }
+            ],
+            scores: [ // Dell has the best workstations
+                {
+                    scorerId: '9', finalScore: 95, submittedAt: new Date(), // Great price
+                    itemScores: [{ quoteItemId: 'Q-SP-001-I1', finalScore: 100, scores: [{ type: 'FINANCIAL', score: 100 }] }, { quoteItemId: 'Q-SP-001-I2', finalScore: 90, scores: [{ type: 'FINANCIAL', score: 90 }] }]
+                },
+                {
+                    scorerId: '10', finalScore: 92, submittedAt: new Date(), // Great reliability
+                    itemScores: [{ quoteItemId: 'Q-SP-001-I1', finalScore: 95, scores: [{ type: 'TECHNICAL', score: 95 }] }, { quoteItemId: 'Q-SP-001-I2', finalScore: 89, scores: [{ type: 'TECHNICAL', score: 89 }] }]
+                }
+            ],
+            finalAverageScore: 93.5
+        },
+        {
+            id: 'Q-SP-002', requisitionId: 'REQ-SPLIT-AWARD', vendorId: 'VENDOR-004', vendorName: 'HP Inc.', totalPrice: 6600, deliveryDate: new Date('2024-06-14T00:00:00Z'), createdAt: new Date(), status: 'Submitted',
+            items: [
+                { id: 'Q-SP-002-I1', name: 'HP EliteDesk', quantity: 5, unitPrice: 1200, requisitionItemId: 'SP-ITEM-1' },
+                { id: 'Q-SP-002-I2', name: 'HP 970 Ergonomic Keyboard', quantity: 5, unitPrice: 120, requisitionItemId: 'SP-ITEM-2' }
+            ],
+             scores: [ // HP has the best keyboards
+                {
+                    scorerId: '9', finalScore: 92.5, submittedAt: new Date(),
+                    itemScores: [{ quoteItemId: 'Q-SP-002-I1', finalScore: 85, scores: [{ type: 'FINANCIAL', score: 85 }] }, { quoteItemId: 'Q-SP-002-I2', finalScore: 100, scores: [{ type: 'FINANCIAL', score: 100 }] }]
+                },
+                {
+                    scorerId: '10', finalScore: 90, submittedAt: new Date(),
+                    itemScores: [{ quoteItemId: 'Q-SP-002-I1', finalScore: 88, scores: [{ type: 'TECHNICAL', score: 88 }] }, { quoteItemId: 'Q-SP-002-I2', finalScore: 92, scores: [{ type: 'TECHNICAL', score: 92 }] }]
+                }
+            ],
+            finalAverageScore: 91.25
+        }
     ],
     purchaseOrders: [],
     goodsReceipts: [],
@@ -147,3 +289,6 @@ const seedData: AppData = {
         { id: 'DEPT-6', name: 'Human Resources', description: 'Manages employee relations and hiring.', headId: null },
     ]
 };
+
+
+    
