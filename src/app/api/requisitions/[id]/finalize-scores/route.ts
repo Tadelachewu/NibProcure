@@ -15,7 +15,7 @@ export async function POST(
     try {
         const body = await request.json();
         const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue } = body;
-        console.log(`[FINALIZE-SCORES] Award Value: ${totalAwardValue}`);
+        console.log(`[FINALIZE-SCORES] Award Value: ${totalAwardValue}, Strategy: ${awardStrategy}`);
 
         const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
         if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Admin' && user.role !== 'Committee')) {
@@ -25,7 +25,8 @@ export async function POST(
         const result = await prisma.$transaction(async (tx) => {
             
             const allQuotes = await tx.quotation.findMany({ 
-                where: { requisitionId: requisitionId }, 
+                where: { requisitionId: requisitionId },
+                include: { items: true, scores: { include: { itemScores: true } } },
                 orderBy: { finalAverageScore: 'desc' } 
             });
 
@@ -35,39 +36,90 @@ export async function POST(
             
             const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
 
-            const awardedVendorIds = Object.keys(awards);
-            const winnerQuotes = allQuotes.filter(q => awardedVendorIds.includes(q.vendorId));
+            // --- STRATEGY: AWARD TO SINGLE BEST VENDOR ---
+            if (awardStrategy === 'all') {
+                const awardedVendorIds = Object.keys(awards);
+                const winnerQuote = allQuotes.find(q => q.vendorId === awardedVendorIds[0]);
 
-            // Create an exclusion list of vendors who have already declined.
-            const declinedVendorIds = new Set(allQuotes.filter(q => q.status === 'Declined' || q.status === 'Failed').map(q => q.vendorId));
+                if (!winnerQuote) {
+                    throw new Error("Winning vendor's quote could not be found.");
+                }
 
-            // The pool of "other" quotes now EXCLUDES winners and any previously declined vendors.
-            const otherQuotes = allQuotes.filter(q => !awardedVendorIds.includes(q.vendorId) && !declinedVendorIds.has(q.vendorId));
+                // Set winner to Pending Award, rank 1
+                await tx.quotation.update({
+                    where: { id: winnerQuote.id },
+                    data: { status: 'Pending_Award', rank: 1 }
+                });
 
+                // Set others to Standby or Rejected
+                const otherQuotes = allQuotes.filter(q => q.id !== winnerQuote.id && q.status !== 'Declined');
+                for (let i = 0; i < otherQuotes.length; i++) {
+                    const status = (i < 2) ? 'Standby' : 'Rejected';
+                    const rank = (i < 2) ? (i + 2) as 2 | 3 : null;
+                    await tx.quotation.update({ where: { id: otherQuotes[i].id }, data: { status, rank } });
+                }
 
-            for (const quote of winnerQuotes) {
-                const award = awards[quote.vendorId];
-                 await tx.quotation.update({
-                    where: { id: quote.id },
-                    data: {
-                        status: 'Pending_Award', // Set to pending, not awarded yet
-                        rank: 1
+            // --- STRATEGY: AWARD BY BEST ITEM ---
+            } else if (awardStrategy === 'item') {
+                // For each item, find the best and standby vendors
+                const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
+
+                for (const reqItem of reqItems) {
+                    let proposals = [];
+                    for (const quote of allQuotes) {
+                         const quoteItem = quote.items.find(i => i.requisitionItemId === reqItem.id);
+                         if (quoteItem) {
+                             let totalScore = 0;
+                             let scoreCount = 0;
+                             quote.scores?.forEach(scoreSet => {
+                                 const score = scoreSet.itemScores?.find(s => s.quoteItemId === quoteItem.id);
+                                 if (score) {
+                                     totalScore += score.finalScore;
+                                     scoreCount++;
+                                 }
+                             });
+                             proposals.push({
+                                 quoteId: quote.id,
+                                 quoteItemId: quoteItem.id,
+                                 vendorId: quote.vendorId,
+                                 averageScore: scoreCount > 0 ? totalScore / scoreCount : 0
+                             });
+                         }
                     }
+
+                    proposals.sort((a,b) => b.averageScore - a.averageScore);
+                    const winner = proposals[0];
+                    const standbys = proposals.slice(1, 3);
+                    
+                    if (winner) {
+                        // Mark the winning quote as partially awarded
+                        await tx.quotation.update({ where: { id: winner.quoteId }, data: { status: 'Partially_Awarded' } });
+                        
+                        // Create standby assignments for this item
+                        for (let i = 0; i < standbys.length; i++) {
+                            await tx.standbyAssignment.create({
+                                data: {
+                                    requisitionId: requisitionId,
+                                    requisitionItemId: reqItem.id,
+                                    quotationId: standbys[i].quoteId,
+                                    rank: i + 2,
+                                }
+                            });
+                        }
+                    }
+                }
+                // Reject quotes that won no items
+                const awardedQuoteIds = new Set(Object.values(awards).flatMap((a: any) => allQuotes.find(q => q.vendorId === a.vendorId)?.id));
+                await tx.quotation.updateMany({
+                    where: {
+                        requisitionId: requisitionId,
+                        id: { notIn: Array.from(awardedQuoteIds) as string[] },
+                        status: 'Submitted'
+                    },
+                    data: { status: 'Rejected', rank: null }
                 });
             }
-            
-            const standbyQuotes = otherQuotes.slice(0, 2);
-            if (standbyQuotes.length > 0) {
-                for (let i = 0; i < standbyQuotes.length; i++) {
-                    await tx.quotation.update({ where: { id: standbyQuotes[i].id }, data: { status: 'Standby', rank: (i + 2) as 2 | 3 } });
-                }
-            }
-            
-            const rejectedQuoteIds = otherQuotes.slice(2).map(q => q.id);
-            if (rejectedQuoteIds.length > 0) {
-                await tx.quotation.updateMany({ where: { id: { in: rejectedQuoteIds } }, data: { status: 'Rejected', rank: null } });
-            }
-            
+
             const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
             
             const updatedRequisition = await tx.purchaseRequisition.update({

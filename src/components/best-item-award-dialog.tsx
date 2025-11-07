@@ -5,7 +5,7 @@ import React, { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from './ui/dialog';
 import { Button } from './ui/button';
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from './ui/alert-dialog';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
+import { Card, CardContent } from './ui/card';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from './ui/table';
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -14,17 +14,19 @@ import { CalendarIcon } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
-import { PurchaseRequisition, Quotation } from '@/lib/types';
+import { PurchaseRequisition, Quotation, QuoteItem } from '@/lib/types';
 
 export const BestItemAwardDialog = ({
     requisition,
     quotations,
     onFinalize,
+    isOpen,
     onClose
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
+    isOpen: boolean;
     onClose: () => void;
 }) => {
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
@@ -48,7 +50,7 @@ export const BestItemAwardDialog = ({
 
         return requisition.items.map(reqItem => {
             let bestScore = -1;
-            let winner: { vendorId: string; vendorName: string; quoteItemId: string; } | null = null;
+            let winner: { vendorId: string; vendorName: string; quoteItemId: string; unitPrice: number; } | null = null;
 
             eligibleQuotes.forEach(quote => {
                 const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
@@ -92,18 +94,30 @@ export const BestItemAwardDialog = ({
                     winner = {
                         vendorId: quote.vendorId,
                         vendorName: quote.vendorName,
-                        quoteItemId: bestProposalForVendor.id
+                        quoteItemId: bestProposalForVendor.id,
+                        unitPrice: bestProposalForVendor.unitPrice,
                     };
                 }
             });
             return {
                 requisitionItemId: reqItem.id,
                 name: reqItem.name,
+                quantity: reqItem.quantity,
                 winner,
                 bestScore,
             }
         });
     }, [requisition, eligibleQuotes]);
+
+    const totalAwardValue = useMemo(() => {
+        return itemWinners.reduce((acc, item) => {
+            if (item.winner) {
+                return acc + (item.winner.unitPrice * item.quantity);
+            }
+            return acc;
+        }, 0);
+    }, [itemWinners]);
+
 
     const handleConfirmAward = () => {
         let awards: { [vendorId: string]: { vendorName: string, items: { requisitionItemId: string, quoteItemId: string }[] } } = {};
@@ -139,6 +153,7 @@ export const BestItemAwardDialog = ({
                                 <TableHead>Item</TableHead>
                                 <TableHead>Recommended Winner</TableHead>
                                 <TableHead className="text-right">Winning Score</TableHead>
+                                <TableHead className="text-right">Winning Price</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -147,6 +162,7 @@ export const BestItemAwardDialog = ({
                                     <TableCell className="font-medium">{item.name}</TableCell>
                                     <TableCell>{item.winner?.vendorName || 'N/A'}</TableCell>
                                     <TableCell className="text-right font-mono">{item.bestScore > 0 ? item.bestScore.toFixed(2) : 'N/A'}</TableCell>
+                                    <TableCell className="text-right font-mono">{item.winner ? `${(item.winner.unitPrice * item.quantity).toLocaleString()} ETB` : 'N/A'}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>
@@ -187,6 +203,9 @@ export const BestItemAwardDialog = ({
                         onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
                     />
                 </div>
+            </div>
+             <div className="text-right text-xl font-bold">
+                Total Award Value: {totalAwardValue.toLocaleString()} ETB
             </div>
 
             <DialogFooter>
