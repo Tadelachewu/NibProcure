@@ -841,7 +841,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -862,7 +862,7 @@ const RFQActionDialog = ({
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
             onClose();
         }
     };
@@ -1386,7 +1386,7 @@ const ScoringDialog = ({
     hidePrices: boolean;
 }) => {
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
@@ -2098,7 +2098,7 @@ const CommitteeActions = ({
     quotations: Quotation[],
     onFinalScoresSubmitted: () => void,
 }) => {
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const { toast } = useToast();
     
     const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
@@ -2133,7 +2133,7 @@ const CommitteeActions = ({
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
         }
     };
 
@@ -2862,7 +2862,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
@@ -2945,4 +2945,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
