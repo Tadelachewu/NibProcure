@@ -30,6 +30,7 @@ export type User = {
   role: UserRole;
   vendorId?: string;
   departmentId?: string;
+  department?: string;
   committeeAssignments?: CommitteeAssignment[];
 };
 
@@ -53,6 +54,7 @@ export type RequisitionStatus =
   | 'Scoring_Complete' // All scores are in, ready to finalize award
   | 'Awarded' // Award has been sent to vendor(s) and is pending response
   | 'Award_Declined' // The winning vendor has declined the award
+  | 'Partially_Declined' // A vendor with multiple items has declined some but not all
   | 'PostApproved' // All hierarchical reviews complete, ready for vendor notification
   | 'PO_Created'
   | 'Fulfilled'
@@ -178,11 +180,12 @@ export type PurchaseRequisition = {
       [key: string]: any;
   };
   minutes?: Minute[];
+  auditTrail?: AuditLog[];
 };
 
 export type AuditLog = {
   id: string; // Will be UUID
-  transactionId: string;
+  transactionId?: string;
   timestamp: Date;
   user: string;
   role: UserRole;
@@ -232,14 +235,17 @@ export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'R
 
 export type Score = {
   id: string;
-  criterionId: string;
   score: number; // 0-100
   comment?: string;
   type: 'FINANCIAL' | 'TECHNICAL';
+  financialCriterionId?: string;
+  technicalCriterionId?: string;
+  itemScoreId: string;
 }
 
 export type ItemScore = {
     id: string;
+    scoreSetId: string;
     quoteItemId: string;
     scores: Score[];
     finalScore: number;
@@ -268,6 +274,7 @@ export type Quotation = {
     status: QuotationStatus;
     notes?: string;
     rank?: 1 | 2 | 3;
+    standbyForItemId?: string;
     answers?: QuoteAnswer[];
     scores?: CommitteeScoreSet[];
     finalAverageScore?: number;

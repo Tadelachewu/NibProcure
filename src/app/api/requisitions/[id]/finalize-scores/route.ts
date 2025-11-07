@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -26,7 +27,7 @@ export async function POST(
             
             const allQuotes = await tx.quotation.findMany({ 
                 where: { requisitionId: requisitionId }, 
-                orderBy: { finalAverageScore: 'desc' } 
+                include: { items: true }
             });
 
             if (allQuotes.length === 0) {
@@ -36,46 +37,50 @@ export async function POST(
             const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
 
             const awardedVendorIds = Object.keys(awards);
-            const winnerQuotes = allQuotes.filter(q => awardedVendorIds.includes(q.vendorId));
-
-            // Create an exclusion list of vendors who have already declined.
-            const declinedVendorIds = new Set(allQuotes.filter(q => q.status === 'Declined' || q.status === 'Failed').map(q => q.vendorId));
-
-            // The pool of "other" quotes now EXCLUDES winners and any previously declined vendors.
-            const otherQuotes = allQuotes.filter(q => !awardedVendorIds.includes(q.vendorId) && !declinedVendorIds.has(q.vendorId));
-
-
-            for (const quote of winnerQuotes) {
-                const award = awards[quote.vendorId];
-                 await tx.quotation.update({
-                    where: { id: quote.id },
-                    data: {
-                        status: 'Pending_Award', // Set to pending, not awarded yet
-                        rank: 1
-                    }
-                });
-            }
             
-            const standbyQuotes = otherQuotes.slice(0, 2);
-            if (standbyQuotes.length > 0) {
-                for (let i = 0; i < standbyQuotes.length; i++) {
-                    await tx.quotation.update({ where: { id: standbyQuotes[i].id }, data: { status: 'Standby', rank: (i + 2) as 2 | 3 } });
+            for (const quote of allQuotes) {
+                if (awardedVendorIds.includes(quote.vendorId)) {
+                    await tx.quotation.update({
+                        where: { id: quote.id },
+                        data: { status: 'Pending_Award', rank: 1 }
+                    });
+                }
+            }
+
+            // Set up to 2 standby vendors for each awarded item
+            const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.requisitionItemId));
+            const uniqueAwardedItemIds = [...new Set(awardedItemIds)];
+
+            for (const reqItemId of uniqueAwardedItemIds) {
+                const quotesWithItem = allQuotes
+                    .filter(q => q.items.some(i => i.requisitionItemId === reqItemId))
+                    .sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
+
+                const winnerQuote = quotesWithItem.find(q => awardedVendorIds.includes(q.vendorId));
+
+                const standbyCandidates = quotesWithItem.filter(q => q.id !== winnerQuote?.id);
+
+                for (let i = 0; i < Math.min(2, standbyCandidates.length); i++) {
+                    const standbyQuote = standbyCandidates[i];
+                    await tx.quotation.update({
+                        where: { id: standbyQuote.id },
+                        data: {
+                            status: 'Standby',
+                            standbyForItemId: reqItemId, // Link standby status to a specific item
+                            rank: (i + 2) as 2 | 3
+                        }
+                    });
                 }
             }
             
-            const rejectedQuoteIds = otherQuotes.slice(2).map(q => q.id);
-            if (rejectedQuoteIds.length > 0) {
-                await tx.quotation.updateMany({ where: { id: { in: rejectedQuoteIds } }, data: { status: 'Rejected', rank: null } });
-            }
-            
-            const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
+            const awardedQuoteItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
             
             const updatedRequisition = await tx.purchaseRequisition.update({
                 where: { id: requisitionId },
                 data: {
                     status: nextStatus as any,
                     currentApproverId: nextApproverId,
-                    awardedQuoteItemIds: awardedItemIds,
+                    awardedQuoteItemIds: awardedQuoteItemIds,
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
                     totalPrice: totalAwardValue
                 }

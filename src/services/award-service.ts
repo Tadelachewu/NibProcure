@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -66,18 +67,20 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
         include: { scores: { include: { itemScores: { include: { scores: true } } } } }
     });
 
-    const scoreSetIds = quotationsToDelete.flatMap(q => q.scores.map(s => s.id));
-    const itemScoreIds = quotationsToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
+    for (const quote of quotationsToDelete) {
+        for (const scoreSet of quote.scores) {
+            const itemScoreIds = scoreSet.itemScores.map(is => is.id);
+            if (itemScoreIds.length > 0) {
+                await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
+            }
+        }
+        const scoreSetIds = quote.scores.map(s => s.id);
+        if (scoreSetIds.length > 0) {
+            await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
+        }
+    }
 
-    if (itemScoreIds.length > 0) {
-        await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
-    }
-    if (scoreSetIds.length > 0) {
-        await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
-    }
-    if (scoreSetIds.length > 0) {
-        await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
-    }
+    await tx.committeeScoreSet.deleteMany({ where: { quotationId: { in: quotationsToDelete.map(q => q.id) } } });
     await tx.quotation.deleteMany({ where: { requisitionId } });
     
     await tx.committeeAssignment.deleteMany({ where: { requisitionId }});
@@ -141,7 +144,7 @@ export async function handleAwardRejection(
     if (otherActiveAwards > 0) {
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
+            data: { status: 'Partially_Declined' }
         });
          await tx.auditLog.create({
             data: {
@@ -176,7 +179,7 @@ export async function handleAwardRejection(
                 action: 'AWARD_DECLINED_STANDBY_AVAILABLE',
                 entity: 'Requisition',
                 entityId: requisition.id,
-                details: `Award declined by ${quote.vendorName}. A standby vendor is available. Manual promotion required.`,
+                details: `Award declined by ${quote.vendorName}. A standby vendor is available for promotion.`,
                 transactionId: requisition.transactionId,
             }
         });
@@ -305,3 +308,4 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
     return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
 }
+
