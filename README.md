@@ -39,7 +39,7 @@ This is a comprehensive, full-stack procurement management system built with Nex
 - PostgreSQL database server
 
 ### 2. Set Up Your Database
-1.  Make sure you have PostgreSQL installed and running.
+1.  Make sure you have a PostgreSQL installed and running.
 2.  Create a new database for this project.
 3.  Update the `.env` file in the root of the project with your PostgreSQL connection string:
 
@@ -57,16 +57,16 @@ npm install
 ```
 
 ### 4. Apply the Database Schema
-This command applies the defined schema in `prisma/schema.prisma` to your database, creating all tables and relationships.
+This command applies any pending schema changes defined in `prisma/schema.prisma` to your database without deleting existing data.
 
 ```bash
-npx prisma migrate dev --name init
+npx prisma migrate deploy
 ```
 
 This will also automatically generate the Prisma Client based on your schema.
 
 ### 5. Seed the Database
-To populate your database with initial sample data (users, vendors, requisitions, etc.), run the seed command:
+To populate your database with initial sample data (users, vendors, requisitions, etc.), run the seed command. This command is safe to run multiple times.
 
 ```bash
 npm run db:seed
