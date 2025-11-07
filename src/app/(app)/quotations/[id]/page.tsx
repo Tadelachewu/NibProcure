@@ -855,7 +855,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -876,7 +876,7 @@ const RFQActionDialog = ({
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
             onClose();
         }
     };
@@ -960,7 +960,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const [distributionType, setDistributionType] = useState('all');
     const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
     const [vendorSearch, setVendorSearch] = useState("");
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
     const [cpoAmount, setCpoAmount] = useState<number | undefined>(requisition.cpoAmount);
@@ -1019,7 +1019,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/send-rfq`, {
                 method: 'POST',
@@ -1050,7 +1050,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     }
     
@@ -1431,7 +1431,7 @@ const ScoringDialog = ({
     }, [quote, requisition, user, form]);
 
     const onSubmit = async (values: ScoreFormValues) => {
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/quotations/${quote.id}/score`, {
                 method: 'POST',
@@ -1453,7 +1453,7 @@ const ScoringDialog = ({
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     };
     
@@ -2018,7 +2018,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/extend-scoring-deadline`, {
                 method: 'POST',
@@ -2038,7 +2038,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
         } catch (error) {
              toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     }
 
@@ -2964,6 +2964,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
