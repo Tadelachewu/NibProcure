@@ -58,7 +58,7 @@ export async function POST(
     }
     
     const transactionResult = await prisma.$transaction(async (tx) => {
-        // Delete previous scores from this user for this quote to ensure clean update.
+        // 1. Delete previous scores from this user for this quote to ensure clean update.
         const previousScoreSet = await tx.committeeScoreSet.findUnique({
             where: { quotationId_scorerId: { quotationId: quoteId, scorerId: userId } },
             include: { itemScores: { include: { scores: true } } }
@@ -77,7 +77,7 @@ export async function POST(
         let totalWeightedScore = 0;
         const totalItems = scores.itemScores.length;
 
-        // Create the main score set for this user and this quote.
+        // 2. Create the main score set for this user and this quote.
         const scoreSet = await tx.committeeScoreSet.create({
             data: {
                 quotation: { connect: { id: quoteId } },
@@ -91,13 +91,13 @@ export async function POST(
             const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
             totalWeightedScore += finalScore;
 
-            // Create the ItemScore record linked to the main CommitteeScoreSet.
+            // 3. Create the ItemScore record linked to the main CommitteeScoreSet.
             const itemScoreRecord = await tx.itemScore.create({
                 data: {
                     quoteItemId: itemScoreData.quoteItemId,
                     scoreSet: { connect: { id: scoreSet.id } }, // Connect to the parent set
                     finalScore: finalScore,
-                    // Create individual scores nested within this ItemScore.
+                    // 4. Create individual scores nested within this ItemScore.
                     scores: {
                         create: allScores.map((s: any) => {
                             const isFinancial = requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId);
