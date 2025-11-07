@@ -63,6 +63,11 @@ export async function POST(
             } else if (awardStrategy === 'item') {
                 const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
 
+                 // Clear existing standby assignments for this requisition before creating new ones
+                await tx.standbyAssignment.deleteMany({
+                    where: { requisitionId: requisitionId },
+                });
+
                 for (const reqItem of reqItems) {
                     let proposals: { quoteId: string; quoteItemId: string; vendorId: string; averageScore: number; }[] = [];
                     for (const quote of allQuotes) {
@@ -89,9 +94,9 @@ export async function POST(
                     }
 
                     proposals.sort((a,b) => b.averageScore - a.averageScore);
-                    const standbys = proposals.slice(1, 3);
                     
-                    // Create standby assignments for this item
+                    // Assign up to two standby vendors for this specific item
+                    const standbys = proposals.slice(1, 3);
                     for (let i = 0; i < standbys.length; i++) {
                         await tx.standbyAssignment.create({
                             data: {
@@ -109,26 +114,15 @@ export async function POST(
                 const winningQuoteIds = new Set(allQuotes.filter(q => winningVendorIds.has(q.vendorId)).map(q => q.id));
                 
                 if (winningQuoteIds.size > 0) {
+                    // This is the status for quotes that have won at least one item and are now entering the approval phase.
                     await tx.quotation.updateMany({
                         where: { id: { in: Array.from(winningQuoteIds) as string[] } },
                         data: { status: 'Partially_Awarded' }
                     });
                 }
 
-
-                // Reject quotes that won no items at all
-                const allQuoteIds = allQuotes.map(q => q.id);
-                const losingQuoteIds = allQuoteIds.filter(id => !winningQuoteIds.has(id));
-
-                if (losingQuoteIds.length > 0) {
-                     await tx.quotation.updateMany({
-                        where: {
-                            id: { in: losingQuoteIds },
-                            status: 'Submitted' // Only reject those that haven't been processed
-                        },
-                        data: { status: 'Rejected', rank: null }
-                    });
-                }
+                // IMPORTANT: We no longer reject quotes here. If a quote won no items but is a standby for others, it remains 'Submitted' or its standby status is handled by the StandbyAssignment model.
+                // Rejection will happen later in the workflow (e.g., after the winning vendor accepts).
             }
 
             const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
