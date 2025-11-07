@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -840,7 +841,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -861,7 +862,7 @@ const RFQActionDialog = ({
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
             onClose();
         }
     };
@@ -1385,7 +1386,7 @@ const ScoringDialog = ({
     hidePrices: boolean;
 }) => {
     const { toast } = useToast();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
@@ -1643,7 +1644,6 @@ const ScoringProgressTracker = ({
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<User | null>(null);
     const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
-    const [isItemAwardCenterOpen, setItemAwardCenterOpen] = useState(false);
     
     const { toast } = useToast();
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
@@ -1708,6 +1708,13 @@ const ScoringProgressTracker = ({
     }
     const buttonState = getButtonState();
 
+    const handleBestItemClick = () => {
+        toast({
+            title: "Coming Soon",
+            description: "The 'Award by Best Item' feature is currently under development."
+        });
+    };
+
 
     return (
         <Card className="mt-6">
@@ -1767,20 +1774,10 @@ const ScoringProgressTracker = ({
                         onClose={() => setSingleAwardCenterOpen(false)}
                     />
                  </Dialog>
-                  <Dialog open={isItemAwardCenterOpen} onOpenChange={setItemAwardCenterOpen}>
-                    <DialogTrigger asChild>
-                         <Button disabled={buttonState.disabled} variant="outline">
-                            {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Award by Best Item
-                        </Button>
-                    </DialogTrigger>
-                    <BestItemAwardDialog
-                        requisition={requisition}
-                        quotations={quotations}
-                        onFinalize={onFinalize}
-                        onClose={() => setItemAwardCenterOpen(false)}
-                    />
-                 </Dialog>
+                  <Button disabled={buttonState.disabled} variant="outline" onClick={handleBestItemClick}>
+                        {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Award by Best Item
+                    </Button>
             </CardFooter>
             {selectedMember && (
                 <>
@@ -2002,7 +1999,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/extend-scoring-deadline`, {
                 method: 'POST',
@@ -2022,7 +2019,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
         } catch (error) {
              toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     }
 
@@ -2865,7 +2862,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
@@ -2948,3 +2945,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
