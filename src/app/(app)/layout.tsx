@@ -111,7 +111,7 @@ export default function AppLayout({
       // Special case for dynamic routes, e.g., allowing /requisitions/123 if /requisitions is allowed.
       const isAllowed = allowedPaths.some(p => {
           if (p === currentPath) return true;
-          if (currentPath.startsWith(`${p}/`)) return true;
+          if (p !== '/' && currentPath.startsWith(`${p}/`)) return true;
           return false;
       });
 

@@ -17,7 +17,7 @@ export default function HomePage() {
       return; 
     }
 
-    // If loading is done and there's no user, go to login.
+    // If loading is done and there's still no user, go to login.
     if (!user) {
       router.push('/login');
       return;
@@ -29,6 +29,7 @@ export default function HomePage() {
             router.push('/vendor/dashboard');
         } else {
             const allowedPaths = rolePermissions[role] || [];
+            // Use dashboard as a default, fallback to the first available page.
             const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
 
             if (defaultPath) {
