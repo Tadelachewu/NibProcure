@@ -219,18 +219,24 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
     const declinedRequisition = await tx.purchaseRequisition.findUnique({
         where: { id: requisitionId },
-        include: { quotations: { where: { status: 'Declined' } } }
+        include: { quotations: { where: { status: 'Declined' }, include: { items: true } } }
     });
 
     if (!declinedRequisition || declinedRequisition.quotations.length === 0) {
         throw new Error('No declined quote found to trigger standby promotion.');
     }
     
-    const allDeclinedItemIds = declinedRequisition.quotations.flatMap(q => q.awardedQuoteItemIds);
+    const allDeclinedQuoteItemIds = declinedRequisition.quotations.flatMap(q => q.items.map(item => item.id));
 
-    const bestStandbyAssignments = await tx.standbyAssignment.findMany({
+    const standbyAssignments = await tx.standbyAssignment.findMany({
         where: {
-            requisitionItemId: { in: allDeclinedItemIds },
+            quotation: {
+                items: {
+                    some: {
+                        id: { in: allDeclinedQuoteItemIds }
+                    }
+                }
+            },
             rank: 2, // Promote the first standby
         },
         include: {
@@ -238,9 +244,9 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         }
     });
 
-    if (bestStandbyAssignments.length === 0) {
+
+    if (standbyAssignments.length === 0) {
         // Logic to re-open RFQ for specific items
-        // This is a placeholder for a more complex feature
         await tx.purchaseRequisition.update({
             where: { id: requisitionId },
             data: { status: 'Partially_Declined' }
@@ -259,7 +265,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
     
     // Group assignments by vendor
     const promotionsByVendor: Record<string, { vendorName: string, items: any[], quoteIds: Set<string> }> = {};
-    for (const assignment of bestStandbyAssignments) {
+    for (const assignment of standbyAssignments) {
         const vendorId = assignment.quotation.vendorId;
         if (!promotionsByVendor[vendorId]) {
             promotionsByVendor[vendorId] = {

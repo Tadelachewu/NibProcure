@@ -9,6 +9,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log(`Clearing existing data...`);
   // Manually manage order of deletion to avoid foreign key constraint violations
+  await prisma.standbyAssignment.deleteMany({});
   await prisma.minute.deleteMany({});
   await prisma.approvalStep.deleteMany({});
   await prisma.approvalThreshold.deleteMany({});

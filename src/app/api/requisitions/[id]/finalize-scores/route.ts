@@ -38,9 +38,10 @@ export async function POST(
 
             const awardedVendorIds = Object.keys(awards);
             
-            // Set awarded quotes to Pending_Award
-            for (const quote of allQuotes) {
-                if (awardedVendorIds.includes(quote.vendorId)) {
+            // Set awarded quotes to Pending_Award and rank them as #1
+            for (const vendorId of awardedVendorIds) {
+                const quotesForVendor = allQuotes.filter(q => q.vendorId === vendorId);
+                for (const quote of quotesForVendor) {
                     await tx.quotation.update({
                         where: { id: quote.id },
                         data: { status: 'Pending_Award', rank: 1 }
@@ -49,35 +50,36 @@ export async function POST(
             }
 
             // Set standby vendors for each awarded item
-            const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.requisitionItemId));
-            const uniqueAwardedItemIds = [...new Set(awardedItemIds)];
-
+            const allAwardedQuoteItemIds: string[] = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
+            const awardedRequisitionItemIds = allQuotes.flatMap(q => q.items)
+                .filter(qi => allAwardedQuoteItemIds.includes(qi.id))
+                .map(qi => qi.requisitionItemId);
+            
             // Clear previous standby assignments for this requisition to avoid duplicates
-            const quotesForReq = await tx.quotation.findMany({ where: { requisitionId: requisitionId }, select: { id: true }});
-            await tx.standbyAssignment.deleteMany({ where: { quotationId: { in: quotesForReq.map(q => q.id) } } });
+            await tx.standbyAssignment.deleteMany({ where: { requisition: { id: requisitionId } } });
 
-
-            for (const reqItemId of uniqueAwardedItemIds) {
+            for (const reqItemId of [...new Set(awardedRequisitionItemIds)]) {
                 const quotesWithItem = allQuotes
                     .filter(q => q.items.some(i => i.requisitionItemId === reqItemId))
                     .sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
 
                 const winnerQuote = quotesWithItem.find(q => awardedVendorIds.includes(q.vendorId));
 
-                const standbyCandidates = quotesWithItem.filter(q => q.id !== winnerQuote?.id);
+                const standbyCandidates = quotesWithItem.filter(q => q.id !== winnerQuote?.id && !awardedVendorIds.includes(q.vendorId));
 
                 for (let i = 0; i < Math.min(2, standbyCandidates.length); i++) {
                     const standbyQuote = standbyCandidates[i];
                     await tx.standbyAssignment.create({
                         data: {
                             quotationId: standbyQuote.id,
+                            requisitionId: requisitionId, // Link to the main requisition
                             requisitionItemId: reqItemId,
-                            rank: i + 2,
+                            rank: i + 2, // Rank 2 or 3
                         }
                     });
-                    // Also update the quote status itself if it's not already awarded for another item
+                    
                     const currentStatus = await tx.quotation.findUnique({ where: { id: standbyQuote.id }, select: { status: true } });
-                    if(currentStatus?.status !== 'Pending_Award') {
+                    if(currentStatus?.status !== 'Pending_Award' && currentStatus?.status !== 'Awarded') {
                        await tx.quotation.update({
                            where: { id: standbyQuote.id },
                            data: { status: 'Standby' }
@@ -86,14 +88,12 @@ export async function POST(
                 }
             }
             
-            const awardedQuoteItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
-            
             const updatedRequisition = await tx.purchaseRequisition.update({
                 where: { id: requisitionId },
                 data: {
                     status: nextStatus as any,
                     currentApproverId: nextApproverId,
-                    awardedQuoteItemIds: awardedQuoteItemIds,
+                    awardedQuoteItemIds: allAwardedQuoteItemIds,
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
                     totalPrice: totalAwardValue
                 }
