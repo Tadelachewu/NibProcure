@@ -129,6 +129,8 @@ export async function POST(
             }
 
             const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
+
+            const requisition = await tx.purchaseRequisition.findUnique({ where: { id: requisitionId } });
             
             const updatedRequisition = await tx.purchaseRequisition.update({
                 where: { id: requisitionId },
@@ -137,7 +139,11 @@ export async function POST(
                     currentApproverId: nextApproverId,
                     awardedQuoteItemIds: awardedItemIds,
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
-                    totalPrice: totalAwardValue
+                    totalPrice: totalAwardValue,
+                    rfqSettings: {
+                        ...(requisition?.rfqSettings as any),
+                        awardStrategy: awardStrategy,
+                    }
                 }
             });
             console.log(`[FINALIZE-SCORES] Requisition ${requisitionId} updated. New status: ${updatedRequisition.status}, Approver: ${updatedRequisition.currentApproverId}`);
