@@ -113,7 +113,7 @@ export async function POST(
                   itemScoreId: createdItemScore.id,
                   score: s.score,
                   comment: s.comment,
-                  type: isFinancial ? 'FINANCIAL' : 'TECHNICAL',
+                  type: isFinancial ? 'FINANCIAL' as const : 'TECHNICAL' as const,
                   financialCriterionId: isFinancial ? s.criterionId : null,
                   technicalCriterionId: !isFinancial ? s.criterionId : null,
                 };
