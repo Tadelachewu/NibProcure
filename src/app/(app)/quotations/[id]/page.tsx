@@ -1644,6 +1644,7 @@ const ScoringProgressTracker = ({
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<User | null>(null);
     const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
+    const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
     
     const { toast } = useToast();
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
@@ -1708,13 +1709,6 @@ const ScoringProgressTracker = ({
     }
     const buttonState = getButtonState();
 
-    const handleBestItemClick = () => {
-        toast({
-            title: "Coming Soon",
-            description: "The 'Award by Best Item' feature is currently under development."
-        });
-    };
-
 
     return (
         <Card className="mt-6">
@@ -1774,10 +1768,21 @@ const ScoringProgressTracker = ({
                         onClose={() => setSingleAwardCenterOpen(false)}
                     />
                  </Dialog>
-                  <Button disabled={buttonState.disabled} variant="outline" onClick={handleBestItemClick}>
-                        {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Award by Best Item
-                    </Button>
+                <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
+                    <DialogTrigger asChild>
+                        <Button disabled={buttonState.disabled} variant="outline">
+                            {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Award by Best Item
+                        </Button>
+                    </DialogTrigger>
+                    <BestItemAwardDialog
+                        isOpen={isBestItemAwardCenterOpen}
+                        onClose={() => setBestItemAwardCenterOpen(false)}
+                        requisition={requisition}
+                        quotations={quotations}
+                        onFinalize={onFinalize}
+                    />
+                </Dialog>
             </CardFooter>
             {selectedMember && (
                 <>
@@ -2098,7 +2103,7 @@ const CommitteeActions = ({
     quotations: Quotation[],
     onFinalScoresSubmitted: () => void,
 }) => {
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
     
     const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
@@ -2133,7 +2138,7 @@ const CommitteeActions = ({
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     };
 
