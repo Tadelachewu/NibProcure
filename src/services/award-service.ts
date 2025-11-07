@@ -80,7 +80,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     }
     await tx.quotation.deleteMany({ where: { requisitionId } });
     
-    await tx.committeeAssignment.deleteMany({ where: { requisitionId } });
+    await tx.committeeAssignment.deleteMany({ where: { requisitionId }});
 
     await tx.purchaseRequisition.update({
         where: { id: requisitionId },
@@ -209,7 +209,7 @@ export async function handleAwardRejection(
  * @param actor - The user performing the action.
  * @returns A message indicating the result of the operation.
  */
-export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
+export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: User) {
     const nextStandby = await tx.quotation.findFirst({
         where: {
             requisitionId,

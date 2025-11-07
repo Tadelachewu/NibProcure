@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { promoteStandbyVendor } from '@/services/award-service';
+import { User } from '@/lib/types';
 
 export async function POST(
   request: Request,
@@ -20,9 +21,7 @@ export async function POST(
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // The logic here should not just be about one vendor, but the whole req.
-      // The logic is moved to the award-service to be more robust.
-      return await promoteStandbyVendor(tx, requisitionId, user);
+      return await promoteStandbyVendor(tx, requisitionId, user as User);
     });
 
     return NextResponse.json(result);

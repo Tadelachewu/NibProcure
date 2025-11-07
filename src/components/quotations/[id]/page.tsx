@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, FileUp, TrophyIcon } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -63,6 +63,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
+import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -228,6 +229,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             case 'Failed': return 'destructive';
             case 'Invoice_Submitted': return 'outline';
             case 'Partially_Awarded': return 'default';
+            case 'Pending_Award': return 'secondary';
         }
     }
 
@@ -243,11 +245,14 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
     const isTechnicalOnlyScorer = user.role === 'Committee_Member' && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
     const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
 
+    const isAssigned = requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id);
+
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {quotes.sort((a, b) => (a.rank || 4) - (b.rank || 4)).map(quote => {
+            {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
+                const awardedItemsForThisQuote = quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded') && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
@@ -294,11 +299,11 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                         </div>
                                     )}
 
-                                    {isDeadlinePassed && (
-                                        <div className="text-sm space-y-2">
-                                        <h4 className="font-semibold">Items:</h4>
-                                            {quote.items.map(item => (
-                                                <div key={item.requisitionItemId} className="flex justify-between items-center text-muted-foreground">
+                                    {isAwarded && awardedItemsForThisQuote.length > 0 && (
+                                        <div className="text-sm space-y-2 pt-2 border-t">
+                                            <h4 className="font-semibold text-green-600">Winning Items:</h4>
+                                            {awardedItemsForThisQuote.map(item => (
+                                                <div key={item.id} className="flex justify-between items-center text-muted-foreground">
                                                     <span>{item.name} x {item.quantity}</span>
                                                     {!hidePrices && <span className="font-mono">{item.unitPrice.toFixed(2)} ETB ea.</span>}
                                                 </div>
@@ -328,7 +333,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                              )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
-                            {user.role === 'Committee_Member' && (
+                            {user.role === 'Committee_Member' && isAssigned && (
                                 <Button className="w-full" variant={hasUserScored ? "secondary" : "outline"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
                                     {hasUserScored ? 'View Your Score' : 'Score this Quote'}
@@ -361,6 +366,7 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
         try {
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('directory', 'contracts');
 
             const uploadResponse = await fetch('/api/upload', {
                 method: 'POST',
@@ -374,10 +380,16 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
 
             const notes = (event.target as any).notes.value;
 
-            const response = await fetch(`/api/requisitions/${requisition.id}/contract`, {
+            const response = await fetch(`/api/contracts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fileName: filePath, notes, userId: user.id }),
+                body: JSON.stringify({
+                    requisitionId: requisition.id,
+                    vendorId: awardedQuote.vendorId,
+                    filePath: filePath,
+                    notes, 
+                    userId: user.id 
+                }),
             });
             if (!response.ok) throw new Error("Failed to save contract details.");
 
@@ -434,8 +446,9 @@ const committeeFormSchema = z.object({
   committeeName: z.string().min(3, "Committee name is required."),
   committeePurpose: z.string().min(10, "Purpose is required."),
   financialCommitteeMemberIds: z.array(z.string()).min(1, "At least one financial member is required."),
-  technicalCommitteeMemberIds: z.array(z.string()).min(1, "At least one technical member is required."),
+  technicalCommitteeMemberIds: z.array(z.string()).optional(),
 }).refine(data => {
+    if (!data.technicalCommitteeMemberIds) return true; // No overlap check needed if it's optional and not provided
     const financialIds = new Set(data.financialCommitteeMemberIds);
     const hasOverlap = data.technicalCommitteeMemberIds.some(id => financialIds.has(id));
     return !hasOverlap;
@@ -1058,7 +1071,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                 <CardContent className="space-y-4">
                     {!isAuthorized && !isSent && (
                         <Alert variant="default" className="border-amber-500/50">
-                            <AlertCircle className="h-4 w-4 text-amber-600" />
+                            <AlertTriangle className="h-4 w-4 text-amber-600" />
                             <AlertTitle>Read-Only Mode</AlertTitle>
                             <AlertDescription>
                                 You do not have permission to send RFQs based on current system settings.
@@ -1383,11 +1396,11 @@ const ScoringDialog = ({
                 return {
                     quoteItemId: item.id,
                     financialScores: requisition.evaluationCriteria?.financialCriteria.map(c => {
-                        const existing = existingItemScore?.scores.find(s => s.criterionId === c.id);
+                        const existing = existingItemScore?.scores.find(s => s.financialCriterionId === c.id);
                         return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
                     }) || [],
                     technicalScores: requisition.evaluationCriteria?.technicalCriteria.map(c => {
-                        const existing = existingItemScore?.scores.find(s => s.criterionId === c.id);
+                        const existing = existingItemScore?.scores.find(s => s.technicalCriterionId === c.id);
                         return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
                     }) || [],
                 }
@@ -1626,7 +1639,8 @@ const ScoringProgressTracker = ({
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<User | null>(null);
-    const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
+    const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
+    const [isItemAwardCenterOpen, setItemAwardCenterOpen] = useState(false);
     
     const { toast } = useToast();
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
@@ -1676,6 +1690,9 @@ const ScoringProgressTracker = ({
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
     const getButtonState = () => {
+        if (requisition.status === 'Award_Declined') {
+            return { text: "Finalize Scores & Award", disabled: true };
+        }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
         }
@@ -1719,7 +1736,7 @@ const ScoringProgressTracker = ({
                                     </div>
                                 ) : member.isOverdue ? (
                                     <>
-                                     <Badge variant="destructive" className="mr-auto"><AlertCircle className="mr-1 h-3 w-3" />Overdue</Badge>
+                                     <Badge variant="destructive"><AlertTriangle className="mr-1 h-3 w-3" />Overdue</Badge>
                                      <Button size="sm" variant="secondary" onClick={()=>{ setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
                                      <Button size="sm" variant="secondary" onClick={() => onCommitteeUpdate(true)}>Replace</Button>
                                      <Button size="sm" variant="outline" onClick={()=>{ setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
@@ -1732,19 +1749,33 @@ const ScoringProgressTracker = ({
                     ))}
                 </ul>
             </CardContent>
-            <CardFooter>
-                 <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
+            <CardFooter className="gap-2">
+                 <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
                     <DialogTrigger asChild>
                          <Button disabled={buttonState.disabled}>
                             {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {buttonState.text}
+                            Award to Single Vendor
                         </Button>
                     </DialogTrigger>
                     <AwardCenterDialog 
                         requisition={requisition}
                         quotations={quotations}
                         onFinalize={onFinalize}
-                        onClose={() => setAwardCenterOpen(false)}
+                        onClose={() => setSingleAwardCenterOpen(false)}
+                    />
+                 </Dialog>
+                  <Dialog open={isItemAwardCenterOpen} onOpenChange={setItemAwardCenterOpen}>
+                    <DialogTrigger asChild>
+                         <Button disabled={buttonState.disabled} variant="outline">
+                            {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Award by Best Item
+                        </Button>
+                    </DialogTrigger>
+                    <BestItemAwardDialog
+                        requisition={requisition}
+                        quotations={quotations}
+                        onFinalize={onFinalize}
+                        onClose={() => setItemAwardCenterOpen(false)}
                     />
                  </Dialog>
             </CardFooter>
@@ -1773,8 +1804,19 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     const printRef = useRef<HTMLDivElement>(null);
     const { toast } = useToast();
 
-    const getCriterionName = (criterionId: string, criteria?: EvaluationCriterion[]) => {
+    const getCriterionName = (criterionId: string, type: 'FINANCIAL' | 'TECHNICAL') => {
+        const criteria = type === 'FINANCIAL'
+          ? requisition.evaluationCriteria?.financialCriteria
+          : requisition.evaluationCriteria?.technicalCriteria;
         return criteria?.find(c => c.id === criterionId)?.name || 'Unknown Criterion';
+    }
+
+    const getItemName = (quoteItemId: string) => {
+        for (const quote of quotations) {
+            const item = quote.items.find(i => i.id === quoteItemId);
+            if (item) return item.name;
+        }
+        return 'Unknown Item';
     }
 
     const handleGeneratePdf = async () => {
@@ -1879,32 +1921,40 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                         </div>
                                                     </div>
                                                     
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
-                                                        <div>
-                                                            <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
-                                                            {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'FINANCIAL').map(s => (
-                                                                <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
-                                                                    <div className="flex justify-between items-center font-medium">
-                                                                        <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
-                                                                        <p className="font-bold">{s.score}/100</p>
+                                                    <div className="space-y-4">
+                                                        {scoreSet.itemScores?.map(itemScore => (
+                                                            <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
+                                                                <h4 className="font-semibold text-sm mb-2 print:text-gray-800 border-b pb-1">Item: {getItemName(itemScore.quoteItemId)}</h4>
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 mt-2">
+                                                                    <div>
+                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-700">Financial ({requisition.evaluationCriteria?.financialWeight}%)</h5>
+                                                                        {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
+                                                                            <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                <div className="flex justify-between items-center font-medium">
+                                                                                    <p>{getCriterionName(s.financialCriterionId!, 'FINANCIAL')}</p>
+                                                                                    <p className="font-bold">{s.score}/100</p>
+                                                                                </div>
+                                                                                {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
-                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                </div>
-                                                            )))}
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
-                                                            {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'TECHNICAL').map(s => (
-                                                                <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
-                                                                    <div className="flex justify-between items-center font-medium">
-                                                                        <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
-                                                                        <p className="font-bold">{s.score}/100</p>
+                                                                    <div>
+                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-700">Technical ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
+                                                                        {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
+                                                                            <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                <div className="flex justify-between items-center font-medium">
+                                                                                    <p>{getCriterionName(s.technicalCriterionId!, 'TECHNICAL')}</p>
+                                                                                    <p className="font-bold">{s.score}/100</p>
+                                                                                </div>
+                                                                                {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
-                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
                                                                 </div>
-                                                            )))}
-                                                        </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
+
 
                                                     {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
                                                 </div>
@@ -1932,7 +1982,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
 const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess }: { isOpen: boolean, onClose: () => void, member: User, requisition: PurchaseRequisition, onSuccess: () => void }) => {
     const { toast } = useToast();
     const { user } = useAuth();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadline, setNewDeadline] = useState<Date|undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
 
@@ -2222,7 +2272,6 @@ export default function QuotationDetailsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAddFormOpen, setAddFormOpen] = useState(false);
   const [isCommitteeDialogOpen, setCommitteeDialogOpen] = useState(false);
   const [isScoringFormOpen, setScoringFormOpen] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
@@ -2230,13 +2279,11 @@ export default function QuotationDetailsPage() {
   const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
   const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
   const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
-  const [lastPOCreated, setLastPOCreated] = useState<PurchaseOrder | null>(null);
-  const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
-  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
+  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby', 'Pending_Award'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   
   const isDeadlinePassed = useMemo(() => {
@@ -2277,53 +2324,35 @@ export default function QuotationDetailsPage() {
     return false;
   }, [user, role, rfqSenderSetting]);
 
-    const fetchRequisitionAndQuotes = async () => {
-        if (!id) return;
-        setLoading(true);
-        setLastPOCreated(null);
-        try {
-            const [reqResponse, venResponse, quoResponse] = await Promise.all([
-                fetch(`/api/requisitions/${id}`),
-                fetch('/api/vendors'),
-                fetch(`/api/quotations?requisitionId=${id}`),
-            ]);
-            const currentReq = await reqResponse.json();
-            const venData = await venResponse.json();
-            const quoData = await quoResponse.json();
+  const fetchRequisitionAndQuotes = async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+          const [reqResponse, venResponse, quoResponse] = await Promise.all([
+              fetch(`/api/requisitions/${id}`),
+              fetch('/api/vendors'),
+              fetch(`/api/quotations?requisitionId=${id}`),
+          ]);
+          const currentReq = await reqResponse.json();
+          const venData = await venResponse.json();
+          const quoData: Quotation[] = await quoResponse.json();
 
-            if (currentReq) {
-                const awardedQuote = quoData.find((q: Quotation) => q.status === 'Awarded');
-                if (awardedQuote && currentReq.awardResponseDeadline && isPast(new Date(currentReq.awardResponseDeadline))) {
-                    toast({
-                        title: 'Deadline Missed',
-                        description: `Vendor ${awardedQuote.vendorName} missed the response deadline. Action required.`,
-                        variant: 'destructive',
-                    });
-                    // This now just reverts the state, does not auto-promote.
-                    await handleAwardChange();
-                    // Refetch after the change
-                    const [refetchedReqRes, refetchedQuoRes] = await Promise.all([
-                        fetch(`/api/requisitions/${id}`),
-                        fetch(`/api/quotations?requisitionId=${id}`)
-                    ]);
-                    setRequisition(await refetchedReqRes.json());
-                    setQuotations(await refetchedQuoRes.json());
-                } else {
-                    setRequisition(currentReq);
-                    setQuotations(quoData);
-                }
-            } else {
-                toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
-            }
-            
-            setVendors(venData || []);
+          setVendors(venData || []);
 
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
-        } finally {
-            setLoading(false);
-        }
-    };
+          if (currentReq) {
+              setRequisition(currentReq);
+              // Sort quotations by creation date descending
+              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          } else {
+              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
+          }
+          
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
+      } finally {
+          setLoading(false);
+      }
+  };
 
 
   useEffect(() => {
@@ -2331,45 +2360,22 @@ export default function QuotationDetailsPage() {
         fetchRequisitionAndQuotes();
     }
   }, [id, user]);
-
-  const handleRfqSent = () => {
-    fetchRequisitionAndQuotes();
-  }
-
-  const handleQuoteAdded = () => {
-    setAddFormOpen(false);
-    fetchRequisitionAndQuotes();
-  }
   
-  const handleContractFinalized = () => {
-    fetchRequisitionAndQuotes();
-  }
-  
-  const handlePOCreated = (po: PurchaseOrder) => {
-    fetchRequisitionAndQuotes();
-    setLastPOCreated(po);
-  }
-  
-   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
+  const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
         
-        let totalAwardValue = 0;
-        const awardedQuoteItems: { [itemId: string]: { price: number, quantity: number } } = {};
-
+        const quoteItemsById: { [key: string]: { price: number; quantity: number } } = {};
         quotations.forEach(q => {
             q.items.forEach(i => {
-                awardedQuoteItems[i.id] = { price: i.unitPrice, quantity: i.quantity };
+                quoteItemsById[i.id] = { price: i.unitPrice, quantity: i.quantity };
             });
         });
 
-        Object.values(awards).forEach((award: any) => {
-            award.items.forEach((item: any) => {
-                const quoteItem = awardedQuoteItems[item.quoteItemId];
-                if (quoteItem) {
-                    totalAwardValue += quoteItem.price * quoteItem.quantity;
-                }
-            });
-        });
+        const totalAwardValue = Object.values(awards).flatMap((a: any) => a.items)
+            .reduce((sum, item: any) => {
+                const quoteItem = quoteItemsById[item.quoteItemId];
+                return sum + (quoteItem ? quoteItem.price * quoteItem.quantity : 0);
+            }, 0);
 
 
         setIsFinalizing(true);
@@ -2395,39 +2401,6 @@ export default function QuotationDetailsPage() {
             setIsFinalizing(false);
         }
     }
-
-
-  const handleAwardChange = async () => {
-    if (!user || !id || !requisition) return;
-    
-    setIsChangingAward(true);
-    try {
-        const response = await fetch(`/api/requisitions/${id}/handle-award-change`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id }),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Failed to handle award change.' }));
-            throw new Error(errorData.error);
-        }
-
-        toast({
-            title: `Action Successful`,
-            description: `The award status has been updated.`
-        });
-        fetchRequisitionAndQuotes();
-    } catch (error) {
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: error instanceof Error ? error.message : 'An unknown error occurred.',
-        });
-    } finally {
-        setIsChangingAward(false);
-    }
-  }
 
   const handleNotifyVendor = async (deadline?: Date) => {
     if (!user || !requisition) return;
@@ -2473,7 +2446,7 @@ export default function QuotationDetailsPage() {
   }
 
   const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
-      if (!requisition) return 'rfq';
+      if (!requisition || !requisition.status) return 'rfq';
       const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
 
       if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
@@ -2527,12 +2500,35 @@ export default function QuotationDetailsPage() {
   if (!requisition) {
      return <div className="text-center p-8">Requisition not found.</div>;
   }
+
+  // A committee member can only see this page if they are assigned
+  const isAssignedCommitteeMember = user.role === 'Committee_Member' && (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id));
+  if (user.role === 'Committee_Member' && !isAssignedCommitteeMember) {
+      return (
+          <Card>
+              <CardHeader>
+                  <CardTitle>Access Denied</CardTitle>
+                  <CardDescription>You are not assigned to the evaluation committee for this requisition.</CardDescription>
+              </CardHeader>
+          </Card>
+      );
+  }
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
   const isReadyForNotification = requisition.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
+  
+  const canViewCumulativeReport = isAwarded && isScoringComplete && (
+      role === 'Procurement_Officer' || 
+      role === 'Admin' || 
+      role?.startsWith('Manager_') || 
+      role?.startsWith('Director_') ||
+      role?.startsWith('VP_') ||
+      role === 'President' ||
+      role?.startsWith('Committee_')
+  );
 
 
   return (
@@ -2677,7 +2673,7 @@ export default function QuotationDetailsPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 w-full sm:w-auto">
-                            {isAwarded && isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin') && (
+                           {canViewCumulativeReport && (
                                 <Button variant="secondary" onClick={() => setReportOpen(true)}>
                                     <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
                                 </Button>
@@ -2728,7 +2724,7 @@ export default function QuotationDetailsPage() {
             </>
         )}
         
-        {(currentStep === 'committee' || currentStep === 'award') && user.role === 'Committee_Member' && (
+        {(currentStep === 'committee' || currentStep === 'award') && user.role === 'Committee_Member' && isAssignedCommitteeMember && (
              <CommitteeActions 
                 user={user}
                 requisition={requisition}
@@ -2739,8 +2735,7 @@ export default function QuotationDetailsPage() {
         
          {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' &&
-            requisition.status !== 'Scoring_Complete' && requisition.status !== 'Award_Declined'
+            requisition.status !== 'PreApproved'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2752,14 +2747,14 @@ export default function QuotationDetailsPage() {
             />
         )}
         
-        {(requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete') && (role === 'Procurement_Officer' || role === 'Admin') && (
-             <AwardStandbyButton 
-                requisition={requisition}
-                quotations={quotations}
-                onFinalize={handleFinalizeScores}
-                isFinalizing={isFinalizing}
-            />
-        )}
+        <AwardStandbyButton 
+            requisition={requisition}
+            quotations={quotations}
+            onSuccess={fetchRequisitionAndQuotes}
+            isFinalizing={isFinalizing}
+            onFinalize={handleFinalizeScores}
+        />
+
 
         {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
             <Card className="mt-6 border-amber-500">
@@ -2770,9 +2765,9 @@ export default function QuotationDetailsPage() {
                 <CardFooter>
                      <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
                         <DialogTrigger asChild>
-                            <Button disabled={isNotifying}>
+                             <Button disabled={isNotifying || requisition.status === 'Awarded'}>
                                 {isNotifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Send Award Notification
+                                {requisition.status === 'Awarded' ? 'Notification Sent' : 'Send Award Notification'}
                             </Button>
                         </DialogTrigger>
                         <NotifyVendorDialog
@@ -2789,11 +2784,11 @@ export default function QuotationDetailsPage() {
         )}
         
         {isAccepted && requisition.status !== 'PO_Created' && role !== 'Committee_Member' && (
-            <ContractManagement requisition={requisition} onContractFinalized={handleContractFinalized} />
+            <ContractManagement requisition={requisition} onContractFinalized={fetchRequisitionAndQuotes} />
         )}
          {requisition && (
             <RequisitionDetailsDialog 
-                reuisition={requisition} 
+                requisition={requisition} 
                 isOpen={isDetailsOpen} 
                 onClose={() => setIsDetailsOpen(false)} 
             />
@@ -2898,3 +2893,25 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
 
+
+
+
+
+
+    
+
+    
+
+
+
+    
+ 
+    
+
+    
+
+
+
+    
+
+    
