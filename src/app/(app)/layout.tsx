@@ -90,41 +90,43 @@ export default function AppLayout({
   }, [user, handleLogout]);
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push('/login');
+    // **THE FIX - PART 1**
+    // Wait until the authentication check is complete before making any decisions.
+    if (loading) {
+      return; 
     }
-  }, [user, loading, router]);
-  
-  // Page-level access check
-  useEffect(() => {
-    if (loading || !role || !rolePermissions[role]) return;
 
-    const allowedPaths = rolePermissions[role] || [];
-    if (allowedPaths.length === 0 && role !== 'Admin') {
-        router.push('/login');
-        return;
+    // If loading is finished and there's still no user, redirect to login.
+    if (!user) {
+      router.push('/login');
+      return;
     }
     
-    const currentPath = pathname.split('?')[0];
+    // Page-level access check
+    if (role && rolePermissions[role]) {
+      const allowedPaths = rolePermissions[role] || [];
+      const currentPath = pathname.split('?')[0];
 
-    // More robust check for dynamic routes.
-    const isAllowed = allowedPaths.some(p => {
-        // Exact match (e.g., /dashboard)
-        if (p === currentPath) return true;
-        // Check for dynamic sub-routes (e.g., if /requisitions is allowed, /requisitions/123 should also be)
-        if (currentPath.startsWith(`${p}/`)) return true;
-        return false;
-    });
+      // Allow access to the root dashboard if it's in the allowed paths.
+      // Special case for dynamic routes, e.g., allowing /requisitions/123 if /requisitions is allowed.
+      const isAllowed = allowedPaths.some(p => {
+          if (p === currentPath) return true;
+          if (currentPath.startsWith(`${p}/`)) return true;
+          return false;
+      });
 
-    if (!isAllowed && currentPath !== '/dashboard') { // Allow dashboard as a common landing page
-        const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
-        if (defaultPath) {
-            router.push(defaultPath);
-        } else {
-            router.push('/login');
-        }
+      // If not allowed and not on the dashboard already, find a safe page to land on.
+      if (!isAllowed && currentPath !== '/dashboard') {
+          const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
+          if (defaultPath) {
+              router.push(defaultPath);
+          } else {
+              // If no default path is found, it's a permission issue, go to login.
+              router.push('/login');
+          }
+      }
     }
-  }, [pathname, loading, role, router, rolePermissions]);
+  }, [user, loading, role, router, pathname, rolePermissions]);
 
 
   if (loading || !user || !role) {
