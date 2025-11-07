@@ -61,7 +61,7 @@ export async function POST(
         // 1. Delete previous scores from this user for this quote to ensure clean update.
         const previousScoreSet = await tx.committeeScoreSet.findUnique({
             where: { quotationId_scorerId: { quotationId: quoteId, scorerId: userId } },
-            include: { itemScores: true }
+            include: { itemScores: { include: { scores: true } } }
         });
 
         if (previousScoreSet) {
@@ -156,3 +156,4 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+

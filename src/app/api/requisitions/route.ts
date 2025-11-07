@@ -170,21 +170,16 @@ export async function GET(request: Request) {
         department: true,
         approver: true,
         quotations: {
-          select: {
-            id: true,
-            vendorId: true,
-            status: true,
-            vendorName: true,
-            totalPrice: true,
-            finalAverageScore: true,
-            items: {
-              select: {
-                id: true,
-                requisitionItemId: true,
-                name: true,
-                quantity: true,
-                unitPrice: true,
-              }
+          include: {
+            items: true,
+            scores: {
+                include: {
+                    itemScores: {
+                        include: {
+                            scores: true
+                        }
+                    }
+                }
             }
           }
         },
@@ -291,12 +286,12 @@ export async function PATCH(
             dataToUpdate.status = 'Rejected';
             dataToUpdate.currentApprover = { disconnect: true };
             auditAction = 'REJECT_REQUISITION';
-            auditDetails = `Requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')} with comment: "${comment}".`;
+            auditDetails = `Requisition ${id} was rejected by ${user.role.replace(/_/g, ' ')}. Reason: "${comment}".`;
         } else { // Department head approves
              dataToUpdate.status = 'PreApproved'; 
              dataToUpdate.currentApprover = { disconnect: true };
              auditAction = 'PRE_APPROVE_REQUISITION';
-             auditDetails = `Requisition ${id} was pre-approved by ${user.role.replace(/_/g, ' ')} with comment: "${comment}". Ready for RFQ.`;
+             auditDetails = `Requisition ${id} was pre-approved by ${user.role.replace(/_/g, ' ')}. Ready for RFQ.`;
         }
         // Set the approver who took the action
         dataToUpdate.approver = { connect: { id: userId } };
