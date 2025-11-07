@@ -300,7 +300,6 @@ export async function PATCH(
         }
         // Set the approver who took the action
         dataToUpdate.approver = { connect: { id: userId } };
-        dataToUpdate.approverComment = comment;
 
     } else if (requisition.status.startsWith('Pending_')) {
         const requiredRole = requisition.status.replace('Pending_', '');
@@ -659,3 +658,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
