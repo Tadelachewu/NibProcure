@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -45,68 +44,38 @@ export const AwardCenterDialog = ({
     }, [quotations]);
     
     const overallWinner = useMemo(() => {
-        let bestOverallScore = -1;
-        let winningQuote: Quotation | null = null;
-        
-        eligibleQuotes.forEach(quote => {
-            if (quote.finalAverageScore && quote.finalAverageScore > bestOverallScore) {
-                bestOverallScore = quote.finalAverageScore;
-                winningQuote = quote;
-            }
-        });
+        if (!eligibleQuotes.length) return null;
 
-        if (!winningQuote) {
-            return null;
-        }
+        const sortedByScore = [...eligibleQuotes].sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
+        const winningQuote = sortedByScore[0];
 
-        const bestItemsFromWinner = requisition.items.map(reqItem => {
-            const proposalsForItem = winningQuote!.items.filter(i => i.requisitionItemId === reqItem.id);
+        if (!winningQuote) return null;
 
-            if (proposalsForItem.length === 0) return null;
-            if (proposalsForItem.length === 1) return { requisitionItemId: reqItem.id, quoteItemId: proposalsForItem[0].id };
-            
-            let bestItemScore = -1;
-            let bestProposalId = proposalsForItem[0].id;
-
-            proposalsForItem.forEach(proposal => {
-                 let totalItemScore = 0;
-                 let scoreCount = 0;
-                 winningQuote!.scores?.forEach(scoreSet => {
-                     const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                     if (itemScore) {
-                         totalItemScore += itemScore.finalScore;
-                         scoreCount++;
-                     }
-                 });
-                 const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                 if (averageItemScore > bestItemScore) {
-                     bestItemScore = averageItemScore;
-                     bestProposalId = proposal.id;
-                 }
-            });
-            return { requisitionItemId: reqItem.id, quoteItemId: bestProposalId };
-        }).filter(Boolean);
-
+        // In a single-vendor award, all items from their quote are considered awarded.
+        const awardedItems = winningQuote.items.map(item => ({
+            requisitionItemId: item.requisitionItemId,
+            quoteItemId: item.id
+        }));
 
         return { 
             vendorId: winningQuote.vendorId,
             vendorName: winningQuote.vendorName,
-            items: bestItemsFromWinner,
-            score: bestOverallScore 
+            items: awardedItems,
+            score: winningQuote.finalAverageScore 
         };
-    }, [eligibleQuotes, requisition]);
+    }, [eligibleQuotes]);
 
 
     const handleConfirmAward = () => {
+        if (!overallWinner) return;
+        
         let awards: { [vendorId: string]: { vendorName: string, items: { requisitionItemId: string, quoteItemId: string }[] } } = {};
         
-        if (overallWinner?.vendorId) {
-            awards[overallWinner.vendorId] = { 
-                vendorName: overallWinner.vendorName!, 
-                items: overallWinner.items!
-            };
-        }
-
+        awards[overallWinner.vendorId] = { 
+            vendorName: overallWinner.vendorName, 
+            items: overallWinner.items
+        };
+        
         onFinalize('all', awards, awardResponseDeadline);
         onClose();
     }
@@ -128,7 +97,7 @@ export const AwardCenterDialog = ({
                     <TrophyIcon className="h-12 w-12 text-amber-400 mx-auto mb-4"/>
                     <p className="text-muted-foreground">Recommended Overall Winner:</p>
                     <p className="text-2xl font-bold">{overallWinner?.vendorName || 'N/A'}</p>
-                    <p className="font-mono text-primary">{overallWinner?.score > 0 ? `${overallWinner.score.toFixed(2)} average score` : 'N/A'}</p>
+                    <p className="font-mono text-primary">{overallWinner?.score ? `${overallWinner.score.toFixed(2)} average score` : 'N/A'}</p>
                 </CardContent>
             </Card>
 
