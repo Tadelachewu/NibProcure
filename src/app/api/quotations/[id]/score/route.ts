@@ -5,18 +5,18 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { EvaluationCriterion, ItemScore, User } from '@/lib/types';
 
-function calculateFinalItemScore(itemScore: any, criteria: any): { finalScore: number, allScores: any[] } {
+function calculateFinalItemScore(itemScoreData: any, criteria: any): { finalScore: number, allScores: any[] } {
     let totalScore = 0;
     
     // Combine financial and technical scores into one array for easier processing
     const allScores = [
-        ...(itemScore.financialScores || []).map((s: any) => ({...s, type: 'FINANCIAL'})),
-        ...(itemScore.technicalScores || []).map((s: any) => ({...s, type: 'TECHNICAL'}))
+        ...(itemScoreData.financialScores || []).map((s: any) => ({...s, type: 'FINANCIAL'})),
+        ...(itemScoreData.technicalScores || []).map((s: any) => ({...s, type: 'TECHNICAL'}))
     ];
 
     const allCriteria: {id: string, weight: number, type: 'FINANCIAL' | 'TECHNICAL'}[] = [
-        ...criteria.financialCriteria.map((c: any) => ({...c, type: 'FINANCIAL'})),
-        ...criteria.technicalCriteria.map((c: any) => ({...c, type: 'TECHNICAL'}))
+        ...(criteria.financialCriteria || []).map((c: any) => ({...c, type: 'FINANCIAL'})),
+        ...(criteria.technicalCriteria || []).map((c: any) => ({...c, type: 'TECHNICAL'}))
     ];
     
     allScores.forEach((s: any) => {
@@ -77,7 +77,17 @@ export async function POST(
             }
         });
 
-        await tx.itemScore.deleteMany({ where: { scoreSetId: scoreSet.id }});
+        // First, delete all old scores related to this scoreSet to ensure a clean slate
+        const oldItemScores = await tx.itemScore.findMany({
+            where: { scoreSetId: scoreSet.id },
+            select: { id: true }
+        });
+        if (oldItemScores.length > 0) {
+            const oldItemScoreIds = oldItemScores.map(is => is.id);
+            await tx.score.deleteMany({ where: { itemScoreId: { in: oldItemScoreIds } } });
+            await tx.itemScore.deleteMany({ where: { id: { in: oldItemScoreIds } } });
+        }
+
 
         let totalWeightedScore = 0;
         const totalItems = scores.itemScores.length;
@@ -132,6 +142,7 @@ export async function POST(
 
         await tx.auditLog.create({
             data: {
+                transactionId: requisition.transactionId,
                 timestamp: new Date(),
                 user: { connect: { id: user.id } },
                 action: 'SCORE_QUOTE',
