@@ -94,8 +94,8 @@ export async function POST(
             // 3. Create the ItemScore record linked to the main CommitteeScoreSet.
             const itemScoreRecord = await tx.itemScore.create({
                 data: {
-                    quoteItemId: itemScoreData.quoteItemId,
-                    scoreSet: { connect: { id: scoreSet.id } }, // Connect to the parent set
+                    quoteItem: { connect: { id: itemScoreData.quoteItemId } },
+                    scoreSet: { connect: { id: scoreSet.id } },
                     finalScore: finalScore,
                     // 4. Create individual scores nested within this ItemScore.
                     scores: {
