@@ -170,8 +170,8 @@ const seedData: AppData = {
         {
             id: 'Q-SA-001', requisitionId: 'REQ-SINGLE-AWARD', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', totalPrice: 8500, deliveryDate: new Date('2024-06-10T00:00:00Z'), createdAt: new Date(), status: 'Submitted',
             items: [
-                { id: 'Q-SA-001-I1', name: 'Custom Mac Pro', quantity: 2, unitPrice: 3400, requisitionItemId: 'SA-ITEM-1' },
-                { id: 'Q-SA-001-I2', name: 'Studio Display', quantity: 2, unitPrice: 850, requisitionItemId: 'SA-ITEM-2' }
+                { id: 'Q-SA-001-I1', name: 'Custom Mac Pro', quantity: 2, unitPrice: 3400, leadTimeDays: 14, requisitionItemId: 'SA-ITEM-1' },
+                { id: 'Q-SA-001-I2', name: 'Studio Display', quantity: 2, unitPrice: 850, leadTimeDays: 10, requisitionItemId: 'SA-ITEM-2' }
             ],
             scores: [
                 // Fiona (Financial Scorer)
@@ -196,8 +196,8 @@ const seedData: AppData = {
         {
             id: 'Q-SA-002', requisitionId: 'REQ-SINGLE-AWARD', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', totalPrice: 8200, deliveryDate: new Date('2024-06-12T00:00:00Z'), createdAt: new Date(), status: 'Submitted',
             items: [
-                { id: 'Q-SA-002-I1', name: 'Dell Precision Tower', quantity: 2, unitPrice: 3300, requisitionItemId: 'SA-ITEM-1' },
-                { id: 'Q-SA-002-I2', name: 'Dell UltraSharp Monitor', quantity: 2, unitPrice: 800, requisitionItemId: 'SA-ITEM-2' }
+                { id: 'Q-SA-002-I1', name: 'Dell Precision Tower', quantity: 2, unitPrice: 3300, leadTimeDays: 7, requisitionItemId: 'SA-ITEM-1' },
+                { id: 'Q-SA-002-I2', name: 'Dell UltraSharp Monitor', quantity: 2, unitPrice: 800, leadTimeDays: 5, requisitionItemId: 'SA-ITEM-2' }
             ],
             scores: [
                 {
@@ -222,8 +222,8 @@ const seedData: AppData = {
         {
             id: 'Q-SP-001', requisitionId: 'REQ-SPLIT-AWARD', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', totalPrice: 6500, deliveryDate: new Date('2024-06-15T00:00:00Z'), createdAt: new Date(), status: 'Submitted',
             items: [
-                { id: 'Q-SP-001-I1', name: 'Dell OptiPlex', quantity: 5, unitPrice: 1150, requisitionItemId: 'SP-ITEM-1' },
-                { id: 'Q-SP-001-I2', name: 'Dell Premier Keyboard', quantity: 5, unitPrice: 150, requisitionItemId: 'SP-ITEM-2' }
+                { id: 'Q-SP-001-I1', name: 'Dell OptiPlex', quantity: 5, unitPrice: 1150, leadTimeDays: 10, requisitionItemId: 'SP-ITEM-1' },
+                { id: 'Q-SP-001-I2', name: 'Dell Premier Keyboard', quantity: 5, unitPrice: 150, leadTimeDays: 10, requisitionItemId: 'SP-ITEM-2' }
             ],
             scores: [ // Dell has the best workstations
                 {
@@ -240,8 +240,8 @@ const seedData: AppData = {
         {
             id: 'Q-SP-002', requisitionId: 'REQ-SPLIT-AWARD', vendorId: 'VENDOR-004', vendorName: 'HP Inc.', totalPrice: 6600, deliveryDate: new Date('2024-06-14T00:00:00Z'), createdAt: new Date(), status: 'Submitted',
             items: [
-                { id: 'Q-SP-002-I1', name: 'HP EliteDesk', quantity: 5, unitPrice: 1200, requisitionItemId: 'SP-ITEM-1' },
-                { id: 'Q-SP-002-I2', name: 'HP 970 Ergonomic Keyboard', quantity: 5, unitPrice: 120, requisitionItemId: 'SP-ITEM-2' }
+                { id: 'Q-SP-002-I1', name: 'HP EliteDesk', quantity: 5, unitPrice: 1200, leadTimeDays: 8, requisitionItemId: 'SP-ITEM-1' },
+                { id: 'Q-SP-002-I2', name: 'HP 970 Ergonomic Keyboard', quantity: 5, unitPrice: 120, leadTimeDays: 12, requisitionItemId: 'SP-ITEM-2' }
             ],
              scores: [ // HP has the best keyboards
                 {
@@ -290,5 +290,7 @@ const seedData: AppData = {
     ]
 };
 
+
+    
 
     
