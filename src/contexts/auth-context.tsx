@@ -170,40 +170,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
-      await Promise.all([
-        fetchAllSettings(),
-        fetchAllUsers(),
-        fetchAllDepartments()
-      ]);
       try {
-          const storedToken = localStorage.getItem('authToken');
-          const users = await fetchAllUsers(); // re-fetch to ensure we have the latest list
-          
-          if (storedToken) {
-              const decoded = jwtDecode<{ exp: number, iat: number } & User>(storedToken);
-              if (decoded && decoded.exp * 1000 > Date.now()) {
-                  const fullUser = users.find((u: User) => u.id === decoded.id) || decoded;
-                  setUser(fullUser);
-                  setToken(storedToken);
-                  setRole(fullUser.role);
-              } else {
-                  localStorage.removeItem('authToken');
-              }
+        await Promise.all([
+          fetchAllSettings(),
+          fetchAllUsers(),
+          fetchAllDepartments()
+        ]);
+
+        const storedToken = localStorage.getItem('authToken');
+        if (storedToken) {
+          const decoded = jwtDecode<{ exp: number, iat: number } & User>(storedToken);
+          if (decoded && decoded.exp * 1000 > Date.now()) {
+            const users = allUsers.length > 0 ? allUsers : await fetchAllUsers();
+            const fullUser = users.find((u: User) => u.id === decoded.id) || decoded;
+            setUser(fullUser);
+            setToken(storedToken);
+            setRole(fullUser.role);
+          } else {
+            localStorage.removeItem('authToken');
           }
+        }
       } catch (error) {
-          console.error("Failed to initialize auth from localStorage", error);
-          localStorage.clear();
+        console.error("Failed to initialize auth from localStorage", error);
+        localStorage.clear();
+        setUser(null);
+        setToken(null);
+        setRole(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
+
     initializeAuth();
   }, [fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
+
 
   const login = (newToken: string, loggedInUser: User, loggedInRole: UserRole) => {
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
     setRole(loggedInRole);
+    // After login, re-fetch all data to ensure context is up-to-date
+    // This is crucial if a user's roles or permissions might have changed
+    Promise.all([
+      fetchAllSettings(),
+      fetchAllUsers(),
+      fetchAllDepartments()
+    ]);
   };
 
   const logout = () => {
