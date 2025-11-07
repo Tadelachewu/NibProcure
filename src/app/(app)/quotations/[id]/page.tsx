@@ -855,7 +855,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -2964,6 +2964,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
