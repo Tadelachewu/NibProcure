@@ -61,7 +61,7 @@ export async function POST(
         // 1. Delete previous scores from this user for this quote to ensure clean update.
         const previousScoreSet = await tx.committeeScoreSet.findUnique({
             where: { quotationId_scorerId: { quotationId: quoteId, scorerId: userId } },
-            include: { itemScores: { include: { scores: true } } }
+            include: { itemScores: true }
         });
 
         if (previousScoreSet) {
@@ -102,7 +102,6 @@ export async function POST(
                         create: allScores.map((s: any) => {
                             const isFinancial = requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId);
                             return {
-                                scorerId: userId,
                                 score: s.score,
                                 comment: s.comment,
                                 type: isFinancial ? 'FINANCIAL' as const : 'TECHNICAL' as const,
