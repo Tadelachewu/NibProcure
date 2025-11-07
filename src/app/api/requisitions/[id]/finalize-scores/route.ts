@@ -36,7 +36,7 @@ export async function POST(
             
             const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
 
-            // --- STRATEGY: AWARD TO SINGLE BEST VENDOR ---
+            // --- STRATEGY: AWARD TO SINGLE BEST VENDOR (UNCHANGED) ---
             if (awardStrategy === 'all') {
                 const awardedVendorIds = Object.keys(awards);
                 const winnerQuote = allQuotes.find(q => q.vendorId === awardedVendorIds[0]);
@@ -59,9 +59,8 @@ export async function POST(
                     await tx.quotation.update({ where: { id: otherQuotes[i].id }, data: { status, rank } });
                 }
 
-            // --- STRATEGY: AWARD BY BEST ITEM ---
+            // --- NEW STRATEGY: AWARD BY BEST ITEM ---
             } else if (awardStrategy === 'item') {
-                // For each item, find the best and standby vendors
                 const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
 
                 for (const reqItem of reqItems) {
@@ -92,8 +91,16 @@ export async function POST(
                     const standbys = proposals.slice(1, 3);
                     
                     if (winner) {
-                        // Mark the winning quote as partially awarded
-                        await tx.quotation.update({ where: { id: winner.quoteId }, data: { status: 'Partially_Awarded' } });
+                        // Mark the winning quote as partially awarded (or pending award if it's the first win for this quote)
+                        await tx.quotation.update({ 
+                            where: { id: winner.quoteId }, 
+                            data: { 
+                                status: {
+                                    // Avoid downgrading from Pending_Award if it won multiple items
+                                    set: allQuotes.find(q => q.id === winner.quoteId)?.status === 'Pending_Award' ? 'Pending_Award' : 'Partially_Awarded'
+                                }
+                            } 
+                        });
                         
                         // Create standby assignments for this item
                         for (let i = 0; i < standbys.length; i++) {
@@ -108,13 +115,21 @@ export async function POST(
                         }
                     }
                 }
-                // Reject quotes that won no items
-                const awardedQuoteIds = new Set(Object.values(awards).flatMap((a: any) => allQuotes.find(q => q.vendorId === a.vendorId)?.id));
+                
+                // Now, find all quotes that won at least one item and set them to Pending_Award
+                const winningQuoteIds = new Set(Object.values(awards).flatMap((a: any) => allQuotes.find(q => q.vendorId === a.vendorId)?.id).filter(Boolean));
+                await tx.quotation.updateMany({
+                    where: { id: { in: Array.from(winningQuoteIds) as string[] } },
+                    data: { status: 'Pending_Award' }
+                });
+
+
+                // Reject quotes that won no items at all
                 await tx.quotation.updateMany({
                     where: {
                         requisitionId: requisitionId,
-                        id: { notIn: Array.from(awardedQuoteIds) as string[] },
-                        status: 'Submitted'
+                        id: { notIn: Array.from(winningQuoteIds) as string[] },
+                        status: 'Submitted' // Only reject those that haven't been processed
                     },
                     data: { status: 'Rejected', rank: null }
                 });
