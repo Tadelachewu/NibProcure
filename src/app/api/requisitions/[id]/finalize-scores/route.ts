@@ -40,20 +40,33 @@ export async function POST(
 
             // --- LOGIC FOR SINGLE VENDOR AWARD ---
             if (awardStrategy === 'all') {
-                const winnerVendorId = awardedVendorIds[0];
-                const winnerQuote = allQuotes.find(q => q.vendorId === winnerVendorId);
-
-                if (!winnerQuote) {
-                    throw new Error("Winning quote not found for single-vendor award strategy.");
+                const sortedByScore = allQuotes.sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
+                
+                if (sortedByScore.length > 0) {
+                    // 1. Award to winner
+                    await tx.quotation.update({
+                        where: { id: sortedByScore[0].id },
+                        data: { status: 'Pending_Award', rank: 1 }
+                    });
                 }
-
-                // Award to winner, reject all others
-                await tx.quotation.update({
-                    where: { id: winnerQuote.id },
-                    data: { status: 'Pending_Award', rank: 1 }
-                });
+                if (sortedByScore.length > 1) {
+                    // 2. Set first standby
+                     await tx.quotation.update({
+                        where: { id: sortedByScore[1].id },
+                        data: { status: 'Standby', rank: 2 }
+                    });
+                }
+                if (sortedByScore.length > 2) {
+                    // 3. Set second standby
+                    await tx.quotation.update({
+                        where: { id: sortedByScore[2].id },
+                        data: { status: 'Standby', rank: 3 }
+                    });
+                }
+                // 4. Reject all others
+                const awardedAndStandbyIds = sortedByScore.slice(0, 3).map(q => q.id);
                 await tx.quotation.updateMany({
-                    where: { requisitionId: requisitionId, id: { not: winnerQuote.id } },
+                    where: { requisitionId: requisitionId, NOT: { id: { in: awardedAndStandbyIds }}},
                     data: { status: 'Rejected', rank: null }
                 });
 
@@ -71,12 +84,14 @@ export async function POST(
                     }
                 }
 
+                const allAwardedAndStandbyQuoteIds = new Set(allQuotes.filter(q => q.status === 'Pending_Award').map(q => q.id));
+
                 // Set standby vendors for each awarded item
                 const awardedRequisitionItemIds = allQuotes.flatMap(q => q.items)
                     .filter(qi => allAwardedQuoteItemIds.includes(qi.id))
                     .map(qi => qi.requisitionItemId);
                 
-                await tx.standbyAssignment.deleteMany({ where: { requisition: { id: requisitionId } } });
+                await tx.standbyAssignment.deleteMany({ where: { requisitionId: requisitionId } });
 
                 for (const reqItemId of [...new Set(awardedRequisitionItemIds)]) {
                     const quotesWithItem = allQuotes
@@ -96,16 +111,18 @@ export async function POST(
                                 rank: i + 2,
                             }
                         });
-                        
-                        const currentStatus = await tx.quotation.findUnique({ where: { id: standbyQuote.id }, select: { status: true } });
-                        if(currentStatus?.status !== 'Pending_Award' && currentStatus?.status !== 'Awarded') {
-                        await tx.quotation.update({
-                            where: { id: standbyQuote.id },
-                            data: { status: 'Standby' }
-                        });
-                        }
+                        allAwardedAndStandbyQuoteIds.add(standbyQuote.id);
                     }
                 }
+                
+                 // Set all non-awarded and non-standby quotes to Rejected
+                await tx.quotation.updateMany({
+                    where: {
+                        requisitionId: requisitionId,
+                        NOT: { id: { in: Array.from(allAwardedAndStandbyQuoteIds) } }
+                    },
+                    data: { status: 'Rejected', rank: null }
+                });
             }
 
             const updatedRequisition = await tx.purchaseRequisition.update({
