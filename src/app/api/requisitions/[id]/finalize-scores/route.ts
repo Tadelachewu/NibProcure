@@ -104,8 +104,9 @@ export async function POST(
                     }
                 }
                 
-                // Now, find all quotes that won at least one item and set them to Pending_Award
-                const winningQuoteIds = new Set(Object.values(awards).flatMap((a: any) => allQuotes.find(q => q.vendorId === a.vendorId)?.id).filter(Boolean));
+                // Now, find all quotes that won at least one item and set them to Partially_Awarded
+                const winningVendorIds = new Set(Object.keys(awards));
+                const winningQuoteIds = new Set(allQuotes.filter(q => winningVendorIds.has(q.vendorId)).map(q => q.id));
                 
                 if (winningQuoteIds.size > 0) {
                     await tx.quotation.updateMany({
