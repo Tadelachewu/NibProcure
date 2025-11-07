@@ -139,7 +139,6 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
         }
     };
     
-    // Filter for only verified vendors
     const verifiedVendors = vendors.filter(v => v.kycStatus === 'Verified');
 
     return (
@@ -1395,17 +1394,22 @@ const ScoringDialog = ({
         if (quote && requisition) {
             const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
             const initialItemScores = quote.items.map(item => {
-                const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
+                const existingItemScore = quote.scores?.flatMap(s => s.itemScores).find(i => i.quoteItemId === item.id);
+                
+                const financialScores = requisition.evaluationCriteria?.financialCriteria.map(c => {
+                    const existingScore = existingItemScore?.scores.find(s => s.financialCriterionId === c.id && s.scorerId === user.id);
+                    return { criterionId: c.id, score: existingScore?.score || 0, comment: existingScore?.comment || "" };
+                }) || [];
+
+                const technicalScores = requisition.evaluationCriteria?.technicalCriteria.map(c => {
+                    const existingScore = existingItemScore?.scores.find(s => s.technicalCriterionId === c.id && s.scorerId === user.id);
+                    return { criterionId: c.id, score: existingScore?.score || 0, comment: existingScore?.comment || "" };
+                }) || [];
+
                 return {
                     quoteItemId: item.id,
-                    financialScores: requisition.evaluationCriteria?.financialCriteria.map(c => {
-                        const existing = existingItemScore?.scores.find(s => s.financialCriterionId === c.id);
-                        return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
-                    }) || [],
-                    technicalScores: requisition.evaluationCriteria?.technicalCriteria.map(c => {
-                        const existing = existingItemScore?.scores.find(s => s.technicalCriterionId === c.id);
-                        return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
-                    }) || [],
+                    financialScores,
+                    technicalScores,
                 }
             });
             form.reset({
@@ -1443,7 +1447,7 @@ const ScoringDialog = ({
     };
     
     if (!requisition.evaluationCriteria) return null;
-    const existingScore = quote.scores?.find(s => s.scorerId === user.id);
+    const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
     const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id);
     const isTechnicalScorer = requisition.technicalCommitteeMemberIds?.includes(user.id);
 
@@ -1469,9 +1473,9 @@ const ScoringDialog = ({
                                     max={100}
                                     step={5}
                                     onValueChange={(v) => field.onChange(v[0])}
-                                    disabled={!!existingScore}
+                                    disabled={!!existingScoreSet}
                                 />
-                                <Input type="number" {...field} className="w-24" disabled={!!existingScore} />
+                                <Input type="number" {...field} className="w-24" disabled={!!existingScoreSet} />
                                 </div>
                             </FormControl>
                             <FormMessage />
@@ -1484,7 +1488,7 @@ const ScoringDialog = ({
                     render={({ field }) => (
                          <FormItem>
                              <FormControl>
-                                <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScore} />
+                                <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScoreSet} />
                              </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -1499,7 +1503,7 @@ const ScoringDialog = ({
         return requisition.items.filter(i => itemIds.has(i.id));
     }, [requisition.items, quote.items]);
 
-    if (!existingScore && isScoringDeadlinePassed) {
+    if (!existingScoreSet && isScoringDeadlinePassed) {
         return (
             <DialogContent>
                 <DialogHeader>
@@ -1580,7 +1584,7 @@ const ScoringDialog = ({
                                 <FormItem>
                                     <FormLabel className="text-lg font-semibold">Overall Comment</FormLabel>
                                     <FormControl>
-                                        <Textarea placeholder="Provide an overall summary or justification for your scores for this entire quotation..." {...field} rows={4} disabled={!!existingScore} />
+                                        <Textarea placeholder="Provide an overall summary or justification for your scores for this entire quotation..." {...field} rows={4} disabled={!!existingScoreSet} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -1590,7 +1594,7 @@ const ScoringDialog = ({
                 </ScrollArea>
 
                 <DialogFooter className="pt-4 mt-4 border-t">
-                    {existingScore ? (
+                    {existingScoreSet ? (
                         <p className="text-sm text-muted-foreground">You have already scored this quote.</p>
                     ) : (
                         <AlertDialog>

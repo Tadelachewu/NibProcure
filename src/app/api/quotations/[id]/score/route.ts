@@ -8,7 +8,6 @@ import { EvaluationCriterion, ItemScore, User } from '@/lib/types';
 function calculateFinalItemScore(itemScoreData: any, criteria: any): { finalScore: number, allScores: any[] } {
     let totalScore = 0;
     
-    // Combine financial and technical scores into one array for easier processing
     const allScores = [
         ...(itemScoreData.financialScores || []).map((s: any) => ({...s, type: 'FINANCIAL'})),
         ...(itemScoreData.technicalScores || []).map((s: any) => ({...s, type: 'TECHNICAL'}))
@@ -59,6 +58,7 @@ export async function POST(
     }
     
     const transactionResult = await prisma.$transaction(async (tx) => {
+        // Find or create the main score set for this user and this quote.
         const scoreSet = await tx.committeeScoreSet.upsert({
             where: {
                 quotationId_scorerId: {
@@ -77,45 +77,41 @@ export async function POST(
             }
         });
 
-        // First, delete all old scores related to this scoreSet to ensure a clean slate
-        const oldItemScores = await tx.itemScore.findMany({
-            where: { scoreSetId: scoreSet.id },
-            select: { id: true }
-        });
-        if (oldItemScores.length > 0) {
-            const oldItemScoreIds = oldItemScores.map(is => is.id);
-            await tx.score.deleteMany({ where: { itemScoreId: { in: oldItemScoreIds } } });
-            await tx.itemScore.deleteMany({ where: { id: { in: oldItemScoreIds } } });
-        }
-
-
         let totalWeightedScore = 0;
         const totalItems = scores.itemScores.length;
 
         for (const itemScoreData of scores.itemScores) {
-            if (!itemScoreData.quoteItemId) {
-              throw new Error(`Critical error: quoteItemId is missing for an item score. This should not happen.`);
-            }
             const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
             totalWeightedScore += finalScore;
-            
-            const createdItemScore = await tx.itemScore.create({
-                data: {
-                    scoreSetId: scoreSet.id,
+
+            // Find or create ONE ItemScore for this quote item. This is the shared record.
+            const itemScoreRecord = await tx.itemScore.upsert({
+                where: { quoteItemId: itemScoreData.quoteItemId },
+                update: {},
+                create: {
                     quoteItemId: itemScoreData.quoteItemId,
-                    finalScore: finalScore,
-                }
+                    finalScore: 0, // This final score is an average and will be updated later
+                },
+                include: { scores: true }
             });
 
+            // Delete any previous scores FROM THIS USER for this specific ItemScore.
+            const previousUserScores = itemScoreRecord.scores.filter(s => s.scorerId === userId).map(s => s.id);
+            if (previousUserScores.length > 0) {
+                await tx.score.deleteMany({ where: { id: { in: previousUserScores } } });
+            }
+
+            // Create the new individual score records for THIS USER.
             const scoresToCreate = allScores.map((s: any) => {
                 const isFinancial = requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId);
                 return {
-                  itemScoreId: createdItemScore.id,
-                  score: s.score,
-                  comment: s.comment,
-                  type: isFinancial ? 'FINANCIAL' as const : 'TECHNICAL' as const,
-                  financialCriterionId: isFinancial ? s.criterionId : null,
-                  technicalCriterionId: !isFinancial ? s.criterionId : null,
+                    itemScoreId: itemScoreRecord.id,
+                    scorerId: userId, // Link this specific score to the user
+                    score: s.score,
+                    comment: s.comment,
+                    type: isFinancial ? 'FINANCIAL' as const : 'TECHNICAL' as const,
+                    financialCriterionId: isFinancial ? s.criterionId : null,
+                    technicalCriterionId: !isFinancial ? s.criterionId : null,
                 };
             });
 
@@ -148,7 +144,7 @@ export async function POST(
                 action: 'SCORE_QUOTE',
                 entity: 'Quotation',
                 entityId: quoteId,
-                details: `Submitted scores for quote from ${quoteToUpdate.vendorName}. Final Score: ${finalAverageScoreForThisScorer.toFixed(2)}.`,
+                details: `Submitted/updated scores for quote from ${quoteToUpdate.vendorName}. Scorer's average: ${finalAverageScoreForThisScorer.toFixed(2)}.`,
             }
         });
 
@@ -160,7 +156,6 @@ export async function POST(
   } catch (error) {
     console.error('Failed to submit scores:', error);
     if (error instanceof Error) {
-        // Check for unique constraint violation
         if ((error as any).code === 'P2002') {
              return NextResponse.json({ error: 'A unique constraint violation occurred. This might be due to a duplicate score entry.'}, { status: 409 });
         }
