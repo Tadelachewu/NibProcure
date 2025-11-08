@@ -155,7 +155,7 @@ async function main() {
       await prisma.approvalStep.create({
         data: {
           thresholdId: createdThreshold.id,
-          role: tier.steps[i],
+          role: tier.steps[i] as any,
           order: i,
         },
       });
