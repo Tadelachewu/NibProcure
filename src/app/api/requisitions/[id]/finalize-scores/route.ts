@@ -132,7 +132,7 @@ export async function POST(
                     });
                 }
                 
-                // Set non-winning and non-standby quotes to Submitted. Do not reject them.
+                // Set non-winning and non-standby quotes to Submitted. Do not reject them yet.
                 await tx.quotation.updateMany({
                     where: {
                         requisitionId: requisitionId,
@@ -155,7 +155,7 @@ export async function POST(
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
                     totalPrice: totalAwardValue,
                     rfqSettings: {
-                        ...(awards?.rfqSettings as any),
+                        ...(requisition?.rfqSettings as any),
                         awardStrategy: awardStrategy,
                     }
                 }

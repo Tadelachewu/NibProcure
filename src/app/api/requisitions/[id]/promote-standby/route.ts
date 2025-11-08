@@ -23,6 +23,9 @@ export async function POST(
       // The logic here should not just be about one vendor, but the whole req.
       // The logic is moved to the award-service to be more robust.
       return await promoteStandbyVendor(tx, requisitionId, user);
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
     });
 
     return NextResponse.json(result);
