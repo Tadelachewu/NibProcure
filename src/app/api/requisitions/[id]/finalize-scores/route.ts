@@ -109,20 +109,33 @@ export async function POST(
                     }
                 }
                 
-                // Now, find all quotes that won at least one item and set them to Partially_Awarded
                 const winningVendorIds = new Set(Object.keys(awards));
                 const winningQuoteIds = new Set(allQuotes.filter(q => winningVendorIds.has(q.vendorId)).map(q => q.id));
-                
+
                 if (winningQuoteIds.size > 0) {
-                    // This is the status for quotes that have won at least one item and are now entering the approval phase.
                     await tx.quotation.updateMany({
                         where: { id: { in: Array.from(winningQuoteIds) as string[] } },
                         data: { status: 'Partially_Awarded' }
                     });
                 }
+                
+                const standbyQuoteIds = new Set(
+                  (await tx.standbyAssignment.findMany({ where: { requisitionId } })).map(sa => sa.quotationId)
+                );
 
-                // IMPORTANT: We no longer reject quotes here. If a quote won no items but is a standby for others, it remains 'Submitted' or its standby status is handled by the StandbyAssignment model.
-                // Rejection will happen later in the workflow (e.g., after the winning vendor accepts).
+                // Update non-winning quotes that have standby assignments to 'Standby' status
+                if (standbyQuoteIds.size > 0) {
+                    await tx.quotation.updateMany({
+                        where: {
+                            requisitionId: requisitionId,
+                            id: { 
+                                in: Array.from(standbyQuoteIds) as string[],
+                                notIn: Array.from(winningQuoteIds) as string[], // Don't override a winner's status
+                            },
+                        },
+                        data: { status: 'Standby' }
+                    });
+                }
             }
 
             const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));

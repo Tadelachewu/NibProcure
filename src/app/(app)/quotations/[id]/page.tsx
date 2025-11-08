@@ -855,7 +855,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        setIsSubmitting(true);
+        
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -876,7 +876,7 @@ const RFQActionDialog = ({
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            setIsSubmitting(false);
+            
             onClose();
         }
     };
@@ -1431,7 +1431,7 @@ const ScoringDialog = ({
     }, [quote, requisition, user, form]);
 
     const onSubmit = async (values: ScoreFormValues) => {
-        setIsSubmitting(true);
+        
         try {
             const response = await fetch(`/api/quotations/${quote.id}/score`, {
                 method: 'POST',
@@ -1453,7 +1453,7 @@ const ScoringDialog = ({
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            setIsSubmitting(false);
+            
         }
     };
     
@@ -2881,7 +2881,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             return;
         }
 
-        setIsSubmitting(true);
+        
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
@@ -2897,7 +2897,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
-            setIsSubmitting(false);
+            
         }
     };
 
@@ -2964,6 +2964,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
