@@ -7,8 +7,6 @@ import { rolePermissions } from '../src/lib/roles';
 const prisma = new PrismaClient();
 
 async function main() {
-  // The 'prisma migrate reset' command handles clearing data, so manual deletion is not needed
-  // and can cause errors if the client is not perfectly in sync.
   console.log(`Start seeding ...`);
 
   const seedData = getInitialData();
@@ -32,13 +30,19 @@ async function main() {
 
   // Seed Roles
   for (const role of allRoles) {
-      await prisma.role.create({ data: { name: role.name.replace(/ /g, '_'), description: role.description } });
+      await prisma.role.upsert({ 
+        where: { name: role.name.replace(/ /g, '_') },
+        update: { description: role.description },
+        create: { name: role.name.replace(/ /g, '_'), description: role.description }
+      });
   }
   console.log('Seeded roles.');
   
   // Seed Settings
-  await prisma.setting.create({
-    data: {
+  await prisma.setting.upsert({
+    where: { key: 'rfqSenderSetting' },
+    update: {},
+    create: {
       key: 'rfqSenderSetting',
       value: {
         type: 'all' // or 'specific'
@@ -47,8 +51,10 @@ async function main() {
     }
   });
 
-  await prisma.setting.create({
-      data: {
+  await prisma.setting.upsert({
+      where: { key: 'committeeConfig' },
+      update: {},
+      create: {
           key: 'committeeConfig',
           value: {
               A: { min: 200001, max: 1000000 },
@@ -57,22 +63,28 @@ async function main() {
       }
   });
 
-  await prisma.setting.create({
-    data: {
+  await prisma.setting.upsert({
+    where: { key: 'rolePermissions' },
+    update: {},
+    create: {
         key: 'rolePermissions',
         value: rolePermissions,
     }
   });
 
-  await prisma.setting.create({
-    data: {
+  await prisma.setting.upsert({
+    where: { key: 'rfqQuorum' },
+    update: {},
+    create: {
         key: 'rfqQuorum',
         value: 3,
     }
   });
 
-  await prisma.setting.create({
-    data: {
+  await prisma.setting.upsert({
+    where: { key: 'committeeQuorum' },
+    update: {},
+    create: {
         key: 'committeeQuorum',
         value: 2,
     }
@@ -89,13 +101,18 @@ async function main() {
   ];
 
   for (const tier of defaultApprovalThresholds) {
-    const createdThreshold = await prisma.approvalThreshold.create({
-      data: {
+    const createdThreshold = await prisma.approvalThreshold.upsert({
+      where: { name: tier.name },
+      update: { min: tier.min, max: tier.max },
+      create: {
         name: tier.name,
         min: tier.min,
         max: tier.max,
       },
     });
+
+    // Clear old steps before adding new ones
+    await prisma.approvalStep.deleteMany({ where: { thresholdId: createdThreshold.id }});
 
     for (let i = 0; i < tier.steps.length; i++) {
       await prisma.approvalStep.create({
@@ -113,8 +130,10 @@ async function main() {
   // Seed Departments without heads first
   for (const department of seedData.departments) {
     const { head, users, headId, ...deptData } = department;
-    await prisma.department.create({
-      data: deptData,
+    await prisma.department.upsert({
+      where: { id: deptData.id },
+      update: deptData,
+      create: deptData,
     });
   }
   console.log('Seeded departments.');
@@ -124,8 +143,15 @@ async function main() {
     const { committeeAssignments, department, vendorId, password, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
 
-    await prisma.user.create({
-      data: {
+    await prisma.user.upsert({
+      where: { id: user.id },
+      update: {
+          name: userData.name,
+          email: userData.email,
+          role: userData.role.replace(/ /g, '_'),
+          departmentId: user.departmentId,
+      },
+      create: {
           ...userData,
           password: hashedPassword,
           role: userData.role.replace(/ /g, '_'), // Pass role as a string
@@ -160,8 +186,14 @@ async function main() {
       const hashedPassword = await bcrypt.hash(vendorUser.password || 'password123', 10);
       
       // Create user for the vendor first
-      const createdUser = await prisma.user.create({
-          data: {
+      const createdUser = await prisma.user.upsert({
+          where: { id: vendorUser.id },
+          update: {
+              name: vendorUser.name,
+              email: vendorUser.email,
+              role: vendorUser.role.replace(/ /g, '_'),
+          },
+          create: {
               id: vendorUser.id,
               name: vendorUser.name,
               email: vendorUser.email,
@@ -171,8 +203,18 @@ async function main() {
       });
       
     // Then create the vendor and link it to the user
-    const createdVendor = await prisma.vendor.create({
-      data: {
+    const createdVendor = await prisma.vendor.upsert({
+      where: { id: vendor.id },
+      update: {
+          name: vendor.name,
+          contactPerson: vendor.contactPerson,
+          email: vendor.email,
+          phone: vendor.phone,
+          address: vendor.address,
+          kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
+          userId: createdUser.id,
+      },
+      create: {
           id: vendor.id,
           name: vendor.name,
           contactPerson: vendor.contactPerson,
@@ -180,7 +222,7 @@ async function main() {
           phone: vendor.phone,
           address: vendor.address,
           kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
-          userId: createdUser.id, // Explicitly provide the userId
+          userId: createdUser.id,
       },
     });
 
@@ -220,8 +262,10 @@ async function main() {
           ...reqData 
       } = requisition;
 
-      const createdRequisition = await prisma.purchaseRequisition.create({
-          data: {
+      const createdRequisition = await prisma.purchaseRequisition.upsert({
+          where: { id: reqData.id },
+          update: {},
+          create: {
               ...reqData,
               status: reqData.status.replace(/ /g, '_') as any,
               urgency: reqData.urgency || 'Low',
@@ -241,8 +285,10 @@ async function main() {
       // Seed RequisitionItems
       if (items) {
           for (const item of items) {
-              await prisma.requisitionItem.create({
-                  data: {
+              await prisma.requisitionItem.upsert({
+                  where: { id: item.id },
+                  update: { ...item },
+                  create: {
                       ...item,
                       unitPrice: item.unitPrice || 0,
                       requisitionId: createdRequisition.id
@@ -254,8 +300,10 @@ async function main() {
       // Seed CustomQuestions
       if (customQuestions) {
           for (const question of customQuestions) {
-              await prisma.customQuestion.create({
-                  data: {
+              await prisma.customQuestion.upsert({
+                  where: { id: question.id },
+                  update: { ...question },
+                  create: {
                       ...question,
                       questionType: question.questionType.replace(/-/g, '_') as any,
                       options: question.options || [],
@@ -267,8 +315,13 @@ async function main() {
 
       // Seed EvaluationCriteria
       if (evaluationCriteria) {
-          await prisma.evaluationCriteria.create({
-              data: {
+          await prisma.evaluationCriteria.upsert({
+              where: { requisitionId: createdRequisition.id },
+              update: {
+                  financialWeight: evaluationCriteria.financialWeight,
+                  technicalWeight: evaluationCriteria.technicalWeight,
+              },
+              create: {
                   requisitionId: createdRequisition.id,
                   financialWeight: evaluationCriteria.financialWeight,
                   technicalWeight: evaluationCriteria.technicalWeight,
@@ -294,8 +347,10 @@ async function main() {
            continue;
        }
 
-       const createdQuote = await prisma.quotation.create({
-           data: {
+       const createdQuote = await prisma.quotation.upsert({
+           where: { id: quote.id },
+           update: {},
+           create: {
                ...quoteData,
                transactionId: requisition.transactionId,
                status: quoteData.status.replace(/_/g, '_') as any,
@@ -308,8 +363,10 @@ async function main() {
 
        if (items) {
            for (const item of items) {
-               await prisma.quoteItem.create({
-                   data: {
+               await prisma.quoteItem.upsert({
+                   where: { id: item.id },
+                   update: { ...item },
+                   create: {
                        ...item,
                        quotationId: createdQuote.id
                    }
@@ -340,8 +397,10 @@ async function main() {
             continue;
         }
 
-        const createdPO = await prisma.purchaseOrder.create({
-            data: {
+        const createdPO = await prisma.purchaseOrder.upsert({
+            where: { id: po.id },
+            update: {},
+            create: {
                 ...poData,
                 transactionId: requisition.transactionId, // Get transaction ID from requisition
                 status: poData.status.replace(/ /g, '_') as any,
@@ -367,8 +426,10 @@ async function main() {
     // Seed Invoices
     for (const invoice of seedData.invoices) {
         const { items, ...invoiceData } = invoice;
-        const createdInvoice = await prisma.invoice.create({
-            data: {
+        const createdInvoice = await prisma.invoice.upsert({
+            where: { id: invoice.id },
+            update: {},
+            create: {
                 ...invoiceData,
                 status: invoiceData.status.replace(/_/g, '_') as any,
                 invoiceDate: new Date(invoiceData.invoiceDate),
@@ -378,8 +439,10 @@ async function main() {
 
         if (items) {
             for (const item of items) {
-                await prisma.invoiceItem.create({
-                    data: {
+                await prisma.invoiceItem.upsert({
+                    where: { id: item.id },
+                    update: {},
+                    create: {
                         ...item,
                         invoiceId: createdInvoice.id,
                     }
@@ -392,8 +455,10 @@ async function main() {
     // Seed Goods Receipt Notes
     for (const grn of seedData.goodsReceipts) {
         const { items, receivedBy, ...grnData } = grn;
-        const createdGrn = await prisma.goodsReceiptNote.create({
-            data: {
+        const createdGrn = await prisma.goodsReceiptNote.upsert({
+            where: { id: grn.id },
+            update: {},
+            create: {
                 ...grnData,
                 receivedDate: new Date(grnData.receivedDate),
                 receivedById: grnData.receivedById,
@@ -420,8 +485,10 @@ async function main() {
     }
     // Exclude user and role from logData as they are not direct fields on the model
     const { user, role, ...logData } = log;
-    await prisma.auditLog.create({
-      data: {
+    await prisma.auditLog.upsert({
+      where: { id: log.id },
+      update: {},
+      create: {
           ...logData,
           timestamp: new Date(log.timestamp),
           user: { connect: { id: userForLog.id } }

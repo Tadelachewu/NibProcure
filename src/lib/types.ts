@@ -30,6 +30,7 @@ export type User = {
   role: UserRole;
   vendorId?: string;
   departmentId?: string;
+  department?: string;
   committeeAssignments?: CommitteeAssignment[];
 };
 
