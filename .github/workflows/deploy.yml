@@ -60,7 +60,7 @@ jobs:
 
         # This clears and repopulates the database with fresh test data.
         echo "Seeding database..."
-        npm run db:seed
+        npm run db:seed:force
       shell: pwsh
 
     # 6. Deploy to IIS remotely via PowerShell Remoting
@@ -131,4 +131,3 @@ jobs:
           Send-MailMessage -To "tade2024bdu@gmail.com" -From "ci-cd@company.com" -Subject "Deployment Failed" -Body "Next.js app deployment failed!" -SmtpServer "smtp.yourserver.com"
           exit 1 
         }
-
