@@ -37,7 +37,7 @@ import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem, StandbyAssignment } from '@/lib/types';
+import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem } from '@/lib/types';
 import { format, formatDistanceToNow, isBefore, isPast, setHours, setMinutes } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -257,7 +257,6 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
                 const awardedItemsForThisQuote = quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
-                const standbyAssignmentsForThisQuote = requisition.standbyAssignments?.filter(sa => sa.quotationId === quote.id);
                 
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded' || quote.status === 'Pending_Award') && 'border-primary ring-2 ring-primary')}>
@@ -312,18 +311,6 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                                 <div key={item.id} className="flex justify-between items-center text-muted-foreground">
                                                     <span>{item.name} x {item.quantity}</span>
                                                     {!hidePrices && <span className="font-mono">{item.unitPrice.toFixed(2)} ETB ea.</span>}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {isAwarded && standbyAssignmentsForThisQuote && standbyAssignmentsForThisQuote.length > 0 && (
-                                        <div className="text-sm space-y-2 pt-2 border-t">
-                                            <h4 className="font-semibold text-amber-600">Standby For:</h4>
-                                            {standbyAssignmentsForThisQuote.map(item => (
-                                                <div key={item.id} className="flex justify-between items-center text-muted-foreground">
-                                                    <span>{item.requisitionItem?.name}</span>
-                                                    <Badge variant="outline">Rank {item.rank}</Badge>
                                                 </div>
                                             ))}
                                         </div>
@@ -833,7 +820,7 @@ const RFQActionDialog = ({
 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
@@ -1400,7 +1387,7 @@ const ScoringDialog = ({
     hidePrices: boolean;
 }) => {
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
@@ -2973,3 +2960,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
 
 
+
+
+    
