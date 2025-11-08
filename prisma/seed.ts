@@ -15,6 +15,7 @@ async function main() {
   await prisma.score.deleteMany({});
   await prisma.itemScore.deleteMany({});
   await prisma.committeeScoreSet.deleteMany({});
+  await prisma.standbyAssignment.deleteMany({});
   await prisma.quoteAnswer.deleteMany({});
   await prisma.quoteItem.deleteMany({});
   await prisma.quotation.deleteMany({});
@@ -176,7 +177,7 @@ async function main() {
 
   // Seed non-vendor users first
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
-    const { committeeAssignments, department, vendorId, password, ...userData } = user;
+    const { committeeAssignments, department, vendorId, password, managingDepartment, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
 
     await prisma.user.upsert({
@@ -184,13 +185,13 @@ async function main() {
       update: {
           name: userData.name,
           email: userData.email,
-          role: userData.role.replace(/ /g, '_'),
+          role: userData.role.replace(/ /g, '_') as any,
           departmentId: user.departmentId,
       },
       create: {
           ...userData,
           password: hashedPassword,
-          role: userData.role.replace(/ /g, '_'), // Pass role as a string
+          role: userData.role.replace(/ /g, '_') as any,
           departmentId: user.departmentId,
       },
     });
@@ -227,14 +228,14 @@ async function main() {
           update: {
               name: vendorUser.name,
               email: vendorUser.email,
-              role: vendorUser.role.replace(/ /g, '_'),
+              role: vendorUser.role.replace(/ /g, '_') as any,
           },
           create: {
               id: vendorUser.id,
               name: vendorUser.name,
               email: vendorUser.email,
               password: hashedPassword,
-              role: vendorUser.role.replace(/ /g, '_'),
+              role: vendorUser.role.replace(/ /g, '_') as any,
           }
       });
       
