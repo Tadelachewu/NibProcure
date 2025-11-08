@@ -4,6 +4,16 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { User, UserRole } from '@/lib/types';
 
+const roleToStatusMap: Record<string, string> = {
+    'Committee_B_Member': 'Pending_Committee_B_Review',
+    'Committee_A_Member': 'Pending_Committee_A_Recommendation',
+    'Manager_Procurement_Division': 'Pending_Managerial_Approval',
+    'Director_Supply_Chain_and_Property_Management': 'Pending_Director_Approval',
+    'VP_Resources_and_Facilities': 'Pending_VP_Approval',
+    'President': 'Pending_President_Approval'
+};
+
+
 /**
  * Finds the correct initial status and approver for a given value tier.
  * @param tx - Prisma transaction client.
@@ -33,9 +43,12 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
     }
 
     const firstStep = relevantTier.steps[0];
-    const getNextStatusFromRole = (role: string): string => `Pending_${role.replace(/ /g, '_')}`;
     
-    const nextStatus = getNextStatusFromRole(firstStep.role);
+    const nextStatus = roleToStatusMap[firstStep.role];
+    if (!nextStatus) {
+      throw new Error(`Could not find a valid pending status for the role: ${firstStep.role}`);
+    }
+
     let nextApproverId: string | null = null;
     
     // Assign an approver only if it's a specific user role, not a general committee role.

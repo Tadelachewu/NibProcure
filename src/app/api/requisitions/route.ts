@@ -10,10 +10,25 @@ import { sendEmail } from '@/services/email-service';
 import { differenceInMinutes, format, isPast } from 'date-fns';
 
 
+const roleToStatusMap: Record<string, string> = {
+    'Committee_B_Member': 'Pending_Committee_B_Review',
+    'Committee_A_Member': 'Pending_Committee_A_Recommendation',
+    'Manager_Procurement_Division': 'Pending_Managerial_Approval',
+    'Director_Supply_Chain_and_Property_Management': 'Pending_Director_Approval',
+    'VP_Resources_and_Facilities': 'Pending_VP_Approval',
+    'President': 'Pending_President_Approval'
+};
+
+
 function getNextStatusFromRole(role: string): string {
-    // This function now standardly creates a 'Pending' status from a role name.
-    return `Pending_${role.replace(/ /g, '_')}`;
+    const status = roleToStatusMap[role];
+    if (!status) {
+        // Fallback for roles without a specific pending status, though this shouldn't happen in the approval flow
+        return 'Pending_Approval';
+    }
+    return status;
 }
+
 
 
 export async function GET(request: Request) {
