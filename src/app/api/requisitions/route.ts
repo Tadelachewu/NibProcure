@@ -34,6 +34,16 @@ export async function GET(request: Request) {
   try {
     let whereClause: any = {};
     
+    const allPendingStatuses = [
+      'Pending_Approval',
+      'Pending_Committee_B_Review',
+      'Pending_Committee_A_Recommendation',
+      'Pending_Managerial_Approval',
+      'Pending_Director_Approval',
+      'Pending_VP_Approval',
+      'Pending_President_Approval'
+    ];
+
     if (forAwardReview === 'true' && userPayload) {
         const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
         const userId = userPayload.user.id;
@@ -52,10 +62,6 @@ export async function GET(request: Request) {
         
         // For Admins and Procurement Officers, show all items pending any form of award review
         if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-            const allReviewStatuses = await prisma.role.findMany({
-                where: { name: { startsWith: 'Pending_' } }
-            }).then(roles => roles.map(r => r.name));
-            
              orConditions.push({ status: { in: [
                 'Pending_Committee_A_Recommendation',
                 'Pending_Committee_B_Review',
@@ -140,7 +146,7 @@ export async function GET(request: Request) {
              whereClause.OR = [
                 { status: 'PreApproved' },
                 { status: 'PostApproved' },
-                { status: { startsWith: 'Pending_' } },
+                ...allPendingStatuses.map(s => ({ status: s })),
                 { status: 'Accepting_Quotes' },
                 { status: 'Scoring_In_Progress' },
                 { status: 'Scoring_Complete' },
@@ -153,7 +159,7 @@ export async function GET(request: Request) {
       if (approverId) {
         whereClause.OR = [
             { currentApproverId: approverId }, // Items currently pending this user's approval
-            { approverId: approverId }       // Items this user has already actioned
+            { approverId: approverId }       // Items this user has actioned
         ];
       }
       
