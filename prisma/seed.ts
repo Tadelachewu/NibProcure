@@ -303,6 +303,7 @@ async function main() {
           update: {},
           create: {
               ...reqData,
+              transactionId: reqData.id,
               status: reqData.status.replace(/ /g, '_') as any,
               urgency: reqData.urgency || 'Low',
               totalPrice: items.reduce((acc, item) => acc + (item.unitPrice || 0) * item.quantity, 0),
