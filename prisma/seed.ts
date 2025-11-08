@@ -303,7 +303,6 @@ async function main() {
           update: {},
           create: {
               ...reqData,
-              transactionId: reqData.id,
               status: reqData.status.replace(/ /g, '_') as any,
               urgency: reqData.urgency || 'Low',
               totalPrice: items.reduce((acc, item) => acc + (item.unitPrice || 0) * item.quantity, 0),
@@ -384,7 +383,6 @@ async function main() {
            update: {},
            create: {
                ...quoteData,
-               transactionId: requisition.transactionId,
                status: quoteData.status.replace(/_/g, '_') as any,
                deliveryDate: new Date(quoteData.deliveryDate),
                createdAt: new Date(quoteData.createdAt),
@@ -434,7 +432,6 @@ async function main() {
             update: {},
             create: {
                 ...poData,
-                transactionId: requisition.transactionId, // Get transaction ID from requisition
                 status: poData.status.replace(/ /g, '_') as any,
                 createdAt: new Date(poData.createdAt),
                 vendorId: vendor.id,
