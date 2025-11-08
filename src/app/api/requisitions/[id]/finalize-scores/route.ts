@@ -36,7 +36,7 @@ export async function POST(
             
             const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
 
-            // --- STRATEGY: AWARD TO SINGLE BEST VENDOR (UNCHANGED) ---
+            // --- STRATEGY: AWARD TO SINGLE BEST VENDOR ---
             if (awardStrategy === 'all') {
                 const awardedVendorIds = Object.keys(awards);
                 const winnerQuote = allQuotes.find(q => q.vendorId === awardedVendorIds[0]);
@@ -45,13 +45,11 @@ export async function POST(
                     throw new Error("Winning vendor's quote could not be found.");
                 }
 
-                // Set winner to Pending Award, rank 1
                 await tx.quotation.update({
                     where: { id: winnerQuote.id },
                     data: { status: 'Pending_Award', rank: 1 }
                 });
 
-                // Set others to Standby or Rejected
                 const otherQuotes = allQuotes.filter(q => q.id !== winnerQuote.id && q.status !== 'Declined');
                 for (let i = 0; i < otherQuotes.length; i++) {
                     const status = (i < 2) ? 'Standby' : 'Rejected';
@@ -59,11 +57,10 @@ export async function POST(
                     await tx.quotation.update({ where: { id: otherQuotes[i].id }, data: { status, rank } });
                 }
 
-            // --- NEW STRATEGY: AWARD BY BEST ITEM ---
+            // --- STRATEGY: AWARD BY BEST ITEM ---
             } else if (awardStrategy === 'item') {
                 const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
 
-                 // Clear existing standby assignments for this requisition before creating new ones
                 await tx.standbyAssignment.deleteMany({
                     where: { requisitionId: requisitionId },
                 });
@@ -95,7 +92,6 @@ export async function POST(
 
                     proposals.sort((a,b) => b.averageScore - a.averageScore);
                     
-                    // Assign up to two standby vendors for this specific item
                     const standbys = proposals.slice(1, 3);
                     for (let i = 0; i < standbys.length; i++) {
                         await tx.standbyAssignment.create({
@@ -123,24 +119,32 @@ export async function POST(
                   (await tx.standbyAssignment.findMany({ where: { requisitionId } })).map(sa => sa.quotationId)
                 );
 
-                // Update non-winning quotes that have standby assignments to 'Standby' status
                 if (standbyQuoteIds.size > 0) {
                     await tx.quotation.updateMany({
                         where: {
                             requisitionId: requisitionId,
                             id: { 
                                 in: Array.from(standbyQuoteIds) as string[],
-                                notIn: Array.from(winningQuoteIds) as string[], // Don't override a winner's status
+                                notIn: Array.from(winningQuoteIds) as string[],
                             },
                         },
                         data: { status: 'Standby' }
                     });
                 }
+                
+                // Set non-winning and non-standby quotes to Submitted. Do not reject them.
+                await tx.quotation.updateMany({
+                    where: {
+                        requisitionId: requisitionId,
+                        id: {
+                            notIn: [...Array.from(winningQuoteIds), ...Array.from(standbyQuoteIds)]
+                        }
+                    },
+                    data: { status: 'Submitted' }
+                });
             }
 
             const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
-
-            const requisition = await tx.purchaseRequisition.findUnique({ where: { id: requisitionId } });
             
             const updatedRequisition = await tx.purchaseRequisition.update({
                 where: { id: requisitionId },
@@ -151,7 +155,7 @@ export async function POST(
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
                     totalPrice: totalAwardValue,
                     rfqSettings: {
-                        ...(requisition?.rfqSettings as any),
+                        ...(awards?.rfqSettings as any),
                         awardStrategy: awardStrategy,
                     }
                 }
