@@ -9,6 +9,42 @@ const prisma = new PrismaClient();
 async function main() {
   console.log(`Start seeding ...`);
 
+  // Clear existing data in a specific order to avoid foreign key constraints
+  console.log('Clearing existing data...');
+  await prisma.auditLog.deleteMany({});
+  await prisma.score.deleteMany({});
+  await prisma.itemScore.deleteMany({});
+  await prisma.committeeScoreSet.deleteMany({});
+  await prisma.quoteAnswer.deleteMany({});
+  await prisma.quoteItem.deleteMany({});
+  await prisma.quotation.deleteMany({});
+  await prisma.review.deleteMany({});
+  await prisma.committeeAssignment.deleteMany({});
+  await prisma.minute.deleteMany({});
+  await prisma.receiptItem.deleteMany({});
+  await prisma.goodsReceiptNote.deleteMany({});
+  await prisma.invoiceItem.deleteMany({});
+  await prisma.invoice.deleteMany({});
+  await prisma.pOItem.deleteMany({});
+  await prisma.purchaseOrder.deleteMany({});
+  await prisma.contract.deleteMany({});
+  await prisma.customQuestion.deleteMany({});
+  await prisma.financialCriterion.deleteMany({});
+  await prisma.technicalCriterion.deleteMany({});
+  await prisma.evaluationCriteria.deleteMany({});
+  await prisma.requisitionItem.deleteMany({});
+  await prisma.purchaseRequisition.deleteMany({});
+  await prisma.kYC_Document.deleteMany({});
+  await prisma.vendor.deleteMany({});
+  await prisma.user.deleteMany({});
+  await prisma.department.deleteMany({});
+  await prisma.approvalStep.deleteMany({});
+  await prisma.approvalThreshold.deleteMany({});
+  await prisma.role.deleteMany({});
+  await prisma.setting.deleteMany({});
+  console.log('Data cleared.');
+
+
   const seedData = getInitialData();
   const allRoles = [
       { name: 'Requester', description: 'Can create purchase requisitions.' },
@@ -315,13 +351,8 @@ async function main() {
 
       // Seed EvaluationCriteria
       if (evaluationCriteria) {
-          await prisma.evaluationCriteria.upsert({
-              where: { requisitionId: createdRequisition.id },
-              update: {
-                  financialWeight: evaluationCriteria.financialWeight,
-                  technicalWeight: evaluationCriteria.technicalWeight,
-              },
-              create: {
+          await prisma.evaluationCriteria.create({
+              data: {
                   requisitionId: createdRequisition.id,
                   financialWeight: evaluationCriteria.financialWeight,
                   technicalWeight: evaluationCriteria.technicalWeight,
