@@ -7,47 +7,8 @@ import { rolePermissions } from '../src/lib/roles';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log(`Clearing existing data...`);
-  // Manually manage order of deletion to avoid foreign key constraint violations
-  await prisma.standbyAssignment.deleteMany({});
-  await prisma.minute.deleteMany({});
-  await prisma.approvalStep.deleteMany({});
-  await prisma.approvalThreshold.deleteMany({});
-  await prisma.score.deleteMany({});
-  await prisma.auditLog.deleteMany({});
-  await prisma.receiptItem.deleteMany({});
-  await prisma.goodsReceiptNote.deleteMany({});
-  await prisma.invoiceItem.deleteMany({});
-  await prisma.invoice.deleteMany({});
-  await prisma.pOItem.deleteMany({});
-  await prisma.purchaseOrder.deleteMany({});
-  await prisma.quoteAnswer.deleteMany({});
-  await prisma.itemScore.deleteMany({});
-  await prisma.committeeScoreSet.deleteMany({});
-  await prisma.quoteItem.deleteMany({});
-  await prisma.quotation.deleteMany({});
-  await prisma.technicalCriterion.deleteMany({});
-  await prisma.financialCriterion.deleteMany({});
-  await prisma.evaluationCriteria.deleteMany({});
-  await prisma.customQuestion.deleteMany({});
-  await prisma.requisitionItem.deleteMany({});
-  await prisma.committeeAssignment.deleteMany({});
-  await prisma.contract.deleteMany({});
-  await prisma.review.deleteMany({});
-  await prisma.purchaseRequisition.deleteMany({});
-  await prisma.kYC_Document.deleteMany({});
-  await prisma.setting.deleteMany({});
-  
-  // Manually manage order of user/vendor deletion to avoid foreign key issues
-  await prisma.department.updateMany({data: { headId: null }});
-  await prisma.vendor.deleteMany({});
-  await prisma.user.deleteMany({});
-  await prisma.department.deleteMany({});
-  await prisma.role.deleteMany({});
-  await prisma.account.deleteMany({});
-  await prisma.session.deleteMany({});
-  console.log('Existing data cleared.');
-
+  // The 'prisma migrate reset' command handles clearing data, so manual deletion is not needed
+  // and can cause errors if the client is not perfectly in sync.
   console.log(`Start seeding ...`);
 
   const seedData = getInitialData();
