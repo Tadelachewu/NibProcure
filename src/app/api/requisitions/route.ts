@@ -525,65 +525,71 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Department not found' }, { status: 404 });
     }
 
-    const newRequisition = await prisma.purchaseRequisition.create({
-        data: {
-            requester: { connect: { id: user.id } },
-            department: { connect: { id: department.id } },
-            title: body.title,
-            urgency: body.urgency,
-            justification: body.justification,
-            status: 'Draft',
-            totalPrice: totalPrice,
-            items: {
-                create: body.items.map((item: any) => ({
-                    name: item.name,
-                    quantity: Number(item.quantity) || 0,
-                    unitPrice: Number(item.unitPrice) || 0,
-                    description: item.description || ''
-                }))
-            },
-            customQuestions: {
-                create: body.customQuestions?.map((q: any) => ({
-                    questionText: q.questionText,
-                    questionType: q.questionType.replace(/-/g, '_'),
-                    isRequired: q.isRequired,
-                    options: q.options || [],
-                }))
-            },
-            evaluationCriteria: {
-                create: {
-                    financialWeight: body.evaluationCriteria.financialWeight,
-                    technicalWeight: body.evaluationCriteria.technicalWeight,
-                    financialCriteria: {
-                        create: body.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) }))
-                    },
-                    technicalCriteria: {
-                        create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) }))
+    const newRequisition = await prisma.$transaction(async (tx) => {
+        const createdReq = await tx.purchaseRequisition.create({
+            data: {
+                requester: { connect: { id: user.id } },
+                department: { connect: { id: department.id } },
+                title: body.title,
+                urgency: body.urgency,
+                justification: body.justification,
+                status: 'Draft',
+                totalPrice: totalPrice,
+                items: {
+                    create: body.items.map((item: any) => ({
+                        name: item.name,
+                        quantity: Number(item.quantity) || 0,
+                        unitPrice: Number(item.unitPrice) || 0,
+                        description: item.description || ''
+                    }))
+                },
+                customQuestions: {
+                    create: body.customQuestions?.map((q: any) => ({
+                        questionText: q.questionText,
+                        questionType: q.questionType.replace(/-/g, '_'),
+                        isRequired: q.isRequired,
+                        options: q.options || [],
+                    }))
+                },
+                evaluationCriteria: {
+                    create: {
+                        financialWeight: body.evaluationCriteria.financialWeight,
+                        technicalWeight: body.evaluationCriteria.technicalWeight,
+                        financialCriteria: {
+                            create: body.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) }))
+                        },
+                        technicalCriteria: {
+                            create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) }))
+                        }
                     }
-                }
+                },
             },
-        },
-        include: { items: true, customQuestions: true, evaluationCriteria: true }
+            include: { items: true, customQuestions: true, evaluationCriteria: true }
+        });
+        
+        // Now update with the transactionId
+        const finalReq = await tx.purchaseRequisition.update({
+            where: { id: createdReq.id },
+            data: { transactionId: createdReq.id }
+        });
+
+        await tx.auditLog.create({
+            data: {
+                transactionId: finalReq.id,
+                user: { connect: { id: user.id } },
+                timestamp: new Date(),
+                action: 'CREATE_REQUISITION',
+                entity: 'Requisition',
+                entityId: finalReq.id,
+                details: `Created new requisition: "${finalReq.title}".`,
+            }
+        });
+        
+        return finalReq;
     });
 
-    const finalRequisition = await prisma.purchaseRequisition.update({
-        where: { id: newRequisition.id },
-        data: { transactionId: newRequisition.id }
-    });
 
-    await prisma.auditLog.create({
-        data: {
-            transactionId: finalRequisition.id,
-            user: { connect: { id: user.id } },
-            timestamp: new Date(),
-            action: 'CREATE_REQUISITION',
-            entity: 'Requisition',
-            entityId: finalRequisition.id,
-            details: `Created new requisition: "${finalRequisition.title}".`,
-        }
-    });
-
-    return NextResponse.json(finalRequisition, { status: 201 });
+    return NextResponse.json(newRequisition, { status: 201 });
   } catch (error) {
     console.error('Failed to create requisition:', error);
     if (error instanceof Error) {
@@ -659,3 +665,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
