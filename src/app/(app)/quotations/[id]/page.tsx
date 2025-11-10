@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -817,7 +818,7 @@ const RFQActionDialog = ({
 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
@@ -1388,7 +1389,14 @@ const ScoringDialog = ({
     
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
-        defaultValues: () => {
+        defaultValues: {
+            committeeComment: "",
+            itemScores: [],
+        }
+    });
+    
+    useEffect(() => {
+        if (quote && requisition) {
             const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
             const initialItemScores = quote.items.map(item => {
                 const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
@@ -1404,35 +1412,11 @@ const ScoringDialog = ({
                     }),
                 };
             });
-            return {
+            form.reset({
                 committeeComment: existingScoreSet?.committeeComment || "",
                 itemScores: initialItemScores,
-            };
+            });
         }
-    });
-    
-    useEffect(() => {
-        if (!quote || !requisition) return;
-        const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
-        const initialItemScores = quote.items.map(item => {
-            const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
-            return {
-                quoteItemId: item.id,
-                financialScores: (requisition.evaluationCriteria?.financialCriteria || []).map(c => {
-                    const existing = existingItemScore?.scores.find(s => s.financialCriterionId === c.id);
-                    return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
-                }),
-                technicalScores: (requisition.evaluationCriteria?.technicalCriteria || []).map(c => {
-                    const existing = existingItemScore?.scores.find(s => s.technicalCriterionId === c.id);
-                    return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
-                }),
-            };
-        });
-        form.reset({
-            committeeComment: existingScoreSet?.committeeComment || "",
-            itemScores: initialItemScores,
-        });
-
     }, [quote, requisition, user.id, form]);
 
     const onSubmit = async (values: ScoreFormValues) => {
@@ -1458,7 +1442,7 @@ const ScoringDialog = ({
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
         }
     };
     
@@ -2835,7 +2819,7 @@ export default function QuotationDetailsPage() {
                             }}
                         />
                     </Dialog>
-                </CardFooter>
+                </DialogFooter>
             </Card>
         )}
         
@@ -2987,5 +2971,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
