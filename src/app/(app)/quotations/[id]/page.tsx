@@ -2362,10 +2362,10 @@ export default function QuotationDetailsPage() {
 
 
   useEffect(() => {
-    if (id && user) { // ensure user is loaded
+    if (id && user && allUsers.length > 0) {
         fetchRequisitionAndQuotes();
     }
-  }, [id, user]);
+  }, [id, user, allUsers]);
   
   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
