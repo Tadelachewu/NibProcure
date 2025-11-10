@@ -210,7 +210,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, isAwarded }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, isAwarded: boolean }) => {
+const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, isAwarded, isAssigned }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, isAwarded: boolean, isAssigned: boolean }) => {
 
     if (quotes.length === 0) {
         return (
@@ -248,8 +248,6 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
     
     const isTechnicalOnlyScorer = user.role === 'Committee_Member' && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
     const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
-
-    const isAssigned = requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id);
 
 
     return (
@@ -2525,18 +2523,8 @@ export default function QuotationDetailsPage() {
      return <div className="text-center p-8">Requisition not found.</div>;
   }
 
-  // A committee member can only see this page if they are assigned
-  const isAssignedCommitteeMember = user.role === 'Committee_Member' && (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id));
-  if (user.role === 'Committee_Member' && !isAssignedCommitteeMember) {
-      return (
-          <Card>
-              <CardHeader>
-                  <CardTitle>Access Denied</CardTitle>
-                  <CardDescription>You are not assigned to the evaluation committee for this requisition.</CardDescription>
-              </CardHeader>
-          </Card>
-      );
-  }
+  const isAssignedCommitteeMember = user.role === 'Committee_Member' && 
+      (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id));
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
   const isReadyForNotification = requisition.status === 'PostApproved';
@@ -2716,10 +2704,10 @@ export default function QuotationDetailsPage() {
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} isAssigned={isAssignedCommitteeMember} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} isAssigned={isAssignedCommitteeMember} />
                                 </TabsContent>
                              </Tabs>
                         )}
