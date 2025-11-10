@@ -16,6 +16,7 @@ export async function POST(request: Request) {
             include: {
                 vendor: true,
                 department: true,
+                role: true, // Include the role relation
             }
         });
 
@@ -24,11 +25,11 @@ export async function POST(request: Request) {
         }
 
         if (user && user.password && await bcrypt.compare(password, user.password)) {
-            const { password: _, ...userWithoutPassword } = user;
+            const { password: _, role: roleInfo, ...userWithoutPassword } = user;
             
             const finalUser: User = {
                 ...userWithoutPassword,
-                role: user.role as UserRole, // Use the role directly from the DB
+                role: roleInfo.name as UserRole, // Use the role name from the relation
                 department: user.department?.name,
             };
 
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
                     id: finalUser.id, 
                     name: finalUser.name,
                     email: finalUser.email,
-                    role: finalUser.role, // This will have underscores, e.g., 'Procurement_Officer'
+                    role: finalUser.role,
                     vendorId: finalUser.vendorId,
                     department: finalUser.department,
                 }, 
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ 
                 user: finalUser, 
                 token, 
-                role: finalUser.role
+                role: finalUser.role // Ensure this top-level role is present
             });
         }
         
