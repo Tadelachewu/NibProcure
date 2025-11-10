@@ -63,6 +63,7 @@ import { Switch } from '@/components/ui/switch';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 
 const PAGE_SIZE = 6;
@@ -2801,7 +2802,7 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-        {(isAuthorized &&
+        {isAuthorized &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
             requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes' &&
             requisition.status !== 'Scoring_Complete' && requisition.status !== 'Award_Declined'
@@ -2960,3 +2961,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         </Card>
     );
 };
+
+    
