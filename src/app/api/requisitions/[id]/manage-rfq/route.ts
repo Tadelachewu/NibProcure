@@ -1,10 +1,9 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 
 
 type RFQAction = 'update' | 'cancel' | 'restart';
@@ -23,11 +22,30 @@ export async function POST(
       newDeadline?: string;
     };
 
-    const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { role: true }
+    });
 
-    if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Admin')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
+
+    // Correct Authorization Logic
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    const userRoleName = user.role.name as UserRole;
+
+    if (rfqSenderSetting?.value?.type === 'specific') {
+        isAuthorized = rfqSenderSetting.value.userId === userId;
+    } else { // 'all' case
+        isAuthorized = userRoleName === 'Procurement_Officer' || userRoleName === 'Admin';
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Unauthorized to manage this RFQ based on system settings.' }, { status: 403 });
+    }
+
 
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId }});
     if (!requisition) {
