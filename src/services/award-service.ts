@@ -53,7 +53,7 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
     
     // Assign an approver only if it's a specific user role, not a general committee role.
     if (!firstStep.role.includes('Committee')) {
-        const approverUser = await tx.user.findFirst({ where: { role: firstStep.role }});
+        const approverUser = await tx.user.findFirst({ where: { role: { name: firstStep.role } }});
         if (!approverUser) {
             throw new Error(`Could not find a user for the role: ${firstStep.role.replace(/_/g, ' ')}`);
         }
@@ -318,5 +318,3 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
     return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
 }
-
-    
