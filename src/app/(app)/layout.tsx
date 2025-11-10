@@ -102,8 +102,6 @@ export default function AppLayout({
     // This is the path segment we are on, e.g., /requisitions or /requisitions/123
     const currentPath = pathname.split('?')[0];
 
-    // **FIXED LOGIC**: Check if the current path is either directly in the allowed list
-    // or if it's a sub-path of an allowed route (e.g., /requisitions/123 is a sub-path of /requisitions)
     const isAllowed = allowedPaths.some(p => {
         // Exact match (e.g., /dashboard) or root path
         if (p === currentPath) return true;
@@ -119,7 +117,6 @@ export default function AppLayout({
             router.push(defaultPath);
         } else {
             // Fallback if somehow a role has no default path (e.g. Admin with no explicit paths)
-            // or if the check is somehow faulty.
              router.push('/login');
         }
     }
