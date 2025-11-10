@@ -1389,34 +1389,35 @@ const ScoringDialog = ({
     
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
+        defaultValues: {},
     });
 
     useEffect(() => {
-        if (quote && requisition) {
+        if (quote && requisition.evaluationCriteria) {
             const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
             const initialItemScores = quote.items.map(item => {
                 const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
                 return {
                     quoteItemId: item.id,
-                    financialScores: requisition.evaluationCriteria?.financialCriteria.map(c => {
+                    financialScores: requisition.evaluationCriteria!.financialCriteria.map(c => {
                         const existing = existingItemScore?.scores.find(s => s.financialCriterionId === c.id);
                         return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
-                    }) || [],
-                    technicalScores: requisition.evaluationCriteria?.technicalCriteria.map(c => {
+                    }),
+                    technicalScores: requisition.evaluationCriteria!.technicalCriteria.map(c => {
                         const existing = existingItemScore?.scores.find(s => s.technicalCriterionId === c.id);
                         return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
-                    }) || [],
-                }
+                    }),
+                };
             });
             form.reset({
                 committeeComment: existingScoreSet?.committeeComment || "",
                 itemScores: initialItemScores,
             });
         }
-    }, [quote, requisition, user, form]);
+    }, [quote, requisition, user.id, form]);
 
     const onSubmit = async (values: ScoreFormValues) => {
-        
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/quotations/${quote.id}/score`, {
                 method: 'POST',
@@ -1438,18 +1439,19 @@ const ScoringDialog = ({
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            
+            setIsSubmitting(false);
         }
     };
     
     if (!requisition.evaluationCriteria) return null;
+
     const existingScore = quote.scores?.find(s => s.scorerId === user.id);
     const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id);
     const isTechnicalScorer = requisition.technicalCommitteeMemberIds?.includes(user.id);
 
     const renderCriteria = (itemIndex: number, type: 'financial' | 'technical') => {
         const criteria = type === 'financial' ? requisition.evaluationCriteria!.financialCriteria : requisition.evaluationCriteria!.technicalCriteria;
-        const fieldName = `itemScores.${itemIndex}.${type}Scores`;
+        const fieldNamePrefix = `itemScores.${itemIndex}.${type}Scores`;
 
         return criteria.map((criterion, criterionIndex) => (
             <div key={criterion.id} className="space-y-2 rounded-md border p-4">
@@ -1459,7 +1461,7 @@ const ScoringDialog = ({
                 </div>
                  <FormField
                     control={form.control}
-                    name={`${fieldName}.${criterionIndex}.score`}
+                    name={`${fieldNamePrefix}.${criterionIndex}.score`}
                     render={({ field }) => (
                          <FormItem>
                             <FormControl>
@@ -1480,7 +1482,7 @@ const ScoringDialog = ({
                  />
                  <FormField
                     control={form.control}
-                    name={`${fieldName}.${criterionIndex}.comment`}
+                    name={`${fieldNamePrefix}.${criterionIndex}.comment`}
                     render={({ field }) => (
                          <FormItem>
                              <FormControl>
@@ -1493,29 +1495,16 @@ const ScoringDialog = ({
             </div>
         ));
     };
-    
-    const originalItems = useMemo(() => {
-        const itemIds = new Set(quote.items.map(i => i.requisitionItemId));
-        return requisition.items.filter(i => itemIds.has(i.id));
-    }, [requisition.items, quote.items]);
 
     if (!existingScore && isScoringDeadlinePassed) {
         return (
             <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Scoring Deadline Passed</DialogTitle>
-                </DialogHeader>
+                <DialogHeader><DialogTitle>Scoring Deadline Passed</DialogTitle></DialogHeader>
                 <div className="py-4 text-center">
                     <TimerOff className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">
-                        The deadline for scoring this quotation has passed. Please contact the procurement officer if you need an extension.
-                    </p>
+                    <p className="text-muted-foreground">The deadline for scoring this quotation has passed.</p>
                 </div>
-                 <DialogFooter>
-                    <DialogClose asChild>
-                        <Button variant="outline">Close</Button>
-                    </DialogClose>
-                </DialogFooter>
+                 <DialogFooter><DialogClose asChild><Button variant="outline">Close</Button></DialogClose></DialogFooter>
             </DialogContent>
         );
     }
@@ -1524,52 +1513,40 @@ const ScoringDialog = ({
         <DialogContent className="max-w-4xl flex flex-col h-[95vh]">
             <DialogHeader>
                 <DialogTitle>Score Quotation from {quote.vendorName}</DialogTitle>
-                <DialogDescription>Evaluate each item in the quote against the requester's criteria. Your scores will be used to determine the final ranking.</DialogDescription>
+                <DialogDescription>Evaluate each item in the quote against the requester's criteria.</DialogDescription>
             </DialogHeader>
             <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0 flex flex-col">
                 <ScrollArea className="flex-1 pr-4 -mr-4">
                      <div className="space-y-6">
-                        {originalItems.map(originalItem => {
-                             const proposalsForItem = quote.items.filter(i => i.requisitionItemId === originalItem.id);
-                             return (
-                                 <Card key={originalItem.id} className="bg-muted/30">
-                                     <CardHeader>
-                                         <CardTitle>Requested Item: {originalItem.name} (Qty: {originalItem.quantity})</CardTitle>
-                                         <CardDescription>Evaluate the following proposal(s) for this item.</CardDescription>
-                                     </CardHeader>
-                                     <CardContent className="space-y-4">
-                                         {proposalsForItem.map(proposal => {
-                                             const itemIndex = quote.items.findIndex(i => i.id === proposal.id);
-                                             return (
-                                                <Card key={proposal.id} className="bg-background">
-                                                    <CardHeader>
-                                                        <CardTitle className="text-lg">{proposal.name}</CardTitle>
-                                                        {!hidePrices && 
-                                                            <CardDescription>
-                                                                Quantity: {proposal.quantity} | Unit Price: {proposal.unitPrice.toFixed(2)} ETB
-                                                            </CardDescription>
-                                                        }
-                                                    </CardHeader>
-                                                    <CardContent className="space-y-4">
-                                                        {isFinancialScorer && !hidePrices && (
-                                                            <div className="space-y-4">
-                                                                <h4 className="font-semibold text-lg flex items-center gap-2"><Scale /> Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
-                                                                {renderCriteria(itemIndex, 'financial')}
-                                                            </div>
-                                                        )}
-                                                        {isTechnicalScorer && (
-                                                            <div className="space-y-4">
-                                                                <h4 className="font-semibold text-lg flex items-center gap-2"><TrendingUp /> Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
-                                                                {renderCriteria(itemIndex, 'technical')}
-                                                            </div>
-                                                        )}
-                                                    </CardContent>
-                                                </Card>
-                                             );
-                                         })}
-                                     </CardContent>
-                                 </Card>
+                        {quote.items.map((quoteItem, index) => {
+                            const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
+                            return (
+                                <Card key={quoteItem.id} className="bg-muted/30">
+                                    <CardHeader>
+                                        <CardTitle>{quoteItem.name}</CardTitle>
+                                        <CardDescription>
+                                            Vendor's proposal for requested item: "{originalItem?.name}" (Qty: {quoteItem.quantity})
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        {!hidePrices && 
+                                            <p className="font-mono">Unit Price: {quoteItem.unitPrice.toFixed(2)} ETB</p>
+                                        }
+                                        {isFinancialScorer && !hidePrices && (
+                                            <div className="space-y-4">
+                                                <h4 className="font-semibold text-lg flex items-center gap-2"><Scale /> Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
+                                                {renderCriteria(index, 'financial')}
+                                            </div>
+                                        )}
+                                        {isTechnicalScorer && (
+                                            <div className="space-y-4">
+                                                <h4 className="font-semibold text-lg flex items-center gap-2"><TrendingUp /> Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
+                                                {renderCriteria(index, 'technical')}
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
                             )
                         })}
                         
@@ -1580,7 +1557,7 @@ const ScoringDialog = ({
                                 <FormItem>
                                     <FormLabel className="text-lg font-semibold">Overall Comment</FormLabel>
                                     <FormControl>
-                                        <Textarea placeholder="Provide an overall summary or justification for your scores for this entire quotation..." {...field} rows={4} disabled={!!existingScore} />
+                                        <Textarea placeholder="Provide an overall summary or justification for your scores..." {...field} rows={4} disabled={!!existingScore} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -1591,27 +1568,20 @@ const ScoringDialog = ({
 
                 <DialogFooter className="pt-4 mt-4 border-t">
                     {existingScore ? (
-                        <p className="text-sm text-muted-foreground">You have already scored this quote.</p>
+                        <DialogClose asChild><Button>Close</Button></DialogClose>
                     ) : (
                         <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button type="button">
-                                    Submit Score
-                                </Button>
-                            </AlertDialogTrigger>
+                            <AlertDialogTrigger asChild><Button type="button">Submit Score</Button></AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>Confirm Your Score</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        Please review your evaluation before submitting. This action cannot be undone.
-                                    </AlertDialogDescription>
+                                    <AlertDialogDescription>Please review your evaluation. This action cannot be undone.</AlertDialogDescription>
                                 </AlertDialogHeader>
-                            
                                 <AlertDialogFooter>
-                                    <AlertDialogCancel>Go Back &amp; Edit</AlertDialogCancel>
+                                    <AlertDialogCancel>Go Back & Edit</AlertDialogCancel>
                                     <AlertDialogAction onClick={form.handleSubmit(onSubmit)} disabled={isSubmitting}>
                                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Confirm &amp; Submit
+                                        Confirm & Submit
                                     </AlertDialogAction>
                                 </AlertDialogFooter>
                             </AlertDialogContent>
@@ -2949,6 +2919,8 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
 
 
+
+    
 
     
 
