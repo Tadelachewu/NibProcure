@@ -1,11 +1,9 @@
-
 'use client';
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/auth-context';
 import { Loader2 } from 'lucide-react';
-import { rolePermissions } from '@/lib/roles';
 
 export default function HomePage() {
   const { user, loading, role, rolePermissions: permissions } = useAuth();
@@ -23,18 +21,24 @@ export default function HomePage() {
 
     if (role === 'Vendor') {
       router.push('/vendor/dashboard');
-    } else {
-      const allowedPaths = permissions[role] || [];
-      // Prefer dashboard if available, otherwise take the first available path.
-      const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
+      return;
+    } 
+    
+    const allowedPaths = permissions[role] || [];
+    
+    // Prefer dashboard if available, otherwise take the first available path.
+    const defaultPath = allowedPaths.includes('/dashboard') 
+        ? '/dashboard' 
+        : allowedPaths[0];
 
-      if (defaultPath) {
-        router.push(defaultPath);
-      } else {
-        console.error(`User role ${role} has no default path defined. Logging out.`);
-        router.push('/login');
-      }
+    if (defaultPath) {
+      router.push(defaultPath);
+    } else {
+      console.error(`User role ${role} has no default path defined. Logging out.`);
+      // If a role truly has no pages, redirect to login to prevent a crash.
+      router.push('/login');
     }
+    
   }, [user, loading, role, router, permissions]);
 
   return (
