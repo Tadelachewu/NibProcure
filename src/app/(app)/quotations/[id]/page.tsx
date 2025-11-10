@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -32,7 +33,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
-import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
+import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -1368,6 +1369,131 @@ const scoreFormSchema = z.object({
 });
 type ScoreFormValues = z.infer<typeof scoreFormSchema>;
 
+
+const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisition, isFinancialScorer, isTechnicalScorer, hidePrices, existingScore }: {
+    itemIndex: number;
+    control: Control<ScoreFormValues>;
+    quoteItem: QuoteItem;
+    originalItem?: RequisitionItem;
+    requisition: PurchaseRequisition;
+    isFinancialScorer: boolean;
+    isTechnicalScorer: boolean;
+    hidePrices: boolean;
+    existingScore?: CommitteeScoreSet;
+}) => {
+    const { fields: financialScoreFields } = useFieldArray({ control, name: `itemScores.${itemIndex}.financialScores` });
+    const { fields: technicalScoreFields } = useFieldArray({ control, name: `itemScores.${itemIndex}.technicalScores` });
+
+    return (
+        <Card className="bg-muted/30">
+            <CardHeader>
+                <CardTitle>{quoteItem.name}</CardTitle>
+                <CardDescription>
+                    Vendor's proposal for requested item: "{originalItem?.name}" (Qty: {quoteItem.quantity})
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {!hidePrices && 
+                    <p className="font-mono">Unit Price: {quoteItem.unitPrice.toFixed(2)} ETB</p>
+                }
+                {isFinancialScorer && !hidePrices && (
+                    <div className="space-y-4">
+                        <h4 className="font-semibold text-lg flex items-center gap-2"><Scale /> Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
+                        { financialScoreFields.map((criterionField, criterionIndex) => (
+                            <div key={criterionField.id} className="space-y-2 rounded-md border p-4 bg-background">
+                                <div className="flex justify-between items-center">
+                                    <FormLabel>{requisition.evaluationCriteria?.financialCriteria[criterionIndex].name}</FormLabel>
+                                    <Badge variant="secondary">Weight: {requisition.evaluationCriteria?.financialCriteria[criterionIndex].weight}%</Badge>
+                                </div>
+                                <FormField
+                                    control={control}
+                                    name={`itemScores.${itemIndex}.financialScores.${criterionIndex}.score`}
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormControl>
+                                                <div className="flex items-center gap-4">
+                                                    <Slider
+                                                        defaultValue={[field.value]}
+                                                        max={100}
+                                                        step={5}
+                                                        onValueChange={(v) => field.onChange(v[0])}
+                                                        disabled={!!existingScore}
+                                                    />
+                                                    <Input type="number" {...field} className="w-24" disabled={!!existingScore} />
+                                                </div>
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={control}
+                                    name={`itemScores.${itemIndex}.financialScores.${criterionIndex}.comment`}
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormControl>
+                                                <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScore} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {isTechnicalScorer && (
+                    <div className="space-y-4">
+                        <h4 className="font-semibold text-lg flex items-center gap-2"><TrendingUp /> Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
+                        {technicalScoreFields.map((criterionField, criterionIndex) => (
+                            <div key={criterionField.id} className="space-y-2 rounded-md border p-4 bg-background">
+                                <div className="flex justify-between items-center">
+                                    <FormLabel>{requisition.evaluationCriteria?.technicalCriteria[criterionIndex].name}</FormLabel>
+                                    <Badge variant="secondary">Weight: {requisition.evaluationCriteria?.technicalCriteria[criterionIndex].weight}%</Badge>
+                                </div>
+                                 <FormField
+                                    control={control}
+                                    name={`itemScores.${itemIndex}.technicalScores.${criterionIndex}.score`}
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormControl>
+                                                <div className="flex items-center gap-4">
+                                                    <Slider
+                                                        defaultValue={[field.value]}
+                                                        max={100}
+                                                        step={5}
+                                                        onValueChange={(v) => field.onChange(v[0])}
+                                                        disabled={!!existingScore}
+                                                    />
+                                                    <Input type="number" {...field} className="w-24" disabled={!!existingScore} />
+                                                </div>
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={control}
+                                    name={`itemScores.${itemIndex}.technicalScores.${criterionIndex}.comment`}
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormControl>
+                                                <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScore} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
+
+
 const ScoringDialog = ({ 
     quote, 
     requisition, 
@@ -1394,11 +1520,14 @@ const ScoringDialog = ({
         },
     });
 
+    const { fields: itemScoreFields } = useFieldArray({ control: form.control, name: "itemScores" });
+
+    const existingScore = useMemo(() => quote.scores?.find(s => s.scorerId === user.id), [quote, user.id]);
+
     useEffect(() => {
         if (quote && requisition && user) {
-            const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
             const initialItemScores = quote.items.map(item => {
-                const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
+                const existingItemScore = existingScore?.itemScores.find(i => i.quoteItemId === item.id);
                 return {
                     quoteItemId: item.id,
                     financialScores: (requisition.evaluationCriteria?.financialCriteria || []).map(c => {
@@ -1412,14 +1541,15 @@ const ScoringDialog = ({
                 };
             });
             form.reset({
-                committeeComment: existingScoreSet?.committeeComment || "",
+                committeeComment: existingScore?.committeeComment || "",
                 itemScores: initialItemScores,
             });
         }
-    }, [quote, requisition, user, form]);
+    }, [quote, requisition, user, form, existingScore]);
+
 
     const onSubmit = async (values: ScoreFormValues) => {
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
             const response = await fetch(`/api/quotations/${quote.id}/score`, {
                 method: 'POST',
@@ -1447,11 +1577,8 @@ const ScoringDialog = ({
     
     if (!requisition.evaluationCriteria) return null;
 
-    const existingScore = useMemo(() => quote.scores?.find(s => s.scorerId === user.id), [quote, user.id]);
-    const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id);
-    const isTechnicalScorer = requisition.technicalCommitteeMemberIds?.includes(user.id);
-
-    const { fields: itemScoreFields } = useFieldArray({ control: form.control, name: "itemScores" });
+    const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id) ?? false;
+    const isTechnicalScorer = requisition.technicalCommitteeMemberIds?.includes(user.id) ?? false;
 
     if (!existingScore && isScoringDeadlinePassed) {
         return (
@@ -1479,116 +1606,19 @@ const ScoringDialog = ({
                         {itemScoreFields.map((field, itemIndex) => {
                             const quoteItem = quote.items[itemIndex];
                             const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
-                            const { fields: financialScoreFields } = useFieldArray({ control: form.control, name: `itemScores.${itemIndex}.financialScores` });
-                            const { fields: technicalScoreFields } = useFieldArray({ control: form.control, name: `itemScores.${itemIndex}.technicalScores` });
-
-                            return (
-                                <Card key={field.id} className="bg-muted/30">
-                                    <CardHeader>
-                                        <CardTitle>{quoteItem.name}</CardTitle>
-                                        <CardDescription>
-                                            Vendor's proposal for requested item: "{originalItem?.name}" (Qty: {quoteItem.quantity})
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        {!hidePrices && 
-                                            <p className="font-mono">Unit Price: {quoteItem.unitPrice.toFixed(2)} ETB</p>
-                                        }
-                                        {isFinancialScorer && !hidePrices && (
-                                            <div className="space-y-4">
-                                                <h4 className="font-semibold text-lg flex items-center gap-2"><Scale /> Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
-                                                { financialScoreFields.map((criterionField, criterionIndex) => (
-                                                    <div key={criterionField.id} className="space-y-2 rounded-md border p-4 bg-background">
-                                                        <div className="flex justify-between items-center">
-                                                            <FormLabel>{requisition.evaluationCriteria?.financialCriteria[criterionIndex].name}</FormLabel>
-                                                            <Badge variant="secondary">Weight: {requisition.evaluationCriteria?.financialCriteria[criterionIndex].weight}%</Badge>
-                                                        </div>
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`itemScores.${itemIndex}.financialScores.${criterionIndex}.score`}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormControl>
-                                                                        <div className="flex items-center gap-4">
-                                                                            <Slider
-                                                                                defaultValue={[field.value]}
-                                                                                max={100}
-                                                                                step={5}
-                                                                                onValueChange={(v) => field.onChange(v[0])}
-                                                                                disabled={!!existingScore}
-                                                                            />
-                                                                            <Input type="number" {...field} className="w-24" disabled={!!existingScore} />
-                                                                        </div>
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`itemScores.${itemIndex}.financialScores.${criterionIndex}.comment`}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormControl>
-                                                                        <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScore} />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                        {isTechnicalScorer && (
-                                            <div className="space-y-4">
-                                                <h4 className="font-semibold text-lg flex items-center gap-2"><TrendingUp /> Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
-                                                {technicalScoreFields.map((criterionField, criterionIndex) => (
-                                                    <div key={criterionField.id} className="space-y-2 rounded-md border p-4 bg-background">
-                                                        <div className="flex justify-between items-center">
-                                                            <FormLabel>{requisition.evaluationCriteria?.technicalCriteria[criterionIndex].name}</FormLabel>
-                                                            <Badge variant="secondary">Weight: {requisition.evaluationCriteria?.technicalCriteria[criterionIndex].weight}%</Badge>
-                                                        </div>
-                                                         <FormField
-                                                            control={form.control}
-                                                            name={`itemScores.${itemIndex}.technicalScores.${criterionIndex}.score`}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormControl>
-                                                                        <div className="flex items-center gap-4">
-                                                                            <Slider
-                                                                                defaultValue={[field.value]}
-                                                                                max={100}
-                                                                                step={5}
-                                                                                onValueChange={(v) => field.onChange(v[0])}
-                                                                                disabled={!!existingScore}
-                                                                            />
-                                                                            <Input type="number" {...field} className="w-24" disabled={!!existingScore} />
-                                                                        </div>
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`itemScores.${itemIndex}.technicalScores.${criterionIndex}.comment`}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormControl>
-                                                                        <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScore} />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            )
+                            
+                            return <ScoringItemCard 
+                                key={field.id}
+                                itemIndex={itemIndex}
+                                control={form.control}
+                                quoteItem={quoteItem}
+                                originalItem={originalItem}
+                                requisition={requisition}
+                                isFinancialScorer={isFinancialScorer}
+                                isTechnicalScorer={isTechnicalScorer}
+                                hidePrices={hidePrices}
+                                existingScore={existingScore}
+                            />
                         })}
                         
                         <FormField
@@ -2034,7 +2064,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
         } catch (error) {
              toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     }
 
@@ -2951,6 +2981,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
