@@ -1393,9 +1393,25 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                {!hidePrices && 
-                    <p className="font-mono">Unit Price: {quoteItem.unitPrice.toFixed(2)} ETB</p>
-                }
+                 <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <p className="font-semibold text-muted-foreground">Brand/Model Details</p>
+                        <p>{quoteItem.brandDetails || 'Not Provided'}</p>
+                    </div>
+                    <div>
+                        <p className="font-semibold text-muted-foreground">Quoted Lead Time</p>
+                        <p>{quoteItem.leadTimeDays} days</p>
+                    </div>
+                    {!hidePrices && 
+                        <div>
+                            <p className="font-semibold text-muted-foreground">Quoted Unit Price</p>
+                            <p className="font-mono">{quoteItem.unitPrice.toFixed(2)} ETB</p>
+                        </div>
+                    }
+                </div>
+
+                <Separator/>
+                
                 {isFinancialScorer && !hidePrices && (
                     <div className="space-y-4">
                         <h4 className="font-semibold text-lg flex items-center gap-2"><Scale /> Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
@@ -1514,10 +1530,7 @@ const ScoringDialog = ({
     
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
-        defaultValues: {
-            committeeComment: "",
-            itemScores: [],
-        },
+        defaultValues: {}, // Initialize empty
     });
 
     const { fields: itemScoreFields } = useFieldArray({ control: form.control, name: "itemScores" });
@@ -1579,6 +1592,8 @@ const ScoringDialog = ({
 
     const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id) ?? false;
     const isTechnicalScorer = requisition.technicalCommitteeMemberIds?.includes(user.id) ?? false;
+    const findQuestionText = (questionId: string) => requisition.customQuestions?.find(q => q.id === questionId)?.questionText || "Unknown Question";
+
 
     if (!existingScore && isScoringDeadlinePassed) {
         return (
@@ -1603,6 +1618,19 @@ const ScoringDialog = ({
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0 flex flex-col">
                 <ScrollArea className="flex-1 pr-4 -mr-4">
                      <div className="space-y-6">
+                        {quote.answers && quote.answers.length > 0 && (
+                            <Card className="bg-muted/30">
+                                <CardHeader><CardTitle>Vendor's Answers to Custom Questions</CardTitle></CardHeader>
+                                <CardContent className="space-y-2 text-sm">
+                                    {quote.answers.map(answer => (
+                                        <div key={answer.questionId}>
+                                            <p className="font-semibold">{findQuestionText(answer.questionId)}</p>
+                                            <p className="text-muted-foreground pl-2 border-l-2 ml-2">{answer.answer}</p>
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        )}
                         {itemScoreFields.map((field, itemIndex) => {
                             const quoteItem = quote.items[itemIndex];
                             const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
@@ -2939,51 +2967,3 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
-
-    
-
-
-
-
-
-
-
-    
-
-    
-
-
-
-    
- 
-    
-
-    
-
-
-
-    
-
-    
-
-
-
-
-
-
-
-
-
-
-
-    
-
-    
-
-    
-
-
-
-
-
-

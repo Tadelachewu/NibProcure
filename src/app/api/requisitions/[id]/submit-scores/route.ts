@@ -13,12 +13,12 @@ export async function POST(
     const body = await request.json();
     const { userId } = body;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    if (user.role !== 'Committee_Member') {
+    if (user.role.name !== 'Committee_Member') {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
