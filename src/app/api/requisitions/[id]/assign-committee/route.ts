@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 
 
 export async function POST(
@@ -28,8 +28,25 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
-    if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Committee')) {
+    const user: User | null = await prisma.user.findUnique({where: {id: userId}, include: { role: true }});
+    if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+    
+    // Correct Authorization Logic
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    const userRoleName = user.role.name as UserRole;
+
+    if (userRoleName === 'Admin' || userRoleName === 'Committee') {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value?.type === 'specific') {
+        isAuthorized = rfqSenderSetting.value.userId === userId;
+    } else { // 'all' case
+        isAuthorized = userRoleName === 'Procurement_Officer';
+    }
+
+    if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
@@ -86,12 +103,13 @@ export async function POST(
 
         await tx.auditLog.create({
             data: {
+                transactionId: requisition.transactionId,
                 timestamp: new Date(),
                 user: { connect: { id: user.id } },
-                action: 'ASSIGN_COMMITTEE',
+                action: 'ASSIGN_EVALUATION_COMMITTEE',
                 entity: 'Requisition',
                 entityId: id,
-                details: `Assigned/updated committee for requisition ${id}. Name: ${committeeName}.`,
+                details: `Assigned/updated evaluation committee for requisition ${id}. Name: ${committeeName}.`,
             }
         });
 

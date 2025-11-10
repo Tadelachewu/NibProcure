@@ -17,8 +17,25 @@ export async function POST(
         const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue } = body;
         console.log(`[FINALIZE-SCORES] Award Value: ${totalAwardValue}, Strategy: ${awardStrategy}`);
 
-        const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Admin' && user.role !== 'Committee')) {
+        const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+        
+        // Correct Authorization Logic
+        const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+        let isAuthorized = false;
+        const userRoleName = user.role.name as UserRole;
+
+        if (userRoleName === 'Admin' || userRoleName === 'Committee') {
+            isAuthorized = true;
+        } else if (rfqSenderSetting?.value?.type === 'specific') {
+            isAuthorized = rfqSenderSetting.value.userId === userId;
+        } else { // 'all' case
+            isAuthorized = userRoleName === 'Procurement_Officer';
+        }
+
+        if (!isAuthorized) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
         
@@ -146,6 +163,8 @@ export async function POST(
 
             const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
             
+            const requisition = await tx.purchaseRequisition.findUnique({ where: { id: requisitionId }});
+
             const updatedRequisition = await tx.purchaseRequisition.update({
                 where: { id: requisitionId },
                 data: {

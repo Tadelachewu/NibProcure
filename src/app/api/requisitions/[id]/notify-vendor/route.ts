@@ -1,10 +1,9 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format, differenceInMinutes } from 'date-fns';
 
@@ -17,9 +16,26 @@ export async function POST(
     const body = await request.json();
     const { userId, awardResponseDeadline } = body;
 
-    const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Admin')) {
+    const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    // Correct Authorization Logic
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    const userRoleName = user.role.name as UserRole;
+
+    if (userRoleName === 'Admin') {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value?.type === 'specific') {
+        isAuthorized = rfqSenderSetting.value.userId === userId;
+    } else { // 'all' case
+        isAuthorized = userRoleName === 'Procurement_Officer';
+    }
+
+    if (!isAuthorized) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
