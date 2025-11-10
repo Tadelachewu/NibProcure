@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -839,7 +840,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        
+        setIsSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -860,7 +861,7 @@ const RFQActionDialog = ({
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            
+            setIsSubmitting(false);
             onClose();
         }
     };
@@ -1073,7 +1074,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                 <CardContent className="space-y-4">
                     {!isAuthorized && !isSent && (
                         <Alert variant="default" className="border-amber-500/50">
-                            <AlertTriangle className="h-4 w-4 text-amber-600" />
+                            <AlertCircle className="h-4 w-4 text-amber-600" />
                             <AlertTitle>Read-Only Mode</AlertTitle>
                             <AlertDescription>
                                 You do not have permission to send RFQs based on current system settings.
@@ -2802,10 +2803,9 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-        {isAuthorized &&
-            ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes' &&
-             (requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined')
+        {(
+          (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined') &&
+          isAuthorized
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2964,3 +2964,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
