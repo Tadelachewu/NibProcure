@@ -29,11 +29,11 @@ export function RoleSwitcher() {
           </div>
         </SelectTrigger>
         <SelectContent>
-            {allUsers.map((u) => (
+            {allUsers.map((u: any) => (
                  <SelectItem key={u.id} value={u.id}>
                     <div className="flex flex-col text-left">
                         <span className="font-medium">{u.name}</span>
-                        <span className="text-xs text-muted-foreground">{u.role ? u.role.replace(/_/g, ' ') : 'No Role'}</span>
+                        <span className="text-xs text-muted-foreground">{u.role?.name ? u.role.name.replace(/_/g, ' ') : 'No Role'}</span>
                     </div>
                 </SelectItem>
             ))}
