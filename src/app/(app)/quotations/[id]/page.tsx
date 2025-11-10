@@ -32,8 +32,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
-import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, FileUp, TrophyIcon } from 'lucide-react';
+import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -1700,6 +1700,7 @@ const ScoringProgressTracker = ({
   onFinalize,
   onCommitteeUpdate,
   isFinalizing,
+  isAuthorized
 }: {
   requisition: PurchaseRequisition;
   quotations: Quotation[];
@@ -1707,6 +1708,7 @@ const ScoringProgressTracker = ({
   onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
   onCommitteeUpdate: (open: boolean) => void;
   isFinalizing: boolean;
+  isAuthorized: boolean;
 }) => {
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
@@ -1763,7 +1765,7 @@ const ScoringProgressTracker = ({
 
     const getButtonState = () => {
         if (requisition.status === 'Award_Declined') {
-            return { text: "Finalize Scores & Award", disabled: true };
+            return { text: "Award Declined", disabled: true };
         }
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
             return { text: "Award Processed", disabled: true };
@@ -1821,37 +1823,39 @@ const ScoringProgressTracker = ({
                     ))}
                 </ul>
             </CardContent>
-            <CardFooter className="gap-2">
-                 <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
-                    <DialogTrigger asChild>
-                         <Button disabled={buttonState.disabled}>
-                            {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Award to Single Vendor
-                        </Button>
-                    </DialogTrigger>
-                    <AwardCenterDialog 
-                        requisition={requisition}
-                        quotations={quotations}
-                        onFinalize={onFinalize}
-                        onClose={() => setSingleAwardCenterOpen(false)}
-                    />
-                 </Dialog>
-                <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
-                    <DialogTrigger asChild>
-                        <Button disabled={buttonState.disabled} variant="outline">
-                            {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Award by Best Item
-                        </Button>
-                    </DialogTrigger>
-                    <BestItemAwardDialog
-                        isOpen={isBestItemAwardCenterOpen}
-                        onClose={() => setBestItemAwardCenterOpen(false)}
-                        requisition={requisition}
-                        quotations={quotations}
-                        onFinalize={onFinalize}
-                    />
-                </Dialog>
-            </CardFooter>
+             {isAuthorized && (
+                 <CardFooter className="gap-2">
+                    <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
+                        <DialogTrigger asChild>
+                            <Button disabled={buttonState.disabled}>
+                                {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Award to Single Vendor
+                            </Button>
+                        </DialogTrigger>
+                        <AwardCenterDialog 
+                            requisition={requisition}
+                            quotations={quotations}
+                            onFinalize={onFinalize}
+                            onClose={() => setSingleAwardCenterOpen(false)}
+                        />
+                    </Dialog>
+                    <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
+                        <DialogTrigger asChild>
+                            <Button disabled={buttonState.disabled} variant="outline">
+                                {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Award by Best Item
+                            </Button>
+                        </DialogTrigger>
+                        <BestItemAwardDialog
+                            isOpen={isBestItemAwardCenterOpen}
+                            onClose={() => setBestItemAwardCenterOpen(false)}
+                            requisition={requisition}
+                            quotations={quotations}
+                            onFinalize={onFinalize}
+                        />
+                    </Dialog>
+                </CardFooter>
+            )}
             {selectedMember && (
                 <>
                     <ExtendDeadlineDialog 
@@ -2369,7 +2373,7 @@ export default function QuotationDetailsPage() {
 
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
-    if (role.name === 'Admin') return true;
+    if (role.name === 'Admin' || role.name === 'Committee') return true;
     if (rfqSenderSetting.type === 'all') {
       return role.name === 'Procurement_Officer';
     }
@@ -2813,9 +2817,9 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-         {((role?.name === 'Procurement_Officer' || role?.name === 'Admin' || role?.name === 'Committee') &&
+        {((role?.name === 'Procurement_Officer' || role?.name === 'Admin' || role?.name === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved'
+            (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete')
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2824,17 +2828,22 @@ export default function QuotationDetailsPage() {
                 onFinalize={handleFinalizeScores}
                 onCommitteeUpdate={setCommitteeDialogOpen}
                 isFinalizing={isFinalizing}
+                isAuthorized={isAuthorized}
             />
         )}
         
-        <AwardStandbyButton 
-            requisition={requisition}
-            quotations={quotations}
-            onSuccess={fetchRequisitionAndQuotes}
-        />
+        {(requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete') && isAuthorized && (
+            <AwardStandbyButton 
+                requisition={requisition}
+                quotations={quotations}
+                onSuccess={fetchRequisitionAndQuotes}
+                isFinalizing={isFinalizing}
+                onFinalize={handleFinalizeScores}
+            />
+        )}
 
 
-        {isReadyForNotification && (role?.name === 'Procurement_Officer' || role?.name === 'Admin') && (
+        {isReadyForNotification && isAuthorized && (
             <Card className="mt-6 border-amber-500">
                  <CardHeader>
                     <CardTitle>Action Required: Notify Vendor</CardTitle>
@@ -2967,3 +2976,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
+

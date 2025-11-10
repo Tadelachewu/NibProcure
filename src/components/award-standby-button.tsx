@@ -11,30 +11,31 @@ import { useAuth } from '@/contexts/auth-context';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { AwardCenterDialog } from './award-center-dialog';
 import { Dialog, DialogContent, DialogTrigger } from './ui/dialog';
+import { BestItemAwardDialog } from './best-item-award-dialog';
 
 
 interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onSuccess: () => void;
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
+    isFinalizing: boolean;
 }
 
 export function AwardStandbyButton({
     requisition,
     quotations,
     onSuccess,
+    onFinalize,
+    isFinalizing,
 }: AwardStandbyButtonProps) {
     const { user } = useAuth();
     const { toast } = useToast();
     const [isPromoting, setIsPromoting] = useState(false);
-    const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
+    const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
+    const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
 
     const hasStandbyVendors = quotations.some(q => q.status === 'Standby');
-    const isRelevantStatus = requisition.status === 'Award_Declined';
-    
-    if (!isRelevantStatus) {
-        return null;
-    }
 
     const handlePromote = async () => {
         if (!user) return;
@@ -98,6 +99,50 @@ export function AwardStandbyButton({
                 </CardFooter>
             </Card>
         );
+    }
+    
+    if (requisition.status === 'Scoring_Complete') {
+         return (
+             <Card className="mt-6 border-green-500">
+                <CardHeader>
+                    <CardTitle>Action Required: Finalize Award</CardTitle>
+                    <CardDescription>
+                        All committee scores have been submitted. You can now finalize the award decision.
+                    </CardDescription>
+                </CardHeader>
+                <CardFooter className="gap-2 pt-0">
+                    <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
+                        <DialogTrigger asChild>
+                            <Button disabled={isFinalizing}>
+                                {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Award to Single Vendor
+                            </Button>
+                        </DialogTrigger>
+                        <AwardCenterDialog 
+                            requisition={requisition}
+                            quotations={quotations}
+                            onFinalize={onFinalize}
+                            onClose={() => setSingleAwardCenterOpen(false)}
+                        />
+                    </Dialog>
+                    <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
+                        <DialogTrigger asChild>
+                            <Button disabled={isFinalizing} variant="outline">
+                                {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Award by Best Item
+                            </Button>
+                        </DialogTrigger>
+                        <BestItemAwardDialog
+                            isOpen={isBestItemAwardCenterOpen}
+                            onClose={() => setBestItemAwardCenterOpen(false)}
+                            requisition={requisition}
+                            quotations={quotations}
+                            onFinalize={onFinalize}
+                        />
+                    </Dialog>
+                </CardFooter>
+            </Card>
+         )
     }
     
     return null;
