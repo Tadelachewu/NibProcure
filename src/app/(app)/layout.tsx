@@ -91,25 +91,24 @@ export default function AppLayout({
   
   // Page-level access check
   useEffect(() => {
-    if (loading || !role) return;
+    if (loading || !role || !pathname) return; // Wait for all data
 
     const allowedPaths = rolePermissions[role] || [];
-    if (allowedPaths.length === 0 && role !== 'Admin') { // Admin might have implicit access
-        // No paths are allowed for this role, redirect to login
+    if (allowedPaths.length === 0 && role !== 'Admin') { 
         router.push('/login');
         return;
     }
     
+    // This is the path segment we are on, e.g., /requisitions or /requisitions/123
     const currentPath = pathname.split('?')[0];
 
-    // Check if the current path is either directly in the allowed list
-    // or is a sub-path of an allowed route (e.g., /requisitions/[id] is a sub-path of /requisitions)
+    // **FIXED LOGIC**: Check if the current path is either directly in the allowed list
+    // or if it's a sub-path of an allowed route (e.g., /requisitions/123 is a sub-path of /requisitions)
     const isAllowed = allowedPaths.some(p => {
+        // Exact match (e.g., /dashboard) or root path
         if (p === currentPath) return true;
-        // Check for dynamic routes. e.g. if allowed is '/requisitions' and current is '/requisitions/123'
-        if (p.endsWith('s')) { // A simple heuristic
-             return currentPath.startsWith(p + '/');
-        }
+        // Sub-path match (e.g., currentPath '/requisitions/123' starts with allowed path '/requisitions/')
+        if (p !== '/' && currentPath.startsWith(p + '/')) return true;
         return false;
     });
 
@@ -119,8 +118,9 @@ export default function AppLayout({
         if (defaultPath) {
             router.push(defaultPath);
         } else {
-            // Fallback if somehow a role has no default path
-            router.push('/login');
+            // Fallback if somehow a role has no default path (e.g. Admin with no explicit paths)
+            // or if the check is somehow faulty.
+             router.push('/login');
         }
     }
   }, [pathname, loading, role, router, rolePermissions]);
