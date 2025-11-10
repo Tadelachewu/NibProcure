@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Card,
@@ -1388,17 +1388,32 @@ const ScoringDialog = ({
     
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
-        defaultValues: {
-            committeeComment: "",
-            itemScores: [],
-        },
+        defaultValues: () => {
+            const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
+            const initialItemScores = quote.items.map(item => {
+                const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
+                return {
+                    quoteItemId: item.id,
+                    financialScores: (requisition.evaluationCriteria?.financialCriteria || []).map(c => {
+                        const existing = existingItemScore?.scores.find(s => s.financialCriterionId === c.id);
+                        return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
+                    }),
+                    technicalScores: (requisition.evaluationCriteria?.technicalCriteria || []).map(c => {
+                        const existing = existingItemScore?.scores.find(s => s.technicalCriterionId === c.id);
+                        return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
+                    }),
+                };
+            });
+            return {
+                committeeComment: existingScoreSet?.committeeComment || "",
+                itemScores: initialItemScores,
+            };
+        }
     });
     
     useEffect(() => {
         if (!quote || !requisition) return;
-
         const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
-
         const initialItemScores = quote.items.map(item => {
             const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
             return {
@@ -1413,7 +1428,6 @@ const ScoringDialog = ({
                 }),
             };
         });
-
         form.reset({
             committeeComment: existingScoreSet?.committeeComment || "",
             itemScores: initialItemScores,
@@ -2973,4 +2987,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
