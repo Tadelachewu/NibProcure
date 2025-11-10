@@ -28,9 +28,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name, description, headId, userId } = body;
     
-    const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+    if (!actor || actor.role.name !== 'Admin') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     if (!name) {
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
 
     await prisma.auditLog.create({
         data: {
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'CREATE_DEPARTMENT',
             entity: 'Department',
@@ -76,9 +76,9 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const { id, name, description, headId, userId } = body;
     
-    const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+    if (!actor || actor.role.name !== 'Admin') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     if (!id || !name) {
@@ -122,7 +122,7 @@ export async function PATCH(request: Request) {
     
     await prisma.auditLog.create({
         data: {
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'UPDATE_DEPARTMENT',
             entity: 'Department',
@@ -151,9 +151,9 @@ export async function DELETE(request: Request) {
     const body = await request.json();
     const { id, userId } = body;
 
-    const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+    if (!actor || actor.role.name !== 'Admin') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     if (!id) {
@@ -164,7 +164,7 @@ export async function DELETE(request: Request) {
     
     await prisma.auditLog.create({
         data: {
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'DELETE_DEPARTMENT',
             entity: 'Department',

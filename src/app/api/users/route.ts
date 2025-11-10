@@ -32,9 +32,9 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name, email, password, role, departmentId, actorUserId } = body;
     
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }});
-    if (!actor) {
-        return NextResponse.json({ error: 'Action performing user not found' }, { status: 404 });
+    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { role: true }});
+    if (!actor || actor.role.name !== 'Admin') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     if (!name || !email || !password || !role || !departmentId) {
@@ -84,9 +84,9 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const { id, name, email, role, departmentId, password, actorUserId } = body;
 
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }});
-    if (!actor) {
-        return NextResponse.json({ error: 'Action performing user not found' }, { status: 404 });
+    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { role: true }});
+    if (!actor || actor.role.name !== 'Admin') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     if (!id || !name || !email || !role || !departmentId) {
@@ -140,9 +140,9 @@ export async function DELETE(request: Request) {
     const body = await request.json();
     const { id, actorUserId } = body;
 
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }});
-    if (!actor) {
-        return NextResponse.json({ error: 'Action performing user not found' }, { status: 404 });
+    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { role: true }});
+    if (!actor || actor.role.name !== 'Admin') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     if (!id) {
