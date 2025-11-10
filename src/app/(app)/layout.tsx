@@ -91,32 +91,44 @@ export default function AppLayout({
   
   // Page-level access check
   useEffect(() => {
-    if (loading || !role || !pathname) return; // Wait for all data
+    // --- DEBUGGING START ---
+    console.log('[Layout Security Check] Running...');
+    console.log(`[Layout Security Check] Current Path: ${pathname}`);
+    console.log(`[Layout Security Check] Auth Loading: ${loading}`);
+    console.log(`[Layout Security Check] User Role: ${role}`);
+    // --- DEBUGGING END ---
+
+    if (loading || !role || !pathname) {
+        console.log('[Layout Security Check] Aborting: Still loading auth data.');
+        return; // Wait for all data
+    }
 
     const allowedPaths = rolePermissions[role] || [];
+    console.log(`[Layout Security Check] Allowed paths for role "${role}":`, allowedPaths);
+
     if (allowedPaths.length === 0 && role !== 'Admin') { 
+        console.log('[Layout Security Check] REDIRECT: No allowed paths found for this role. Logging out.');
         router.push('/login');
         return;
     }
     
-    // This is the path segment we are on, e.g., /requisitions or /requisitions/123
     const currentPath = pathname.split('?')[0];
 
     const isAllowed = allowedPaths.some(p => {
-        // Exact match (e.g., /dashboard) or root path
-        if (p === currentPath) return true;
-        // Sub-path match (e.g., currentPath '/requisitions/123' starts with allowed path '/requisitions/')
-        if (p !== '/' && currentPath.startsWith(p + '/')) return true;
-        return false;
+        if (p === '/') return currentPath === '/'; // Exact match for root
+        // Exact match (e.g., /dashboard) or sub-path match (e.g., /requisitions/123 starts with /requisitions)
+        return currentPath === p || currentPath.startsWith(`${p}/`);
     });
 
+    console.log(`[Layout Security Check] Is path "${currentPath}" allowed? ${isAllowed}`);
+
     if (!isAllowed) {
-        // If not allowed, redirect to the first available path for that role.
         const defaultPath = allowedPaths[0];
+        console.log(`[Layout Security Check] REDIRECT: Path not allowed. Redirecting to default path: ${defaultPath}`);
         if (defaultPath) {
             router.push(defaultPath);
         } else {
-            // Fallback if somehow a role has no default path (e.g. Admin with no explicit paths)
+             console.log('[Layout Security Check] REDIRECT: No default path found. Redirecting to login.');
              router.push('/login');
         }
     }
@@ -146,7 +158,7 @@ export default function AppLayout({
                 <SidebarMenuItem key={item.path}>
                     <Link href={item.path}>
                         <SidebarMenuButton
-                        isActive={item.path === '/' ? pathname === '/' : pathname.startsWith(item.path)}
+                        isActive={pathname.startsWith(item.path) && (item.path !== '/' || pathname === '/')}
                         tooltip={item.label}
                         >
                         <item.icon />
@@ -192,3 +204,4 @@ export default function AppLayout({
     </SidebarProvider>
   );
 }
+
