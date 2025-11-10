@@ -13,7 +13,7 @@ import { Label } from './ui/label';
 import { useAuth } from '@/contexts/auth-context';
 
 export function RoleSwitcher() {
-  const { user, allUsers, switchUser } = useAuth();
+  const { user, role, allUsers, switchUser } = useAuth();
 
   return (
     <div className="flex w-full flex-col gap-2 p-2">

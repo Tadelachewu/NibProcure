@@ -160,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const decoded = decodeJwt<{ exp: number, iat: number } & User>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
                   const fullUser = users.find((u: User) => u.id === decoded.id) || decoded;
-                  const formattedRole = (fullUser.role as string).replace(/ /g, '_') as UserRole;
+                  const formattedRole = (fullUser.role as any).name?.replace(/ /g, '_') as UserRole || (fullUser.role as UserRole);
                   setUser(fullUser);
                   setToken(storedToken);
                   setRole(formattedRole);
@@ -181,7 +181,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
-    // **FIX**: Ensure the role is always stored with underscores.
     setRole((loggedInRole as string).replace(/ /g, '_') as UserRole);
   };
 
