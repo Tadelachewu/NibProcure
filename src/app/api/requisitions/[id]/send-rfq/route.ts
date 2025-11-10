@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 
 export async function POST(
@@ -20,23 +20,23 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
+    const user = await prisma.user.findUnique({
+        where: {id: userId},
+        include: { role: true }
+    });
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
+    const userRoleName = user.role.name as UserRole;
 
-    // Corrected Authorization Logic
     if (rfqSenderSetting?.value?.type === 'specific') {
-        // If a specific user is set, ONLY that user is authorized.
         isAuthorized = rfqSenderSetting.value.userId === userId;
-    } else { // This handles the 'all' case
-        // If set to 'all', any Procurement Officer or Admin can send.
-        isAuthorized = user.role === 'Procurement_Officer' || user.role === 'Admin';
+    } else { // 'all' case
+        isAuthorized = userRoleName === 'Procurement_Officer' || userRoleName === 'Admin';
     }
-
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized: You do not have permission to send RFQs based on the current system settings.' }, { status: 403 });
