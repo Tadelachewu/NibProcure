@@ -177,7 +177,7 @@ async function main() {
 
   // Seed non-vendor users first
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
-    const { committeeAssignments, department, vendorId, password, managingDepartment, ...userData } = user;
+    const { committeeAssignments, department, vendorId, departmentId, password, managingDepartment, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
     const formattedRoleName = userData.role.replace(/ /g, '_');
 
@@ -540,5 +540,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-    
