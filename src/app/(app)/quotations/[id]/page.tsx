@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -64,7 +63,6 @@ import { Switch } from '@/components/ui/switch';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 
 const PAGE_SIZE = 6;
@@ -2059,7 +2057,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
 const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess }: { isOpen: boolean, onClose: () => void, member: User, requisition: PurchaseRequisition, onSuccess: () => void }) => {
     const { toast } = useToast();
     const { user } = useAuth();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [newDeadline, setNewDeadline] = useState<Date|undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
 
@@ -2372,19 +2370,19 @@ export default function QuotationDetailsPage() {
   }, [requisition, quotations, allUsers]);
 
   const isAuthorized = useMemo(() => {
-    if (!user || !role) return false;
-    if (role.name === 'Admin') return true;
+    if (!user || !user.role) return false;
+    if (user.role.name === 'Admin') return true;
     if (rfqSenderSetting.type === 'specific') {
-      return user.id === rfqSenderSetting.userId;
+        return user.id === rfqSenderSetting.userId;
     }
     if (rfqSenderSetting.type === 'all') {
-      return role.name === 'Procurement_Officer';
+        return user.role.name === 'Procurement_Officer';
     }
     return false;
-  }, [user, role, rfqSenderSetting]);
+  }, [user, rfqSenderSetting]);
   
   const isAssignedCommitteeMember = useMemo(() => {
-      if (!user || user.role.name !== 'Committee_Member' || !requisition) {
+      if (!user || !user.role || user.role.name !== 'Committee_Member' || !requisition) {
           return false;
       }
       return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
@@ -2517,12 +2515,16 @@ export default function QuotationDetailsPage() {
       if (!requisition || !requisition.status) return 'rfq';
       const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
 
-      if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
+      if (['PreApproved', 'Award_Declined'].includes(requisition.status) && !isAwarded) return 'rfq';
       if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
-      if (requisition.status === 'Accepting_Quotes' && deadlinePassed) return 'committee';
+      
+      const inScoringProcess = [
+          'Accepting_Quotes', // Post-deadline
+          'Scoring_In_Progress', 
+          'Scoring_Complete'
+      ].includes(requisition.status);
 
-      const inScoringProcess = requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined';
-      if (inScoringProcess) {
+      if (inScoringProcess && deadlinePassed) {
           return isScoringComplete ? 'award' : 'committee';
       }
       
@@ -2530,7 +2532,7 @@ export default function QuotationDetailsPage() {
       if (inReviewProcess) return 'award';
 
       if (isAccepted) {
-        return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
+        return requisition.status === 'PO_Created' || requisition.status === 'Closed' ? 'completed' : 'finalize';
       }
       
       return 'rfq'; // Default fallback
@@ -2678,32 +2680,14 @@ export default function QuotationDetailsPage() {
             isAuthorized={isAuthorized}
         />
         
-        {currentStep === 'committee' && canManageCommittees && (
-            readyForCommitteeAssignment ? (
-                <EvaluationCommitteeManagement
-                    requisition={requisition}
-                    onCommitteeUpdated={fetchRequisitionAndQuotes}
-                    open={isCommitteeDialogOpen}
-                    onOpenChange={setCommitteeDialogOpen}
-                    isAuthorized={isAuthorized}
-                />
-            ) : (
-                <Card className="border-dashed">
-                    <CardHeader>
-                        <CardTitle>Evaluation Committee</CardTitle>
-                        <CardDescription>Assign scorers to evaluate vendor quotations.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="text-center py-10">
-                        <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                        <p className="font-semibold">Quorum Not Met</p>
-                        <p className="text-sm text-muted-foreground">
-                            Only {quotations.length} of the required {committeeQuorum} quotes have been submitted.
-                            <br />
-                            Committee assignment is not yet possible.
-                        </p>
-                    </CardContent>
-                </Card>
-            )
+        {(readyForCommitteeAssignment && canManageCommittees) && (
+            <EvaluationCommitteeManagement
+                requisition={requisition}
+                onCommitteeUpdated={fetchRequisitionAndQuotes}
+                open={isCommitteeDialogOpen}
+                onOpenChange={setCommitteeDialogOpen}
+                isAuthorized={isAuthorized}
+            />
         )}
 
 
@@ -2819,7 +2803,8 @@ export default function QuotationDetailsPage() {
         
         {(isAuthorized &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes'
+            requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes' &&
+            requisition.status !== 'Scoring_Complete' && requisition.status !== 'Award_Declined'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
