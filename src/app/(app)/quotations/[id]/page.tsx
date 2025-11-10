@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -816,7 +817,7 @@ const RFQActionDialog = ({
 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
@@ -1387,29 +1388,12 @@ const ScoringDialog = ({
     
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
-        defaultValues: () => {
-            const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
-            const initialItemScores = quote.items.map(item => {
-                const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
-                return {
-                    quoteItemId: item.id,
-                    financialScores: (requisition.evaluationCriteria?.financialCriteria || []).map(c => {
-                        const existing = existingItemScore?.scores.find(s => s.financialCriterionId === c.id);
-                        return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
-                    }),
-                    technicalScores: (requisition.evaluationCriteria?.technicalCriteria || []).map(c => {
-                        const existing = existingItemScore?.scores.find(s => s.technicalCriterionId === c.id);
-                        return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
-                    }),
-                };
-            });
-            return {
-                committeeComment: existingScoreSet?.committeeComment || "",
-                itemScores: initialItemScores,
-            };
-        }
+        defaultValues: {
+            committeeComment: "",
+            itemScores: [],
+        },
     });
-    
+
     useEffect(() => {
         if (quote && requisition && user) {
             const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
@@ -2050,7 +2034,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
         } catch (error) {
              toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
         }
     }
 
@@ -2167,27 +2151,6 @@ const CommitteeActions = ({
         }
     };
 
-    if (user.role.name !== 'Committee_Member') {
-        return null;
-    }
-
-    if (scoresAlreadyFinalized) {
-        return (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Committee Actions</CardTitle>
-                    <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Button variant="outline" disabled>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Scores Submitted
-                    </Button>
-                </CardContent>
-            </Card>
-        )
-    }
-
     return (
         <Card>
             <CardHeader>
@@ -2198,25 +2161,27 @@ const CommitteeActions = ({
                 <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {quotations.length} quotes.</p>
             </CardContent>
             <CardFooter>
-                <AlertDialog>
+                 <AlertDialog>
                     <AlertDialogTrigger asChild>
-                        <Button disabled={!allQuotesScored || isSubmitting}>
-                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Submit Final Scores
+                        <Button disabled={!allQuotesScored || isSubmitting || scoresAlreadyFinalized}>
+                            {scoresAlreadyFinalized ? <CheckCircle className="mr-2 h-4 w-4" /> : (isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />)}
+                            {scoresAlreadyFinalized ? 'Scores Submitted' : 'Submit Final Scores'}
                         </Button>
                     </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure you want to submit?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This will finalize your scores for this requisition. You will not be able to make further changes.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
+                    {!scoresAlreadyFinalized && (
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure you want to submit?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    This will finalize your scores for this requisition. You will not be able to make further changes.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    )}
                 </AlertDialog>
             </CardFooter>
         </Card>
@@ -2986,6 +2951,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
