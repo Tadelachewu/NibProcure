@@ -56,7 +56,10 @@ export async function getUserByToken(token: string): Promise<{ user: User, role:
             return null;
         }
         
-        return { user: decoded, role: decoded.role };
+        // **FIX**: Ensure the role from the token is always formatted with underscores
+        const formattedRole = (decoded.role as string).replace(/ /g, '_') as UserRole;
+        
+        return { user: decoded, role: formattedRole };
     } catch(e) {
         console.error("Failed to decode token:", e);
         return null;

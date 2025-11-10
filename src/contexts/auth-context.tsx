@@ -4,29 +4,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
 import { Department, User, UserRole } from '@/lib/types';
 import { rolePermissions as defaultRolePermissions } from '@/lib/roles';
-
-// Custom JWT decoding function to avoid dependency issues
-function jwtDecode<T>(token: string): T | null {
-  try {
-    const base64Url = token.split('.')[1];
-    if (!base64Url) return null;
-
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map(function (c) {
-          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        })
-        .join('')
-    );
-
-    return JSON.parse(jsonPayload) as T;
-  } catch (error) {
-    console.error("Failed to decode JWT:", error);
-    return null;
-  }
-}
+import { decodeJwt } from '@/lib/auth';
 
 
 export interface RfqSenderSetting {
@@ -170,22 +148,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
+      const users = await fetchAllUsers();
       await Promise.all([
         fetchAllSettings(),
-        fetchAllUsers(),
         fetchAllDepartments()
       ]);
       try {
           const storedToken = localStorage.getItem('authToken');
-          const users = await fetchAllUsers(); // re-fetch to ensure we have the latest list
           
           if (storedToken) {
-              const decoded = jwtDecode<{ exp: number, iat: number } & User>(storedToken);
+              const decoded = decodeJwt<{ exp: number, iat: number } & User>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
                   const fullUser = users.find((u: User) => u.id === decoded.id) || decoded;
+                  const formattedRole = (fullUser.role as string).replace(/ /g, '_') as UserRole;
                   setUser(fullUser);
                   setToken(storedToken);
-                  setRole(fullUser.role);
+                  setRole(formattedRole);
               } else {
                   localStorage.removeItem('authToken');
               }
@@ -203,7 +181,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
-    setRole(loggedInRole);
+    // **FIX**: Ensure the role is always stored with underscores.
+    setRole((loggedInRole as string).replace(/ /g, '_') as UserRole);
   };
 
   const logout = () => {
