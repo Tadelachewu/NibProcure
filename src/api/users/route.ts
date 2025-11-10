@@ -14,10 +14,11 @@ export async function GET() {
             committeeAssignments: true,
         }
     });
+    // Return the full user object with the nested role
     const formattedUsers = users.map(u => ({
         ...u,
         department: u.department?.name || 'N/A',
-        role: u.role.name // Use the name from the included role object
+        // No longer flattening the role, send the full object
     }));
     return NextResponse.json(formattedUsers);
   } catch (error) {
