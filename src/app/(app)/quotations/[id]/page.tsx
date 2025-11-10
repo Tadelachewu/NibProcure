@@ -1373,7 +1373,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
     itemIndex: number;
     control: Control<ScoreFormValues>;
     quoteItem: QuoteItem;
-    originalItem?: RequisitionItem;
+    originalItem?: PurchaseRequisition['items'][0];
     requisition: PurchaseRequisition;
     isFinancialScorer: boolean;
     isTechnicalScorer: boolean;
@@ -2533,7 +2533,7 @@ export default function QuotationDetailsPage() {
       if (inReviewProcess) return 'award';
 
       if (isAccepted) {
-        return requisition.status === 'PO_Created' || requisition.status === 'Closed' ? 'completed' : 'finalize';
+        return requisition.status === 'PO_Created' || requisition.status === 'Closed' || requisition.status === 'Fulfilled' ? 'completed' : 'finalize';
       }
       
       return 'rfq'; // Default fallback
@@ -2804,8 +2804,7 @@ export default function QuotationDetailsPage() {
         
         {isAuthorized &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes' &&
-            requisition.status !== 'Scoring_Complete' && requisition.status !== 'Award_Declined'
+            requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2905,7 +2904,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             return;
         }
 
-        
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
@@ -2921,7 +2920,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
-            
+            setIsSubmitting(false);
         }
     };
 
@@ -2961,5 +2960,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         </Card>
     );
 };
+    
 
     
