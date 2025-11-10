@@ -2720,7 +2720,7 @@ export default function QuotationDetailsPage() {
             </>
         )}
         
-        {(currentStep === 'committee' || currentStep === 'award') && user.role === 'Committee_Member' && isAssignedCommitteeMember && (
+        {(currentStep === 'committee' || currentStep === 'award') && isAssignedCommitteeMember && (
              <CommitteeActions 
                 user={user}
                 requisition={requisition}
