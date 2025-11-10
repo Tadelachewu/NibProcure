@@ -160,10 +160,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const decoded = decodeJwt<{ exp: number, iat: number } & User>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
                   const fullUser = users.find((u: User) => u.id === decoded.id) || decoded;
-                  const formattedRole = (fullUser.role as any).name?.replace(/ /g, '_') as UserRole || (fullUser.role as UserRole);
+                  const formattedRole = (fullUser.role as any)?.name ? (fullUser.role as any).name : fullUser.role as UserRole;
                   setUser(fullUser);
                   setToken(storedToken);
-                  setRole(formattedRole);
+                  setRole(formattedRole.replace(/ /g, '_'));
               } else {
                   localStorage.removeItem('authToken');
               }
@@ -203,6 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if(response.ok) {
               const result = await response.json();
+              // The API now correctly returns a top-level role string
               login(result.token, result.user, result.role);
               window.location.href = '/';
           } else {
