@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -2371,16 +2372,16 @@ export default function QuotationDetailsPage() {
   }, [requisition, quotations, allUsers]);
 
   const isAuthorized = useMemo(() => {
-    if (!user || !user.role) return false;
-    if (user.role.name === 'Admin') return true;
+    if (!user || !role) return false;
+    if (role.name === 'Admin') return true;
     if (rfqSenderSetting.type === 'specific') {
         return user.id === rfqSenderSetting.userId;
     }
     if (rfqSenderSetting.type === 'all') {
-        return user.role.name === 'Procurement_Officer';
+        return role.name === 'Procurement_Officer';
     }
     return false;
-  }, [user, rfqSenderSetting]);
+  }, [user, role, rfqSenderSetting]);
   
   const isAssignedCommitteeMember = useMemo(() => {
       if (!user || !user.role || user.role.name !== 'Committee_Member' || !requisition) {
@@ -2608,7 +2609,7 @@ export default function QuotationDetailsPage() {
     <div className="space-y-6">
         <Button variant="outline" onClick={() => router.push('/quotations')}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to All Requisitions
+            <span>Back to All Requisitions</span>
         </Button>
         
         <Card className="p-4 sm:p-6">
@@ -2804,7 +2805,8 @@ export default function QuotationDetailsPage() {
         
         {isAuthorized &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes'
+            requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes' &&
+             (requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined')
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
