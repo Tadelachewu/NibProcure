@@ -177,7 +177,7 @@ async function main() {
 
   // Seed non-vendor users first
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
-    const { committeeAssignments, department, vendorId, password, managingDepartment, roleId, ...userData } = user;
+    const { committeeAssignments, department, vendorId, password, managingDepartment, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
     const formattedRoleName = userData.role.replace(/ /g, '_');
 
@@ -187,13 +187,13 @@ async function main() {
           name: userData.name,
           email: userData.email,
           role: { connect: { name: formattedRoleName } },
-          departmentId: user.departmentId,
+          department: user.departmentId ? { connect: { id: user.departmentId } } : undefined,
       },
       create: {
           ...userData,
           password: hashedPassword,
           role: { connect: { name: formattedRoleName } },
-          departmentId: user.departmentId,
+          department: user.departmentId ? { connect: { id: user.departmentId } } : undefined,
       },
     });
   }
@@ -540,5 +540,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-    
