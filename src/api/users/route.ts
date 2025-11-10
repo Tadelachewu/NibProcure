@@ -10,12 +10,14 @@ export async function GET() {
     const users = await prisma.user.findMany({
         include: { 
             department: true,
-            committeeAssignments: true, // Ensure assignments are fetched
+            role: true, // Include the role relation
+            committeeAssignments: true,
         }
     });
     const formattedUsers = users.map(u => ({
         ...u,
-        department: u.department?.name || 'N/A'
+        department: u.department?.name || 'N/A',
+        role: u.role.name // Use the name from the included role object
     }));
     return NextResponse.json(formattedUsers);
   } catch (error) {
@@ -50,7 +52,7 @@ export async function POST(request: Request) {
             name,
             email,
             password: hashedPassword,
-            role: role.replace(/ /g, '_'),
+            role: { connect: { name: role.replace(/ /g, '_') } },
             department: { connect: { id: departmentId } },
         }
     });
@@ -90,7 +92,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'User ID and all fields are required' }, { status: 400 });
     }
     
-    const oldUser = await prisma.user.findUnique({ where: { id } });
+    const oldUser = await prisma.user.findUnique({ where: { id }, include: { role: true } });
     if (!oldUser) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -98,7 +100,7 @@ export async function PATCH(request: Request) {
     const updateData: any = {
         name,
         email,
-        role: role.replace(/ /g, '_'),
+        role: { connect: { name: role.replace(/ /g, '_') } },
         department: { connect: { id: departmentId } },
     };
     
@@ -118,7 +120,7 @@ export async function PATCH(request: Request) {
             action: 'UPDATE_USER',
             entity: 'User',
             entityId: id,
-            details: `Updated user "${oldUser.name}". Name: ${oldUser.name} -> ${name}. Role: ${oldUser.role.replace(/_/g, ' ')} -> ${role}.`,
+            details: `Updated user "${oldUser.name}". Name: ${oldUser.name} -> ${name}. Role: ${oldUser.role.name.replace(/_/g, ' ')} -> ${role}.`,
         }
     });
 
@@ -146,24 +148,15 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
     
-    const userToDelete = await prisma.user.findUnique({ where: { id } });
+    const userToDelete = await prisma.user.findUnique({ where: { id }, include: { role: true } });
     if (!userToDelete) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    if (userToDelete.role === 'Admin') {
+    if (userToDelete.role.name === 'Admin') {
         return NextResponse.json({ error: 'Cannot delete an Admin user.' }, { status: 403 });
     }
     
-    // Check if user is a manager to other users and reassign them
-    const subordinates = await prisma.user.findMany({ where: { managerId: id } });
-    for (const subordinate of subordinates) {
-        await prisma.user.update({
-            where: { id: subordinate.id },
-            data: { managerId: userToDelete.managerId }, // Reassign to the deleted user's manager
-        });
-    }
-
     await prisma.user.delete({ where: { id } });
     
     await prisma.auditLog.create({
