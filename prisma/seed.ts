@@ -192,7 +192,7 @@ async function main() {
 
   // Seed non-vendor users first
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
-    const { committeeAssignments, department, vendorId, password, managingDepartment, ...userData } = user;
+    const { committeeAssignments, department, departmentId, vendorId, password, managingDepartment, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
     const formattedRoleName = userData.role.replace(/ /g, '_');
 
@@ -202,7 +202,7 @@ async function main() {
           name: userData.name,
           email: userData.email,
           role: { connect: { name: formattedRoleName } },
-          department: user.departmentId ? { connect: { id: user.departmentId } } : undefined,
+          department: departmentId ? { connect: { id: departmentId } } : undefined,
       },
       create: {
           id: userData.id,
@@ -210,7 +210,7 @@ async function main() {
           email: userData.email,
           password: hashedPassword,
           role: { connect: { name: formattedRoleName } },
-          department: user.departmentId ? { connect: { id: user.departmentId } } : undefined,
+          department: departmentId ? { connect: { id: departmentId } } : undefined,
       },
     });
   }
@@ -314,6 +314,7 @@ async function main() {
           financialCommitteeMemberIds,
           technicalCommitteeMemberIds,
           department,
+          departmentId,
           ...reqData
       } = requisition;
 
@@ -328,7 +329,7 @@ async function main() {
               requester: { connect: { id: requesterId } },
               approver: approverId ? { connect: { id: approverId } } : undefined,
               currentApprover: currentApproverId ? { connect: { id: currentApproverId } } : undefined,
-              department: { connect: { id: reqData.departmentId } },
+              department: { connect: { id: departmentId } },
               financialCommitteeMembers: financialCommitteeMemberIds ? { connect: financialCommitteeMemberIds.map(id => ({ id })) } : undefined,
               technicalCommitteeMembers: technicalCommitteeMemberIds ? { connect: technicalCommitteeMemberIds.map(id => ({ id })) } : undefined,
               deadline: reqData.deadline ? new Date(reqData.deadline) : undefined,
