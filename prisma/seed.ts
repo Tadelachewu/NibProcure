@@ -67,14 +67,14 @@ async function main() {
 
   // Seed Roles
   for (const role of allRoles) {
-      await prisma.role.upsert({ 
+      await prisma.role.upsert({
         where: { name: role.name.replace(/ /g, '_') },
         update: { description: role.description },
         create: { name: role.name.replace(/ /g, '_'), description: role.description }
       });
   }
   console.log('Seeded roles.');
-  
+
   // Seed Settings
   await prisma.setting.upsert({
     where: { key: 'rfqSenderSetting' },
@@ -177,27 +177,28 @@ async function main() {
 
   // Seed non-vendor users first
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
-    const { committeeAssignments, department, vendorId, password, managingDepartment, ...userData } = user;
+    const { committeeAssignments, department, vendorId, password, managingDepartment, roleId, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
+    const formattedRoleName = userData.role.replace(/ /g, '_');
 
     await prisma.user.upsert({
       where: { id: user.id },
       update: {
           name: userData.name,
           email: userData.email,
-          role: userData.role.replace(/ /g, '_') as any,
+          role: { connect: { name: formattedRoleName } },
           departmentId: user.departmentId,
       },
       create: {
           ...userData,
           password: hashedPassword,
-          role: userData.role.replace(/ /g, '_') as any,
+          role: { connect: { name: formattedRoleName } },
           departmentId: user.departmentId,
       },
     });
   }
   console.log('Seeded non-vendor users.');
-  
+
   // Third pass to link department heads
   for (const dept of seedData.departments) {
     if (dept.headId) {
@@ -219,26 +220,27 @@ async function main() {
           console.warn(`Skipping vendor ${vendor.name} because its user was not found.`);
           continue;
       }
-      
+
       const hashedPassword = await bcrypt.hash(vendorUser.password || 'password123', 10);
-      
+      const formattedRoleName = vendorUser.role.replace(/ /g, '_');
+
       // Create user for the vendor first
       const createdUser = await prisma.user.upsert({
           where: { id: vendorUser.id },
           update: {
               name: vendorUser.name,
               email: vendorUser.email,
-              role: vendorUser.role.replace(/ /g, '_') as any,
+              role: { connect: { name: formattedRoleName } },
           },
           create: {
               id: vendorUser.id,
               name: vendorUser.name,
               email: vendorUser.email,
               password: hashedPassword,
-              role: vendorUser.role.replace(/ /g, '_') as any,
+              role: { connect: { name: formattedRoleName } },
           }
       });
-      
+
     // Then create the vendor and link it to the user
     const createdVendor = await prisma.vendor.upsert({
       where: { id: vendor.id },
@@ -285,10 +287,10 @@ async function main() {
   // Seed Requisitions
   for (const requisition of seedData.requisitions) {
       const {
-          items, 
-          customQuestions, 
-          evaluationCriteria, 
-          quotations, 
+          items,
+          customQuestions,
+          evaluationCriteria,
+          quotations,
           requesterId,
           approverId,
           currentApproverId,
@@ -296,7 +298,7 @@ async function main() {
           technicalCommitteeMemberIds,
           department,
           departmentId,
-          ...reqData 
+          ...reqData
       } = requisition;
 
       const createdRequisition = await prisma.purchaseRequisition.upsert({
@@ -318,7 +320,7 @@ async function main() {
               awardResponseDeadline: reqData.awardResponseDeadline ? new Date(reqData.awardResponseDeadline) : undefined,
           }
       });
-      
+
       // Seed RequisitionItems
       if (items) {
           for (const item of items) {
@@ -372,7 +374,7 @@ async function main() {
    // Seed Quotations
    for (const quote of seedData.quotations) {
        const { items, answers, scores, requisitionId, vendorId, ...quoteData } = quote;
-       
+
        const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
        if (!requisition) {
            console.warn(`Skipping quote ${quote.id} because its requisition ${requisitionId} was not found.`);
@@ -452,7 +454,7 @@ async function main() {
         });
     }
     console.log('Seeded purchase orders and related items.');
-    
+
     // Seed Invoices
     for (const invoice of seedData.invoices) {
         const { items, ...invoiceData } = invoice;
@@ -538,3 +540,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    
