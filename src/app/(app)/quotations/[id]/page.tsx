@@ -336,7 +336,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                              )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
-                            {user.role === 'Committee_Member' && isAssigned && (
+                            {isAssigned && (
                                 <Button className="w-full" variant={hasUserScored ? "secondary" : "outline"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
                                     {hasUserScored ? 'View Your Score' : 'Score this Quote'}
@@ -1387,14 +1387,11 @@ const ScoringDialog = ({
     const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
     
+    const existingScoreSet = useMemo(() => quote.scores?.find(s => s.scorerId === user.id), [quote, user.id]);
+
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
-        defaultValues: {},
-    });
-
-    useEffect(() => {
-        if (quote && requisition.evaluationCriteria) {
-            const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
+        defaultValues: () => {
             const initialItemScores = quote.items.map(item => {
                 const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
                 return {
@@ -1409,11 +1406,15 @@ const ScoringDialog = ({
                     }),
                 };
             });
-            form.reset({
+            return {
                 committeeComment: existingScoreSet?.committeeComment || "",
                 itemScores: initialItemScores,
-            });
+            };
         }
+    });
+
+    useEffect(() => {
+        form.reset(form.formState.defaultValues);
     }, [quote, requisition, user.id, form]);
 
     const onSubmit = async (values: ScoreFormValues) => {
@@ -1445,58 +1446,12 @@ const ScoringDialog = ({
     
     if (!requisition.evaluationCriteria) return null;
 
-    const existingScore = quote.scores?.find(s => s.scorerId === user.id);
     const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id);
     const isTechnicalScorer = requisition.technicalCommitteeMemberIds?.includes(user.id);
 
-    const renderCriteria = (itemIndex: number, type: 'financial' | 'technical') => {
-        const criteria = type === 'financial' ? requisition.evaluationCriteria!.financialCriteria : requisition.evaluationCriteria!.technicalCriteria;
-        const fieldNamePrefix = `itemScores.${itemIndex}.${type}Scores`;
+    const { fields: itemScoreFields } = useFieldArray({ control: form.control, name: "itemScores" });
 
-        return criteria.map((criterion, criterionIndex) => (
-            <div key={criterion.id} className="space-y-2 rounded-md border p-4">
-                <div className="flex justify-between items-center">
-                    <FormLabel>{criterion.name}</FormLabel>
-                    <Badge variant="secondary">Weight: {criterion.weight}%</Badge>
-                </div>
-                 <FormField
-                    control={form.control}
-                    name={`${fieldNamePrefix}.${criterionIndex}.score`}
-                    render={({ field }) => (
-                         <FormItem>
-                            <FormControl>
-                                <div className="flex items-center gap-4">
-                                <Slider
-                                    defaultValue={[field.value]}
-                                    max={100}
-                                    step={5}
-                                    onValueChange={(v) => field.onChange(v[0])}
-                                    disabled={!!existingScore}
-                                />
-                                <Input type="number" {...field} className="w-24" disabled={!!existingScore} />
-                                </div>
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                 />
-                 <FormField
-                    control={form.control}
-                    name={`${fieldNamePrefix}.${criterionIndex}.comment`}
-                    render={({ field }) => (
-                         <FormItem>
-                             <FormControl>
-                                <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScore} />
-                             </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                 />
-            </div>
-        ));
-    };
-
-    if (!existingScore && isScoringDeadlinePassed) {
+    if (!existingScoreSet && isScoringDeadlinePassed) {
         return (
             <DialogContent>
                 <DialogHeader><DialogTitle>Scoring Deadline Passed</DialogTitle></DialogHeader>
@@ -1519,10 +1474,11 @@ const ScoringDialog = ({
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0 flex flex-col">
                 <ScrollArea className="flex-1 pr-4 -mr-4">
                      <div className="space-y-6">
-                        {quote.items.map((quoteItem, index) => {
+                        {itemScoreFields.map((field, itemIndex) => {
+                            const quoteItem = quote.items[itemIndex];
                             const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
                             return (
-                                <Card key={quoteItem.id} className="bg-muted/30">
+                                <Card key={field.id} className="bg-muted/30">
                                     <CardHeader>
                                         <CardTitle>{quoteItem.name}</CardTitle>
                                         <CardDescription>
@@ -1536,13 +1492,93 @@ const ScoringDialog = ({
                                         {isFinancialScorer && !hidePrices && (
                                             <div className="space-y-4">
                                                 <h4 className="font-semibold text-lg flex items-center gap-2"><Scale /> Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
-                                                {renderCriteria(index, 'financial')}
+                                                { (requisition.evaluationCriteria?.financialCriteria || []).map((criterion, criterionIndex) => (
+                                                    <div key={criterion.id} className="space-y-2 rounded-md border p-4 bg-background">
+                                                        <div className="flex justify-between items-center">
+                                                            <FormLabel>{criterion.name}</FormLabel>
+                                                            <Badge variant="secondary">Weight: {criterion.weight}%</Badge>
+                                                        </div>
+                                                        <FormField
+                                                            control={form.control}
+                                                            name={`itemScores.${itemIndex}.financialScores.${criterionIndex}.score`}
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormControl>
+                                                                        <div className="flex items-center gap-4">
+                                                                            <Slider
+                                                                                defaultValue={[field.value]}
+                                                                                max={100}
+                                                                                step={5}
+                                                                                onValueChange={(v) => field.onChange(v[0])}
+                                                                                disabled={!!existingScoreSet}
+                                                                            />
+                                                                            <Input type="number" {...field} className="w-24" disabled={!!existingScoreSet} />
+                                                                        </div>
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                        <FormField
+                                                            control={form.control}
+                                                            name={`itemScores.${itemIndex}.financialScores.${criterionIndex}.comment`}
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormControl>
+                                                                        <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScoreSet} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
                                         {isTechnicalScorer && (
                                             <div className="space-y-4">
                                                 <h4 className="font-semibold text-lg flex items-center gap-2"><TrendingUp /> Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
-                                                {renderCriteria(index, 'technical')}
+                                                {(requisition.evaluationCriteria?.technicalCriteria || []).map((criterion, criterionIndex) => (
+                                                    <div key={criterion.id} className="space-y-2 rounded-md border p-4 bg-background">
+                                                        <div className="flex justify-between items-center">
+                                                            <FormLabel>{criterion.name}</FormLabel>
+                                                            <Badge variant="secondary">Weight: {criterion.weight}%</Badge>
+                                                        </div>
+                                                         <FormField
+                                                            control={form.control}
+                                                            name={`itemScores.${itemIndex}.technicalScores.${criterionIndex}.score`}
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormControl>
+                                                                        <div className="flex items-center gap-4">
+                                                                            <Slider
+                                                                                defaultValue={[field.value]}
+                                                                                max={100}
+                                                                                step={5}
+                                                                                onValueChange={(v) => field.onChange(v[0])}
+                                                                                disabled={!!existingScoreSet}
+                                                                            />
+                                                                            <Input type="number" {...field} className="w-24" disabled={!!existingScoreSet} />
+                                                                        </div>
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                        <FormField
+                                                            control={form.control}
+                                                            name={`itemScores.${itemIndex}.technicalScores.${criterionIndex}.comment`}
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                    <FormControl>
+                                                                        <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScoreSet} />
+                                                                    </FormControl>
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
                                     </CardContent>
@@ -1557,7 +1593,7 @@ const ScoringDialog = ({
                                 <FormItem>
                                     <FormLabel className="text-lg font-semibold">Overall Comment</FormLabel>
                                     <FormControl>
-                                        <Textarea placeholder="Provide an overall summary or justification for your scores..." {...field} rows={4} disabled={!!existingScore} />
+                                        <Textarea placeholder="Provide an overall summary or justification for your scores..." {...field} rows={4} disabled={!!existingScoreSet} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -1567,7 +1603,7 @@ const ScoringDialog = ({
                 </ScrollArea>
 
                 <DialogFooter className="pt-4 mt-4 border-t">
-                    {existingScore ? (
+                    {existingScoreSet ? (
                         <DialogClose asChild><Button>Close</Button></DialogClose>
                     ) : (
                         <AlertDialog>
@@ -2049,7 +2085,7 @@ const OverdueReportDialog = ({ isOpen, onClose, member }: { isOpen: boolean, onC
                      <div className="p-4 border rounded-md bg-muted/50">
                         <p><span className="font-semibold">Member Name:</span> {member.name}</p>
                         <p><span className="font-semibold">Email:</span> {member.email}</p>
-                        <p><span className="font-semibold">Assigned Role:</span> {member.role}</p>
+                        <p><span className="font-semibold">Assigned Role:</span> {member.role.name}</p>
                      </div>
                 </div>
                 <DialogFooter>
@@ -2078,7 +2114,6 @@ const CommitteeActions = ({
     const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
     const allQuotesScored = quotations.length > 0 && userScoredQuotesCount === quotations.length;
     
-    // Corrected logic: Check the live assignment status from the user object
     const assignment = useMemo(() => {
         return user.committeeAssignments?.find(a => a.requisitionId === requisition.id);
     }, [user.committeeAssignments, requisition.id]);
@@ -2111,7 +2146,7 @@ const CommitteeActions = ({
         }
     };
 
-    if (user.role !== 'Committee_Member') {
+    if (user.role.name !== 'Committee_Member') {
         return null;
     }
 
@@ -2493,7 +2528,7 @@ export default function QuotationDetailsPage() {
      return <div className="text-center p-8">Requisition not found.</div>;
   }
 
-  const isAssignedCommitteeMember = user.role === 'Committee_Member' && 
+  const isAssignedCommitteeMember = user.role.name === 'Committee_Member' && 
       (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id));
   
   const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
@@ -2720,7 +2755,7 @@ export default function QuotationDetailsPage() {
             </>
         )}
         
-        {(currentStep === 'committee' || currentStep === 'award') && isAssignedCommitteeMember && (
+        {isAssignedCommitteeMember && (
              <CommitteeActions 
                 user={user}
                 requisition={requisition}
