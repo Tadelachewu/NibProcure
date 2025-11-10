@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 import { handleAwardRejection } from '@/services/award-service';
 
 
@@ -16,8 +16,12 @@ export async function POST(
     const body = await request.json();
     const { userId, action } = body as { userId: string; action: 'accept' | 'reject' };
 
-    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
-    if (!user || user.role !== 'Vendor') {
+    const user = await prisma.user.findUnique({
+        where: {id: userId},
+        include: { role: true }
+    });
+    
+    if (!user || user.role.name !== 'Vendor') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
