@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -31,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, FileUp, TrophyIcon } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -2373,11 +2374,11 @@ export default function QuotationDetailsPage() {
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
     if (role.name === 'Admin' || role.name === 'Committee') return true;
-    if (rfqSenderSetting.type === 'all') {
-      return role.name === 'Procurement_Officer';
-    }
     if (rfqSenderSetting.type === 'specific') {
       return user.id === rfqSenderSetting.userId;
+    }
+    if (rfqSenderSetting.type === 'all') {
+      return role.name === 'Procurement_Officer';
     }
     return false;
   }, [user, role, rfqSenderSetting]);
@@ -2650,7 +2651,7 @@ export default function QuotationDetailsPage() {
             <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
         )}
 
-        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && (role?.name === 'Procurement_Officer' || role?.name === 'Committee' || role?.name === 'Admin') && (
+        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && isAuthorized && (
             <div className="grid md:grid-cols-2 gap-6 items-start">
                 <RFQDistribution 
                     requisition={requisition} 
@@ -2818,7 +2819,7 @@ export default function QuotationDetailsPage() {
         
         {((role?.name === 'Procurement_Officer' || role?.name === 'Admin' || role?.name === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined')
+            requisition.status !== 'PreApproved'
         ) && (
             <ScoringProgressTracker
                 requisition={requisition}
@@ -2836,8 +2837,8 @@ export default function QuotationDetailsPage() {
                 requisition={requisition}
                 quotations={quotations}
                 onSuccess={fetchRequisitionAndQuotes}
-                isFinalizing={isFinalizing}
                 onFinalize={handleFinalizeScores}
+                isFinalizing={isFinalizing}
             />
         )}
 
