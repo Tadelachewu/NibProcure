@@ -22,10 +22,13 @@ export function RoleSwitcher() {
         value={user?.id || ''}
         onValueChange={(userId) => switchUser(userId)}
       >
-        <SelectTrigger className="w-full h-9">
+        <SelectTrigger className="w-full h-auto py-1">
           <div className="flex items-center gap-2 truncate">
             <User className="h-4 w-4" />
-            <SelectValue placeholder="Select a user to test" />
+             <div className="flex flex-col text-left">
+                <span className="font-medium">{user?.name}</span>
+                <span className="text-xs text-muted-foreground">{role ? role.replace(/_/g, ' ') : 'No Role'}</span>
+            </div>
           </div>
         </SelectTrigger>
         <SelectContent>

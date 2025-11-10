@@ -10,12 +10,15 @@ export async function GET() {
     const users = await prisma.user.findMany({
         include: { 
             department: true,
-            committeeAssignments: true, // Ensure assignments are fetched
+            role: true, // Include the full role object
+            committeeAssignments: true,
         }
     });
+    // Return the full user object with the nested role
     const formattedUsers = users.map(u => ({
         ...u,
-        department: u.department?.name || 'N/A'
+        department: u.department?.name || 'N/A',
+        // The role object is now correctly nested, no flattening needed here.
     }));
     return NextResponse.json(formattedUsers);
   } catch (error) {
@@ -50,7 +53,7 @@ export async function POST(request: Request) {
             name,
             email,
             password: hashedPassword,
-            role: role.replace(/ /g, '_'),
+            role: { connect: { name: role.replace(/ /g, '_') } },
             department: { connect: { id: departmentId } },
         }
     });
@@ -90,7 +93,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'User ID and all fields are required' }, { status: 400 });
     }
     
-    const oldUser = await prisma.user.findUnique({ where: { id } });
+    const oldUser = await prisma.user.findUnique({ where: { id }, include: { role: true } });
     if (!oldUser) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -98,7 +101,7 @@ export async function PATCH(request: Request) {
     const updateData: any = {
         name,
         email,
-        role: role.replace(/ /g, '_'),
+        role: { connect: { name: role.replace(/ /g, '_') } },
         department: { connect: { id: departmentId } },
     };
     
@@ -118,7 +121,7 @@ export async function PATCH(request: Request) {
             action: 'UPDATE_USER',
             entity: 'User',
             entityId: id,
-            details: `Updated user "${oldUser.name}". Name: ${oldUser.name} -> ${name}. Role: ${oldUser.role.replace(/_/g, ' ')} -> ${role}.`,
+            details: `Updated user "${oldUser.name}". Name: ${oldUser.name} -> ${name}. Role: ${oldUser.role.name.replace(/_/g, ' ')} -> ${role}.`,
         }
     });
 
@@ -146,12 +149,12 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
     
-    const userToDelete = await prisma.user.findUnique({ where: { id } });
+    const userToDelete = await prisma.user.findUnique({ where: { id }, include: { role: true } });
     if (!userToDelete) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    if (userToDelete.role === 'Admin') {
+    if (userToDelete.role.name === 'Admin') {
         return NextResponse.json({ error: 'Cannot delete an Admin user.' }, { status: 403 });
     }
     

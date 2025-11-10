@@ -193,7 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
   
   const switchUser = async (userId: string) => {
-      const targetUser = allUsers.find(u => u.id === userId);
+      const targetUser = allUsers.find((u: any) => u.id === userId);
       if (targetUser) {
           const response = await fetch('/api/auth/login', {
             method: 'POST',
@@ -203,7 +203,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if(response.ok) {
               const result = await response.json();
-              // The API now correctly returns a top-level role string
               login(result.token, result.user, result.role);
               window.location.href = '/';
           } else {
