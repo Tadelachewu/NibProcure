@@ -78,7 +78,11 @@ async function main() {
   // Seed Settings
   await prisma.setting.upsert({
     where: { key: 'rfqSenderSetting' },
-    update: {},
+    update: {
+        value: {
+            type: 'all'
+        }
+    },
     create: {
       key: 'rfqSenderSetting',
       value: {
@@ -90,7 +94,12 @@ async function main() {
 
   await prisma.setting.upsert({
       where: { key: 'committeeConfig' },
-      update: {},
+      update: {
+        value: {
+            A: { min: 200001, max: 1000000 },
+            B: { min: 10001, max: 200000 }
+        }
+      },
       create: {
           key: 'committeeConfig',
           value: {
@@ -102,7 +111,9 @@ async function main() {
 
   await prisma.setting.upsert({
     where: { key: 'rolePermissions' },
-    update: {},
+    update: {
+        value: rolePermissions,
+    },
     create: {
         key: 'rolePermissions',
         value: rolePermissions,
@@ -111,7 +122,9 @@ async function main() {
 
   await prisma.setting.upsert({
     where: { key: 'rfqQuorum' },
-    update: {},
+    update: {
+        value: 3,
+    },
     create: {
         key: 'rfqQuorum',
         value: 3,
@@ -120,7 +133,9 @@ async function main() {
 
   await prisma.setting.upsert({
     where: { key: 'committeeQuorum' },
-    update: {},
+    update: {
+        value: 2,
+    },
     create: {
         key: 'committeeQuorum',
         value: 2,
@@ -177,7 +192,7 @@ async function main() {
 
   // Seed non-vendor users first
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
-    const { committeeAssignments, department, vendorId, departmentId, password, managingDepartment, ...userData } = user;
+    const { committeeAssignments, department, vendorId, password, managingDepartment, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
     const formattedRoleName = userData.role.replace(/ /g, '_');
 
@@ -190,7 +205,9 @@ async function main() {
           department: user.departmentId ? { connect: { id: user.departmentId } } : undefined,
       },
       create: {
-          ...userData,
+          id: userData.id,
+          name: userData.name,
+          email: userData.email,
           password: hashedPassword,
           role: { connect: { name: formattedRoleName } },
           department: user.departmentId ? { connect: { id: user.departmentId } } : undefined,
@@ -297,7 +314,6 @@ async function main() {
           financialCommitteeMemberIds,
           technicalCommitteeMemberIds,
           department,
-          departmentId,
           ...reqData
       } = requisition;
 
@@ -312,7 +328,7 @@ async function main() {
               requester: { connect: { id: requesterId } },
               approver: approverId ? { connect: { id: approverId } } : undefined,
               currentApprover: currentApproverId ? { connect: { id: currentApproverId } } : undefined,
-              department: { connect: { id: departmentId } },
+              department: { connect: { id: reqData.departmentId } },
               financialCommitteeMembers: financialCommitteeMemberIds ? { connect: financialCommitteeMemberIds.map(id => ({ id })) } : undefined,
               technicalCommitteeMembers: technicalCommitteeMemberIds ? { connect: technicalCommitteeMemberIds.map(id => ({ id })) } : undefined,
               deadline: reqData.deadline ? new Date(reqData.deadline) : undefined,
