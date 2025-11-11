@@ -86,25 +86,20 @@ export async function POST(
             }
 
             // 2. Fetch all winning vendors' details in one query
-            const winningVendorsData = await tx.vendor.findMany({ 
+            const allWinningVendorsData = await tx.vendor.findMany({ 
                 where: { id: { in: Array.from(winningVendorIds) } }
             });
-            const allWinningVendors = new Map(winningVendorsData.map(v => [v.id, v]));
+            const allWinningVendors = new Map(allWinningVendorsData.map(v => [v.id, v]));
 
             const itemsToUpdate: { id: string; details: PerItemAwardDetail[] }[] = [];
-            const winningVendorDetails: Map<string, { name: string; email: string }> = new Map();
-
-            // 3. Now, iterate again to update statuses and prepare notifications
+            
+            // 3. Now, iterate again to update statuses
             for (const item of requisition.items) {
                 const perItemDetails = item.perItemAwardDetails as PerItemAwardDetail[] || [];
                 let hasUpdate = false;
                 
                 const updatedDetails = perItemDetails.map(detail => {
                     if (detail.status === 'Pending_Award') {
-                        const vendor = allWinningVendors.get(detail.vendorId);
-                        if(vendor) {
-                            winningVendorDetails.set(vendor.id, { name: vendor.name, email: vendor.email });
-                        }
                         hasUpdate = true;
                         return { ...detail, status: 'Awarded' as PerItemAwardStatus };
                     }
@@ -118,22 +113,25 @@ export async function POST(
 
 
             // 4. Notify each unique winning vendor
-            for (const [vendorId, vendorInfo] of winningVendorDetails.entries()) {
-                const emailHtml = `
-                    <h1>Congratulations, ${vendorInfo.name}!</h1>
-                    <p>You have been awarded a contract for items in requisition <strong>${requisition.title}</strong>.</p>
-                    <p>Please log in to the vendor portal to review the award details and respond.</p>
-                    ${updatedRequisition.awardResponseDeadline ? `<p><strong>This award must be accepted by ${format(new Date(updatedRequisition.awardResponseDeadline), 'PPpp')}.</strong></p>` : ''}
-                    <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
-                    <p>Thank you,</p>
-                    <p>Nib InternationalBank Procurement</p>
-                `;
+            for (const vendorId of winningVendorIds) {
+                const vendorInfo = allWinningVendors.get(vendorId);
+                if (vendorInfo) {
+                    const emailHtml = `
+                        <h1>Congratulations, ${vendorInfo.name}!</h1>
+                        <p>You have been awarded a contract for items in requisition <strong>${requisition.title}</strong>.</p>
+                        <p>Please log in to the vendor portal to review the award details and respond.</p>
+                        ${updatedRequisition.awardResponseDeadline ? `<p><strong>This award must be accepted by ${format(new Date(updatedRequisition.awardResponseDeadline), 'PPpp')}.</strong></p>` : ''}
+                        <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
+                        <p>Thank you,</p>
+                        <p>Nib InternationalBank Procurement</p>
+                    `;
 
-                await sendEmail({
-                    to: vendorInfo.email,
-                    subject: `Contract Awarded: ${requisition.title}`,
-                    html: emailHtml
-                });
+                    await sendEmail({
+                        to: vendorInfo.email,
+                        subject: `Contract Awarded: ${requisition.title}`,
+                        html: emailHtml
+                    });
+                }
             }
 
             // 5. Update the item details in the database
