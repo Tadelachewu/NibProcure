@@ -222,14 +222,17 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
     }
     
     const getOverallStatusForVendor = (vendorId: string) => {
-        if (requisition.rfqSettings?.awardStrategy === 'item') {
-            const vendorAwards = requisition.items.flatMap(item => 
-                (item.perItemAwardDetails || []).filter(detail => detail.vendorId === vendorId)
-            );
-            if (vendorAwards.some(a => a.status === 'Pending_Award')) return 'Pending_Award';
-            if (vendorAwards.some(a => a.status === 'Accepted')) return 'Accepted';
-            if (vendorAwards.some(a => a.status === 'Awarded')) return 'Awarded';
-            if (vendorAwards.some(a => a.status === 'Standby')) return 'Standby';
+        if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
+            for (const item of requisition.items) {
+                const awardDetail = (item.perItemAwardDetails || []).find(d => d.vendorId === vendorId);
+                if (awardDetail?.status === 'Pending_Award') return 'Pending_Award';
+                if (awardDetail?.status === 'Accepted') return 'Accepted';
+                if (awardDetail?.status === 'Awarded') return 'Awarded';
+            }
+            for (const item of requisition.items) {
+                 const awardDetail = (item.perItemAwardDetails || []).find(d => d.vendorId === vendorId);
+                 if (awardDetail?.status === 'Standby') return 'Standby';
+            }
         }
         return null;
     }
@@ -269,15 +272,14 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
                 
-                const perItemStrategy = requisition.rfqSettings?.awardStrategy === 'item';
+                const perItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 const mainStatus = perItemStrategy ? getOverallStatusForVendor(quote.vendorId) || quote.status : quote.status;
                 const awardedItemsForThisQuote = quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
                 
                 const itemAwardDetails = perItemStrategy 
-                    ? requisition.items.map(item => {
-                        const detail = (item.perItemAwardDetails || []).find(d => d.vendorId === quote.vendorId);
-                        return detail ? { ...detail, itemName: item.name } : null;
-                    }).filter(Boolean)
+                    ? requisition.items.flatMap(item => 
+                        (item.perItemAwardDetails || []).filter(d => d.vendorId === quote.vendorId)
+                    )
                     : [];
 
                 return (
@@ -328,10 +330,15 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                     
                                      {perItemStrategy && itemAwardDetails.length > 0 && (
                                         <div className="text-sm space-y-2 pt-2 border-t">
-                                            <h4 className="font-semibold">Item Statuses</h4>
+                                            <h4 className="font-semibold">Your Item Statuses</h4>
                                             {itemAwardDetails.map(detail => (
                                                 <div key={detail!.quoteItemId} className="flex justify-between items-center text-muted-foreground">
-                                                    <span className="flex items-center gap-1">{getRankIcon(detail!.rank)} {detail!.itemName}</span>
+                                                    <span className="flex items-center gap-2">
+                                                        {getRankIcon(detail!.rank)}
+                                                        <span className="truncate" title={detail.proposedItemName}>
+                                                            {detail.proposedItemName}
+                                                        </span>
+                                                    </span>
                                                     <Badge variant={getStatusVariant(detail!.status as any)}>{detail!.status.replace(/_/g, ' ')}</Badge>
                                                 </div>
                                             ))}
@@ -981,7 +988,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const [distributionType, setDistributionType] = useState('all');
     const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
     const [vendorSearch, setVendorSearch] = useState("");
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
     const [cpoAmount, setCpoAmount] = useState<number | undefined>(requisition.cpoAmount);
