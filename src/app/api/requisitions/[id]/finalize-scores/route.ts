@@ -112,9 +112,12 @@ export async function POST(
                     proposals.sort((a,b) => b.averageScore - a.averageScore);
                     
                     const rankedProposals = proposals.slice(0, 3).map((p, index) => {
-                        const { averageScore, ...rest } = p; // Remove temporary property
                         let status: PerItemAwardDetail['status'] = (index === 0) ? 'Pending_Award' : 'Standby';
-                        return { ...rest, rank: index + 1, status };
+                        return { 
+                            ...p, 
+                            rank: index + 1, 
+                            status 
+                        };
                     });
 
                     await tx.requisitionItem.update({

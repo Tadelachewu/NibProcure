@@ -37,7 +37,7 @@ import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'r
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem } from '@/lib/types';
+import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem, PerItemAwardDetail } from '@/lib/types';
 import { format, formatDistanceToNow, isBefore, isPast, setHours, setMinutes } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -223,16 +223,14 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
     
     const getOverallStatusForVendor = (vendorId: string) => {
         if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
-            for (const item of requisition.items) {
-                const awardDetail = (item.perItemAwardDetails || []).find(d => d.vendorId === vendorId);
-                if (awardDetail?.status === 'Pending_Award') return 'Pending_Award';
-                if (awardDetail?.status === 'Accepted') return 'Accepted';
-                if (awardDetail?.status === 'Awarded') return 'Awarded';
-            }
-            for (const item of requisition.items) {
-                 const awardDetail = (item.perItemAwardDetails || []).find(d => d.vendorId === vendorId);
-                 if (awardDetail?.status === 'Standby') return 'Standby';
-            }
+            const allVendorDetails = requisition.items.flatMap(item => 
+                (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === vendorId)
+            );
+            
+            if (allVendorDetails.some(d => d.status === 'Pending_Award')) return 'Pending_Award';
+            if (allVendorDetails.some(d => d.status === 'Accepted')) return 'Accepted';
+            if (allVendorDetails.some(d => d.status === 'Awarded')) return 'Awarded';
+            if (allVendorDetails.some(d => d.status === 'Standby')) return 'Standby';
         }
         return null;
     }
@@ -274,11 +272,10 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                 
                 const perItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 const mainStatus = perItemStrategy ? getOverallStatusForVendor(quote.vendorId) || quote.status : quote.status;
-                const awardedItemsForThisQuote = quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
                 
                 const itemAwardDetails = perItemStrategy 
                     ? requisition.items.flatMap(item => 
-                        (item.perItemAwardDetails || []).filter(d => d.vendorId === quote.vendorId)
+                        (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === quote.vendorId)
                     )
                     : [];
 
@@ -339,23 +336,14 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                                             {detail.proposedItemName}
                                                         </span>
                                                     </span>
-                                                    <Badge variant={getStatusVariant(detail!.status as any)}>{detail!.status.replace(/_/g, ' ')}</Badge>
+                                                    <div className="flex items-center gap-1">
+                                                        <Badge variant={getStatusVariant(detail!.status as any)}>{detail!.status.replace(/_/g, ' ')}</Badge>
+                                                        {detail.averageScore && <Badge variant="outline" className="font-mono">{detail.averageScore.toFixed(2)}</Badge>}
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
                                      )}
-
-                                    {!perItemStrategy && isAwarded && awardedItemsForThisQuote.length > 0 && (
-                                        <div className="text-sm space-y-2 pt-2 border-t">
-                                            <h4 className="font-semibold text-green-600">Winning Items:</h4>
-                                            {awardedItemsForThisQuote.map(item => (
-                                                <div key={item.id} className="flex justify-between items-center text-muted-foreground">
-                                                    <span>{item.name} x {item.quantity}</span>
-                                                    {!hidePrices && <span className="font-mono">{item.unitPrice.toFixed(2)} ETB ea.</span>}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
                                 </>
                             ) : (
                                 <div className="text-center py-8">
