@@ -28,7 +28,7 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const user: User | null = await prisma.user.findUnique({where: {id: userId}, include: { role: true }});
+    const user = await prisma.user.findUnique({where: {id: userId}, include: { role: true }});
     if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -40,11 +40,15 @@ export async function POST(
 
     if (userRoleName === 'Admin' || userRoleName === 'Committee') {
         isAuthorized = true;
-    } else if (rfqSenderSetting?.value?.type === 'specific') {
-        isAuthorized = rfqSenderSetting.value.userId === userId;
-    } else { // 'all' case
-        isAuthorized = userRoleName === 'Procurement_Officer';
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userId?: string };
+        if (setting.type === 'specific') {
+            isAuthorized = setting.userId === userId;
+        } else { // 'all' case
+            isAuthorized = userRoleName === 'Procurement_Officer';
+        }
     }
+
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
