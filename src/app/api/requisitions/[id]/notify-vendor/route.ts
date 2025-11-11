@@ -73,7 +73,7 @@ export async function POST(
             // 1. First, gather all winning vendor IDs from the per-item details
             const winningVendorIds = new Set<string>();
             for (const item of requisition.items) {
-                const perItemDetails = item.perItemAwardDetails as PerItemAwardDetail[] || [];
+                const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
                 for (const detail of perItemDetails) {
                     if (detail.status === 'Pending_Award') {
                         winningVendorIds.add(detail.vendorId);
@@ -91,11 +91,10 @@ export async function POST(
             });
             const allWinningVendors = new Map(allWinningVendorsData.map(v => [v.id, v]));
 
+            // 3. Now, iterate again to update statuses and prepare for DB update
             const itemsToUpdate: { id: string; details: PerItemAwardDetail[] }[] = [];
-            
-            // 3. Now, iterate again to update statuses
             for (const item of requisition.items) {
-                const perItemDetails = item.perItemAwardDetails as PerItemAwardDetail[] || [];
+                const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
                 let hasUpdate = false;
                 
                 const updatedDetails = perItemDetails.map(detail => {
