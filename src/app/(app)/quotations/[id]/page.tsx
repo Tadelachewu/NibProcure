@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -62,6 +63,7 @@ import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BestItemAwardDialog } from '../best-item-award-dialog';
 
 
 const PAGE_SIZE = 6;
@@ -2288,6 +2290,8 @@ export default function QuotationDetailsPage() {
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
   const [isChangingAward, setIsChangingAward] = useState(false);
+  const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
+  const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
 
   const userRoleName = useMemo(() => {
     if (!user || !user.role) return null;
@@ -2800,55 +2804,71 @@ export default function QuotationDetailsPage() {
           )
         )}
         
-         {(requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined') && isAuthorized && (
-            <Card className="mt-6">
-                <CardHeader>
-                    <CardTitle>Awarding Center</CardTitle>
-                    <CardDescription>
-                        {requisition.status === 'Award_Declined' ? 'The previous winner has declined. You may now promote a standby vendor.' : 'Finalize scores and decide on the award strategy for this requisition.'}
-                    </CardDescription>
-                </CardHeader>
-                <CardFooter className="gap-4">
-                    {requisition.status === 'Award_Declined' ? (
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button disabled={isChangingAward}>
-                                    {isChangingAward ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrophyIcon className="mr-2 h-4 w-4" />}
-                                    Promote Standby Vendor
-                                </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        This will promote the next highest-ranked standby vendor to the "Awarded" status. This action cannot be undone.
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={handleAwardChange}>Confirm &amp; Promote</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    ) : (
-                        <Dialog>
-                            <DialogTrigger asChild>
-                                <Button disabled={isFinalizing}>
-                                    {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Finalize &amp; Award
-                                </Button>
-                            </DialogTrigger>
-                            <AwardCenterDialog
-                                requisition={requisition}
-                                quotations={quotations}
-                                onFinalize={handleFinalizeScores}
-                                onClose={()=>{}}
-                            />
-                        </Dialog>
-                    )}
-                </CardFooter>
-            </Card>
-        )}
+        {(requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined') && isAuthorized && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Awarding Center</CardTitle>
+            <CardDescription>
+              {requisition.status === 'Award_Declined'
+                ? 'The previous winner has declined. You may now promote a standby vendor.'
+                : 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="gap-4">
+            {requisition.status === 'Award_Declined' ? (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button disabled={isChangingAward}>
+                    {isChangingAward ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrophyIcon className="mr-2 h-4 w-4" />}
+                    Promote Standby Vendor
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will promote the next highest-ranked standby vendor to the "Awarded" status. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleAwardChange}>Confirm &amp; Promote</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <>
+                <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
+                  <DialogTrigger asChild>
+                    <Button disabled={isFinalizing}>Award All to Single Vendor</Button>
+                  </DialogTrigger>
+                  <AwardCenterDialog
+                    requisition={requisition}
+                    quotations={quotations}
+                    onFinalize={handleFinalizeScores}
+                    onClose={() => setSingleAwardCenterOpen(false)}
+                  />
+                </Dialog>
+
+                <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="secondary" disabled={isFinalizing}>
+                      Award by Best Offer (Per Item)
+                    </Button>
+                  </DialogTrigger>
+                  <BestItemAwardDialog
+                    requisition={requisition}
+                    quotations={quotations}
+                    onFinalize={handleFinalizeScores}
+                    isOpen={isBestItemAwardCenterOpen}
+                    onClose={() => setBestItemAwardCenterOpen(false)}
+                  />
+                </Dialog>
+              </>
+            )}
+          </CardFooter>
+        </Card>
+      )}
 
 
         {isReadyForNotification && isAuthorized && (
