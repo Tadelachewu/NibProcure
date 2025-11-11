@@ -2479,12 +2479,14 @@ export default function QuotationDetailsPage() {
         'Scoring_In_Progress',
         'Scoring_Complete'
     ].includes(requisition.status);
-
+    
     if (inScoringProcess && deadlinePassed) {
         return isScoringComplete ? 'award' : 'committee';
     }
 
-    const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded' || requisition.status === 'Award_Declined';
+    if (requisition.status === 'Award_Declined') return 'award';
+
+    const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded';
     if (inReviewProcess) return 'award';
 
     if (isAccepted) {
@@ -2561,11 +2563,10 @@ export default function QuotationDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="outline" onClick={() => router.push('/quotations')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          <span>Back to All Requisitions</span>
-      </Button>
-
+        <Button variant="outline" onClick={() => router.push('/quotations')}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            <span>Back to All Requisitions</span>
+        </Button>
 
         <Card className="p-4 sm:p-6">
             <WorkflowStepper step={currentStep} />
@@ -2609,7 +2610,7 @@ export default function QuotationDetailsPage() {
         {quorumNotMetAndDeadlinePassed && isAuthorized && (
             <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
         )}
-
+        
         {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && isAuthorized && (
             <div className="grid md:grid-cols-2 gap-6 items-start">
                 <RFQDistribution
@@ -2650,7 +2651,7 @@ export default function QuotationDetailsPage() {
 
         {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
             <>
-                {canManageCommittees && currentStep !== 'committee' && readyForCommitteeAssignment && (
+                {canManageCommittees && currentStep !== 'committee' && readyForCommitteeAssignment && !isAwarded && (
                      <div className="hidden">
                         <EvaluationCommitteeManagement
                             requisition={requisition}
