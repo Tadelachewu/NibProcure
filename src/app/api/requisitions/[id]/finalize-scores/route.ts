@@ -1,9 +1,10 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User, UserRole } from '@/lib/types';
+import { User, UserRole, PerItemAwardDetail } from '@/lib/types';
 import { getNextApprovalStep } from '@/services/award-service';
 
 export async function POST(
@@ -22,7 +23,6 @@ export async function POST(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
         
-        // Correct Authorization Logic
         const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
         let isAuthorized = false;
         const userRoleName = user.role.name as UserRole;
@@ -31,7 +31,7 @@ export async function POST(
             isAuthorized = true;
         } else if (rfqSenderSetting?.value?.type === 'specific') {
             isAuthorized = rfqSenderSetting.value.userId === userId;
-        } else { // 'all' case
+        } else {
             isAuthorized = userRoleName === 'Procurement_Officer';
         }
 
@@ -43,7 +43,7 @@ export async function POST(
             
             const allQuotes = await tx.quotation.findMany({ 
                 where: { requisitionId: requisitionId },
-                include: { items: true, scores: { include: { itemScores: true } } },
+                include: { items: true, scores: { include: { itemScores: { include: { scores: true } } } } },
                 orderBy: { finalAverageScore: 'desc' } 
             });
 
@@ -53,7 +53,6 @@ export async function POST(
             
             const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
 
-            // --- STRATEGY: AWARD TO SINGLE BEST VENDOR ---
             if (awardStrategy === 'all') {
                 const awardedVendorIds = Object.keys(awards);
                 const winnerQuote = allQuotes.find(q => q.vendorId === awardedVendorIds[0]);
@@ -74,94 +73,63 @@ export async function POST(
                     await tx.quotation.update({ where: { id: otherQuotes[i].id }, data: { status, rank } });
                 }
 
-            // --- STRATEGY: AWARD BY BEST ITEM ---
             } else if (awardStrategy === 'item') {
                 const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
 
-                await tx.standbyAssignment.deleteMany({
-                    where: { requisitionId: requisitionId },
-                });
-
                 for (const reqItem of reqItems) {
-                    let proposals: { quoteId: string; quoteItemId: string; vendorId: string; averageScore: number; }[] = [];
+                    let proposals: PerItemAwardDetail[] = [];
                     for (const quote of allQuotes) {
                          const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
                          if (proposalsForItem.length > 0) {
                              proposalsForItem.forEach(proposal => {
-                                 let totalScore = 0;
+                                 let totalItemScore = 0;
                                  let scoreCount = 0;
                                  quote.scores?.forEach(scoreSet => {
-                                     const score = scoreSet.itemScores?.find(s => s.quoteItemId === proposal.id);
-                                     if (score) {
-                                         totalScore += score.finalScore;
+                                     const itemScore = scoreSet.itemScores?.find(s => s.quoteItemId === proposal.id);
+                                     if (itemScore) {
+                                         totalItemScore += itemScore.finalScore;
                                          scoreCount++;
                                      }
                                  });
+                                 const averageScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
                                  proposals.push({
-                                     quoteId: quote.id,
-                                     quoteItemId: proposal.id,
                                      vendorId: quote.vendorId,
-                                     averageScore: scoreCount > 0 ? totalScore / scoreCount : 0
-                                 });
+                                     vendorName: quote.vendorName,
+                                     quotationId: quote.id,
+                                     quoteItemId: proposal.id,
+                                     proposedItemName: proposal.name,
+                                     unitPrice: proposal.unitPrice,
+                                     status: 'Standby', // Default status
+                                     rank: 0, // Placeholder for rank
+                                     averageScore: averageScore // Temporary property for sorting
+                                 } as any);
                              });
                          }
                     }
 
-                    proposals.sort((a,b) => b.averageScore - a.averageScore);
+                    proposals.sort((a,b) => (b as any).averageScore - (a as any).averageScore);
                     
-                    const standbys = proposals.slice(1, 3);
-                    for (let i = 0; i < standbys.length; i++) {
-                        await tx.standbyAssignment.create({
-                            data: {
-                                requisitionId: requisitionId,
-                                requisitionItemId: reqItem.id,
-                                quotationId: standbys[i].quoteId,
-                                rank: i + 2,
-                            }
-                        });
-                    }
-                }
-                
-                const winningVendorIds = new Set(Object.keys(awards));
-                const winningQuoteIds = new Set(allQuotes.filter(q => winningVendorIds.has(q.vendorId)).map(q => q.id));
-
-                if (winningQuoteIds.size > 0) {
-                    await tx.quotation.updateMany({
-                        where: { id: { in: Array.from(winningQuoteIds) as string[] } },
-                        data: { status: 'Partially_Awarded' }
-                    });
-                }
-                
-                const standbyQuoteIds = new Set(
-                  (await tx.standbyAssignment.findMany({ where: { requisitionId } })).map(sa => sa.quotationId)
-                );
-
-                if (standbyQuoteIds.size > 0) {
-                    await tx.quotation.updateMany({
-                        where: {
-                            requisitionId: requisitionId,
-                            id: { 
-                                in: Array.from(standbyQuoteIds) as string[],
-                                notIn: Array.from(winningQuoteIds) as string[],
-                            },
-                        },
-                        data: { status: 'Standby' }
-                    });
-                }
-                
-                // Set non-winning and non-standby quotes to Submitted. Do not reject them yet.
-                await tx.quotation.updateMany({
-                    where: {
-                        requisitionId: requisitionId,
-                        id: {
-                            notIn: [...Array.from(winningQuoteIds), ...Array.from(standbyQuoteIds)]
+                    const rankedProposals = proposals.map((p, index) => {
+                        const { averageScore, ...rest } = p as any; // Remove temporary property
+                        let status: PerItemAwardDetail['status'] = 'Standby';
+                        if (index === 0) {
+                            status = 'Pending_Award';
                         }
-                    },
-                    data: { status: 'Submitted' }
-                });
+                        return { ...rest, rank: index + 1, status };
+                    });
+
+                    await tx.requisitionItem.update({
+                        where: { id: reqItem.id },
+                        data: {
+                            perItemAwardDetails: rankedProposals as any
+                        }
+                    });
+                }
             }
 
-            const awardedItemIds = Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId));
+            const awardedItemIds = awardStrategy === 'all'
+                ? Object.values(awards).flatMap((a: any) => a.items.map((i: any) => i.quoteItemId))
+                : []; // For per-item, this is now stored on the item itself.
             
             const requisition = await tx.purchaseRequisition.findUnique({ where: { id: requisitionId }});
 

@@ -67,12 +67,26 @@ export type RequisitionStatus =
 
 export type Urgency = 'Low' | 'Medium' | 'High' | 'Critical';
 
+export type PerItemAwardStatus = 'Awarded' | 'Standby' | 'Declined' | 'Accepted' | 'Pending_Award';
+
+export type PerItemAwardDetail = {
+  rank: number;
+  vendorId: string;
+  vendorName: string;
+  quotationId: string;
+  quoteItemId: string;
+  proposedItemName: string;
+  unitPrice: number;
+  status: PerItemAwardStatus;
+}
+
 export type RequisitionItem = {
   id: string; // Will be UUID
   name: string;
   description: string;
   quantity: number;
   unitPrice: number;
+  perItemAwardDetails?: PerItemAwardDetail[];
 };
 
 export type QuestionType = 'text' | 'boolean' | 'multiple_choice' | 'file';
@@ -173,6 +187,7 @@ export type PurchaseRequisition = {
   committeePurpose?: string;
   cpoAmount?: number;
   rfqSettings?: {
+      awardStrategy?: 'all' | 'item';
       allowQuoteEdits?: boolean;
       technicalEvaluatorSeesPrices?: boolean;
       experienceDocumentRequired?: boolean;
@@ -229,11 +244,12 @@ export type QuoteAnswer = {
   answer: string;
 }
 
-export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'Rejected' | 'Standby' | 'Invoice Submitted' | 'Failed' | 'Accepted' | 'Declined' | 'Pending_Award';
+export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'Rejected' | 'Standby' | 'Invoice_Submitted' | 'Failed' | 'Accepted' | 'Declined' | 'Pending_Award';
 
 export type Score = {
   id: string;
-  criterionId: string;
+  financialCriterionId?: string | null;
+  technicalCriterionId?: string | null;
   score: number; // 0-100
   comment?: string;
   type: 'FINANCIAL' | 'TECHNICAL';
@@ -408,5 +424,3 @@ export interface ApprovalThreshold {
     max: number | null; // null for infinity
     steps: ApprovalStep[];
 }
-
-    
