@@ -2468,30 +2468,32 @@ export default function QuotationDetailsPage() {
   }
 
   const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
-      if (!requisition || !requisition.status) return 'rfq';
-      const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+    if (!requisition || !requisition.status) return 'rfq';
+    const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
 
-      if (['PreApproved', 'Award_Declined'].includes(requisition.status) && !isAwarded) return 'rfq';
-      if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
-      
-      const inScoringProcess = [
-          'Accepting_Quotes', // Post-deadline
-          'Scoring_In_Progress', 
-          'Scoring_Complete'
-      ].includes(requisition.status);
+    if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
+    if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
+    
+    if (requisition.status === 'Award_Declined') return 'award';
 
-      if (inScoringProcess && deadlinePassed) {
-          return isScoringComplete ? 'award' : 'committee';
-      }
-      
-      const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded';
-      if (inReviewProcess) return 'award';
+    const inScoringProcess = [
+        'Accepting_Quotes', // Post-deadline
+        'Scoring_In_Progress', 
+        'Scoring_Complete'
+    ].includes(requisition.status);
 
-      if (isAccepted) {
-        return requisition.status === 'PO_Created' || requisition.status === 'Closed' || requisition.status === 'Fulfilled' ? 'completed' : 'finalize';
-      }
-      
-      return 'rfq'; // Default fallback
+    if (inScoringProcess && deadlinePassed) {
+        return isScoringComplete ? 'award' : 'committee';
+    }
+    
+    const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded';
+    if (inReviewProcess) return 'award';
+
+    if (isAccepted) {
+      return requisition.status === 'PO_Created' || requisition.status === 'Closed' || requisition.status === 'Fulfilled' ? 'completed' : 'finalize';
+    }
+    
+    return 'rfq'; // Default fallback
   };
   const currentStep = getCurrentStep();
   
@@ -2561,10 +2563,11 @@ export default function QuotationDetailsPage() {
 
   return (
     <div className="space-y-6">
-        <Button variant="outline" onClick={() => router.push('/quotations')}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            <span>Back to All Requisitions</span>
-        </Button>
+      <Button variant="outline" onClick={() => router.push('/quotations')}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          <span>Back to All Requisitions</span>
+      </Button>
+
         
         <Card className="p-4 sm:p-6">
             <WorkflowStepper step={currentStep} />
@@ -2759,7 +2762,7 @@ export default function QuotationDetailsPage() {
         
         {userRole && (
           (
-            (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined') &&
+            (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Award_Declined') &&
             isAuthorized
           ) && (
               <ScoringProgressTracker
@@ -2920,6 +2923,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
