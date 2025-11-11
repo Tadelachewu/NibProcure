@@ -10,6 +10,9 @@ export async function GET() {
     const thresholds = await prisma.approvalThreshold.findMany({
       include: {
         steps: {
+          include: {
+            role: true, // Include the full Role object
+          },
           orderBy: {
             order: 'asc',
           },
@@ -19,7 +22,17 @@ export async function GET() {
         min: 'asc'
       }
     });
-    return NextResponse.json(thresholds);
+    
+    // Format the response to match what the client expects, if necessary
+    const formattedThresholds = thresholds.map(t => ({
+      ...t,
+      steps: t.steps.map(s => ({
+        ...s,
+        role: s.role.name // Flatten the role object to just the name
+      }))
+    }));
+
+    return NextResponse.json(formattedThresholds);
   } catch (error) {
     console.error("Failed to fetch approval matrix:", error);
     return NextResponse.json({ error: 'Failed to fetch approval matrix' }, { status: 500 });
@@ -46,21 +59,25 @@ export async function POST(request: Request) {
           },
         });
 
-        const stepsToCreate = tier.steps.map((step, index) => ({
-          thresholdId: createdThreshold.id,
-          role: step.role,
-          order: index,
-        }));
-        
-        if(stepsToCreate.length > 0) {
+        if (tier.steps && tier.steps.length > 0) {
+            const stepsToCreate = tier.steps.map((step, index) => ({
+              thresholdId: createdThreshold.id,
+              roleName: step.role, // Connect using the role name
+              order: index,
+            }));
+            
             await tx.approvalStep.createMany({
-                data: stepsToCreate,
+                data: stepsToCreate.map(s => ({
+                    thresholdId: s.thresholdId,
+                    roleName: s.roleName,
+                    order: s.order,
+                })),
             });
         }
         
         createdThresholds.push({
             ...createdThreshold,
-            steps: stepsToCreate
+            steps: tier.steps || []
         });
       }
       return createdThresholds;
@@ -71,6 +88,10 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Failed to update approval matrix:", error);
      if (error instanceof Error) {
+        // More specific error logging
+        if ((error as any).code === 'P2003') {
+             return NextResponse.json({ error: 'Failed to process request: A role specified in the approval steps does not exist.', details: (error as any).meta?.field_name }, { status: 400 });
+        }
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
