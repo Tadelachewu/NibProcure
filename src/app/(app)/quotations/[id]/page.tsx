@@ -62,8 +62,6 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
-import { AwardStandbyButton } from '@/components/award-standby-button';
-import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 
@@ -2101,7 +2099,7 @@ const OverdueReportDialog = ({ isOpen, onClose, member }: { isOpen: boolean, onC
                      <div className="p-4 border rounded-md bg-muted/50">
                         <p><span className="font-semibold">Member Name:</span> {member.name}</p>
                         <p><span className="font-semibold">Email:</span> {member.email}</p>
-                        <p><span className="font-semibold">Assigned Role:</span> {member.role.name}</p>
+                        <p><span className="font-semibold">Assigned Role:</span> {member.role.name.replace(/_/g, ' ')}</p>
                      </div>
                 </div>
                 <DialogFooter>
@@ -2565,7 +2563,7 @@ export default function QuotationDetailsPage() {
     <div className="space-y-6">
         <Button variant="outline" onClick={() => router.push('/quotations')}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            <span>Back to All Requisitions</span>
+            Back to All Requisitions
         </Button>
 
         <Card className="p-4 sm:p-6">
@@ -2775,15 +2773,30 @@ export default function QuotationDetailsPage() {
               />
           )
         )}
-
+        
         {(requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete') && isAuthorized && (
-            <AwardStandbyButton
-                requisition={requisition}
-                quotations={quotations}
-                onSuccess={fetchRequisitionAndQuotes}
-                onFinalize={handleFinalizeScores}
-                isFinalizing={isFinalizing}
-            />
+            <Card className="mt-6">
+                <CardHeader>
+                    <CardTitle>Awarding Center</CardTitle>
+                    <CardDescription>Finalize scores and decide on the award strategy for this requisition.</CardDescription>
+                </CardHeader>
+                <CardFooter className="gap-4">
+                     <Dialog>
+                        <DialogTrigger asChild>
+                            <Button disabled={isFinalizing}>
+                                {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Finalize &amp; Award
+                            </Button>
+                        </DialogTrigger>
+                        <AwardCenterDialog
+                            requisition={requisition}
+                            quotations={quotations}
+                            onFinalize={handleFinalizeScores}
+                            onClose={()=>{}}
+                        />
+                    </Dialog>
+                </CardFooter>
+            </Card>
         )}
 
 
