@@ -25,7 +25,7 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
       include: {
         steps: {
           include: {
-            role: { // Ensure the full role object with its name is included
+            role: { 
               select: {
                 name: true
               }
@@ -174,9 +174,8 @@ export async function handleAwardRejection(
         const nextStandby = await tx.quotation.findFirst({ where: { requisitionId: requisition.id, status: 'Standby' }, orderBy: { rank: 'asc' } });
 
         if (nextStandby) {
-            await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
-            await tx.auditLog.create({ data: { timestamp: new Date(), user: { connect: { id: actor.id } }, action: 'AWARD_DECLINED_STANDBY_AVAILABLE', entity: 'Requisition', entityId: requisition.id, details: `Award declined by ${quote.vendorName}. Standby available. Manual promotion required.`, transactionId: requisition.transactionId } });
-            return { message: 'Award has been declined. A standby vendor is available for promotion.' };
+            // Automatically promote and re-route for approval
+            return await promoteStandbyVendor(tx, requisition.id, actor);
         } else {
             await deepCleanRequisition(tx, requisition.id);
             await tx.auditLog.create({ data: { timestamp: new Date(), action: 'RESTART_RFQ_NO_STANDBY', entity: 'Requisition', entityId: requisition.id, details: `All vendors declined award and no standby vendors were available. The RFQ process has been completely reset.`, transactionId: requisition.transactionId } });
@@ -280,5 +279,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
     return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
 }
+
+    
 
     
