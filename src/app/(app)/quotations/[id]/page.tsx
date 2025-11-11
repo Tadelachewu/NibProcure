@@ -139,7 +139,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
             setSubmitting(false);
         }
     };
-    
+
     // Filter for only verified vendors
     const verifiedVendors = vendors.filter(v => v.kycStatus === 'Verified');
 
@@ -221,7 +221,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             </div>
         );
     }
-    
+
     const getStatusVariant = (status: QuotationStatus) => {
         switch (status) {
             case 'Awarded': return 'default';
@@ -245,7 +245,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             default: return null;
         }
     }
-    
+
     const isTechnicalOnlyScorer = user.role.name === 'Committee_Member' && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
     const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
 
@@ -255,7 +255,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
                 const awardedItemsForThisQuote = quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
-                
+
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded' || quote.status === 'Pending_Award') && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
@@ -284,7 +284,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                         </>
                                     )}
 
-                                    
+
                                     {quote.cpoDocumentUrl && (
                                         <div className="text-sm space-y-1 pt-2 border-t">
                                             <h4 className="font-semibold">CPO Document</h4>
@@ -390,8 +390,8 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
                     requisitionId: requisition.id,
                     vendorId: awardedQuote.vendorId,
                     filePath: filePath,
-                    notes, 
-                    userId: user.id 
+                    notes,
+                    userId: user.id
                 }),
             });
             if (!response.ok) throw new Error("Failed to save contract details.");
@@ -408,7 +408,7 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
             setSubmitting(false);
         }
     }
-    
+
     if (!awardedQuote) return null;
 
     return (
@@ -416,7 +416,7 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
             <CardHeader>
                 <CardTitle>Contract &amp; PO Finalization</CardTitle>
                 <CardDescription>
-                    The vendor <span className="font-semibold">{awardedQuote?.vendorName}</span> has accepted the award. 
+                    The vendor <span className="font-semibold">{awardedQuote?.vendorName}</span> has accepted the award.
                     A PO (<span className="font-mono">{requisition.purchaseOrderId}</span>) has been generated. Please finalize and send the documents.
                 </CardDescription>
             </CardHeader>
@@ -473,7 +473,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         requisition.scoringDeadline ? format(new Date(requisition.scoringDeadline), 'HH:mm') : '17:00'
     );
     const [technicalViewPrices, setTechnicalViewPrices] = useState(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
-    
+
     const form = useForm<CommitteeFormValues>({
         resolver: zodResolver(committeeFormSchema),
         defaultValues: {
@@ -489,7 +489,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         const [hours, minutes] = deadlineTime.split(':').map(Number);
         return setMinutes(setHours(deadlineDate, hours), minutes);
     }, [deadlineDate, deadlineTime]);
-    
+
     useEffect(() => {
         form.reset({
             committeeName: requisition.committeeName || "",
@@ -528,8 +528,8 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             const response = await fetch(`/api/requisitions/${requisition.id}/assign-committee`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userId: user.id, 
+                body: JSON.stringify({
+                    userId: user.id,
                     ...values,
                     scoringDeadline: finalDeadline,
                     rfqSettings: {
@@ -557,7 +557,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             setSubmitting(false);
         }
     }
-    
+
     const committeeMembers = useMemo(() => allUsers.filter(u => u.role.name === 'Committee_Member'), [allUsers]);
     const assignedFinancialMembers = useMemo(() => allUsers.filter(u => requisition.financialCommitteeMemberIds?.includes(u.id)), [allUsers, requisition]);
     const assignedTechnicalMembers = useMemo(() => allUsers.filter(u => requisition.technicalCommitteeMemberIds?.includes(u.id)), [allUsers, requisition]);
@@ -584,7 +584,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             </div>
         </div>
     );
-    
+
     const MemberSelection = ({ type }: { type: 'financial' | 'technical' }) => {
         const [search, setSearch] = useState("");
         const otherType = type === 'financial' ? 'technical' : 'financial';
@@ -602,7 +602,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             <div className="space-y-2">
                 <div className="relative pt-2">
                     <Search className="absolute left-2.5 top-5 h-4 w-4 text-muted-foreground" />
-                    <Input 
+                    <Input
                         placeholder={`Search ${type} members...`}
                         className="pl-8 w-full"
                         value={search}
@@ -744,8 +744,8 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                                                     />
                                                 </PopoverContent>
                                             </Popover>
-                                            <Input 
-                                                type="time" 
+                                            <Input
+                                                type="time"
                                                 className="w-32"
                                                 value={deadlineTime}
                                                 onChange={(e) => setDeadlineTime(e.target.value)}
@@ -755,8 +755,8 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                                     <div className="space-y-2">
                                         <FormLabel>Price Visibility</FormLabel>
                                         <div className="flex items-center space-x-2 rounded-md border p-2 h-10">
-                                            <Switch 
-                                                id="technical-view-prices" 
+                                            <Switch
+                                                id="technical-view-prices"
                                                 checked={technicalViewPrices}
                                                 onCheckedChange={setTechnicalViewPrices}
                                             />
@@ -764,7 +764,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div className="grid md:grid-cols-2 gap-6">
                                      <div>
                                         <h3 className="font-semibold text-lg">Financial Committee</h3>
@@ -822,13 +822,13 @@ const RFQActionDialog = ({
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
-    
+
     const finalNewDeadline = useMemo(() => {
         if (!newDeadlineDate) return undefined;
         const [hours, minutes] = newDeadlineTime.split(':').map(Number);
         return setMinutes(setHours(newDeadlineDate, hours), minutes);
     }, [newDeadlineDate, newDeadlineTime]);
-    
+
     const handleSubmit = async () => {
         if (!user) return;
         if (action !== 'update' && !reason.trim()) {
@@ -845,8 +845,8 @@ const RFQActionDialog = ({
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userId: user.id, 
+                body: JSON.stringify({
+                    userId: user.id,
                     action,
                     reason,
                     newDeadline: action === 'update' ? finalNewDeadline : undefined
@@ -913,8 +913,8 @@ const RFQActionDialog = ({
                                         />
                                     </PopoverContent>
                                 </Popover>
-                                <Input 
-                                    type="time" 
+                                <Input
+                                    type="time"
                                     className="w-32"
                                     value={newDeadlineTime}
                                     onChange={(e) => setNewDeadlineTime(e.target.value)}
@@ -949,12 +949,12 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
     const [cpoAmount, setCpoAmount] = useState<number | undefined>(requisition.cpoAmount);
-    
+
     const [allowQuoteEdits, setAllowQuoteEdits] = useState(requisition.rfqSettings?.allowQuoteEdits ?? true);
     const [experienceDocumentRequired, setExperienceDocumentRequired] = useState(requisition.rfqSettings?.experienceDocumentRequired ?? false);
     const { user } = useAuth();
     const { toast } = useToast();
-    
+
     const isSent = requisition.status === 'Accepting_Quotes' || requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
 
 
@@ -989,7 +989,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
             });
             return;
         }
-        
+
         if (requisition.scoringDeadline && !isBefore(deadline, new Date(requisition.scoringDeadline))) {
             toast({
                 variant: 'destructive',
@@ -1009,8 +1009,8 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
             const response = await fetch(`/api/requisitions/${requisition.id}/send-rfq`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userId: user.id, 
+                body: JSON.stringify({
+                    userId: user.id,
                     vendorIds: distributionType === 'all' ? [] : selectedVendors,
                     deadline,
                     cpoAmount,
@@ -1038,8 +1038,8 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
             setSubmitting(false);
         }
     }
-    
-    
+
+
     const filteredVendors = useMemo(() => {
         const verifiedVendors = Array.isArray(vendors) ? vendors.filter(v => v.kycStatus === 'Verified') : [];
         if (!vendorSearch) {
@@ -1108,8 +1108,8 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                                     />
                                 </PopoverContent>
                             </Popover>
-                            <Input 
-                                type="time" 
+                            <Input
+                                type="time"
                                 className="w-32"
                                 value={deadlineTime}
                                 onChange={(e) => setDeadlineTime(e.target.value)}
@@ -1133,10 +1133,10 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                         <Label htmlFor="cpoAmount">CPO Amount (ETB)</Label>
                         <div className="relative">
                             <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input 
+                            <Input
                                 id="cpoAmount"
                                 type="number"
-                                placeholder="Enter required CPO amount" 
+                                placeholder="Enter required CPO amount"
                                 className="pl-10"
                                 value={cpoAmount || ''}
                                 onChange={(e) => setCpoAmount(Number(e.target.value))}
@@ -1178,8 +1178,8 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                                 <CardTitle className="text-lg">Select Vendors</CardTitle>
                                 <div className="relative mt-2">
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input 
-                                        placeholder="Search vendors..." 
+                                    <Input
+                                        placeholder="Search vendors..."
                                         className="pl-8 w-full"
                                         value={vendorSearch}
                                         onChange={(e) => setVendorSearch(e.target.value)}
@@ -1192,11 +1192,11 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                                     <div className="space-y-4">
                                     {filteredVendors.map(vendor => (
                                         <div key={vendor.id} className="flex items-start space-x-4 rounded-md border p-4 has-[:checked]:bg-muted">
-                                            <Checkbox 
-                                                id={`vendor-${vendor.id}`} 
+                                            <Checkbox
+                                                id={`vendor-${vendor.id}`}
                                                 checked={selectedVendors.includes(vendor.id)}
                                                 onCheckedChange={(checked) => {
-                                                    setSelectedVendors(prev => 
+                                                    setSelectedVendors(prev =>
                                                         checked ? [...prev, vendor.id] : prev.filter(id => id !== vendor.id)
                                                     )
                                                 }}
@@ -1263,7 +1263,7 @@ const ManageRFQ = ({
 }) => {
     const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'update'});
     const canManageRfq = isAuthorized && requisition.status === 'Accepting_Quotes' && !isPast(new Date(requisition.deadline!));
-    
+
     if (!canManageRfq) return null;
 
     return (
@@ -1278,7 +1278,7 @@ const ManageRFQ = ({
                     <Button variant="destructive" onClick={() => setActionDialog({isOpen: true, type: 'cancel'})}><Ban className="mr-2"/> Cancel RFQ</Button>
                 </CardFooter>
             </Card>
-            <RFQActionDialog 
+            <RFQActionDialog
                 action={actionDialog.type}
                 requisition={requisition}
                 isOpen={actionDialog.isOpen}
@@ -1402,7 +1402,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                         <p className="font-semibold text-muted-foreground">Quoted Lead Time</p>
                         <p>{quoteItem.leadTimeDays} days</p>
                     </div>
-                    {!hidePrices && 
+                    {!hidePrices &&
                         <div>
                             <p className="font-semibold text-muted-foreground">Quoted Unit Price</p>
                             <p className="font-mono">{quoteItem.unitPrice.toFixed(2)} ETB</p>
@@ -1411,7 +1411,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                 </div>
 
                 <Separator/>
-                
+
                 {isFinancialScorer && !hidePrices && (
                     <div className="space-y-4">
                         <h4 className="font-semibold text-lg flex items-center gap-2"><Scale /> Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
@@ -1510,24 +1510,24 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
 };
 
 
-const ScoringDialog = ({ 
-    quote, 
-    requisition, 
-    user, 
+const ScoringDialog = ({
+    quote,
+    requisition,
+    user,
     onScoreSubmitted,
     isScoringDeadlinePassed,
     hidePrices,
-}: { 
-    quote: Quotation; 
-    requisition: PurchaseRequisition; 
-    user: User; 
+}: {
+    quote: Quotation;
+    requisition: PurchaseRequisition;
+    user: User;
     onScoreSubmitted: () => void;
     isScoringDeadlinePassed: boolean;
     hidePrices: boolean;
 }) => {
     const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
-    
+
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
         defaultValues: {}, // Initialize empty
@@ -1587,7 +1587,7 @@ const ScoringDialog = ({
             setSubmitting(false);
         }
     };
-    
+
     if (!requisition.evaluationCriteria) return null;
 
     const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id) ?? false;
@@ -1607,7 +1607,7 @@ const ScoringDialog = ({
             </DialogContent>
         );
     }
-    
+
     return (
         <DialogContent className="max-w-4xl flex flex-col h-[95vh]">
             <DialogHeader>
@@ -1634,8 +1634,8 @@ const ScoringDialog = ({
                         {itemScoreFields.map((field, itemIndex) => {
                             const quoteItem = quote.items[itemIndex];
                             const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
-                            
-                            return <ScoringItemCard 
+
+                            return <ScoringItemCard
                                 key={field.id}
                                 itemIndex={itemIndex}
                                 control={form.control}
@@ -1648,7 +1648,7 @@ const ScoringDialog = ({
                                 existingScore={existingScore}
                             />
                         })}
-                        
+
                         <FormField
                             control={form.control}
                             name="committeeComment"
@@ -1715,7 +1715,7 @@ const ScoringProgressTracker = ({
     const [selectedMember, setSelectedMember] = useState<User | null>(null);
     const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
     const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
-    
+
     const { toast } = useToast();
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
 
@@ -1732,14 +1732,14 @@ const ScoringProgressTracker = ({
         return assignedCommitteeMembers.map(member => {
             const assignment = member.committeeAssignments?.find(a => a.requisitionId === requisition.id);
             const hasSubmittedFinalScores = !!assignment?.scoresSubmitted;
-            
+
             let submissionDate: Date | null = null;
             if (hasSubmittedFinalScores) {
                 const latestScore = quotations
                     .flatMap(q => q.scores || [])
                     .filter(s => s.scorerId === member.id)
                     .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0];
-                
+
                 if (latestScore) {
                     submissionDate = new Date(latestScore.submittedAt);
                 }
@@ -1760,7 +1760,7 @@ const ScoringProgressTracker = ({
              return 0;
         });
     }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id]);
-    
+
 
     return (
         <Card className="mt-6">
@@ -1807,14 +1807,14 @@ const ScoringProgressTracker = ({
             </CardContent>
             {selectedMember && (
                 <>
-                    <ExtendDeadlineDialog 
+                    <ExtendDeadlineDialog
                         isOpen={isExtendDialogOpen}
                         onClose={() => { setExtendDialogOpen(false); setSelectedMember(null); }}
                         member={selectedMember}
                         requisition={requisition}
                         onSuccess={() => onCommitteeUpdate(false)}
                     />
-                    <OverdueReportDialog 
+                    <OverdueReportDialog
                         isOpen={isReportDialogOpen}
                         onClose={() => { setReportDialogOpen(false); setSelectedMember(null); }}
                         member={selectedMember}
@@ -1872,16 +1872,16 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                  height = pdfHeight - 20;
                  width = height * ratio;
             }
-            
+
             const x = (pdfWidth - width) / 2;
             const y = 10;
 
             // Add a white background to the PDF before adding the image
             pdf.setFillColor(255, 255, 255);
             pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
-            
+
             pdf.addImage(imgData, 'PNG', x, y, width, height);
-            
+
             pdf.save(`Scoring-Report-${requisition.id}.pdf`);
             toast({ title: "PDF Generated", description: "Your report has been downloaded." });
 
@@ -1921,7 +1921,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                             <div>
                                                 <CardTitle className="text-xl">{quote.vendorName}</CardTitle>
                                                 <CardDescription className="print:text-gray-700 pt-1">
-                                                    Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> | 
+                                                    Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> |
                                                     Rank: <span className="font-bold">{quote.rank || 'N/A'}</span> |
                                                     Total Price: <span className="font-bold">{quote.totalPrice.toLocaleString()} ETB</span>
                                                 </CardDescription>
@@ -1946,7 +1946,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                         <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPp')}</p>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <div className="space-y-4">
                                                         {scoreSet.itemScores?.map(itemScore => (
                                                             <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
@@ -2017,7 +2017,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
         const [hours, minutes] = newDeadlineTime.split(':').map(Number);
         return setMinutes(setHours(newDeadline, hours), minutes);
     }, [newDeadline, newDeadlineTime]);
-    
+
     const handleSubmit = async () => {
         if (!user || !finalNewDeadline) return;
         if (isBefore(finalNewDeadline, new Date())) {
@@ -2126,14 +2126,14 @@ const CommitteeActions = ({
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
-    
+
     const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
     const allQuotesScored = quotations.length > 0 && userScoredQuotesCount === quotations.length;
-    
+
     const assignment = useMemo(() => {
         return user.committeeAssignments?.find(a => a.requisitionId === requisition.id);
     }, [user.committeeAssignments, requisition.id]);
-    
+
     const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
 
     const handleSubmitScores = async () => {
@@ -2273,7 +2273,7 @@ export default function QuotationDetailsPage() {
   const { toast } = useToast();
   const { user, allUsers, rolePermissions, rfqSenderSetting, committeeQuorum } = useAuth();
   const id = params.id as string;
-  
+
   const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
@@ -2291,26 +2291,26 @@ export default function QuotationDetailsPage() {
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
 
-  const userRole = useMemo(() => {
+  const userRoleName = useMemo(() => {
     if (!user || !user.role) return null;
-    return typeof user.role === 'string' ? user.role : user.role.name;
+    return user.role.name;
   }, [user]);
 
   const isAuthorized = useMemo(() => {
-    if (!user || !userRole) return false;
-    if (userRole === 'Admin') return true;
+    if (!user || !userRoleName) return false;
+    if (userRoleName === 'Admin') return true;
     if (rfqSenderSetting.type === 'specific') {
       return user.id === rfqSenderSetting.userId;
     }
     if (rfqSenderSetting.type === 'all') {
-      return userRole === 'Procurement_Officer';
+      return userRoleName === 'Procurement_Officer';
     }
     return false;
-  }, [user, userRole, rfqSenderSetting]);
+  }, [user, userRoleName, rfqSenderSetting]);
 
   const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby', 'Pending_Award'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
-  
+
   const isDeadlinePassed = useMemo(() => {
     if (!requisition) return false;
     return requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
@@ -2336,13 +2336,13 @@ export default function QuotationDetailsPage() {
         return member?.committeeAssignments?.some(a => a.requisitionId === requisition.id && a.scoresSubmitted) || false;
     });
   }, [requisition, quotations, allUsers]);
-  
+
   const isAssignedCommitteeMember = useMemo(() => {
-      if (!user || !userRole || userRole !== 'Committee_Member' || !requisition) {
+      if (!user || !userRoleName || userRoleName !== 'Committee_Member' || !requisition) {
           return false;
       }
       return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
-  }, [user, userRole, requisition]);
+  }, [user, userRoleName, requisition]);
 
 
   const fetchRequisitionAndQuotes = useCallback(async () => {
@@ -2367,7 +2367,7 @@ export default function QuotationDetailsPage() {
           } else {
               toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
           }
-          
+
       } catch (error) {
           toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
       } finally {
@@ -2381,10 +2381,10 @@ export default function QuotationDetailsPage() {
         fetchRequisitionAndQuotes();
     }
   }, [id, user, allUsers, fetchRequisitionAndQuotes]);
-  
+
   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
-        
+
         const quoteItemsById: { [key: string]: { price: number; quantity: number } } = {};
         quotations.forEach(q => {
             q.items.forEach(i => {
@@ -2459,7 +2459,7 @@ export default function QuotationDetailsPage() {
     setHidePricesForScoring(hidePrices);
     setScoringFormOpen(true);
   }
-  
+
   const handleScoreSubmitted = () => {
       setScoringFormOpen(false);
       setSelectedQuoteForScoring(null);
@@ -2473,30 +2473,28 @@ export default function QuotationDetailsPage() {
 
     if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
     if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
-    
-    if (requisition.status === 'Award_Declined') return 'award';
 
     const inScoringProcess = [
         'Accepting_Quotes', // Post-deadline
-        'Scoring_In_Progress', 
+        'Scoring_In_Progress',
         'Scoring_Complete'
     ].includes(requisition.status);
 
     if (inScoringProcess && deadlinePassed) {
         return isScoringComplete ? 'award' : 'committee';
     }
-    
-    const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded';
+
+    const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded' || requisition.status === 'Award_Declined';
     if (inReviewProcess) return 'award';
 
     if (isAccepted) {
       return requisition.status === 'PO_Created' || requisition.status === 'Closed' || requisition.status === 'Fulfilled' ? 'completed' : 'finalize';
     }
-    
+
     return 'rfq'; // Default fallback
   };
   const currentStep = getCurrentStep();
-  
+
   const formatEvaluationCriteria = (criteria?: EvaluationCriteria) => {
       if (!criteria) return "No specific criteria defined.";
 
@@ -2539,25 +2537,25 @@ export default function QuotationDetailsPage() {
   if (loading || !user) {
      return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
-  
+
   if (!requisition) {
      return <div className="text-center p-8">Requisition not found.</div>;
   }
-  
+
   const canManageCommittees = isAuthorized;
   const isReadyForNotification = requisition.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
-  
+
   const canViewCumulativeReport = isAwarded && isScoringComplete && (
-      userRole === 'Procurement_Officer' || 
-      userRole === 'Admin' || 
-      userRole?.startsWith('Manager_') || 
-      userRole?.startsWith('Director_') ||
-      userRole?.startsWith('VP_') ||
-      userRole === 'President' ||
-      userRole?.startsWith('Committee_')
+      userRoleName === 'Procurement_Officer' ||
+      userRoleName === 'Admin' ||
+      userRoleName?.startsWith('Manager_') ||
+      userRoleName?.startsWith('Director_') ||
+      userRoleName?.startsWith('VP_') ||
+      userRoleName === 'President' ||
+      userRoleName?.startsWith('Committee_')
   );
 
 
@@ -2568,11 +2566,11 @@ export default function QuotationDetailsPage() {
           <span>Back to All Requisitions</span>
       </Button>
 
-        
+
         <Card className="p-4 sm:p-6">
             <WorkflowStepper step={currentStep} />
         </Card>
-        
+
         {requisition.evaluationCriteria && (
             <Card>
                  <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -2590,7 +2588,7 @@ export default function QuotationDetailsPage() {
                 </CardContent>
             </Card>
         )}
-        
+
         {noBidsAndDeadlinePassed && isAuthorized && (
             <Card className="border-amber-500">
                 <CardHeader>
@@ -2607,16 +2605,16 @@ export default function QuotationDetailsPage() {
                 </CardFooter>
             </Card>
         )}
-        
+
         {quorumNotMetAndDeadlinePassed && isAuthorized && (
             <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
         )}
 
         {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && isAuthorized && (
             <div className="grid md:grid-cols-2 gap-6 items-start">
-                <RFQDistribution 
-                    requisition={requisition} 
-                    vendors={vendors} 
+                <RFQDistribution
+                    requisition={requisition}
+                    vendors={vendors}
                     onRfqSent={fetchRequisitionAndQuotes}
                     isAuthorized={isAuthorized}
                 />
@@ -2632,14 +2630,14 @@ export default function QuotationDetailsPage() {
                 </Card>
             </div>
         )}
-        
-        <ManageRFQ 
+
+        <ManageRFQ
             requisition={requisition}
             onSuccess={fetchRequisitionAndQuotes}
             isAuthorized={isAuthorized}
         />
-        
-        {(readyForCommitteeAssignment && canManageCommittees) && (
+
+        {(readyForCommitteeAssignment && canManageCommittees && !isAwarded) && (
             <EvaluationCommitteeManagement
                 requisition={requisition}
                 onCommitteeUpdated={fetchRequisitionAndQuotes}
@@ -2726,10 +2724,10 @@ export default function QuotationDetailsPage() {
 
                     <Dialog open={isScoringFormOpen} onOpenChange={setScoringFormOpen}>
                         {selectedQuoteForScoring && requisition && user && (
-                            <ScoringDialog 
-                                quote={selectedQuoteForScoring} 
-                                requisition={requisition} 
-                                user={user} 
+                            <ScoringDialog
+                                quote={selectedQuoteForScoring}
+                                requisition={requisition}
+                                user={user}
                                 onScoreSubmitted={handleScoreSubmitted}
                                 isScoringDeadlinePassed={isScoringDeadlinePassed}
                                 hidePrices={hidePricesForScoring}
@@ -2750,17 +2748,17 @@ export default function QuotationDetailsPage() {
                 </Card>
             </>
         )}
-        
+
         {isAssignedCommitteeMember && (
-             <CommitteeActions 
+             <CommitteeActions
                 user={user}
                 requisition={requisition}
                 quotations={quotations}
                 onFinalScoresSubmitted={fetchRequisitionAndQuotes}
              />
         )}
-        
-        {userRole && (
+
+        {userRoleName && (
           (
             (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Award_Declined') &&
             isAuthorized
@@ -2776,9 +2774,9 @@ export default function QuotationDetailsPage() {
               />
           )
         )}
-        
+
         {(requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete') && isAuthorized && (
-            <AwardStandbyButton 
+            <AwardStandbyButton
                 requisition={requisition}
                 quotations={quotations}
                 onSuccess={fetchRequisitionAndQuotes}
@@ -2814,15 +2812,15 @@ export default function QuotationDetailsPage() {
                 </CardFooter>
             </Card>
         )}
-        
-        {isAccepted && requisition.status !== 'PO_Created' && userRole && userRole !== 'Committee_Member' && (
+
+        {isAccepted && requisition.status !== 'PO_Created' && userRoleName && userRoleName !== 'Committee_Member' && (
             <ContractManagement requisition={requisition} onContractFinalized={fetchRequisitionAndQuotes} />
         )}
          {requisition && (
-            <RequisitionDetailsDialog 
-                requisition={requisition} 
-                isOpen={isDetailsOpen} 
-                onClose={() => setIsDetailsOpen(false)} 
+            <RequisitionDetailsDialog
+                requisition={requisition}
+                isOpen={isDetailsOpen}
+                onClose={() => setIsDetailsOpen(false)}
             />
         )}
         {requisition && quotations && (
@@ -2833,7 +2831,7 @@ export default function QuotationDetailsPage() {
                 onClose={() => setReportOpen(false)}
             />
         )}
-        <RFQActionDialog 
+        <RFQActionDialog
             action={actionDialog.type}
             requisition={requisition}
             isOpen={actionDialog.isOpen}
@@ -2850,7 +2848,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
-    
+
     const finalNewDeadline = useMemo(() => {
         if (!newDeadlineDate) return undefined;
         const [hours, minutes] = newDeadlineTime.split(':').map(Number);
@@ -2913,17 +2911,10 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             </CardContent>
             <CardFooter>
                 <Button onClick={handleReopen} disabled={isSubmitting || !finalNewDeadline}>
-                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} 
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                     Re-open RFQ
                 </Button>
             </CardFooter>
         </Card>
     );
 };
-    
-
-    
-
-
-
-
