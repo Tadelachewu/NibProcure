@@ -169,17 +169,47 @@ export async function handleAwardRejection(
 
     } else { // Single vendor award
         await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
-        await tx.auditLog.create({ data: { timestamp: new Date(), user: { connect: { id: actor.id } }, action: 'DECLINE_AWARD', entity: 'Quotation', entityId: quote.id, details: `Vendor declined award.`, transactionId: requisition.transactionId } });
+        
+        await tx.auditLog.create({ 
+            data: { 
+                timestamp: new Date(), 
+                user: { connect: { id: actor.id } }, 
+                action: 'DECLINE_AWARD', 
+                entity: 'Quotation', 
+                entityId: quote.id, 
+                details: `Vendor declined award.`, 
+                transactionId: requisition.transactionId 
+            } 
+        });
 
-        const nextStandby = await tx.quotation.findFirst({ where: { requisitionId: requisition.id, status: 'Standby' }, orderBy: { rank: 'asc' } });
+        const hasStandby = await tx.quotation.count({
+            where: {
+                requisitionId: requisition.id,
+                status: 'Standby'
+            }
+        });
 
-        if (nextStandby) {
-            // Automatically promote and re-route for approval
-            return await promoteStandbyVendor(tx, requisition.id, actor);
+        // Set the main requisition status to 'Award_Declined' to signal the UI.
+        // This pauses the process until the PO manually promotes.
+        await tx.purchaseRequisition.update({
+            where: { id: requisition.id },
+            data: { status: 'Award_Declined' }
+        });
+
+        if (hasStandby > 0) {
+            return { message: 'Award declined. A standby vendor is available for promotion.' };
         } else {
-            await deepCleanRequisition(tx, requisition.id);
-            await tx.auditLog.create({ data: { timestamp: new Date(), action: 'RESTART_RFQ_NO_STANDBY', entity: 'Requisition', entityId: requisition.id, details: `All vendors declined award and no standby vendors were available. The RFQ process has been completely reset.`, transactionId: requisition.transactionId } });
-            return { message: 'Award declined. No more standby vendors. Requisition has been reset for a new RFQ process.' };
+             await tx.auditLog.create({ 
+                data: { 
+                    timestamp: new Date(), 
+                    action: 'AWAITING_RESET', 
+                    entity: 'Requisition', 
+                    entityId: requisition.id, 
+                    details: 'Award was declined and no standby vendors are available. Manual RFQ restart is required.', 
+                    transactionId: requisition.transactionId 
+                } 
+            });
+            return { message: 'Award declined. No more standby vendors are available.' };
         }
     }
 }
