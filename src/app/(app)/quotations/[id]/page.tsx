@@ -1761,24 +1761,6 @@ const ScoringProgressTracker = ({
         });
     }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id]);
     
-    const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
-
-    const getButtonState = () => {
-        if (requisition.status === 'Award_Declined') {
-            return { text: "Award Declined", disabled: true };
-        }
-        if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
-            return { text: "Award Processed", disabled: true };
-        }
-        if (requisition.status.startsWith('Pending_')) {
-            return { text: "Award Pending Final Approval", disabled: true };
-        }
-        if (isFinalizing) return { text: "Finalizing...", disabled: true };
-        if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
-        return { text: "Finalize Scores & Award", disabled: false };
-    }
-    const buttonState = getButtonState();
-
 
     return (
         <Card className="mt-6">
@@ -1823,39 +1805,6 @@ const ScoringProgressTracker = ({
                     ))}
                 </ul>
             </CardContent>
-             {isAuthorized && (
-                 <CardFooter className="gap-2">
-                    <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
-                        <DialogTrigger asChild>
-                            <Button disabled={buttonState.disabled}>
-                                {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Award to Single Vendor
-                            </Button>
-                        </DialogTrigger>
-                        <AwardCenterDialog 
-                            requisition={requisition}
-                            quotations={quotations}
-                            onFinalize={onFinalize}
-                            onClose={() => setSingleAwardCenterOpen(false)}
-                        />
-                    </Dialog>
-                    <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
-                        <DialogTrigger asChild>
-                            <Button disabled={buttonState.disabled} variant="outline">
-                                {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Award by Best Item
-                            </Button>
-                        </DialogTrigger>
-                        <BestItemAwardDialog
-                            isOpen={isBestItemAwardCenterOpen}
-                            onClose={() => setBestItemAwardCenterOpen(false)}
-                            requisition={requisition}
-                            quotations={quotations}
-                            onFinalize={onFinalize}
-                        />
-                    </Dialog>
-                </CardFooter>
-            )}
             {selectedMember && (
                 <>
                     <ExtendDeadlineDialog 
@@ -2322,7 +2271,7 @@ export default function QuotationDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const { user, allUsers, role, token, rfqSenderSetting, committeeQuorum } = useAuth();
+  const { user, allUsers, rolePermissions, rfqSenderSetting, committeeQuorum } = useAuth();
   const id = params.id as string;
   
   const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
@@ -2343,9 +2292,9 @@ export default function QuotationDetailsPage() {
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
 
   const userRole = useMemo(() => {
-    if (!user || !role) return null;
-    return typeof role === 'string' ? role : (role as any).name;
-  }, [user, role]);
+    if (!user || !user.role) return null;
+    return typeof user.role === 'string' ? user.role : user.role.name;
+  }, [user]);
 
   const isAuthorized = useMemo(() => {
     if (!user || !userRole) return false;
@@ -2971,5 +2920,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
