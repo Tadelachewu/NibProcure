@@ -33,7 +33,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, MoreVertical } from 'lucide-react';
-import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
+import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -227,9 +227,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                 (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === vendorId)
             );
             
-            if (allVendorDetails.some(d => d.status === 'Pending_Award')) return 'Pending_Award';
-            if (allVendorDetails.some(d => d.status === 'Accepted')) return 'Accepted';
-            if (allVendorDetails.some(d => d.status === 'Awarded')) return 'Awarded';
+            if (allVendorDetails.some(d => d.status === 'Pending_Award' || d.status === 'Awarded' || d.status === 'Accepted')) return 'Pending_Award';
             if (allVendorDetails.some(d => d.status === 'Standby')) return 'Standby';
         }
         return null;
@@ -3105,3 +3103,4 @@ const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Qu
         </Dialog>
     );
 };
+

@@ -1,8 +1,9 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus } from '@/lib/types';
+import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -102,8 +103,18 @@ export default function VendorDashboardPage() {
 
     const getRequisitionCardStatus = (req: PurchaseRequisition): RequisitionCardStatus => {
         if (!user?.vendorId) return 'Action Required';
-        const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
 
+        // Check per-item award details first for 'item' strategy
+        if (req.rfqSettings?.awardStrategy === 'item') {
+            const vendorAwards = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId));
+            
+            if (vendorAwards.some(a => a.status === 'Awarded' || a.status === 'Pending_Award')) return 'Awarded';
+            if (vendorAwards.some(a => a.status === 'Accepted')) return 'Accepted';
+            if (vendorAwards.some(a => a.status === 'Standby')) return 'Standby';
+        }
+
+        // Fallback to overall quote status for 'all' strategy or if no item awards found
+        const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
         if (vendorQuote) {
             if (vendorQuote.status === 'Awarded') return 'Awarded';
             if (vendorQuote.status === 'Partially_Awarded') return 'Partially Awarded';
@@ -126,7 +137,10 @@ export default function VendorDashboardPage() {
             return 'Processing'; // Default for other statuses like Rejected, Declined, Failed
         }
         
-        // This case should not happen if the API is correct, but as a fallback
+        // If vendor has no quote but there might be an item-level award (e.g. from a different quote that was deleted/re-evaluated)
+        const hasAnyItemAward = req.items.some(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.vendorId === user.vendorId));
+        if (hasAnyItemAward) return 'Awarded'; // Or a more specific status based on the details.
+
         return 'Action Required';
     }
 
@@ -137,7 +151,9 @@ export default function VendorDashboardPage() {
 
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
-            if (vendorQuote) {
+            const isItemAwarded = req.rfqSettings?.awardStrategy === 'item' && req.items.some(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.vendorId === user?.vendorId));
+
+            if (vendorQuote || isItemAwarded) {
                 active.push(req);
             } else {
                 open.push(req);
@@ -332,3 +348,4 @@ export default function VendorDashboardPage() {
         </div>
     )
 }
+
