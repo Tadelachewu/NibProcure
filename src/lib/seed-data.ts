@@ -1,5 +1,4 @@
 
-
 import type { PurchaseRequisition, AuditLog, Vendor, Quotation, PurchaseOrder, GoodsReceiptNote, Invoice, User, Department } from './types';
 
 export interface AppData {
@@ -81,7 +80,7 @@ const seedData: AppData = {
             kycStatus: 'Verified',
             kycDocuments: [
                 { name: 'Business License', url: '#', submittedAt: new Date('2023-03-10T00:00:00Z')},
-                { name: 'Tax ID', url: '#', submittedAt: new Date('2023-03-10T00:00:0Z')}
+                { name: 'Tax ID', url: '#', submittedAt: new Date('2023-03-10T00:00:00Z')}
             ]
         }
     ],
