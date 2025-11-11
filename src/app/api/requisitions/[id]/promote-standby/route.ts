@@ -28,10 +28,13 @@ export async function POST(
 
     if (userRoleName === 'Admin') {
         isAuthorized = true;
-    } else if (rfqSenderSetting?.value?.type === 'specific') {
-        isAuthorized = (rfqSenderSetting.value as any).userId === userId;
-    } else { // 'all' case
-        isAuthorized = userRoleName === 'Procurement_Officer';
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userId?: string };
+        if (setting.type === 'specific') {
+            isAuthorized = setting.userId === userId;
+        } else { // 'all' case
+            isAuthorized = userRoleName === 'Procurement_Officer';
+        }
     }
 
     if (!isAuthorized) {
