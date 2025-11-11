@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -1906,7 +1905,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                             {/* Header for PDF */}
                             <div className="hidden print:block text-center mb-8 pt-4">
                                 <Image src="/logo.png" alt="Logo" width={40} height={40} className="mx-auto mb-2" />
-                                <h1 className="text-2xl font-bold text-black">Scoring & Award Justification Report</h1>
+                                <h1 className="text-2xl font-bold text-black">Scoring &amp; Award Justification Report</h1>
                                 <p className="text-gray-600">{requisition.title}</p>
                                 <p className="text-sm text-gray-500">{requisition.id}</p>
                                 <p className="text-sm text-gray-500">Report Generated: {format(new Date(), 'PPpp')}</p>
@@ -2257,7 +2256,7 @@ const NotifyVendorDialog = ({
                 </div>
                 <DialogFooter>
                     <Button variant="ghost" onClick={onClose}>Cancel</Button>
-                    <Button onClick={() => onConfirm(finalDeadline)}>Confirm & Notify</Button>
+                    <Button onClick={() => onConfirm(finalDeadline)}>Confirm &amp; Notify</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -2288,6 +2287,7 @@ export default function QuotationDetailsPage() {
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
+  const [isChangingAward, setIsChangingAward] = useState(false);
 
   const userRoleName = useMemo(() => {
     if (!user || !user.role) return null;
@@ -2418,6 +2418,32 @@ export default function QuotationDetailsPage() {
             });
         } finally {
             setIsFinalizing(false);
+        }
+    }
+
+    const handleAwardChange = async () => {
+        if (!user || !id || !requisition) return;
+        setIsChangingAward(true);
+        try {
+            const response = await fetch(`/api/requisitions/${id}/handle-award-change`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Failed to handle award change.' }));
+                throw new Error(errorData.error);
+            }
+            toast({ title: `Action Successful`, description: `The award status has been updated.` });
+            fetchRequisitionAndQuotes();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsChangingAward(false);
         }
     }
 
@@ -2774,27 +2800,52 @@ export default function QuotationDetailsPage() {
           )
         )}
         
-        {(requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete') && isAuthorized && (
+         {(requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined') && isAuthorized && (
             <Card className="mt-6">
                 <CardHeader>
                     <CardTitle>Awarding Center</CardTitle>
-                    <CardDescription>Finalize scores and decide on the award strategy for this requisition.</CardDescription>
+                    <CardDescription>
+                        {requisition.status === 'Award_Declined' ? 'The previous winner has declined. You may now promote a standby vendor.' : 'Finalize scores and decide on the award strategy for this requisition.'}
+                    </CardDescription>
                 </CardHeader>
                 <CardFooter className="gap-4">
-                     <Dialog>
-                        <DialogTrigger asChild>
-                            <Button disabled={isFinalizing}>
-                                {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Finalize &amp; Award
-                            </Button>
-                        </DialogTrigger>
-                        <AwardCenterDialog
-                            requisition={requisition}
-                            quotations={quotations}
-                            onFinalize={handleFinalizeScores}
-                            onClose={()=>{}}
-                        />
-                    </Dialog>
+                    {requisition.status === 'Award_Declined' ? (
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button disabled={isChangingAward}>
+                                    {isChangingAward ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrophyIcon className="mr-2 h-4 w-4" />}
+                                    Promote Standby Vendor
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This will promote the next highest-ranked standby vendor to the "Awarded" status. This action cannot be undone.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleAwardChange}>Confirm &amp; Promote</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    ) : (
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <Button disabled={isFinalizing}>
+                                    {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Finalize &amp; Award
+                                </Button>
+                            </DialogTrigger>
+                            <AwardCenterDialog
+                                requisition={requisition}
+                                quotations={quotations}
+                                onFinalize={handleFinalizeScores}
+                                onClose={()=>{}}
+                            />
+                        </Dialog>
+                    )}
                 </CardFooter>
             </Card>
         )}
