@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -28,7 +29,7 @@ export async function POST(
     if (userRoleName === 'Admin') {
         isAuthorized = true;
     } else if (rfqSenderSetting?.value?.type === 'specific') {
-        isAuthorized = rfqSenderSetting.value.userId === userId;
+        isAuthorized = (rfqSenderSetting.value as any).userId === userId;
     } else { // 'all' case
         isAuthorized = userRoleName === 'Procurement_Officer';
     }
@@ -38,8 +39,6 @@ export async function POST(
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // The logic here should not just be about one vendor, but the whole req.
-      // The logic is moved to the award-service to be more robust.
       return await promoteStandbyVendor(tx, requisitionId, user);
     }, {
       maxWait: 15000,

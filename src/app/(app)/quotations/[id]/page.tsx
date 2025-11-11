@@ -2429,7 +2429,7 @@ export default function QuotationDetailsPage() {
         if (!user || !id || !requisition) return;
         setIsChangingAward(true);
         try {
-            const response = await fetch(`/api/requisitions/${id}/handle-award-change`, {
+            const response = await fetch(`/api/requisitions/${id}/promote-standby`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user.id }),
