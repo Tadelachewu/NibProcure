@@ -183,30 +183,30 @@ export async function handleAwardRejection(
             } 
         });
 
-        // Set the main requisition status to 'Award_Declined' to signal the UI to show the "Promote" button.
-        await tx.purchaseRequisition.update({
-            where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
-        });
-
         const hasStandby = await tx.quotation.count({
             where: { requisitionId: requisition.id, status: 'Standby' }
         });
 
         if (hasStandby > 0) {
+            // Set the main requisition status to 'Award_Declined' to signal the UI to show the "Promote" button.
+            await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: { status: 'Award_Declined' }
+            });
             return { message: 'Award declined. A standby vendor is available for promotion.' };
         } else {
              await tx.auditLog.create({ 
                 data: { 
                     timestamp: new Date(), 
-                    action: 'AWAITING_RESET', 
+                    action: 'AUTO_RESET_RFQ', 
                     entity: 'Requisition', 
                     entityId: requisition.id, 
-                    details: 'Award was declined and no standby vendors are available. Manual RFQ restart is required.', 
+                    details: 'Award was declined and no standby vendors were available. The RFQ process has been automatically reset.', 
                     transactionId: requisition.transactionId 
                 } 
             });
-            return { message: 'Award declined. No more standby vendors are available.' };
+            await deepCleanRequisition(tx, requisition.id);
+            return { message: 'Award declined. No standby vendors available. Requisition has been automatically reset for a new RFQ process.' };
         }
     }
 }
