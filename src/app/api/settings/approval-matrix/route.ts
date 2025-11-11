@@ -23,7 +23,7 @@ export async function GET() {
       }
     });
     
-    // Format the response to match what the client expects, if necessary
+    // Format the response to match what the client expects
     const formattedThresholds = thresholds.map(t => ({
       ...t,
       steps: t.steps.map(s => ({
@@ -66,13 +66,15 @@ export async function POST(request: Request) {
               order: index,
             }));
             
-            await tx.approvalStep.createMany({
-                data: stepsToCreate.map(s => ({
-                    thresholdId: s.thresholdId,
-                    roleName: s.roleName,
-                    order: s.order,
-                })),
-            });
+            for (const stepData of stepsToCreate) {
+              await tx.approvalStep.create({
+                data: {
+                  threshold: { connect: { id: stepData.thresholdId } },
+                  role: { connect: { name: stepData.roleName } },
+                  order: stepData.order,
+                }
+              });
+            }
         }
         
         createdThresholds.push({
@@ -97,3 +99,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    

@@ -146,10 +146,10 @@ async function main() {
 
   // Seed Approval Matrix
   const defaultApprovalThresholds = [
-    { name: 'Low Value', min: 0, max: 10000, steps: ['Manager_Procurement_Division'] },
-    { name: 'Mid Value', min: 10001, max: 200000, steps: ['Committee_B_Member', 'Manager_Procurement_Division', 'Director_Supply_Chain_and_Property_Management'] },
-    { name: 'High Value', min: 200001, max: 1000000, steps: ['Committee_A_Member', 'Director_Supply_Chain_and_Property_Management', 'VP_Resources_and_Facilities'] },
-    { name: 'Very-High Value', min: 1000001, max: null, steps: ['Committee_A_Member', 'VP_Resources_and_Facilities', 'President'] },
+    { name: 'Low Value', min: 0, max: 10000, steps: [{ role: 'Manager_Procurement_Division'}] },
+    { name: 'Mid Value', min: 10001, max: 200000, steps: [{ role: 'Committee_B_Member'}, { role: 'Manager_Procurement_Division'}, { role: 'Director_Supply_Chain_and_Property_Management'}] },
+    { name: 'High Value', min: 200001, max: 1000000, steps: [{ role: 'Committee_A_Member'}, { role: 'Director_Supply_Chain_and_Property_Management'}, { role: 'VP_Resources_and_Facilities'}] },
+    { name: 'Very-High Value', min: 1000001, max: null, steps: [{ role: 'Committee_A_Member'}, { role: 'VP_Resources_and_Facilities'}, { role: 'President'}] },
   ];
 
   for (const tier of defaultApprovalThresholds) {
@@ -170,7 +170,7 @@ async function main() {
       await prisma.approvalStep.create({
         data: {
           threshold: { connect: { id: createdThreshold.id } },
-          role: { connect: { name: tier.steps[i] } },
+          role: { connect: { name: tier.steps[i].role } },
           order: i,
         },
       });
@@ -558,3 +558,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    
