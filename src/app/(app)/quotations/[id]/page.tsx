@@ -2342,6 +2342,23 @@ export default function QuotationDetailsPage() {
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
 
+  const userRole = useMemo(() => {
+    if (!user || !role) return null;
+    return typeof role === 'string' ? role : (role as any).name;
+  }, [user, role]);
+
+  const isAuthorized = useMemo(() => {
+    if (!user || !userRole) return false;
+    if (userRole === 'Admin') return true;
+    if (rfqSenderSetting.type === 'specific') {
+      return user.id === rfqSenderSetting.userId;
+    }
+    if (rfqSenderSetting.type === 'all') {
+      return userRole === 'Procurement_Officer';
+    }
+    return false;
+  }, [user, userRole, rfqSenderSetting]);
+
   const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby', 'Pending_Award'].includes(q.status)), [quotations]);
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
   
@@ -2370,25 +2387,13 @@ export default function QuotationDetailsPage() {
         return member?.committeeAssignments?.some(a => a.requisitionId === requisition.id && a.scoresSubmitted) || false;
     });
   }, [requisition, quotations, allUsers]);
-
-  const isAuthorized = useMemo(() => {
-    if (!user || !role) return false;
-    if (role.name === 'Admin') return true;
-    if (rfqSenderSetting.type === 'specific') {
-        return user.id === rfqSenderSetting.userId;
-    }
-    if (rfqSenderSetting.type === 'all') {
-        return role.name === 'Procurement_Officer';
-    }
-    return false;
-  }, [user, role, rfqSenderSetting]);
   
   const isAssignedCommitteeMember = useMemo(() => {
-      if (!user || !user.role || user.role.name !== 'Committee_Member' || !requisition) {
+      if (!user || !userRole || userRole !== 'Committee_Member' || !requisition) {
           return false;
       }
       return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
-  }, [user, requisition]);
+  }, [user, userRole, requisition]);
 
 
   const fetchRequisitionAndQuotes = useCallback(async () => {
@@ -2595,13 +2600,13 @@ export default function QuotationDetailsPage() {
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
   
   const canViewCumulativeReport = isAwarded && isScoringComplete && (
-      role?.name === 'Procurement_Officer' || 
-      role?.name === 'Admin' || 
-      role?.name?.startsWith('Manager_') || 
-      role?.name?.startsWith('Director_') ||
-      role?.name?.startsWith('VP_') ||
-      role?.name === 'President' ||
-      role?.name?.startsWith('Committee_')
+      userRole === 'Procurement_Officer' || 
+      userRole === 'Admin' || 
+      userRole?.startsWith('Manager_') || 
+      userRole?.startsWith('Director_') ||
+      userRole?.startsWith('VP_') ||
+      userRole === 'President' ||
+      userRole?.startsWith('Committee_')
   );
 
 
@@ -2634,7 +2639,7 @@ export default function QuotationDetailsPage() {
             </Card>
         )}
         
-        {noBidsAndDeadlinePassed && (role?.name === 'Procurement_Officer' || role?.name === 'Admin') && (
+        {noBidsAndDeadlinePassed && isAuthorized && (
             <Card className="border-amber-500">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> RFQ Closed: No Bids Received</CardTitle>
@@ -2651,7 +2656,7 @@ export default function QuotationDetailsPage() {
             </Card>
         )}
         
-        {quorumNotMetAndDeadlinePassed && (role?.name === 'Procurement_Officer' || role?.name === 'Admin') && (
+        {quorumNotMetAndDeadlinePassed && isAuthorized && (
             <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
         )}
 
@@ -2803,19 +2808,21 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-        {(
-          (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined') &&
-          isAuthorized
-        ) && (
-            <ScoringProgressTracker
-                requisition={requisition}
-                quotations={quotations}
-                allUsers={allUsers}
-                onFinalize={handleFinalizeScores}
-                onCommitteeUpdate={setCommitteeDialogOpen}
-                isFinalizing={isFinalizing}
-                isAuthorized={isAuthorized}
-            />
+        {userRole && (
+          (
+            (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined') &&
+            isAuthorized
+          ) && (
+              <ScoringProgressTracker
+                  requisition={requisition}
+                  quotations={quotations}
+                  allUsers={allUsers}
+                  onFinalize={handleFinalizeScores}
+                  onCommitteeUpdate={setCommitteeDialogOpen}
+                  isFinalizing={isFinalizing}
+                  isAuthorized={isAuthorized}
+              />
+          )
         )}
         
         {(requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete') && isAuthorized && (
@@ -2856,7 +2863,7 @@ export default function QuotationDetailsPage() {
             </Card>
         )}
         
-        {isAccepted && requisition.status !== 'PO_Created' && role?.name !== 'Committee_Member' && (
+        {isAccepted && requisition.status !== 'PO_Created' && userRole && userRole !== 'Committee_Member' && (
             <ContractManagement requisition={requisition} onContractFinalized={fetchRequisitionAndQuotes} />
         )}
          {requisition && (
@@ -2964,4 +2971,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
