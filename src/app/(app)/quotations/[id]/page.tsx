@@ -220,19 +220,34 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             </div>
         );
     }
+    
+    const getOverallStatusForVendor = (vendorId: string) => {
+        if (requisition.rfqSettings?.awardStrategy === 'item') {
+            const vendorAwards = requisition.items.flatMap(item => 
+                (item.perItemAwardDetails || []).filter(detail => detail.vendorId === vendorId)
+            );
+            if (vendorAwards.some(a => a.status === 'Pending_Award')) return 'Pending_Award';
+            if (vendorAwards.some(a => a.status === 'Accepted')) return 'Accepted';
+            if (vendorAwards.some(a => a.status === 'Awarded')) return 'Awarded';
+            if (vendorAwards.some(a => a.status === 'Standby')) return 'Standby';
+        }
+        return null;
+    }
 
-    const getStatusVariant = (status: QuotationStatus) => {
+
+    const getStatusVariant = (status: QuotationStatus | 'Pending_Award') => {
         switch (status) {
-            case 'Awarded': return 'default';
-            case 'Accepted': return 'default';
+            case 'Awarded': 
+            case 'Accepted': 
+            case 'Pending_Award':
+                return 'default';
+            case 'Partially_Awarded': return 'default';
             case 'Standby': return 'secondary';
             case 'Submitted': return 'outline';
             case 'Rejected': return 'destructive';
             case 'Declined': return 'destructive';
             case 'Failed': return 'destructive';
             case 'Invoice_Submitted': return 'outline';
-            case 'Partially_Awarded': return 'default';
-            case 'Pending_Award': return 'secondary';
         }
     }
 
@@ -253,17 +268,27 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
+                
+                const perItemStrategy = requisition.rfqSettings?.awardStrategy === 'item';
+                const mainStatus = perItemStrategy ? getOverallStatusForVendor(quote.vendorId) || quote.status : quote.status;
                 const awardedItemsForThisQuote = quote.items.filter(item => requisition.awardedQuoteItemIds.includes(item.id));
+                
+                const itemAwardDetails = perItemStrategy 
+                    ? requisition.items.map(item => {
+                        const detail = (item.perItemAwardDetails || []).find(d => d.vendorId === quote.vendorId);
+                        return detail ? { ...detail, itemName: item.name } : null;
+                    }).filter(Boolean)
+                    : [];
 
                 return (
-                    <Card key={quote.id} className={cn("flex flex-col", (quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded' || quote.status === 'Pending_Award') && 'border-primary ring-2 ring-primary')}>
+                    <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded' || mainStatus === 'Pending_Award') && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
-                                 {isDeadlinePassed && getRankIcon(quote.rank)}
+                                 {(isDeadlinePassed && !perItemStrategy) && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
-                               <Badge variant={getStatusVariant(quote.status)}>{quote.status.replace(/_/g, ' ')}</Badge>
+                               <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
@@ -300,8 +325,20 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                             </Button>
                                         </div>
                                     )}
+                                    
+                                     {perItemStrategy && itemAwardDetails.length > 0 && (
+                                        <div className="text-sm space-y-2 pt-2 border-t">
+                                            <h4 className="font-semibold">Item Statuses</h4>
+                                            {itemAwardDetails.map(detail => (
+                                                <div key={detail!.quoteItemId} className="flex justify-between items-center text-muted-foreground">
+                                                    <span className="flex items-center gap-1">{getRankIcon(detail!.rank)} {detail!.itemName}</span>
+                                                    <Badge variant={getStatusVariant(detail!.status as any)}>{detail!.status.replace(/_/g, ' ')}</Badge>
+                                                </div>
+                                            ))}
+                                        </div>
+                                     )}
 
-                                    {isAwarded && awardedItemsForThisQuote.length > 0 && (
+                                    {!perItemStrategy && isAwarded && awardedItemsForThisQuote.length > 0 && (
                                         <div className="text-sm space-y-2 pt-2 border-t">
                                             <h4 className="font-semibold text-green-600">Winning Items:</h4>
                                             {awardedItemsForThisQuote.map(item => (
