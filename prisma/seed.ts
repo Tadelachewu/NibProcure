@@ -293,6 +293,7 @@ async function main() {
             await prisma.kYC_Document.create({
                 data: {
                     ...doc,
+                    submittedAt: new Date(doc.submittedAt),
                     vendorId: createdVendor.id,
                 }
             });
