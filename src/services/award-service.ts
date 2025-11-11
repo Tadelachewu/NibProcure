@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -22,9 +21,20 @@ const roleToStatusMap: Record<string, string> = {
  * @returns An object with the next status and approver ID.
  */
 export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue: number) {
-    const approvalMatrix = await tx.approvalThreshold.findMany({ 
-        include: { steps: { orderBy: { order: 'asc' } } }, 
-        orderBy: { min: 'asc' }
+    const approvalMatrix = await tx.approvalThreshold.findMany({
+      include: {
+        steps: {
+          include: {
+            role: { // Ensure the full role object with its name is included
+              select: {
+                name: true
+              }
+            }
+          },
+          orderBy: { order: 'asc' }
+        }
+      },
+      orderBy: { min: 'asc' }
     });
 
     const relevantTier = approvalMatrix.find(tier => 
@@ -45,17 +55,17 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
 
     const firstStep = relevantTier.steps[0];
     
-    const nextStatus = roleToStatusMap[firstStep.role];
+    const nextStatus = roleToStatusMap[firstStep.role.name];
     if (!nextStatus) {
-      throw new Error(`Could not find a valid pending status for the role: ${firstStep.role}`);
+      throw new Error(`Could not find a valid pending status for the role: ${firstStep.role.name}`);
     }
 
     let nextApproverId: string | null = null;
     
-    if (!firstStep.role.includes('Committee')) {
-        const approverUser = await tx.user.findFirst({ where: { role: { name: firstStep.role } }});
+    if (!firstStep.role.name.includes('Committee')) {
+        const approverUser = await tx.user.findFirst({ where: { role: { name: firstStep.role.name } }});
         if (!approverUser) {
-            throw new Error(`Could not find a user for the role: ${firstStep.role.replace(/_/g, ' ')}`);
+            throw new Error(`Could not find a user for the role: ${firstStep.role.name.replace(/_/g, ' ')}`);
         }
         nextApproverId = approverUser.id;
     }
@@ -63,7 +73,7 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
     return { 
         nextStatus, 
         nextApproverId,
-        auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.replace(/_/g, ' ')} for approval.`
+        auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.name.replace(/_/g, ' ')} for approval.`
     };
 }
 
@@ -270,3 +280,5 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
     return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
 }
+
+    
