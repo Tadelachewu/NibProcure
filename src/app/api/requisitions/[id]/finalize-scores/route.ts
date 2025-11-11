@@ -77,7 +77,7 @@ export async function POST(
                 const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
 
                 for (const reqItem of reqItems) {
-                    let proposals: PerItemAwardDetail[] = [];
+                    let proposals: any[] = [];
                     for (const quote of allQuotes) {
                          const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
                          if (proposalsForItem.length > 0) {
@@ -99,22 +99,17 @@ export async function POST(
                                      quoteItemId: proposal.id,
                                      proposedItemName: proposal.name,
                                      unitPrice: proposal.unitPrice,
-                                     status: 'Standby', // Default status
-                                     rank: 0, // Placeholder for rank
-                                     averageScore: averageScore // Temporary property for sorting
-                                 } as any);
+                                     averageScore: averageScore 
+                                 });
                              });
                          }
                     }
 
-                    proposals.sort((a,b) => (b as any).averageScore - (a as any).averageScore);
+                    proposals.sort((a,b) => b.averageScore - a.averageScore);
                     
-                    const rankedProposals = proposals.map((p, index) => {
-                        const { averageScore, ...rest } = p as any; // Remove temporary property
-                        let status: PerItemAwardDetail['status'] = 'Standby';
-                        if (index === 0) {
-                            status = 'Pending_Award';
-                        }
+                    const rankedProposals = proposals.slice(0, 3).map((p, index) => {
+                        const { averageScore, ...rest } = p; // Remove temporary property
+                        let status: PerItemAwardDetail['status'] = (index === 0) ? 'Pending_Award' : 'Standby';
                         return { ...rest, rank: index + 1, status };
                     });
 

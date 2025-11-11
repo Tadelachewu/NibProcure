@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -182,18 +183,14 @@ export async function handleAwardRejection(
             } 
         });
 
-        const hasStandby = await tx.quotation.count({
-            where: {
-                requisitionId: requisition.id,
-                status: 'Standby'
-            }
-        });
-
-        // Set the main requisition status to 'Award_Declined' to signal the UI.
-        // This pauses the process until the PO manually promotes.
+        // Set the main requisition status to 'Award_Declined' to signal the UI to show the "Promote" button.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }
+        });
+
+        const hasStandby = await tx.quotation.count({
+            where: { requisitionId: requisition.id, status: 'Standby' }
         });
 
         if (hasStandby > 0) {
