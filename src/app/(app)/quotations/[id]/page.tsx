@@ -63,7 +63,7 @@ import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BestItemAwardDialog } from '../best-item-award-dialog';
+import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
 
 
 const PAGE_SIZE = 6;
