@@ -92,7 +92,6 @@ export async function POST(
             const allWinningVendors = new Map(allWinningVendorsData.map(v => [v.id, v]));
 
             // 3. Now, iterate again to update statuses and prepare for DB update
-            const itemsToUpdate: { id: string; details: PerItemAwardDetail[] }[] = [];
             for (const item of requisition.items) {
                 const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
                 let hasUpdate = false;
@@ -106,7 +105,10 @@ export async function POST(
                 });
 
                 if (hasUpdate) {
-                    itemsToUpdate.push({ id: item.id, details: updatedDetails });
+                    await tx.requisitionItem.update({
+                        where: { id: item.id },
+                        data: { perItemAwardDetails: updatedDetails as any }
+                    });
                 }
             }
 
@@ -131,14 +133,6 @@ export async function POST(
                         html: emailHtml
                     });
                 }
-            }
-
-            // 5. Update the item details in the database
-            for (const itemUpdate of itemsToUpdate) {
-                await tx.requisitionItem.update({
-                    where: { id: itemUpdate.id },
-                    data: { perItemAwardDetails: itemUpdate.details as any }
-                });
             }
         
         } else {
