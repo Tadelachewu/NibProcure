@@ -30,7 +30,7 @@ export async function POST(
         if (userRoleName === 'Admin' || userRoleName === 'Committee') {
             isAuthorized = true;
         } else if (rfqSenderSetting?.value?.type === 'specific') {
-            isAuthorized = rfqSenderSetting.value.userId === userId;
+            isAuthorized = (rfqSenderSetting.value as any).userId === userId;
         } else {
             isAuthorized = userRoleName === 'Procurement_Officer';
         }

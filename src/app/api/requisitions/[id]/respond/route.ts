@@ -47,7 +47,7 @@ export async function POST(
         }
         // **SAFEGUARD END**
 
-        if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded') {
+        if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') {
             throw new Error('This quote is not currently in an awarded state.');
         }
 
@@ -58,7 +58,7 @@ export async function POST(
             });
             
             const awardedQuoteItems = quote.items.filter(item => 
-                requisition.awardedQuoteItemIds.includes(item.id)
+                (requisition.awardedQuoteItemIds || []).includes(item.id)
             );
 
             const thisVendorAwardedItems = awardedQuoteItems.length > 0 ? awardedQuoteItems : quote.items;
@@ -91,7 +91,7 @@ export async function POST(
                 where: {
                     requisitionId: requisition.id,
                     id: { not: quote.id },
-                    status: { in: ['Awarded', 'Partially_Awarded'] }
+                    status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
                 }
             });
 
@@ -119,7 +119,7 @@ export async function POST(
 
         } else if (action === 'reject') {
             const declinedItemIds = quote.items
-                .filter((item: any) => requisition.awardedQuoteItemIds.includes(item.id))
+                .filter((item: any) => (requisition.awardedQuoteItemIds || []).includes(item.id))
                 .map((item: any) => item.requisitionItemId);
                 
             return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds);
@@ -145,5 +145,3 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
