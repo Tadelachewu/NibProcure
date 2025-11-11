@@ -173,7 +173,7 @@ export function UserManagementEditor() {
       form.reset({
         name: user.name,
         email: user.email,
-        role: user.role,
+        role: (user.role as any)?.name || user.role,
         departmentId: user.departmentId || '',
         password: '',
       });
@@ -223,7 +223,7 @@ export function UserManagementEditor() {
                                 <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                                 <TableCell className="font-semibold">{user.name}</TableCell>
                                 <TableCell>{user.email}</TableCell>
-                                <TableCell>{user.role.replace(/_/g, ' ')}</TableCell>
+                                <TableCell>{(user.role as any).name ? (user.role as any).name.replace(/_/g, ' ') : user.role}</TableCell>
                                 <TableCell>{user.department}</TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex gap-2 justify-end">
@@ -233,7 +233,7 @@ export function UserManagementEditor() {
                                         </Button>
                                         <AlertDialog>
                                             <AlertDialogTrigger asChild>
-                                                <Button variant="destructive" size="sm" disabled={user.role === 'Admin'}>
+                                                <Button variant="destructive" size="sm" disabled={(user.role as any).name === 'Admin'}>
                                                     <Trash2 className="mr-2 h-4 w-4" />
                                                     Delete
                                                 </Button>

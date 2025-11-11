@@ -164,8 +164,8 @@ export function DepartmentManagementEditor() {
   }
 
   const potentialHeadsForSelectedDept = departmentToEdit
-    ? allUsers.filter(u => u.departmentId === departmentToEdit.id && u.role !== 'Vendor' && u.role !== 'Requester')
-    : allUsers.filter(u => u.role !== 'Vendor' && u.role !== 'Requester');
+    ? allUsers.filter(u => u.departmentId === departmentToEdit.id && (u.role as any)?.name !== 'Vendor' && (u.role as any)?.name !== 'Requester')
+    : allUsers.filter(u => (u.role as any)?.name !== 'Vendor' && (u.role as any)?.name !== 'Requester');
 
 
   return (
@@ -272,7 +272,7 @@ export function DepartmentManagementEditor() {
                         <SelectContent>
                              <SelectItem value="null">None</SelectItem>
                             {potentialHeadsForSelectedDept.map(user => (
-                                <SelectItem key={user.id} value={user.id}>{user.name} ({user.role})</SelectItem>
+                                <SelectItem key={user.id} value={user.id}>{user.name} ({(user.role as any).name.replace(/_/g, ' ')})</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
