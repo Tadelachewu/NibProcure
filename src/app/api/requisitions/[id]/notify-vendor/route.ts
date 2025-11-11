@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User, UserRole } from '@/lib/types';
+import { PerItemAwardDetail, User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format, differenceInMinutes } from 'date-fns';
 
@@ -28,17 +28,24 @@ export async function POST(
 
     if (userRoleName === 'Admin') {
         isAuthorized = true;
-    } else if (rfqSenderSetting?.value?.type === 'specific') {
-        isAuthorized = rfqSenderSetting.value.userId === userId;
-    } else { // 'all' case
-        isAuthorized = userRoleName === 'Procurement_Officer';
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userId?: string };
+        if (setting.type === 'specific') {
+            isAuthorized = setting.userId === userId;
+        } else { // 'all' case
+            isAuthorized = userRoleName === 'Procurement_Officer';
+        }
     }
+
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
+    const requisition = await prisma.purchaseRequisition.findUnique({ 
+        where: { id: requisitionId },
+        include: { items: true }
+    });
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
     }
@@ -57,49 +64,107 @@ export async function POST(
                 awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
             }
         });
-
-        // Find all quotes that are ready for award (either for a full or partial award)
-        const winningQuotes = await tx.quotation.findMany({
-            where: {
-                requisitionId: requisitionId,
-                status: { in: ['Pending_Award', 'Partially_Awarded'] }
-            },
-            include: {
-                vendor: true
-            }
-        });
-
-        if (winningQuotes.length === 0) {
-            throw new Error("No winning quote in 'Pending Award' or 'Partially Awarded' status found to notify. The requisition might be in an inconsistent state.");
-        }
         
-        // Notify all winning vendors (for single or split awards)
-        for (const winningQuote of winningQuotes) {
-            
-            // CRITICAL FIX: Update the quote status to 'Awarded'. This is the official offer.
-            await tx.quotation.update({
-                where: { id: winningQuote.id },
-                data: { status: 'Awarded' }
-            });
+        const rfqSettings = requisition.rfqSettings as any;
 
-            if (winningQuote.vendor && requisition) {
-                const finalDeadline = awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline;
+        if (rfqSettings?.awardStrategy === 'item') {
+            // --- LOGIC FOR PER-ITEM AWARDS ---
+            
+            // 1. Gather all winning vendors from the per-item details
+            const winningVendorDetails: Map<string, { name: string; email: string }> = new Map();
+            const itemsToUpdate: { id: string; details: PerItemAwardDetail[] }[] = [];
+
+            for (const item of requisition.items) {
+                const perItemDetails = item.perItemAwardDetails as PerItemAwardDetail[] || [];
+                let hasUpdate = false;
+                
+                const updatedDetails = perItemDetails.map(detail => {
+                    if (detail.status === 'Pending_Award') {
+                        const vendor = allWinningVendors.get(detail.vendorId);
+                        if(vendor) {
+                            winningVendorDetails.set(vendor.id, { name: vendor.name, email: vendor.email });
+                        }
+                        hasUpdate = true;
+                        return { ...detail, status: 'Awarded' as PerItemAwardStatus };
+                    }
+                    return detail;
+                });
+
+                if (hasUpdate) {
+                    itemsToUpdate.push({ id: item.id, details: updatedDetails });
+                }
+            }
+
+            const allWinningVendorIds = Array.from(winningVendorDetails.keys());
+            if (allWinningVendorIds.length === 0) {
+                 throw new Error("No vendors found in 'Pending Award' status across all items. The requisition might be in an inconsistent state.");
+            }
+            const allWinningVendors = await tx.vendor.findMany({ where: { id: { in: allWinningVendorIds } } });
+
+
+            // 2. Notify each unique winning vendor
+            for (const [vendorId, vendorInfo] of winningVendorDetails.entries()) {
                 const emailHtml = `
-                    <h1>Congratulations, ${winningQuote.vendor.name}!</h1>
-                    <p>You have been awarded a contract for requisition <strong>${requisition.title}</strong>.</p>
+                    <h1>Congratulations, ${vendorInfo.name}!</h1>
+                    <p>You have been awarded a contract for items in requisition <strong>${requisition.title}</strong>.</p>
                     <p>Please log in to the vendor portal to review the award details and respond.</p>
-                    ${finalDeadline ? `<p><strong>This award must be accepted by ${format(finalDeadline, 'PPpp')}.</strong></p>` : ''}
+                    ${updatedRequisition.awardResponseDeadline ? `<p><strong>This award must be accepted by ${format(new Date(updatedRequisition.awardResponseDeadline), 'PPpp')}.</strong></p>` : ''}
                     <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
                     <p>Thank you,</p>
                     <p>Nib InternationalBank Procurement</p>
                 `;
 
                 await sendEmail({
-                    to: winningQuote.vendor.email,
+                    to: vendorInfo.email,
                     subject: `Contract Awarded: ${requisition.title}`,
                     html: emailHtml
                 });
             }
+
+            // 3. Update the item details in the database
+            for (const itemUpdate of itemsToUpdate) {
+                await tx.requisitionItem.update({
+                    where: { id: itemUpdate.id },
+                    data: { perItemAwardDetails: itemUpdate.details as any }
+                });
+            }
+        
+        } else {
+            // --- LOGIC FOR SINGLE VENDOR AWARD ---
+            const winningQuote = await tx.quotation.findFirst({
+                where: {
+                    requisitionId: requisitionId,
+                    status: 'Pending_Award'
+                },
+                include: {
+                    vendor: true
+                }
+            });
+
+            if (!winningQuote) {
+                throw new Error("No winning quote in 'Pending Award' status found to notify. The requisition might be in an inconsistent state.");
+            }
+            
+            await tx.quotation.update({
+                where: { id: winningQuote.id },
+                data: { status: 'Awarded' }
+            });
+            
+            const emailHtml = `
+                <h1>Congratulations, ${winningQuote.vendor.name}!</h1>
+                <p>You have been awarded the contract for requisition <strong>${requisition.title}</strong>.</p>
+                <p>Please log in to the vendor portal to review the award and respond.</p>
+                ${updatedRequisition.awardResponseDeadline ? `<p><strong>This award must be accepted by ${format(new Date(updatedRequisition.awardResponseDeadline), 'PPpp')}.</strong></p>` : ''}
+                <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
+                <p>Thank you,</p>
+                <p>Nib InternationalBank Procurement</p>
+            `;
+
+            await sendEmail({
+                to: winningQuote.vendor.email,
+                subject: `Contract Awarded: ${requisition.title}`,
+                html: emailHtml
+            });
         }
         
         await tx.auditLog.create({
@@ -117,7 +182,7 @@ export async function POST(
         return updatedRequisition;
     });
 
-    return NextResponse.json({ message: 'Vendor notified successfully.', requisition: transactionResult });
+    return NextResponse.json({ message: 'Vendor(s) notified successfully.', requisition: transactionResult });
 
   } catch (error) {
     console.error("Failed to notify vendor:", error);
