@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { PerItemAwardDetail, User, UserRole } from '@/lib/types';
+import { PerItemAwardDetail, PerItemAwardStatus, User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format, differenceInMinutes } from 'date-fns';
 
@@ -70,10 +70,31 @@ export async function POST(
         if (rfqSettings?.awardStrategy === 'item') {
             // --- LOGIC FOR PER-ITEM AWARDS ---
             
-            // 1. Gather all winning vendors from the per-item details
-            const winningVendorDetails: Map<string, { name: string; email: string }> = new Map();
-            const itemsToUpdate: { id: string; details: PerItemAwardDetail[] }[] = [];
+            // 1. First, gather all winning vendor IDs from the per-item details
+            const winningVendorIds = new Set<string>();
+            for (const item of requisition.items) {
+                const perItemDetails = item.perItemAwardDetails as PerItemAwardDetail[] || [];
+                for (const detail of perItemDetails) {
+                    if (detail.status === 'Pending_Award') {
+                        winningVendorIds.add(detail.vendorId);
+                    }
+                }
+            }
 
+            if (winningVendorIds.size === 0) {
+                 throw new Error("No vendors found in 'Pending Award' status across all items. The requisition might be in an inconsistent state.");
+            }
+
+            // 2. Fetch all winning vendors' details in one query
+            const winningVendorsData = await tx.vendor.findMany({ 
+                where: { id: { in: Array.from(winningVendorIds) } }
+            });
+            const allWinningVendors = new Map(winningVendorsData.map(v => [v.id, v]));
+
+            const itemsToUpdate: { id: string; details: PerItemAwardDetail[] }[] = [];
+            const winningVendorDetails: Map<string, { name: string; email: string }> = new Map();
+
+            // 3. Now, iterate again to update statuses and prepare notifications
             for (const item of requisition.items) {
                 const perItemDetails = item.perItemAwardDetails as PerItemAwardDetail[] || [];
                 let hasUpdate = false;
@@ -95,14 +116,8 @@ export async function POST(
                 }
             }
 
-            const allWinningVendorIds = Array.from(winningVendorDetails.keys());
-            if (allWinningVendorIds.length === 0) {
-                 throw new Error("No vendors found in 'Pending Award' status across all items. The requisition might be in an inconsistent state.");
-            }
-            const allWinningVendors = await tx.vendor.findMany({ where: { id: { in: allWinningVendorIds } } });
 
-
-            // 2. Notify each unique winning vendor
+            // 4. Notify each unique winning vendor
             for (const [vendorId, vendorInfo] of winningVendorDetails.entries()) {
                 const emailHtml = `
                     <h1>Congratulations, ${vendorInfo.name}!</h1>
@@ -121,7 +136,7 @@ export async function POST(
                 });
             }
 
-            // 3. Update the item details in the database
+            // 5. Update the item details in the database
             for (const itemUpdate of itemsToUpdate) {
                 await tx.requisitionItem.update({
                     where: { id: itemUpdate.id },
