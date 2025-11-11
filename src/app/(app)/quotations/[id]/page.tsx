@@ -32,8 +32,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
-import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, MoreVertical } from 'lucide-react';
+import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -209,7 +209,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, isAwarded, isAssigned }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, isAwarded: boolean, isAssigned: boolean }) => {
+const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, isAwarded, onShowDetails }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, isAwarded: boolean, onShowDetails: (quote: Quotation) => void }) => {
 
     if (quotes.length === 0) {
         return (
@@ -307,38 +307,20 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                         </>
                                     )}
 
-
-                                    {quote.cpoDocumentUrl && (
-                                        <div className="text-sm space-y-1 pt-2 border-t">
-                                            <h4 className="font-semibold">CPO Document</h4>
-                                            <Button asChild variant="link" className="p-0 h-auto">
-                                                <a href={quote.cpoDocumentUrl} target="_blank" rel="noopener noreferrer">{quote.cpoDocumentUrl.split('/').pop()}</a>
-                                            </Button>
-                                        </div>
-                                    )}
-                                     {quote.experienceDocumentUrl && (
-                                        <div className="text-sm space-y-1 pt-2 border-t">
-                                            <h4 className="font-semibold">Experience Document</h4>
-                                            <Button asChild variant="link" className="p-0 h-auto">
-                                                <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer">{quote.experienceDocumentUrl.split('/').pop()}</a>
-                                            </Button>
-                                        </div>
-                                    )}
-                                    
                                      {perItemStrategy && itemAwardDetails.length > 0 && (
                                         <div className="text-sm space-y-2 pt-2 border-t">
                                             <h4 className="font-semibold">Your Item Statuses</h4>
                                             {itemAwardDetails.map(detail => (
-                                                <div key={detail!.quoteItemId} className="flex justify-between items-center text-muted-foreground">
+                                                <div key={detail.quoteItemId} className="flex justify-between items-center text-muted-foreground">
                                                     <span className="flex items-center gap-2">
-                                                        {getRankIcon(detail!.rank)}
+                                                        {getRankIcon(detail.rank)}
                                                         <span className="truncate" title={detail.proposedItemName}>
                                                             {detail.proposedItemName}
                                                         </span>
                                                     </span>
                                                     <div className="flex items-center gap-1">
-                                                        <Badge variant={getStatusVariant(detail!.status as any)}>{detail!.status.replace(/_/g, ' ')}</Badge>
-                                                        {detail.averageScore && <Badge variant="outline" className="font-mono">{detail.averageScore.toFixed(2)}</Badge>}
+                                                        <Badge variant={getStatusVariant(detail.status as any)}>{detail.status.replace(/_/g, ' ')}</Badge>
+                                                        {detail.averageScore && <Badge variant="outline" className="font-mono">{detail.averageScore.toFixed(2)} pts</Badge>}
                                                     </div>
                                                 </div>
                                             ))}
@@ -353,13 +335,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                 </div>
                             )}
 
-                            {quote.notes && (
-                                <div className="text-sm space-y-1 pt-2 border-t">
-                                    <h4 className="font-semibold">Notes:</h4>
-                                    <p className="text-muted-foreground text-xs italic">{quote.notes}</p>
-                                </div>
-                            )}
-                             {isAwarded && typeof quote.finalAverageScore === 'number' && (
+                             {isAwarded && typeof quote.finalAverageScore === 'number' && !perItemStrategy && (
                                  <div className="text-center pt-2 border-t">
                                     <h4 className="font-semibold text-sm">Final Score</h4>
                                     <p className="text-2xl font-bold text-primary">{quote.finalAverageScore.toFixed(2)}</p>
@@ -367,12 +343,9 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                              )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
-                            {isAssigned && (
-                                <Button className="w-full" variant={hasUserScored ? "secondary" : "outline"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
-                                    {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
-                                    {hasUserScored ? 'View Your Score' : 'Score this Quote'}
-                                </Button>
-                            )}
+                            <Button className="w-full" variant="outline" onClick={() => onShowDetails(quote)}>
+                                <Eye className="mr-2 h-4 w-4" /> View Full Quote
+                            </Button>
                         </CardFooter>
                     </Card>
                 )
@@ -2297,7 +2270,6 @@ const NotifyVendorDialog = ({
     );
 };
 
-
 export default function QuotationDetailsPage() {
   const router = useRouter();
   const params = useParams();
@@ -2315,6 +2287,7 @@ export default function QuotationDetailsPage() {
   const [isNotifying, setIsNotifying] = useState(false);
   const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
   const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
+  const [selectedQuoteForDetails, setSelectedQuoteForDetails] = useState<Quotation | null>(null);
   const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isReportOpen, setReportOpen] = useState(false);
@@ -2623,10 +2596,18 @@ export default function QuotationDetailsPage() {
 
   return (
     <div className="space-y-6">
-        <Button variant="outline" onClick={() => router.push('/quotations')}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to All Requisitions
-        </Button>
+       <div className="flex items-center justify-between">
+          <Button variant="outline" onClick={() => router.push('/quotations')}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to All Requisitions
+          </Button>
+           {canViewCumulativeReport && (
+                <Button variant="secondary" onClick={() => setReportOpen(true)}>
+                    <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
+                </Button>
+            )}
+        </div>
+
 
         <Card className="p-4 sm:p-6">
             <WorkflowStepper step={currentStep} />
@@ -2723,7 +2704,7 @@ export default function QuotationDetailsPage() {
                     </div>
                 )}
                 <Card>
-                    <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <CardHeader>
                         <div>
                             <CardTitle>Quotations for {requisition.id}</CardTitle>
                             <CardDescription>{requisition.title}</CardDescription>
@@ -2744,13 +2725,6 @@ export default function QuotationDetailsPage() {
                                 )}
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                           {canViewCumulativeReport && (
-                                <Button variant="secondary" onClick={() => setReportOpen(true)}>
-                                    <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
-                                </Button>
-                            )}
-                        </div>
                     </CardHeader>
                      <CardContent>
                         {loading ? (
@@ -2764,10 +2738,10 @@ export default function QuotationDetailsPage() {
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} isAssigned={isAssignedCommitteeMember} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} onShowDetails={setSelectedQuoteForDetails} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} isAssigned={isAssignedCommitteeMember} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} onShowDetails={setSelectedQuoteForDetails}/>
                                 </TabsContent>
                              </Tabs>
                         )}
@@ -2948,6 +2922,14 @@ export default function QuotationDetailsPage() {
                 onClose={() => setReportOpen(false)}
             />
         )}
+         {selectedQuoteForDetails && requisition && (
+            <QuoteDetailsDialog 
+                quote={selectedQuoteForDetails}
+                requisition={requisition}
+                isOpen={!!selectedQuoteForDetails}
+                onClose={() => setSelectedQuoteForDetails(null)}
+            />
+        )}
         <RFQActionDialog
             action={actionDialog.type}
             requisition={requisition}
@@ -3033,5 +3015,93 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
                 </Button>
             </CardFooter>
         </Card>
+    );
+};
+
+const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Quotation; requisition: PurchaseRequisition; isOpen: boolean; onClose: () => void; }) => {
+    if (!quote) return null;
+
+    const findQuestionText = (questionId: string) => {
+        return requisition.customQuestions?.find(q => q.id === questionId)?.questionText || "Unknown Question";
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Quote Details: {quote.vendorName}</DialogTitle>
+                    <DialogDescription>
+                        Submitted {format(new Date(quote.createdAt), 'PPpp')} for requisition: {requisition.title}
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[70vh] pr-4">
+                    <div className="space-y-4 py-4">
+                        <Card>
+                            <CardHeader><CardTitle>Items Quoted</CardTitle></CardHeader>
+                            <CardContent>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Item Name</TableHead>
+                                            <TableHead>Brand</TableHead>
+                                            <TableHead className="text-right">Unit Price</TableHead>
+                                            <TableHead className="text-right">Lead Time</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {quote.items.map(item => (
+                                            <TableRow key={item.id}>
+                                                <TableCell className="font-medium">{item.name}</TableCell>
+                                                <TableCell className="text-muted-foreground">{item.brandDetails || 'N/A'}</TableCell>
+                                                <TableCell className="text-right font-mono">{item.unitPrice.toLocaleString()} ETB</TableCell>
+                                                <TableCell className="text-right">{item.leadTimeDays} days</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                                <div className="text-right font-bold text-lg mt-4">Total: {quote.totalPrice.toLocaleString()} ETB</div>
+                            </CardContent>
+                        </Card>
+
+                         {quote.notes && (
+                            <Card>
+                                <CardHeader><CardTitle>Vendor Notes</CardTitle></CardHeader>
+                                <CardContent>
+                                    <p className="text-sm text-muted-foreground italic">"{quote.notes}"</p>
+                                </CardContent>
+                            </Card>
+                        )}
+                        
+                        {(quote.cpoDocumentUrl || quote.experienceDocumentUrl) && (
+                             <Card>
+                                <CardHeader><CardTitle>Uploaded Documents</CardTitle></CardHeader>
+                                <CardContent className="space-y-2">
+                                     {quote.cpoDocumentUrl && <Button asChild variant="outline" className="w-full justify-start"><a href={quote.cpoDocumentUrl} target="_blank" rel="noopener noreferrer"><FileText className="mr-2"/> CPO Document</a></Button>}
+                                     {quote.experienceDocumentUrl && <Button asChild variant="outline" className="w-full justify-start"><a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer"><FileText className="mr-2"/> Experience Document</a></Button>}
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {quote.answers && quote.answers.length > 0 && (
+                            <Card>
+                                <CardHeader><CardTitle>Vendor's Answers</CardTitle></CardHeader>
+                                <CardContent className="space-y-3">
+                                    {quote.answers.map(answer => (
+                                        <div key={answer.questionId}>
+                                            <p className="font-semibold text-sm">{findQuestionText(answer.questionId)}</p>
+                                            <p className="text-sm text-muted-foreground pl-2 border-l-2 ml-2 mt-1">{answer.answer}</p>
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        )}
+
+                    </div>
+                </ScrollArea>
+                <DialogFooter>
+                    <Button onClick={onClose}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 };
