@@ -227,7 +227,9 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                 (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === vendorId)
             );
             
-            if (allVendorDetails.some(d => d.status === 'Pending_Award' || d.status === 'Awarded' || d.status === 'Accepted')) return 'Pending_Award';
+            if (allVendorDetails.some(d => d.status === 'Awarded')) return 'Awarded';
+            if (allVendorDetails.some(d => d.status === 'Accepted')) return 'Accepted';
+            if (allVendorDetails.some(d => d.status === 'Pending_Award')) return 'Pending_Award';
             if (allVendorDetails.some(d => d.status === 'Standby')) return 'Standby';
         }
         return null;
@@ -1006,7 +1008,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/send-rfq`, {
                 method: 'POST',
@@ -1037,7 +1039,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     }
 
@@ -2563,7 +2565,7 @@ export default function QuotationDetailsPage() {
   const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
   const paginatedQuotes = useMemo(() => {
     const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
-    return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
+    return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE;
   }, [quotesForDisplay, currentQuotesPage]);
 
 
@@ -3104,3 +3106,6 @@ const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Qu
     );
 };
 
+
+
+    
