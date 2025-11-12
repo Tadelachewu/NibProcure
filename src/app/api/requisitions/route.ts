@@ -131,17 +131,15 @@ export async function GET(request: Request) {
                     }
                 }
             },
-            // Condition C: Vendor has won a per-item award, even if they didn't win the whole quote.
+             // Condition C: Vendor has won a per-item award, even if they didn't win the whole quote.
             {
                 items: {
                   some: {
                     perItemAwardDetails: {
-                      some: {
-                        vendorId: userPayload.user.vendorId,
-                      }
-                    }
-                  }
-                }
+                      array_contains: [{vendorId: userPayload.user.vendorId}],
+                    },
+                  },
+                },
             }
         ];
 
