@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -133,12 +134,13 @@ export async function GET(request: Request) {
             // Condition C: Vendor has won a per-item award, even if they didn't win the whole quote.
             {
                 items: {
-                    some: {
-                        perItemAwardDetails: {
-                            path: '$[*].vendorId',
-                            array_contains: userPayload.user.vendorId
-                        }
+                  some: {
+                    perItemAwardDetails: {
+                      some: {
+                        vendorId: userPayload.user.vendorId,
+                      }
                     }
+                  }
                 }
             }
         ];
