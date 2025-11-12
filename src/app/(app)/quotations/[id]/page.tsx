@@ -828,7 +828,7 @@ const RFQActionDialog = ({
 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
@@ -850,7 +850,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -871,7 +871,7 @@ const RFQActionDialog = ({
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
             onClose();
         }
     };
@@ -941,8 +941,8 @@ const RFQActionDialog = ({
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Close</Button></DialogClose>
-                    <Button onClick={handleSubmit} disabled={isSubmitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
-                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    <Button onClick={handleSubmit} disabled={submitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
+                            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                         Confirm {action.charAt(0).toUpperCase() + action.slice(1)}
                     </Button>
                 </DialogFooter>
@@ -3117,3 +3117,4 @@ const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Qu
     
 
     
+
