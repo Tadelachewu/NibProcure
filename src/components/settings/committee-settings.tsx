@@ -114,13 +114,32 @@ export function CommitteeSettings() {
         }
     };
 
-    const handleRoleChange = async (user: User, newRole: UserRole) => {
-        await updateUserRole(user.id, newRole);
-        toast({
-            title: `User Role Updated`,
-            description: `${user.name} is now a ${newRole.replace(/_/g, ' ')}.`,
-        });
-        fetchAllUsers(); // Refresh the user list
+    const handleRoleChange = async (user: User, newRoleName: UserRole) => {
+        if (!actor) return;
+        const userToUpdate = allUsers.find(u => u.id === user.id);
+        if (!userToUpdate) return;
+    
+        try {
+            const response = await fetch('/api/users', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    ...userToUpdate, 
+                    role: newRoleName, // Pass the role name directly
+                    actorUserId: actor.id 
+                })
+            });
+            if (!response.ok) throw new Error("Failed to update role");
+            
+            toast({
+                title: `User Role Updated`,
+                description: `${user.name} is now a ${newRoleName.replace(/_/g, ' ')}.`,
+            });
+            await fetchAllUsers(); // Refresh the user list
+        } catch (e) {
+            console.error(e);
+            toast({ variant: 'destructive', title: 'Error', description: 'Failed to update user role.' });
+        }
     }
     
     const handleAddCommittee = async () => {
@@ -166,9 +185,9 @@ export function CommitteeSettings() {
         const committee = localConfig[committeeKey];
         if (!committee) return null;
         
-        const role: UserRole = `Committee_${committeeKey}_Member`;
-        const members = allUsers.filter(u => u.role === role);
-        const nonMembers = allUsers.filter(u => u.role !== role && u.role !== 'Admin' && u.role !== 'Vendor')
+        const roleName: UserRole = `Committee_${committeeKey}_Member`;
+        const members = allUsers.filter(u => (u.role as any)?.name === roleName);
+        const nonMembers = allUsers.filter(u => (u.role as any)?.name !== roleName && (u.role as any)?.name !== 'Admin' && (u.role as any)?.name !== 'Vendor')
             .filter(u => departmentFilters[committeeKey] === 'all' || u.departmentId === departmentFilters[committeeKey])
             .filter(u => u.name.toLowerCase().includes(searchTerms[committeeKey]?.toLowerCase() || ''));
 
@@ -234,7 +253,7 @@ export function CommitteeSettings() {
                                                 <p className="text-xs text-muted-foreground">{user.department}</p>
                                             </div>
                                         </div>
-                                        <Button size="sm" variant="outline" onClick={() => handleRoleChange(user, role)}><UserCheck className="h-4 w-4 mr-2" /> Add</Button>
+                                        <Button size="sm" variant="outline" onClick={() => handleRoleChange(user, roleName)}><UserCheck className="h-4 w-4 mr-2" /> Add</Button>
                                     </div>
                                 ))}
                              </ScrollArea>
