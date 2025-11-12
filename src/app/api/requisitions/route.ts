@@ -72,10 +72,12 @@ export async function GET(request: Request) {
         orConditions.push({ currentApproverId: userId });
 
         // Condition 2: The status matches a committee role this user has
-        if (isCommitteeRole) {
-            orConditions.push({ status: `Pending_${userRole}` });
+        if (userRole === 'Committee_A_Member') {
+            orConditions.push({ status: 'Pending_Committee_A_Recommendation' });
+        } else if (userRole === 'Committee_B_Member') {
+            orConditions.push({ status: 'Pending_Committee_B_Review' });
         }
-        
+
         // For Admins and Procurement Officers, show all items pending any form of award review
         if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
              orConditions.push({ status: { in: [
@@ -698,5 +700,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
 
     
