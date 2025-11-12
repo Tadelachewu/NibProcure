@@ -18,7 +18,7 @@ import {
   CardDescription,
 } from './ui/card';
 import { Button } from './ui/button';
-import { PurchaseRequisition, User } from '@/lib/types';
+import { PurchaseRequisition, User, UserRole } from '@/lib/types';
 import { format } from 'date-fns';
 import {
   Check,
@@ -198,12 +198,13 @@ export function AwardReviewsTable() {
                   
                   let isActionable = false;
                   if (user && req.status) {
-                      const requiredRoleForStatus = req.status.replace('Pending_', '');
-                      // Condition 1: The user's role matches the pending status (for committees)
-                      if (user.role === requiredRoleForStatus) {
+                      const userRole = user.role as UserRole;
+                      if (
+                          (userRole === 'Committee_A_Member' && req.status === 'Pending_Committee_A_Recommendation') ||
+                          (userRole === 'Committee_B_Member' && req.status === 'Pending_Committee_B_Review')
+                      ) {
                           isActionable = true;
                       }
-                      // Condition 2: The user is the specific current approver (for hierarchical roles)
                       else if (req.currentApproverId === user.id) {
                           isActionable = true;
                       }
