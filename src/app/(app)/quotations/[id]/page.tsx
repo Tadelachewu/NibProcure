@@ -63,6 +63,7 @@ import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 
 const PAGE_SIZE = 6;
@@ -3112,6 +3113,7 @@ const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Qu
     
 
     
+
 
 
 
