@@ -198,7 +198,8 @@ export function AwardReviewsTable() {
                   
                   let isActionable = false;
                   if (user && req.status) {
-                      const userRole = user.role as UserRole;
+                      const userRole = (user.role as any)?.name || user.role;
+                      
                       if (
                           (userRole === 'Committee_A_Member' && req.status === 'Pending_Committee_A_Recommendation') ||
                           (userRole === 'Committee_B_Member' && req.status === 'Pending_Committee_B_Review')

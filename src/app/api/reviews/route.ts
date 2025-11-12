@@ -22,11 +22,10 @@ export async function GET(request: Request) {
     const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
     const userId = userPayload.user.id;
 
-    const isCommitteeRole = userRole.startsWith('Committee_') && userRole.endsWith('_Member');
-
-    if (isCommitteeRole) {
-        const statusToFind = `Pending_${userRole}`;
-        whereClause = { status: statusToFind };
+    if (userRole === 'Committee_A_Member') {
+        whereClause.status = 'Pending_Committee_A_Recommendation';
+    } else if (userRole === 'Committee_B_Member') {
+        whereClause.status = 'Pending_Committee_B_Review';
     } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
        const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
        const allReviewStatuses = allCommitteeRoles.map(r => `Pending_${r.name}`);
@@ -53,12 +52,7 @@ export async function GET(request: Request) {
       },
     });
 
-    const formattedRequisitions = requisitions.map(req => ({
-        ...req,
-        status: req.status.replace(/_/g, ' '),
-    }));
-
-    return NextResponse.json(formattedRequisitions);
+    return NextResponse.json(requisitions);
   } catch (error) {
     console.error('Failed to fetch requisitions for review:', error);
     if (error instanceof Error) {
