@@ -603,31 +603,66 @@ export default function VendorRequisitionPage() {
     const canEditQuote = submittedQuote?.status === 'Submitted' && !isAwardProcessStarted && !isDeadlinePassed && allowEdits;
 
     const awardedItems = useMemo(() => {
-        if (!submittedQuote || !requisition?.awardedQuoteItemIds || requisition.awardedQuoteItemIds.length === 0) {
-            return submittedQuote?.items || [];
+      if (!requisition || !user?.vendorId) return [];
+      
+      const vendorAwardedItems: QuoteItem[] = [];
+      const quote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
+      
+      // Handle "Award by Best Item" scenario
+      if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
+        const awardedQuoteItemIds = new Set<string>();
+        requisition.items.forEach(reqItem => {
+          const awardDetails = (reqItem.perItemAwardDetails || []).find(detail => detail.vendorId === user.vendorId && (detail.status === 'Awarded' || detail.status === 'Accepted'));
+          if (awardDetails) {
+            awardedQuoteItemIds.add(awardDetails.quoteItemId);
+          }
+        });
+        if(quote){
+          vendorAwardedItems.push(...quote.items.filter(item => awardedQuoteItemIds.has(item.id)));
         }
-        
-        // For partial awards, filter the quote items to only those present in the requisition's awarded list
-        if (submittedQuote.status === 'Partially_Awarded' || submittedQuote.status === 'Accepted' || submittedQuote.status === 'Awarded') {
-             const awardedIds = new Set(requisition.awardedQuoteItemIds);
-            return submittedQuote.items.filter(item => awardedIds.has(item.id));
+      }
+      // Handle single-vendor award scenario
+      else if (quote && ['Awarded', 'Partially_Awarded', 'Accepted'].includes(quote.status)) {
+        if (requisition.awardedQuoteItemIds && requisition.awardedQuoteItemIds.length > 0) {
+          const awardedIds = new Set(requisition.awardedQuoteItemIds);
+          vendorAwardedItems.push(...quote.items.filter(item => awardedIds.has(item.id)));
+        } else {
+          // If awardedQuoteItemIds is empty, it means the whole quote was awarded
+          vendorAwardedItems.push(...quote.items);
+        }
+      }
+
+      return vendorAwardedItems;
+    }, [requisition, user]);
+    
+    const isAwarded = useMemo(() => {
+        if (!requisition || !user?.vendorId) return false;
+
+        // Check for overall quote status (single-vendor award)
+        const vendorQuote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
+        if (vendorQuote && (vendorQuote.status === 'Awarded' || vendorQuote.status === 'Partially_Awarded')) {
+            return true;
         }
 
-        return submittedQuote.items;
-    }, [submittedQuote, requisition]);
+        // Check for per-item award status
+        return requisition.items.some(item =>
+            (item.perItemAwardDetails || []).some(detail => detail.vendorId === user.vendorId && detail.status === 'Awarded')
+        );
+    }, [requisition, user]);
 
 
     const fetchRequisitionData = async () => {
         if (!id || !token || !user) return;
         
         setLoading(true);
-        setError(null);
+setError(null);
         try {
-             const response = await fetch(`/api/requisitions/${id}`);
+             const response = await fetch(`/api/requisitions?id=${id}`);
              if (!response.ok) {
                 throw new Error('Failed to fetch requisition data.');
              }
-             const foundReq: PurchaseRequisition = await response.json();
+             const allReqs: PurchaseRequisition[] = await response.json();
+             const foundReq = allReqs.find(r => r.id === id);
              
              if (!foundReq) {
                  throw new Error('Requisition not found or not available for quoting.');
@@ -698,7 +733,6 @@ export default function VendorRequisitionPage() {
     if (error) return <div className="text-destructive text-center p-8">{error}</div>;
     if (!requisition) return <div className="text-center p-8">Requisition not found.</div>;
 
-    const isAwarded = submittedQuote?.status === 'Awarded' || submittedQuote?.status === 'Partially_Awarded';
     const isAccepted = submittedQuote?.status === 'Accepted';
     const hasResponded = submittedQuote?.status === 'Accepted' || submittedQuote?.status === 'Declined';
     const hasSubmittedInvoice = submittedQuote?.status === 'Invoice_Submitted';
@@ -834,7 +868,7 @@ export default function VendorRequisitionPage() {
                              )}
                         </CardDescription>
                     </CardHeader>
-                    {submittedQuote?.status === 'Partially_Awarded' && (
+                    {awardedItems.length > 0 && awardedItems.length < (submittedQuote?.items?.length || 0) && (
                         <CardContent>
                             <Alert>
                                 <Info className="h-4 w-4" />
