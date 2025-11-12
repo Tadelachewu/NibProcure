@@ -149,24 +149,34 @@ export async function handleAwardRejection(
             if (!reqItem || !reqItem.perItemAwardDetails) continue;
 
             const awardDetails = reqItem.perItemAwardDetails as PerItemAwardDetail[];
-            const rejectedVendorIndex = awardDetails.findIndex(d => d.vendorId === quote.vendorId);
-            if (rejectedVendorIndex !== -1) {
-                awardDetails[rejectedVendorIndex].status = 'Declined';
-            }
-
-            const nextStandby = awardDetails.find(d => d.rank === rejectedVendorIndex + 2);
-            if (nextStandby) {
-                nextStandby.status = 'Pending_Award';
-                 await tx.auditLog.create({ data: { action: 'PROMOTE_STANDBY', entity: 'RequisitionItem', entityId: reqItem.id, details: `Promoted ${nextStandby.vendorName} to pending award for item ${reqItem.name}.`, transactionId: requisition.transactionId } });
-            }
-
+            const updatedDetails = awardDetails.map(d => 
+                d.vendorId === quote.vendorId && d.status === 'Awarded' 
+                ? { ...d, status: 'Declined' as const } 
+                : d
+            );
+            
             await tx.requisitionItem.update({
                 where: { id: reqItem.id },
-                data: { perItemAwardDetails: awardDetails as any }
+                data: { perItemAwardDetails: updatedDetails as any }
             });
         }
+        
+        // Set the main status to Award_Declined to signal that a manual promotion is needed.
         await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
-        return { message: 'Per-item award has been updated after decline.' };
+        
+        await tx.auditLog.create({ 
+            data: { 
+                timestamp: new Date(), 
+                user: { connect: { id: actor.id } }, 
+                action: 'DECLINE_AWARD', 
+                entity: 'Requisition', 
+                entityId: requisition.id, 
+                details: `Vendor ${quote.vendorName} declined the award for ${declinedItemIds.length} item(s). Manual promotion of standby is now possible.`, 
+                transactionId: requisition.transactionId 
+            } 
+        });
+
+        return { message: 'Per-item award has been declined. A standby vendor can now be manually promoted.' };
 
     } else { // Single vendor award
         await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
