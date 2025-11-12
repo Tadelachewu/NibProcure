@@ -105,10 +105,10 @@ export default function VendorDashboardPage() {
         if (!user?.vendorId) return 'Action Required';
 
         // Check per-item award details first for 'item' strategy
-        if (req.rfqSettings?.awardStrategy === 'item') {
+        if ((req.rfqSettings as any)?.awardStrategy === 'item') {
             const vendorAwards = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId));
             
-            if (vendorAwards.some(a => a.status === 'Awarded' || a.status === 'Pending_Award')) return 'Awarded';
+            if (vendorAwards.some(a => a.status === 'Awarded')) return 'Awarded';
             if (vendorAwards.some(a => a.status === 'Accepted')) return 'Accepted';
             if (vendorAwards.some(a => a.status === 'Standby')) return 'Standby';
         }
@@ -138,8 +138,8 @@ export default function VendorDashboardPage() {
         }
         
         // If vendor has no quote but there might be an item-level award (e.g. from a different quote that was deleted/re-evaluated)
-        const hasAnyItemAward = req.items.some(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.vendorId === user.vendorId));
-        if (hasAnyItemAward) return 'Awarded'; // Or a more specific status based on the details.
+        const hasAnyItemAward = req.items.some(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.vendorId === user.vendorId && d.status === 'Awarded'));
+        if (hasAnyItemAward) return 'Awarded';
 
         return 'Action Required';
     }
@@ -151,9 +151,13 @@ export default function VendorDashboardPage() {
 
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
-            const isItemAwarded = req.rfqSettings?.awardStrategy === 'item' && req.items.some(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.vendorId === user?.vendorId));
+            
+            const isPerItemAwarded = (req.rfqSettings as any)?.awardStrategy === 'item' && 
+                req.items.some(item => 
+                    (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user?.vendorId && (d.status === 'Awarded' || d.status === 'Accepted'))
+                );
 
-            if (vendorQuote || isItemAwarded) {
+            if (vendorQuote || isPerItemAwarded) {
                 active.push(req);
             } else {
                 open.push(req);
@@ -349,3 +353,4 @@ export default function VendorDashboardPage() {
     )
 }
 
+    

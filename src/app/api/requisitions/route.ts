@@ -129,6 +129,17 @@ export async function GET(request: Request) {
                         vendorId: userPayload.user.vendorId
                     }
                 }
+            },
+            // Condition C: Vendor has won a per-item award, even if they didn't win the whole quote.
+            {
+                items: {
+                    some: {
+                        perItemAwardDetails: {
+                            path: '$[*].vendorId',
+                            array_contains: userPayload.user.vendorId
+                        }
+                    }
+                }
             }
         ];
 
@@ -219,6 +230,7 @@ export async function GET(request: Request) {
             description: true,
             quantity: true,
             unitPrice: true,
+            perItemAwardDetails: true,
           }
         },
         minutes: {
@@ -686,3 +698,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
