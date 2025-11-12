@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Card,
@@ -62,7 +62,6 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
 
 
@@ -828,7 +827,7 @@ const RFQActionDialog = ({
 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [submitting, setSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
@@ -941,8 +940,8 @@ const RFQActionDialog = ({
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Close</Button></DialogClose>
-                    <Button onClick={handleSubmit} disabled={submitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
-                            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    <Button onClick={handleSubmit} disabled={isSubmitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                         Confirm {action.charAt(0).toUpperCase() + action.slice(1)}
                     </Button>
                 </DialogFooter>
@@ -2822,32 +2821,29 @@ export default function QuotationDetailsPage() {
             <CardTitle>Awarding Center</CardTitle>
             <CardDescription>
               {requisition.status === 'Award_Declined'
-                ? 'The previous winner has declined. You may now promote a standby vendor.'
+                ? 'An award was declined. You may now promote a standby vendor.'
                 : 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
             </CardDescription>
           </CardHeader>
           <CardFooter className="gap-4">
             {requisition.status === 'Award_Declined' ? (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button disabled={isChangingAward}>
-                    {isChangingAward ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrophyIcon className="mr-2 h-4 w-4" />}
-                    Promote Standby Vendor
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will promote the next highest-ranked standby vendor to the "Awarded" status. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleAwardChange}>Confirm &amp; Promote</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                <AlertDialog>
+                    <AlertDialogTrigger asChild><Button disabled={isChangingAward}>
+                        {isChangingAward ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <TrophyIcon className="mr-2 h-4 w-4"/>}
+                        Promote Standby Vendor
+                    </Button></AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
+                            <AlertDialogDescription>This will promote the next highest-ranked standby vendor to an awarded status. This action cannot be undone.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleAwardChange}>Confirm &amp; Promote</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
             ) : (
               <>
                 <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
@@ -3117,4 +3113,5 @@ const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Qu
     
 
     
+
 
