@@ -338,18 +338,19 @@ export async function PATCH(
         dataToUpdate.approverComment = comment;
 
     } else if (requisition.status.startsWith('Pending_')) {
-        const requiredRole = requisition.status.replace('Pending_', '');
         let isDesignatedApprover = false;
 
-        // Check if the user's role matches the required role for the committee step
-        if (user.role.name === requiredRole) {
+        // Check if user has the correct Committee role for the status
+        if (
+            (user.role.name === 'Committee_A_Member' && requisition.status === 'Pending_Committee_A_Recommendation') ||
+            (user.role.name === 'Committee_B_Member' && requisition.status === 'Pending_Committee_B_Review')
+        ) {
             isDesignatedApprover = true;
-        } 
-        // Check if the user is the specific current approver for hierarchical steps
+        }
+        // Check for individual hierarchical approvers
         else if (requisition.currentApproverId === userId) {
             isDesignatedApprover = true;
         }
-
 
         if (!isDesignatedApprover) {
             return NextResponse.json({ error: 'You are not the designated approver for this item.' }, { status: 403 });
@@ -408,7 +409,7 @@ export async function PATCH(
              });
         } else if (newStatus === 'Approved') { // Using "Approved" as the action from the frontend
              return await prisma.$transaction(async (tx) => {
-                const approvalMatrix = await tx.approvalThreshold.findMany({ include: { steps: { orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
+                const approvalMatrix = await tx.approvalThreshold.findMany({ include: { steps: { include: { role: true }, orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
                 const totalValue = requisition.totalPrice;
                 const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
 
@@ -416,14 +417,14 @@ export async function PATCH(
                     throw new Error('No approval tier configured for this award value.');
                 }
                 
-                const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getNextStatusFromRole(step.role));
+                const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getNextStatusFromRole(step.role.name));
                 
                 if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
                     const nextStep = relevantTier.steps[currentStepIndex + 1];
-                    dataToUpdate.status = getNextStatusFromRole(nextStep.role);
+                    dataToUpdate.status = getNextStatusFromRole(nextStep.role.name);
 
-                    if (!nextStep.role.includes('Committee')) {
-                        const nextApprover = await tx.user.findFirst({ where: { role: { name: nextStep.role } }});
+                    if (!nextStep.role.name.includes('Committee')) {
+                        const nextApprover = await tx.user.findFirst({ where: { role: { name: nextStep.role.name } }});
                         if (nextApprover) {
                           dataToUpdate.currentApprover = { connect: { id: nextApprover.id } };
                         } else {
@@ -432,7 +433,7 @@ export async function PATCH(
                     } else {
                         dataToUpdate.currentApprover = { disconnect: true };
                     }
-                    auditDetails = `Award approved by ${user.role.name.replace(/_/g, ' ')}. Advanced to ${nextStep.role.replace(/_/g, ' ')}.`;
+                    auditDetails = `Award approved by ${user.role.name.replace(/_/g, ' ')}. Advanced to ${nextStep.role.name.replace(/_/g, ' ')}.`;
                 } else {
                     // This is the final approval. Set to PostApproved to await manual notification.
                     dataToUpdate.status = 'PostApproved';
