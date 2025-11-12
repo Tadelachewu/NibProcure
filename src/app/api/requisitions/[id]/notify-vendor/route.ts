@@ -21,7 +21,6 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Correct Authorization Logic
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
     const userRoleName = user.role.name as UserRole;
@@ -50,27 +49,17 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
     }
     
-    // This is the crucial gate. Only requisitions in PostApproved can be notified.
     if (requisition.status !== 'PostApproved') {
         return NextResponse.json({ error: 'This requisition is not ready for vendor notification.' }, { status: 400 });
     }
 
     const transactionResult = await prisma.$transaction(async (tx) => {
-        // Update the main requisition status from PostApproved to Awarded, which signifies the offers are out.
-        const updatedRequisition = await tx.purchaseRequisition.update({
-            where: { id: requisitionId },
-            data: {
-                status: 'Awarded',
-                awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
-            }
-        });
-        
         const rfqSettings = requisition.rfqSettings as any;
 
         if (rfqSettings?.awardStrategy === 'item') {
             // --- LOGIC FOR PER-ITEM AWARDS ---
             
-            // 1. First, gather all winning vendor IDs from the per-item details
+            // 1. Gather all winning vendor IDs from the per-item details
             const winningVendorIds = new Set<string>();
             for (const item of requisition.items) {
                 const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
@@ -85,13 +74,13 @@ export async function POST(
                  throw new Error("No vendors found in 'Pending Award' status across all items. The requisition might be in an inconsistent state.");
             }
 
-            // 2. Fetch all winning vendors' details in one query
+            // 2. Fetch all winning vendors' details
             const allWinningVendorsData = await tx.vendor.findMany({ 
                 where: { id: { in: Array.from(winningVendorIds) } }
             });
             const allWinningVendors = new Map(allWinningVendorsData.map(v => [v.id, v]));
 
-            // 3. Now, iterate again to update statuses and prepare for DB update
+            // 3. Update item statuses and send notifications
             for (const item of requisition.items) {
                 const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
                 let hasUpdate = false;
@@ -112,8 +101,14 @@ export async function POST(
                 }
             }
 
+            const updatedRequisition = await tx.purchaseRequisition.update({
+              where: { id: requisitionId },
+              data: {
+                  status: 'Awarded',
+                  awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
+              }
+            });
 
-            // 4. Notify each unique winning vendor
             for (const vendorId of winningVendorIds) {
                 const vendorInfo = allWinningVendors.get(vendorId);
                 if (vendorInfo) {
@@ -134,13 +129,15 @@ export async function POST(
                     });
                 }
             }
+
+            return updatedRequisition;
         
         } else {
             // --- LOGIC FOR SINGLE VENDOR AWARD ---
             const winningQuote = await tx.quotation.findFirst({
                 where: {
                     requisitionId: requisitionId,
-                    status: 'Pending_Award'
+                    status: { in: ['Pending_Award', 'Partially_Awarded'] }
                 },
                 include: {
                     vendor: true
@@ -148,8 +145,16 @@ export async function POST(
             });
 
             if (!winningQuote) {
-                throw new Error("No winning quote in 'Pending Award' status found to notify. The requisition might be in an inconsistent state.");
+                throw new Error("No winning quote in 'Pending Award' or 'Partially Awarded' status found to notify. The requisition might be in an inconsistent state.");
             }
+            
+            const updatedRequisition = await tx.purchaseRequisition.update({
+                where: { id: requisitionId },
+                data: {
+                    status: 'Awarded',
+                    awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
+                }
+            });
             
             await tx.quotation.update({
                 where: { id: winningQuote.id },
@@ -171,6 +176,8 @@ export async function POST(
                 subject: `Contract Awarded: ${requisition.title}`,
                 html: emailHtml
             });
+
+            return updatedRequisition;
         }
         
         await tx.auditLog.create({
@@ -184,8 +191,6 @@ export async function POST(
                 details: `Sent award notification to winning vendor(s) for requisition ${requisitionId}.`
             }
         });
-
-        return updatedRequisition;
     });
 
     return NextResponse.json({ message: 'Vendor(s) notified successfully.', requisition: transactionResult });
