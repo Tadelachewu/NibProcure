@@ -48,18 +48,14 @@ export const BestItemAwardDialog = ({
     const itemWinners = useMemo(() => {
         if (!requisition.items) return [];
 
-        // For each item in the original requisition...
         return requisition.items.map(reqItem => {
-            
-            // Stage 1: Find each vendor's single best ("champion") proposal for this specific item.
+            // Stage 1: Find each vendor's single "champion" bid for this item.
             const championBids = eligibleQuotes.map(quote => {
-                // Get all proposals from this vendor for this specific requisition item.
                 const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
                 if (proposalsForItem.length === 0) return null;
 
-                // Determine the highest score this vendor achieved for this item.
-                let bestVendorProposal: QuoteItem | null = null;
-                let bestVendorItemScore = -1;
+                let bestProposalForItem: QuoteItem | null = null;
+                let bestItemScore = -1;
 
                 proposalsForItem.forEach(proposal => {
                     let totalItemScore = 0;
@@ -73,25 +69,24 @@ export const BestItemAwardDialog = ({
                     });
                     const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
                     
-                    if (averageItemScore > bestVendorItemScore) {
-                        bestVendorItemScore = averageItemScore;
-                        bestVendorProposal = proposal;
+                    if (averageItemScore > bestItemScore) {
+                        bestItemScore = averageItemScore;
+                        bestProposalForItem = proposal;
                     }
                 });
 
-                if (!bestVendorProposal) return null;
+                if (!bestProposalForItem) return null;
 
-                // This is the "champion bid" for this vendor for this item.
                 return {
                     vendorId: quote.vendorId,
                     vendorName: quote.vendorName,
-                    quoteItemId: bestVendorProposal.id,
-                    unitPrice: bestVendorProposal.unitPrice,
-                    score: bestVendorItemScore
+                    quoteItemId: bestProposalForItem.id,
+                    unitPrice: bestProposalForItem.unitPrice,
+                    score: bestItemScore
                 };
             }).filter((bid): bid is NonNullable<typeof bid> => bid !== null);
             
-            // Stage 2: Rank the "champion bids" against each other to find the winner for this item.
+            // Stage 2: Rank the "champion bids" to find the winner for this item.
             championBids.sort((a, b) => b.score - a.score);
             
             const winner = championBids.length > 0 ? championBids[0] : null;
@@ -102,9 +97,10 @@ export const BestItemAwardDialog = ({
                 quantity: reqItem.quantity,
                 winner: winner,
                 bestScore: winner ? winner.score : -1,
-            }
+            };
         });
     }, [requisition, eligibleQuotes]);
+
 
     const totalAwardValue = useMemo(() => {
         return itemWinners.reduce((acc, item) => {
