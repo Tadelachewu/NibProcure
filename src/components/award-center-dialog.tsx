@@ -46,52 +46,67 @@ export const AwardCenterDialog = ({
     
     const overallWinner = useMemo(() => {
         let bestOverallScore = -1;
-        let winningQuote: Quotation | null = null;
-        
+        let winningVendorId: string | null = null;
+        let winningVendorName: string | null = null;
+        let winningItems: { requisitionItemId: string, quoteItemId: string }[] = [];
+
         eligibleQuotes.forEach(quote => {
-            if (quote.finalAverageScore && quote.finalAverageScore > bestOverallScore) {
-                bestOverallScore = quote.finalAverageScore;
-                winningQuote = quote;
+            // Step 1: For each original item, find this vendor's best proposal (including alternatives)
+            const championBids = requisition.items.map(reqItem => {
+                const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
+                if (proposalsForItem.length === 0) {
+                    return null; // Vendor didn't bid on this item
+                }
+                
+                // Find the best scoring proposal from this vendor for this item
+                let bestProposalForItem = proposalsForItem[0];
+                let bestItemScore = -1;
+
+                proposalsForItem.forEach(proposal => {
+                    let totalItemScore = 0;
+                    let scoreCount = 0;
+                    quote.scores?.forEach(scoreSet => {
+                        const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
+                        if (itemScore) {
+                            totalItemScore += itemScore.finalScore;
+                            scoreCount++;
+                        }
+                    });
+                    const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                    if (averageItemScore > bestItemScore) {
+                        bestItemScore = averageItemScore;
+                        bestProposalForItem = proposal;
+                    }
+                });
+                return { proposal: bestProposalForItem, score: bestItemScore };
+            }).filter(Boolean); // Remove nulls for items not bid on
+
+            if (championBids.length === 0) return;
+
+            // Step 2: Calculate the vendor's average score based ONLY on these champion bids
+            const totalScoreOfChampions = championBids.reduce((acc, bid) => acc + (bid?.score || 0), 0);
+            const vendorAverageScore = totalScoreOfChampions / championBids.length;
+
+            // Step 3: Compare with other vendors to find the overall winner
+            if (vendorAverageScore > bestOverallScore) {
+                bestOverallScore = vendorAverageScore;
+                winningVendorId = quote.vendorId;
+                winningVendorName = quote.vendorName;
+                winningItems = championBids.map(bid => ({
+                    requisitionItemId: bid!.proposal.requisitionItemId,
+                    quoteItemId: bid!.proposal.id
+                }));
             }
         });
 
-        if (!winningQuote) {
+        if (!winningVendorId) {
             return null;
         }
 
-        const bestItemsFromWinner = requisition.items.map(reqItem => {
-            const proposalsForItem = winningQuote!.items.filter(i => i.requisitionItemId === reqItem.id);
-
-            if (proposalsForItem.length === 0) return null;
-            if (proposalsForItem.length === 1) return { requisitionItemId: reqItem.id, quoteItemId: proposalsForItem[0].id };
-            
-            let bestItemScore = -1;
-            let bestProposalId = proposalsForItem[0].id;
-
-            proposalsForItem.forEach(proposal => {
-                 let totalItemScore = 0;
-                 let scoreCount = 0;
-                 winningQuote!.scores?.forEach(scoreSet => {
-                     const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                     if (itemScore) {
-                         totalItemScore += itemScore.finalScore;
-                         scoreCount++;
-                     }
-                 });
-                 const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                 if (averageItemScore > bestItemScore) {
-                     bestItemScore = averageItemScore;
-                     bestProposalId = proposal.id;
-                 }
-            });
-            return { requisitionItemId: reqItem.id, quoteItemId: bestProposalId };
-        }).filter(Boolean);
-
-
         return { 
-            vendorId: winningQuote.vendorId,
-            vendorName: winningQuote.vendorName,
-            items: bestItemsFromWinner,
+            vendorId: winningVendorId,
+            vendorName: winningVendorName,
+            items: winningItems,
             score: bestOverallScore 
         };
     }, [eligibleQuotes, requisition]);
@@ -122,7 +137,7 @@ export const AwardCenterDialog = ({
             <Card>
                 <CardHeader>
                     <CardTitle>Best Overall Vendor</CardTitle>
-                    <CardDescription>This strategy awards all items to the single vendor with the highest average score across all items.</CardDescription>
+                    <CardDescription>This strategy awards all items to the single vendor with the highest average score across their best proposal for each item.</CardDescription>
                 </CardHeader>
                 <CardContent className="text-center p-8">
                     <TrophyIcon className="h-12 w-12 text-amber-400 mx-auto mb-4"/>
