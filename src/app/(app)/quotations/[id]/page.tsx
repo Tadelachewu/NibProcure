@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -32,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, MoreVertical } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -1641,7 +1640,12 @@ const ScoringDialog = ({
                             </Card>
                         )}
                         {itemScoreFields.map((field, itemIndex) => {
-                            const quoteItem = quote.items[itemIndex];
+                             const itemScoreData = form.getValues().itemScores[itemIndex];
+                             if (!itemScoreData) return null;
+                         
+                             const quoteItem = quote.items.find(item => item.id === itemScoreData.quoteItemId);
+                             if (!quoteItem) return null;
+
                             const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
 
                             return <ScoringItemCard
@@ -3228,114 +3232,3 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
-
-
-
-
-
-```
-  </change>
-  <change>
-    <file>src/app/api/requisitions/[id]/restart-item-rfq/route.ts</file>
-    <content><![CDATA[
-'use server';
-
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { User, PerItemAwardDetail } from '@/lib/types';
-import { sendEmail } from '@/services/email-service';
-import { format } from 'date-fns';
-
-
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const requisitionId = params.id;
-    const body = await request.json();
-    const { userId, itemIds, vendorIds, newDeadline } = body;
-
-    const actor: User | null = await prisma.user.findUnique({ where: { id: userId } });
-    if (!actor || (actor.role as any)?.name !== 'Procurement_Officer' && (actor.role as any)?.name !== 'Admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    if (!itemIds || itemIds.length === 0 || !vendorIds || vendorIds.length === 0 || !newDeadline) {
-      return NextResponse.json({ error: 'Missing required parameters: itemIds, vendorIds, and newDeadline.' }, { status: 400 });
-    }
-
-    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
-    if (!requisition) {
-      return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
-    }
-
-    const transactionResult = await prisma.$transaction(async (tx) => {
-        // Reset the award details for the specific failed items
-        for (const itemId of itemIds) {
-            await tx.requisitionItem.update({
-                where: { id: itemId },
-                data: { perItemAwardDetails: Prisma.JsonNull }
-            });
-        }
-
-        // Set the requisition back to an active bidding state
-        const updatedRequisition = await tx.purchaseRequisition.update({
-            where: { id: requisitionId },
-            data: {
-                status: 'Accepting_Quotes',
-                deadline: new Date(newDeadline),
-            }
-        });
-        
-        const vendorsToNotify = await tx.vendor.findMany({
-            where: { id: { in: vendorIds } }
-        });
-        
-        const itemsToReTender = await tx.requisitionItem.findMany({
-            where: { id: { in: itemIds } }
-        });
-
-        const itemNames = itemsToReTender.map(i => i.name).join(', ');
-
-        for (const vendor of vendorsToNotify) {
-            const emailHtml = `
-                <h1>New Request for Quotation for Specific Items</h1>
-                <p>Hello ${vendor.name},</p>
-                <p>A new Request for Quotation (RFQ) has been issued for specific items from requisition <strong>${requisition.title}</strong>.</p>
-                <p><strong>Items:</strong> ${itemNames}</p>
-                <p><strong>New Submission Deadline:</strong> ${format(new Date(newDeadline), 'PPpp')}</p>
-                <p>Please log in to the vendor portal to view the full details and submit your quotation.</p>
-                <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
-            `;
-            await sendEmail({
-                to: vendor.email,
-                subject: `New RFQ for items from: ${requisition.title}`,
-                html: emailHtml
-            });
-        }
-        
-        await tx.auditLog.create({
-            data: {
-                transactionId: requisition.transactionId,
-                user: { connect: { id: actor.id } },
-                action: 'RESTART_ITEM_RFQ',
-                entity: 'Requisition',
-                entityId: requisitionId,
-                details: `Restarted RFQ for items: ${itemNames}. Sent to ${vendorsToNotify.length} vendors.`
-            }
-        });
-
-        return updatedRequisition;
-    });
-
-    return NextResponse.json({ message: 'RFQ for failed items has been successfully restarted.', requisition: transactionResult });
-
-  } catch (error) {
-    console.error('Failed to restart item RFQ:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
-  }
-}
