@@ -2362,6 +2362,20 @@ export default function QuotationDetailsPage() {
       return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
   }, [user, userRoleName, requisition]);
 
+  const isReviewer = useMemo(() => {
+    if (!user || !userRoleName || !requisition) return false;
+    const isHierarchicalReviewer = requisition.currentApproverId === user.id;
+    const isCommitteeReviewer = (userRoleName === 'Committee_A_Member' && requisition.status === 'Pending_Committee_A_Recommendation') || (userRoleName === 'Committee_B_Member' && requisition.status === 'Pending_Committee_B_Review');
+    return isHierarchicalReviewer || isCommitteeReviewer;
+  }, [user, userRoleName, requisition]);
+  
+  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
+  
+  const canManageCommittees = isAuthorized;
+  const isReadyForNotification = requisition?.status === 'PostApproved';
+  const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
+  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
+  const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
 
   const fetchRequisitionAndQuotes = useCallback(async () => {
       if (!id) return;
@@ -2591,22 +2605,6 @@ export default function QuotationDetailsPage() {
   if (!requisition) {
      return <div className="text-center p-8">Requisition not found.</div>;
   }
-
-  const canManageCommittees = isAuthorized;
-  const isReadyForNotification = requisition.status === 'PostApproved';
-  const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
-  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
-  const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
-
-  const isReviewer = useMemo(() => {
-    if (!user || !userRoleName || !requisition) return false;
-    const isHierarchicalReviewer = requisition.currentApproverId === user.id;
-    const isCommitteeReviewer = (userRoleName === 'Committee_A_Member' && requisition.status === 'Pending_Committee_A_Recommendation') || (userRoleName === 'Committee_B_Member' && requisition.status === 'Pending_Committee_B_Review');
-    return isHierarchicalReviewer || isCommitteeReviewer;
-  }, [user, userRoleName, requisition]);
-
-  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
-
 
   return (
     <div className="space-y-6">
