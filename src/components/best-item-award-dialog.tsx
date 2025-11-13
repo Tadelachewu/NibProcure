@@ -204,7 +204,7 @@ export const BestItemAwardDialog = ({
             <DialogFooter>
                 <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
                 <AlertDialog>
-                    <AlertDialogTrigger asChild><Button>Finalize &amp; Send Awards</Button></AlertDialogTrigger>
+                    <AlertDialogTrigger asChild><Button>Finalize & Send Awards</Button></AlertDialogTrigger>
                     <AlertDialogContent>
                         <AlertDialogHeader>
                         <AlertDialogTitle>Confirm Per-Item Award Decision</AlertDialogTitle>
