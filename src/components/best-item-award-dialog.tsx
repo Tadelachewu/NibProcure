@@ -48,13 +48,16 @@ export const BestItemAwardDialog = ({
     const itemWinners = useMemo(() => {
         if (!requisition.items) return [];
 
+        // For each item in the original requisition...
         return requisition.items.map(reqItem => {
             
-            // Stage 1: Find each vendor's single best ("champion") proposal for this item
+            // Stage 1: Find each vendor's single best ("champion") proposal for this specific item.
             const championBids = eligibleQuotes.map(quote => {
+                // Get all proposals from this vendor for this specific requisition item.
                 const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
                 if (proposalsForItem.length === 0) return null;
 
+                // Determine the highest score this vendor achieved for this item.
                 let bestVendorProposal: QuoteItem | null = null;
                 let bestVendorItemScore = -1;
 
@@ -78,6 +81,7 @@ export const BestItemAwardDialog = ({
 
                 if (!bestVendorProposal) return null;
 
+                // This is the "champion bid" for this vendor for this item.
                 return {
                     vendorId: quote.vendorId,
                     vendorName: quote.vendorName,
@@ -87,7 +91,7 @@ export const BestItemAwardDialog = ({
                 };
             }).filter((bid): bid is NonNullable<typeof bid> => bid !== null);
             
-            // Stage 2: Rank the champion bids against each other
+            // Stage 2: Rank the "champion bids" against each other to find the winner for this item.
             championBids.sort((a, b) => b.score - a.score);
             
             const winner = championBids.length > 0 ? championBids[0] : null;
