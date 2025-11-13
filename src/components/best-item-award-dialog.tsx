@@ -49,12 +49,14 @@ export const BestItemAwardDialog = ({
         if (!requisition.items) return [];
 
         return requisition.items.map(reqItem => {
-            let bestScore = -1;
-            let winner: { vendorId: string; vendorName: string; quoteItemId: string; unitPrice: number; } | null = null;
-
-            eligibleQuotes.forEach(quote => {
+            
+            // Step 1: Find each vendor's single best ("champion") proposal for this item
+            const championBids = eligibleQuotes.map(quote => {
                 const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
-                if (!proposalsForItem.length) return;
+                if (proposalsForItem.length === 0) return null;
+
+                let bestVendorProposal: QuoteItem | null = null;
+                let bestVendorItemScore = -1;
 
                 proposalsForItem.forEach(proposal => {
                     let totalItemScore = 0;
@@ -68,23 +70,34 @@ export const BestItemAwardDialog = ({
                     });
                     const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
                     
-                    if (averageItemScore > bestScore) {
-                        bestScore = averageItemScore;
-                        winner = {
-                            vendorId: quote.vendorId,
-                            vendorName: quote.vendorName,
-                            quoteItemId: proposal.id,
-                            unitPrice: proposal.unitPrice,
-                        };
+                    if (averageItemScore > bestVendorItemScore) {
+                        bestVendorItemScore = averageItemScore;
+                        bestVendorProposal = proposal;
                     }
                 });
-            });
+
+                if (!bestVendorProposal) return null;
+
+                return {
+                    vendorId: quote.vendorId,
+                    vendorName: quote.vendorName,
+                    quoteItemId: bestVendorProposal.id,
+                    unitPrice: bestVendorProposal.unitPrice,
+                    score: bestVendorItemScore
+                };
+            }).filter((bid): bid is NonNullable<typeof bid> => bid !== null);
+            
+            // Step 2: Rank the champion bids against each other
+            championBids.sort((a, b) => b.score - a.score);
+            
+            const winner = championBids.length > 0 ? championBids[0] : null;
+
             return {
                 requisitionItemId: reqItem.id,
                 name: reqItem.name,
                 quantity: reqItem.quantity,
-                winner,
-                bestScore,
+                winner: winner,
+                bestScore: winner ? winner.score : -1,
             }
         });
     }, [requisition, eligibleQuotes]);
