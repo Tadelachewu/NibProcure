@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -31,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -2076,7 +2077,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
                         <div className="flex gap-2">
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newDeadline && "text-muted-foreground")}>
+                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !newDeadline && "text-muted-foreground")}>
                                         <CalendarIcon className="mr-2 h-4 w-4" />
                                         {newDeadline ? format(newDeadline, "PPP") : <span>Pick a date</span>}
                                     </Button>
@@ -2266,7 +2267,7 @@ const NotifyVendorDialog = ({
                             type="time"
                             className="w-32"
                             value={deadlineTime}
-                            onChange={(e) => setDeadlineTime(e.target.value)}
+                            onChange={(e) => setNewDeadlineTime(e.target.value)}
                         />
                     </div>
                 </div>
@@ -2396,6 +2397,10 @@ export default function QuotationDetailsPage() {
   useEffect(() => {
     if (id && user && allUsers.length > 0) {
         fetchRequisitionAndQuotes();
+        window.addEventListener('focus', fetchRequisitionAndQuotes);
+        return () => {
+            window.removeEventListener('focus', fetchRequisitionAndQuotes);
+        }
     }
   }, [id, user, allUsers, fetchRequisitionAndQuotes]);
 
@@ -2593,15 +2598,14 @@ export default function QuotationDetailsPage() {
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
 
-  const canViewCumulativeReport = isAwarded && isScoringComplete && (
-      userRoleName === 'Procurement_Officer' ||
-      userRoleName === 'Admin' ||
-      userRoleName?.startsWith('Manager_') ||
-      userRoleName?.startsWith('Director_') ||
-      userRoleName?.startsWith('VP_') ||
-      userRoleName === 'President' ||
-      userRoleName?.startsWith('Committee_')
-  );
+  const isReviewer = useMemo(() => {
+    if (!user || !userRoleName || !requisition) return false;
+    const isHierarchicalReviewer = requisition.currentApproverId === user.id;
+    const isCommitteeReviewer = (userRoleName === 'Committee_A_Member' && requisition.status === 'Pending_Committee_A_Recommendation') || (userRoleName === 'Committee_B_Member' && requisition.status === 'Pending_Committee_B_Review');
+    return isHierarchicalReviewer || isCommitteeReviewer;
+  }, [user, userRoleName, requisition]);
+
+  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
 
 
   return (
@@ -3118,7 +3122,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
     const failedItems = useMemo(() => 
         requisition.items.filter(item => 
-            item.perItemAwardDetails?.some(d => d.status === 'Failed_to_Award')
+            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award')
         ), [requisition.items]);
 
     const deadline = useMemo(() => {
