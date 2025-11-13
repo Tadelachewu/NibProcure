@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -187,7 +186,7 @@ export async function GET(request: Request) {
       if (approverId) {
         whereClause.OR = [
             { currentApproverId: approverId }, // Items currently pending this user's approval
-            { approverId: approverId }       // Items this user has actioned
+            { reviews: { some: { reviewerId: approverId } } } // Items this user has actioned
         ];
       }
       
@@ -335,7 +334,16 @@ export async function PATCH(
         }
         // Set the approver who took the action
         dataToUpdate.approver = { connect: { id: userId } };
-        dataToUpdate.approverComment = comment;
+        
+        await prisma.review.create({
+            data: {
+                requisition: { connect: { id } },
+                reviewer: { connect: { id: userId } },
+                decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
+                comment,
+            }
+        });
+
 
     } else if (requisition.status.startsWith('Pending_')) {
         let isDesignatedApprover = false;
@@ -701,7 +709,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
-
-    
