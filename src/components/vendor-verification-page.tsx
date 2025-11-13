@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   Card,
@@ -47,7 +47,7 @@ export function VendorVerificationPage() {
   const [action, setAction] = useState<'verify' | 'reject' | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  const fetchVendors = async () => {
+  const fetchVendors = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch('/api/vendors');
@@ -59,11 +59,15 @@ export function VendorVerificationPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchVendors();
-  }, []);
+    window.addEventListener('focus', fetchVendors);
+    return () => {
+        window.removeEventListener('focus', fetchVendors);
+    }
+  }, [fetchVendors]);
 
   const handleOpenDialog = (vendor: Vendor, type: 'verify' | 'reject') => {
     setSelectedVendor(vendor);

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -496,7 +496,7 @@ export function InvoicesPage() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     try {
       const invResponse = await fetch('/api/invoices');
@@ -534,11 +534,15 @@ export function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchAllData();
-  }, []);
+    window.addEventListener('focus', fetchAllData);
+    return () => {
+        window.removeEventListener('focus', fetchAllData);
+    }
+  }, [fetchAllData]);
   
   const totalPages = Math.ceil(invoices.length / PAGE_SIZE);
   const paginatedInvoices = useMemo(() => {
@@ -805,5 +809,3 @@ function PaymentDialog({ invoice, onConfirm, isLoading }: { invoice: Invoice, on
         </AlertDialog>
     );
 }
-
-

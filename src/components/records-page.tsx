@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -160,7 +160,7 @@ const AuditTrailDialog = ({ document, auditTrail, minutes }: { document: Documen
                                 {minutes.map(minute => (
                                     <Card key={minute.id}>
                                         <CardHeader>
-                                            <CardTitle className="flex justify-between items-center">
+                                            <CardTitle className="flex justify-between items-center text-base">
                                                 <span>Minute: {minute.decisionBody}</span>
                                                 <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
                                             </CardTitle>
@@ -202,7 +202,7 @@ export function RecordsPage() {
   const { user, role } = useAuth();
 
 
-  const fetchRecords = async () => {
+  const fetchRecords = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch('/api/records');
@@ -216,11 +216,15 @@ export function RecordsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchRecords();
-  }, []);
+    window.addEventListener('focus', fetchRecords);
+    return () => {
+        window.removeEventListener('focus', fetchRecords);
+    }
+  }, [fetchRecords]);
   
   const filteredRecords = useMemo(() => {
     let relevantRecords = records;

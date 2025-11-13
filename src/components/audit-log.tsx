@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -45,21 +45,26 @@ export function AuditLog() {
   const [currentPage, setCurrentPage] = useState(1);
   const { user, role } = useAuth();
 
-  useEffect(() => {
-    const fetchLogs = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch('/api/audit-log');
-        const data = await response.json();
-        setLogs(data);
-      } catch (error) {
-        console.error("Failed to fetch audit logs", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLogs();
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/audit-log');
+      const data = await response.json();
+      setLogs(data);
+    } catch (error) {
+      console.error("Failed to fetch audit logs", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchLogs();
+    window.addEventListener('focus', fetchLogs);
+    return () => {
+      window.removeEventListener('focus', fetchLogs);
+    };
+  }, [fetchLogs]);
 
   const uniqueRoles = useMemo(() => ['all', ...Array.from(new Set(logs.map(log => log.role)))], [logs]);
   const uniqueActions = useMemo(() => ['all', ...Array.from(new Set(logs.map(log => log.action)))], [logs]);

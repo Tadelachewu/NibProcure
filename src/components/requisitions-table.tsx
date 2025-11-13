@@ -1,7 +1,8 @@
 
+
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -75,7 +76,7 @@ export function RequisitionsTable() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
 
-  const fetchRequisitions = async () => {
+  const fetchRequisitions = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch('/api/requisitions');
@@ -89,11 +90,15 @@ export function RequisitionsTable() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchRequisitions();
-  }, []);
+    window.addEventListener('focus', fetchRequisitions);
+    return () => {
+        window.removeEventListener('focus', fetchRequisitions);
+    }
+  }, [fetchRequisitions]);
   
   const handleSubmitForApproval = async (req: PurchaseRequisition) => {
     if (!user) return;

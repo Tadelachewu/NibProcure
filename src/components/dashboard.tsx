@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -73,7 +73,7 @@ function ProcurementOfficerDashboard({ setActiveView }: { setActiveView: (view: 
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
-     const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         setLoading(true);
         try {
             const [reqResponse, invResponse] = await Promise.all([
@@ -89,11 +89,15 @@ function ProcurementOfficerDashboard({ setActiveView }: { setActiveView: (view: 
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
         fetchData();
-    }, []);
+        window.addEventListener('focus', fetchData);
+        return () => {
+            window.removeEventListener('focus', fetchData);
+        };
+    }, [fetchData]);
 
     const stats = useMemo(() => {
         const openRequisitions = requisitions.filter(r => r.status !== 'Closed' && r.status !== 'Fulfilled').length;
@@ -266,7 +270,7 @@ export function Dashboard({ setActiveView }: DashboardProps) {
             />
           </div>
         );
-      case 'Procurement Officer':
+      case 'Procurement_Officer':
         return <ProcurementOfficerDashboard setActiveView={setActiveView} />;
       default:
         return <p>No dashboard available for this role.</p>;
@@ -280,7 +284,7 @@ export function Dashboard({ setActiveView }: DashboardProps) {
             <h1 className="text-3xl font-bold">Welcome back, {user?.name}!</h1>
             <p className="text-muted-foreground">
             Here's a summary of procurement activities for your role as a{' '}
-            <strong>{role}</strong>.
+            <strong>{role?.replace(/_/g, ' ')}</strong>.
             </p>
         </div>
       </div>

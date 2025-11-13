@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -57,49 +57,57 @@ export default function VendorDashboardPage() {
     const [openCurrentPage, setOpenCurrentPage] = useState(1);
     const [activeCurrentPage, setActiveCurrentPage] = useState(1);
 
-    useEffect(() => {
-        if (!token || !user?.vendorId) return;
-
-        const fetchAllData = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                // Fetch vendor details
-                const vendorRes = await fetch(`/api/vendors`);
-                if(!vendorRes.ok) throw new Error('Could not fetch vendor details.');
-                const allVendors: Vendor[] = await vendorRes.json();
-                const currentVendor = allVendors.find(v => v.id === user.vendorId);
-                setVendor(currentVendor || null);
-
-                // If vendor is not verified, don't fetch requisitions
-                if (currentVendor?.kycStatus !== 'Verified') {
-                    setAllRequisitions([]);
-                    return;
-                }
-
-                const response = await fetch('/api/requisitions?forVendor=true', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                if (!response.ok) {
-                    if (response.status === 403) {
-                         throw new Error('You do not have permission to view these resources.');
-                    }
-                    throw new Error('Failed to fetch requisitions.');
-                }
-                const requisitionsData: PurchaseRequisition[] = await response.json();
-                setAllRequisitions(requisitionsData);
-
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'An unknown error occurred.');
-            } finally {
-                setLoading(false);
-            }
+    const fetchAllData = useCallback(async () => {
+        if (!token || !user?.vendorId) {
+            setLoading(false);
+            return;
         };
 
-        fetchAllData();
+        setLoading(true);
+        setError(null);
+        try {
+            // Fetch vendor details
+            const vendorRes = await fetch(`/api/vendors`);
+            if(!vendorRes.ok) throw new Error('Could not fetch vendor details.');
+            const allVendors: Vendor[] = await vendorRes.json();
+            const currentVendor = allVendors.find(v => v.id === user.vendorId);
+            setVendor(currentVendor || null);
+
+            // If vendor is not verified, don't fetch requisitions
+            if (currentVendor?.kycStatus !== 'Verified') {
+                setAllRequisitions([]);
+                setLoading(false);
+                return;
+            }
+
+            const response = await fetch('/api/requisitions?forVendor=true', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (!response.ok) {
+                if (response.status === 403) {
+                     throw new Error('You do not have permission to view these resources.');
+                }
+                throw new Error('Failed to fetch requisitions.');
+            }
+            const requisitionsData: PurchaseRequisition[] = await response.json();
+            setAllRequisitions(requisitionsData);
+
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+        } finally {
+            setLoading(false);
+        }
     }, [token, user]);
+
+    useEffect(() => {
+        fetchAllData();
+        window.addEventListener('focus', fetchAllData);
+        return () => {
+            window.removeEventListener('focus', fetchAllData);
+        }
+    }, [fetchAllData]);
 
     const getRequisitionCardStatus = (req: PurchaseRequisition): RequisitionCardStatus => {
         if (!user?.vendorId) return 'Action Required';
@@ -138,7 +146,7 @@ export default function VendorDashboardPage() {
         }
         
         // If vendor has no quote but there might be an item-level award (e.g. from a different quote that was deleted/re-evaluated)
-        const hasAnyItemAward = req.items.some(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.vendorId === user.vendorId && d.status === 'Awarded'));
+        const hasAnyItemAward = req.items.some(item => (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user.vendorId && d.status === 'Awarded'));
         if (hasAnyItemAward) return 'Awarded';
 
         return 'Action Required';
@@ -352,5 +360,3 @@ export default function VendorDashboardPage() {
         </div>
     )
 }
-
-    

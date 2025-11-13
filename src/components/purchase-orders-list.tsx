@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -36,26 +36,31 @@ export function PurchaseOrdersList() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [poResponse, reqResponse] = await Promise.all([
-          fetch('/api/purchase-orders'),
-          fetch('/api/requisitions')
-        ]);
-        const poData: PurchaseOrder[] = await poResponse.json();
-        const reqData: PurchaseRequisition[] = await reqResponse.json();
-        setPurchaseOrders(poData);
-        setRequisitions(reqData);
-      } catch (error) {
-        console.error("Failed to fetch data", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [poResponse, reqResponse] = await Promise.all([
+        fetch('/api/purchase-orders'),
+        fetch('/api/requisitions')
+      ]);
+      const poData: PurchaseOrder[] = await poResponse.json();
+      const reqData: PurchaseRequisition[] = await reqResponse.json();
+      setPurchaseOrders(poData);
+      setRequisitions(reqData);
+    } catch (error) {
+      console.error("Failed to fetch data", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+    window.addEventListener('focus', fetchData);
+    return () => {
+      window.removeEventListener('focus', fetchData);
+    };
+  }, [fetchData]);
   
   const handleViewReqDetails = (reqId: string) => {
     const req = requisitions.find(r => r.id === reqId);
@@ -156,7 +161,7 @@ export function PurchaseOrdersList() {
         <RequisitionDetailsDialog
             isOpen={isDetailsOpen}
             onClose={() => setIsDetailsOpen(false)}
-            reuisition={selectedRequisition}
+            requisition={selectedRequisition}
         />
     )}
     </>

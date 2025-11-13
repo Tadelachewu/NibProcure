@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -63,7 +63,7 @@ export function ApprovalsTable() {
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
 
-  const fetchRequisitions = async () => {
+  const fetchRequisitions = useCallback(async () => {
     if (!user) return;
     try {
       setLoading(true);
@@ -80,7 +80,7 @@ export function ApprovalsTable() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -88,7 +88,12 @@ export function ApprovalsTable() {
     } else {
         setLoading(false);
     }
-  }, [user]);
+    
+    window.addEventListener('focus', fetchRequisitions);
+    return () => {
+        window.removeEventListener('focus', fetchRequisitions);
+    }
+  }, [user, fetchRequisitions]);
 
   const handleAction = (req: PurchaseRequisition, type: 'approve' | 'reject') => {
     setSelectedRequisition(req);

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -40,33 +40,38 @@ export function ContractsPage() {
   const router = useRouter();
   const { toast } = useToast();
   
-  useEffect(() => {
-    const fetchContracts = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch('/api/contracts');
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to fetch contracts");
-        }
-        if (Array.isArray(data)) {
-          setContracts(data);
-        } else {
-          throw new Error("Received invalid data from server.");
-        }
-      } catch (error) {
-        console.error("Failed to fetch contracts", error);
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: error instanceof Error ? error.message : "Could not fetch contracts data."
-        })
-      } finally {
-        setLoading(false);
+  const fetchContracts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/contracts');
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch contracts");
       }
-    };
-    fetchContracts();
+      if (Array.isArray(data)) {
+        setContracts(data);
+      } else {
+        throw new Error("Received invalid data from server.");
+      }
+    } catch (error) {
+      console.error("Failed to fetch contracts", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Could not fetch contracts data."
+      })
+    } finally {
+      setLoading(false);
+    }
   }, [toast]);
+  
+  useEffect(() => {
+    fetchContracts();
+    window.addEventListener('focus', fetchContracts);
+    return () => {
+        window.removeEventListener('focus', fetchContracts);
+    }
+  }, [fetchContracts]);
 
   const filteredContracts = useMemo(() => {
     return contracts

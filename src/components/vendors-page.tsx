@@ -2,7 +2,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -98,7 +98,7 @@ export function VendorsPage() {
     },
   });
 
-  const fetchVendors = async () => {
+  const fetchVendors = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch('/api/vendors');
@@ -114,11 +114,15 @@ export function VendorsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchVendors();
-  }, []);
+    window.addEventListener('focus', fetchVendors);
+    return () => {
+        window.removeEventListener('focus', fetchVendors);
+    }
+  }, [fetchVendors]);
 
   const totalPages = Math.ceil(vendors.length / PAGE_SIZE);
   const paginatedVendors = useMemo(() => {
