@@ -64,6 +64,7 @@ import { Switch } from '@/components/ui/switch';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AwardStandbyButton } from '@/components/award-standby-button';
 
 
 const PAGE_SIZE = 6;
@@ -2309,6 +2310,46 @@ export default function QuotationDetailsPage() {
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
   const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
 
+  const fetchRequisitionAndQuotes = useCallback(async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+          const [reqResponse, venResponse, quoResponse] = await Promise.all([
+              fetch(`/api/requisitions/${id}`),
+              fetch('/api/vendors'),
+              fetch(`/api/quotations?requisitionId=${id}`),
+          ]);
+          const currentReq = await reqResponse.json();
+          const venData = await venResponse.json();
+          const quoData: Quotation[] = await quoResponse.json();
+
+          setVendors(venData || []);
+
+          if (currentReq) {
+              setRequisition(currentReq);
+              // Sort quotations by creation date descending
+              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          } else {
+              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
+          }
+
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
+      } finally {
+          setLoading(false);
+      }
+  }, [id, toast]);
+
+  useEffect(() => {
+    if (id && user && allUsers.length > 0) {
+        fetchRequisitionAndQuotes();
+        window.addEventListener('focus', fetchRequisitionAndQuotes);
+        return () => {
+            window.removeEventListener('focus', fetchRequisitionAndQuotes);
+        }
+    }
+  }, [id, user, allUsers, fetchRequisitionAndQuotes]);
+
   const userRoleName = useMemo(() => {
     if (!user || !user.role) return null;
     return user.role.name;
@@ -2368,55 +2409,15 @@ export default function QuotationDetailsPage() {
     const isCommitteeReviewer = (userRoleName === 'Committee_A_Member' && requisition.status === 'Pending_Committee_A_Recommendation') || (userRoleName === 'Committee_B_Member' && requisition.status === 'Pending_Committee_B_Review');
     return isHierarchicalReviewer || isCommitteeReviewer;
   }, [user, userRoleName, requisition]);
-  
-  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
-  
+
   const canManageCommittees = isAuthorized;
   const isReadyForNotification = requisition?.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
-
-  const fetchRequisitionAndQuotes = useCallback(async () => {
-      if (!id) return;
-      setLoading(true);
-      try {
-          const [reqResponse, venResponse, quoResponse] = await Promise.all([
-              fetch(`/api/requisitions/${id}`),
-              fetch('/api/vendors'),
-              fetch(`/api/quotations?requisitionId=${id}`),
-          ]);
-          const currentReq = await reqResponse.json();
-          const venData = await venResponse.json();
-          const quoData: Quotation[] = await quoResponse.json();
-
-          setVendors(venData || []);
-
-          if (currentReq) {
-              setRequisition(currentReq);
-              // Sort quotations by creation date descending
-              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-          } else {
-              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
-          }
-
-      } catch (error) {
-          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
-      } finally {
-          setLoading(false);
-      }
-  }, [id, toast]);
-
-
-  useEffect(() => {
-    if (id && user && allUsers.length > 0) {
-        fetchRequisitionAndQuotes();
-        window.addEventListener('focus', fetchRequisitionAndQuotes);
-        return () => {
-            window.removeEventListener('focus', fetchRequisitionAndQuotes);
-        }
-    }
-  }, [id, user, allUsers, fetchRequisitionAndQuotes]);
+  
+  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
+  
 
   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
