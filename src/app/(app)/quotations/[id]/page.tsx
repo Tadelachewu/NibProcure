@@ -2302,6 +2302,7 @@ export default function QuotationDetailsPage() {
   const [isChangingAward, setIsChangingAward] = useState(false);
   const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
+  const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
 
   const userRoleName = useMemo(() => {
     if (!user || !user.role) return null;
@@ -2827,23 +2828,12 @@ export default function QuotationDetailsPage() {
           </CardHeader>
           <CardFooter className="gap-4">
             {requisition.status === 'Award_Declined' ? (
-                <AlertDialog>
-                    <AlertDialogTrigger asChild><Button disabled={isChangingAward}>
-                        {isChangingAward ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <TrophyIcon className="mr-2 h-4 w-4"/>}
-                        Promote Standby Vendor
-                    </Button></AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Confirm Promotion</AlertDialogTitle>
-                            <AlertDialogDescription>This will promote the next highest-ranked standby vendor to an awarded status. This action cannot be undone.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleAwardChange}>Confirm &amp; Promote</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-
+                <AwardStandbyButton
+                    requisition={requisition}
+                    quotations={quotations}
+                    onPromote={handleAwardChange}
+                    isChangingAward={isChangingAward}
+                />
             ) : (
               <>
                 <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
@@ -2874,6 +2864,11 @@ export default function QuotationDetailsPage() {
                 </Dialog>
               </>
             )}
+             <RestartRfqDialog 
+                requisition={requisition} 
+                vendors={vendors} 
+                onRfqRestarted={fetchRequisitionAndQuotes}
+             />
           </CardFooter>
         </Card>
       )}
@@ -2946,7 +2941,7 @@ export default function QuotationDetailsPage() {
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
 
@@ -2963,7 +2958,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
@@ -2979,7 +2974,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     };
 
@@ -3108,8 +3103,128 @@ const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Qu
     );
 };
 
+const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisition: PurchaseRequisition; vendors: Vendor[]; onRfqRestarted: () => void; }) => {
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [isOpen, setIsOpen] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
+    const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
+    const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
+    const [deadlineTime, setDeadlineTime] = useState('17:00');
 
+    const failedItems = useMemo(() => 
+        requisition.items.filter(item => 
+            item.perItemAwardDetails?.some(d => d.status === 'Failed_to_Award')
+        ), [requisition.items]);
 
+    const deadline = useMemo(() => {
+        if (!deadlineDate || !deadlineTime) return undefined;
+        const [hours, minutes] = deadlineTime.split(':').map(Number);
+        return setMinutes(setHours(deadlineDate, hours), minutes);
+    }, [deadlineDate, deadlineTime]);
+    
+    const canRestart = (requisition.rfqSettings as any)?.awardStrategy === 'item' && failedItems.length > 0;
+
+    const handleRestart = async () => {
+        if (!user || !deadline || failedItems.length === 0 || selectedVendors.length === 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please select vendors and a new deadline.' });
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const response = await fetch(`/api/requisitions/${requisition.id}/restart-item-rfq`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: user.id,
+                    itemIds: failedItems.map(item => item.id),
+                    vendorIds: selectedVendors,
+                    newDeadline: deadline,
+                }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to restart RFQ for items.');
+            }
+            toast({ title: 'RFQ Restarted', description: 'The RFQ for the failed items has been sent to new vendors.' });
+            onRfqRestarted();
+            setIsOpen(false);
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
+        } finally {
+            setSubmitting(false);
+        }
+    };
+    
+    if (!canRestart) return null;
+    
+    return (
+        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+            <DialogTrigger asChild>
+                <Button variant="destructive" className="gap-2">
+                    <RefreshCw className="h-4 w-4" />
+                    Restart RFQ for Failed Items
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Restart RFQ for Failed Items</DialogTitle>
+                    <DialogDescription>Select new vendors to send a Request for Quotation for the items that failed to be awarded.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div>
+                        <Label>Items to Re-tender</Label>
+                        <ul className="list-disc pl-5 text-sm text-muted-foreground">
+                            {failedItems.map(item => <li key={item.id}>{item.name}</li>)}
+                        </ul>
+                    </div>
+                     <div className="space-y-2">
+                        <Label>New Quotation Submission Deadline</Label>
+                        <div className="flex gap-2">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal",!deadlineDate && "text-muted-foreground")}>
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {deadlineDate ? format(deadlineDate, "PPP") : <span>Pick a new date</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar mode="single" selected={deadlineDate} onSelect={setDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
+                                </PopoverContent>
+                            </Popover>
+                            <Input type="time" className="w-32" value={deadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
+                        </div>
+                    </div>
+                    <div>
+                        <Label>Select Vendors</Label>
+                        <ScrollArea className="h-48 border rounded-md p-2 mt-2">
+                            {vendors.filter(v => v.kycStatus === 'Verified').map(vendor => (
+                                <div key={vendor.id} className="flex items-center space-x-2 p-1">
+                                    <Checkbox 
+                                        id={`vendor-restart-${vendor.id}`} 
+                                        checked={selectedVendors.includes(vendor.id)}
+                                        onCheckedChange={(checked) => {
+                                            setSelectedVendors(prev => checked ? [...prev, vendor.id] : prev.filter(id => id !== vendor.id));
+                                        }}
+                                    />
+                                    <Label htmlFor={`vendor-restart-${vendor.id}`} className="font-normal">{vendor.name}</Label>
+                                </div>
+                            ))}
+                        </ScrollArea>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+                    <Button onClick={handleRestart} disabled={isSubmitting || selectedVendors.length === 0 || !deadline}>
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2"/>}
+                        Send New RFQ
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
     
 
     
@@ -3117,3 +3232,110 @@ const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Qu
 
 
 
+
+```
+  </change>
+  <change>
+    <file>src/app/api/requisitions/[id]/restart-item-rfq/route.ts</file>
+    <content><![CDATA[
+'use server';
+
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { User, PerItemAwardDetail } from '@/lib/types';
+import { sendEmail } from '@/services/email-service';
+import { format } from 'date-fns';
+
+
+export async function POST(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const requisitionId = params.id;
+    const body = await request.json();
+    const { userId, itemIds, vendorIds, newDeadline } = body;
+
+    const actor: User | null = await prisma.user.findUnique({ where: { id: userId } });
+    if (!actor || (actor.role as any)?.name !== 'Procurement_Officer' && (actor.role as any)?.name !== 'Admin') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    if (!itemIds || itemIds.length === 0 || !vendorIds || vendorIds.length === 0 || !newDeadline) {
+      return NextResponse.json({ error: 'Missing required parameters: itemIds, vendorIds, and newDeadline.' }, { status: 400 });
+    }
+
+    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
+    if (!requisition) {
+      return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
+    }
+
+    const transactionResult = await prisma.$transaction(async (tx) => {
+        // Reset the award details for the specific failed items
+        for (const itemId of itemIds) {
+            await tx.requisitionItem.update({
+                where: { id: itemId },
+                data: { perItemAwardDetails: Prisma.JsonNull }
+            });
+        }
+
+        // Set the requisition back to an active bidding state
+        const updatedRequisition = await tx.purchaseRequisition.update({
+            where: { id: requisitionId },
+            data: {
+                status: 'Accepting_Quotes',
+                deadline: new Date(newDeadline),
+            }
+        });
+        
+        const vendorsToNotify = await tx.vendor.findMany({
+            where: { id: { in: vendorIds } }
+        });
+        
+        const itemsToReTender = await tx.requisitionItem.findMany({
+            where: { id: { in: itemIds } }
+        });
+
+        const itemNames = itemsToReTender.map(i => i.name).join(', ');
+
+        for (const vendor of vendorsToNotify) {
+            const emailHtml = `
+                <h1>New Request for Quotation for Specific Items</h1>
+                <p>Hello ${vendor.name},</p>
+                <p>A new Request for Quotation (RFQ) has been issued for specific items from requisition <strong>${requisition.title}</strong>.</p>
+                <p><strong>Items:</strong> ${itemNames}</p>
+                <p><strong>New Submission Deadline:</strong> ${format(new Date(newDeadline), 'PPpp')}</p>
+                <p>Please log in to the vendor portal to view the full details and submit your quotation.</p>
+                <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
+            `;
+            await sendEmail({
+                to: vendor.email,
+                subject: `New RFQ for items from: ${requisition.title}`,
+                html: emailHtml
+            });
+        }
+        
+        await tx.auditLog.create({
+            data: {
+                transactionId: requisition.transactionId,
+                user: { connect: { id: actor.id } },
+                action: 'RESTART_ITEM_RFQ',
+                entity: 'Requisition',
+                entityId: requisitionId,
+                details: `Restarted RFQ for items: ${itemNames}. Sent to ${vendorsToNotify.length} vendors.`
+            }
+        });
+
+        return updatedRequisition;
+    });
+
+    return NextResponse.json({ message: 'RFQ for failed items has been successfully restarted.', requisition: transactionResult });
+
+  } catch (error) {
+    console.error('Failed to restart item RFQ:', error);
+    if (error instanceof Error) {
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+  }
+}
