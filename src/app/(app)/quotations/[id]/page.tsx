@@ -61,9 +61,9 @@ import Image from 'next/image';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardStandbyButton } from '@/components/award-standby-button';
 
 
@@ -84,59 +84,6 @@ const contractFormSchema = z.object({
     fileName: z.string().min(3, "File name is required."),
     notes: z.string().min(10, "Negotiation notes are required.")
 })
-
-/**
- * For a given vendor's quote, this function groups all their proposed items (including alternatives)
- * by the original requisition item and selects only the single best-scoring proposal for each.
- * This ensures a vendor's card only shows their "champion" bid for each item.
- */
-function getVendorChampionItems(quote: Quotation, requisition: PurchaseRequisition): QuoteItem[] {
-    const championItems: QuoteItem[] = [];
-    if (!quote?.items || !requisition?.items) return [];
-
-    // Get a set of all unique requisition item IDs from the original requisition
-    const allRequisitionItemIds = new Set(requisition.items.map(i => i.id));
-
-    allRequisitionItemIds.forEach(reqItemId => {
-        // Find all of this vendor's proposals for this single requisition item
-        const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItemId);
-
-        if (proposalsForItem.length === 0) {
-            return; // Vendor did not bid on this item
-        }
-        
-        if (proposalsForItem.length === 1) {
-            championItems.push(proposalsForItem[0]); // Only one proposal, it's the champion by default
-            return;
-        }
-
-        // If there are multiple proposals, find the one with the highest score
-        let bestProposal: QuoteItem = proposalsForItem[0];
-        let bestScore = -1;
-
-        proposalsForItem.forEach(proposal => {
-            let totalScore = 0;
-            let scoreCount = 0;
-            // Sum up the scores for this specific quoteItem from all committee members
-            quote.scores?.forEach(scoreSet => {
-                const itemScore = scoreSet.itemScores?.find(s => s.quoteItemId === proposal.id);
-                if (itemScore) {
-                    totalScore += itemScore.finalScore;
-                    scoreCount++;
-                }
-            });
-            const averageScore = scoreCount > 0 ? totalScore / scoreCount : 0;
-            if (averageScore > bestScore) {
-                bestScore = averageScore;
-                bestProposal = proposal;
-            }
-        });
-        championItems.push(bestProposal);
-    });
-
-    return championItems;
-}
-
 
 function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: PurchaseRequisition; vendors: Vendor[], onQuoteAdded: () => void }) {
     const [isSubmitting, setSubmitting] = useState(false);
@@ -312,13 +259,13 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
 
                 const mainStatus = useMemo(() => {
                     const statusSet = new Set(thisVendorItemStatuses.map(s => s.status));
+                    if (statusSet.has('Awarded')) return 'Awarded';
+                    if (statusSet.has('Accepted')) return 'Accepted';
+                    if (statusSet.has('Pending_Award')) return 'Pending_Award';
                     if (statusSet.has('Declined')) return 'Declined';
-                    if (statusSet.has('Awarded') || statusSet.has('Pending_Award')) {
-                        return requisition.status === 'Awarded' ? 'Awarded' : 'Pending_Award';
-                    }
                     if (statusSet.has('Standby')) return 'Standby';
                     return quote.status;
-                }, [thisVendorItemStatuses, quote.status, requisition.status]);
+                }, [thisVendorItemStatuses, quote.status]);
                 
                 const isAwarded = ['Awarded', 'Accepted', 'Partially_Awarded', 'Pending_Award'].includes(mainStatus);
 
@@ -2457,10 +2404,11 @@ export default function QuotationDetailsPage() {
     if (!requisition || !quotations || quotations.length === 0) return [];
     
     // 1. Create a list of all "champion bids" from every vendor for every item.
-    const allChampionBids = quotations.flatMap(quote => {
-        return (requisition.items || []).map(reqItem => {
+    const allChampionBids: any[] = [];
+    for (const reqItem of requisition.items || []) {
+        for (const quote of quotations) {
             const proposalsForItem = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
-            if (proposalsForItem.length === 0) return null;
+            if (proposalsForItem.length === 0) continue;
 
             let bestProposal = proposalsForItem[0];
             let bestScore = -1;
@@ -2482,16 +2430,17 @@ export default function QuotationDetailsPage() {
                 }
             });
 
-            return {
+            allChampionBids.push({
                 reqItemId: reqItem.id,
                 reqItemName: reqItem.name,
                 vendorId: quote.vendorId,
                 proposalId: bestProposal.id,
                 proposalName: bestProposal.name,
                 score: bestScore,
-            };
-        }).filter(Boolean);
-    });
+            });
+        }
+    }
+
 
     // 2. Group these champion bids by the original requisition item.
     const groupedByReqItem: { [reqItemId: string]: any[] } = {};
@@ -2517,8 +2466,7 @@ export default function QuotationDetailsPage() {
             if (thisAwardDetail) {
                 status = thisAwardDetail.status;
             } else if (rank <= 3) {
-                 // This fallback is unlikely if `finalize-scores` ran correctly, but good for safety.
-                status = rank === 1 ? 'Pending_Award' : 'Standby';
+                 status = rank === 1 ? 'Pending_Award' : 'Standby';
             }
             
             finalStatuses.push({
