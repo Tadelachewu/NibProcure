@@ -2322,7 +2322,7 @@ const NotifyVendorDialog = ({
                             type="time"
                             className="w-32"
                             value={deadlineTime}
-                            onChange={(e) => setNewDeadlineTime(e.target.value)}
+                            onChange={(e) => setDeadlineTime(e.target.value)}
                         />
                     </div>
                 </div>
@@ -2457,29 +2457,12 @@ export default function QuotationDetailsPage() {
       return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
   }, [user, userRoleName, requisition]);
   
-  if (loading || !user) {
-     return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  }
-
-  if (!requisition) {
-     return <div className="text-center p-8">Requisition not found.</div>;
-  }
-
   const isReviewer = useMemo(() => {
     if (!user || !userRoleName || !requisition) return false;
     const isHierarchicalReviewer = requisition.currentApproverId === user.id;
     const isCommitteeReviewer = (userRoleName === 'Committee_A_Member' && requisition.status === 'Pending_Committee_A_Recommendation') || (userRoleName === 'Committee_B_Member' && requisition.status === 'Pending_Committee_B_Review');
     return isHierarchicalReviewer || isCommitteeReviewer;
   }, [user, userRoleName, requisition]);
-
-  const canManageCommittees = isAuthorized;
-  const isReadyForNotification = requisition?.status === 'PostApproved';
-  const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
-  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
-  const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
-  
-  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
-  
 
   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
@@ -2620,7 +2603,6 @@ export default function QuotationDetailsPage() {
 
     return 'rfq'; // Default fallback
   };
-  const currentStep = getCurrentStep();
 
   const formatEvaluationCriteria = (criteria?: EvaluationCriteria) => {
       if (!criteria) return "No specific criteria defined.";
@@ -2652,6 +2634,24 @@ export default function QuotationDetailsPage() {
     const scored = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id));
     return { pendingQuotes: pending, scoredQuotes: scored };
   }, [quotations, user]);
+
+  if (loading || !user) {
+     return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
+  if (!requisition) {
+     return <div className="text-center p-8">Requisition not found.</div>;
+  }
+
+  const canManageCommittees = isAuthorized;
+  const isReadyForNotification = requisition?.status === 'PostApproved';
+  const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
+  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
+  const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
+  
+  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
+  
+  const currentStep = getCurrentStep();
 
   const quotesForDisplay = (user && user.role.name === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (user && user.role.name === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
   const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
