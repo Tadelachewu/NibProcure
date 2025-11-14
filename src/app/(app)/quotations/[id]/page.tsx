@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -326,8 +325,9 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                 const perItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 const mainStatus = perItemStrategy ? getOverallStatusForVendor(quote.vendorId) || quote.status : quote.status;
                 
+                const championItems = perItemStrategy ? getVendorChampionItems(quote, requisition) : quote.items;
                 const itemAwardDetails = perItemStrategy 
-                    ? getVendorChampionItems(quote, requisition).map(championItem => {
+                    ? championItems.map(championItem => {
                         const originalReqItem = requisition.items.find(i => i.id === championItem.requisitionItemId);
                         const details = (originalReqItem?.perItemAwardDetails as PerItemAwardDetail[] || []).find(d => d.quoteItemId === championItem.id);
                         return details;
@@ -2364,46 +2364,6 @@ export default function QuotationDetailsPage() {
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
   const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
 
-  const fetchRequisitionAndQuotes = useCallback(async () => {
-      if (!id) return;
-      setLoading(true);
-      try {
-          const [reqResponse, venResponse, quoResponse] = await Promise.all([
-              fetch(`/api/requisitions/${id}`),
-              fetch('/api/vendors'),
-              fetch(`/api/quotations?requisitionId=${id}`),
-          ]);
-          const currentReq = await reqResponse.json();
-          const venData = await venResponse.json();
-          const quoData: Quotation[] = await quoResponse.json();
-
-          setVendors(venData || []);
-
-          if (currentReq) {
-              setRequisition(currentReq);
-              // Sort quotations by creation date descending
-              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-          } else {
-              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
-          }
-
-      } catch (error) {
-          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
-      } finally {
-          setLoading(false);
-      }
-  }, [id, toast]);
-
-  useEffect(() => {
-    if (id && user && allUsers.length > 0) {
-        fetchRequisitionAndQuotes();
-        window.addEventListener('focus', fetchRequisitionAndQuotes);
-        return () => {
-            window.removeEventListener('focus', fetchRequisitionAndQuotes);
-        }
-    }
-  }, [id, user, allUsers, fetchRequisitionAndQuotes]);
-
   const userRoleName = useMemo(() => {
     if (!user || !user.role) return null;
     return user.role.name;
@@ -2478,6 +2438,75 @@ export default function QuotationDetailsPage() {
     return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
   }, [quotesForDisplay, currentQuotesPage]);
   
+  const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
+    if (!requisition || !requisition.status) return 'rfq';
+    const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+
+    if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
+    if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
+
+    const inScoringProcess = [
+        'Accepting_Quotes', // Post-deadline
+        'Scoring_In_Progress',
+        'Scoring_Complete'
+    ].includes(requisition.status);
+    
+    if (inScoringProcess && deadlinePassed) {
+        return isScoringComplete ? 'award' : 'committee';
+    }
+
+    if (requisition.status === 'Award_Declined') return 'award';
+
+    const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded';
+    if (inReviewProcess) return 'award';
+
+    if (isAccepted) {
+      return requisition.status === 'PO_Created' || requisition.status === 'Closed' || requisition.status === 'Fulfilled' ? 'completed' : 'finalize';
+    }
+
+    return 'rfq'; // Default fallback
+  }, [requisition, isAwarded, isAccepted, isScoringComplete]);
+
+  const fetchRequisitionAndQuotes = useCallback(async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+          const [reqResponse, venResponse, quoResponse] = await Promise.all([
+              fetch(`/api/requisitions/${id}`),
+              fetch('/api/vendors'),
+              fetch(`/api/quotations?requisitionId=${id}`),
+          ]);
+          const currentReq = await reqResponse.json();
+          const venData = await venResponse.json();
+          const quoData: Quotation[] = await quoResponse.json();
+
+          setVendors(venData || []);
+
+          if (currentReq) {
+              setRequisition(currentReq);
+              // Sort quotations by creation date descending
+              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          } else {
+              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
+          }
+
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
+      } finally {
+          setLoading(false);
+      }
+  }, [id, toast]);
+
+  useEffect(() => {
+    if (id && user && allUsers.length > 0) {
+        fetchRequisitionAndQuotes();
+        window.addEventListener('focus', fetchRequisitionAndQuotes);
+        return () => {
+            window.removeEventListener('focus', fetchRequisitionAndQuotes);
+        }
+    }
+  }, [id, user, allUsers, fetchRequisitionAndQuotes]);
+
   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
 
@@ -2589,35 +2618,6 @@ export default function QuotationDetailsPage() {
       fetchRequisitionAndQuotes();
   }
 
-  const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
-    if (!requisition || !requisition.status) return 'rfq';
-    const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
-
-    if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
-    if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
-
-    const inScoringProcess = [
-        'Accepting_Quotes', // Post-deadline
-        'Scoring_In_Progress',
-        'Scoring_Complete'
-    ].includes(requisition.status);
-    
-    if (inScoringProcess && deadlinePassed) {
-        return isScoringComplete ? 'award' : 'committee';
-    }
-
-    if (requisition.status === 'Award_Declined') return 'award';
-
-    const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded';
-    if (inReviewProcess) return 'award';
-
-    if (isAccepted) {
-      return requisition.status === 'PO_Created' || requisition.status === 'Closed' || requisition.status === 'Fulfilled' ? 'completed' : 'finalize';
-    }
-
-    return 'rfq'; // Default fallback
-  };
-
   const formatEvaluationCriteria = (criteria?: EvaluationCriteria) => {
       if (!criteria) return "No specific criteria defined.";
 
@@ -2658,8 +2658,6 @@ export default function QuotationDetailsPage() {
   
   const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
   
-  const currentStep = getCurrentStep();
-
   return (
     <div className="space-y-6">
        <div className="flex items-center justify-between">
@@ -2903,7 +2901,7 @@ export default function QuotationDetailsPage() {
                   <AwardCenterDialog
                     requisition={requisition}
                     quotations={quotations}
-                    onFinalize={handleFinalizeScores}
+                    onFinalize={handleFinalScores}
                     onClose={() => setSingleAwardCenterOpen(false)}
                   />
                 </Dialog>
@@ -2917,7 +2915,7 @@ export default function QuotationDetailsPage() {
                   <BestItemAwardDialog
                     requisition={requisition}
                     quotations={quotations}
-                    onFinalize={handleFinalizeScores}
+                    onFinalize={handleFinalScores}
                     isOpen={isBestItemAwardCenterOpen}
                     onClose={() => setBestItemAwardCenterOpen(false)}
                   />
@@ -3289,3 +3287,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
     
 
+
+
+    
