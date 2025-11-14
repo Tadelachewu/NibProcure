@@ -263,7 +263,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, onShowDetails, itemStatuses }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, onShowDetails: (quote: Quotation) => void, itemStatuses: any[] }) => {
+const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[] }) => {
     
     if (quotes.length === 0) {
         return (
@@ -311,17 +311,14 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
                 const mainStatus = useMemo(() => {
-                    if (!isPerItemStrategy) {
-                        return quote.status;
-                    }
-                    if (thisVendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
-                    if (thisVendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) {
-                        // If notification is sent, show Awarded, otherwise it's still Pending Award from a PO officer perspective
+                    const statusSet = new Set(thisVendorItemStatuses.map(s => s.status));
+                    if (statusSet.has('Declined')) return 'Declined';
+                    if (statusSet.has('Awarded') || statusSet.has('Pending_Award')) {
                         return requisition.status === 'Awarded' ? 'Awarded' : 'Pending_Award';
                     }
-                    if (thisVendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
+                    if (statusSet.has('Standby')) return 'Standby';
                     return quote.status;
-                }, [thisVendorItemStatuses, quote.status, requisition.status, isPerItemStrategy]);
+                }, [thisVendorItemStatuses, quote.status, requisition.status]);
                 
                 const isAwarded = ['Awarded', 'Accepted', 'Partially_Awarded', 'Pending_Award'].includes(mainStatus);
 
@@ -391,7 +388,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                              )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
-                            <Button className="w-full" variant="outline" onClick={() => onShowDetails(quote)}>
+                            <Button className="w-full" variant="outline" onClick={() => onScore(quote, hidePrices)}>
                                 <Eye className="mr-2 h-4 w-4" /> View Full Quote
                             </Button>
                              {user.role.name === 'Committee_Member' && isDeadlinePassed && (
@@ -2733,7 +2730,7 @@ export default function QuotationDetailsPage() {
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
   
-  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
+  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer || userRoleName === 'Procurement_Officer');
   
   return (
     <div className="space-y-6">
@@ -2879,10 +2876,10 @@ export default function QuotationDetailsPage() {
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} onShowDetails={setSelectedQuoteForDetails} itemStatuses={itemStatuses} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} onShowDetails={setSelectedQuoteForDetails} itemStatuses={itemStatuses}/>
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses}/>
                                 </TabsContent>
                              </Tabs>
                         )}
