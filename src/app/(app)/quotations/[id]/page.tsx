@@ -307,12 +307,10 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
             {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
                 
-                const perItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
-                
+                const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+
                 const itemStatuses = useMemo(() => {
-                    if (!perItemStrategy) return [];
                     return requisition.items.map(reqItem => {
-                        // Stage 1: Find this vendor's champion bid for this item
                         const proposals = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
                         if (proposals.length === 0) return null;
 
@@ -322,31 +320,7 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                         proposals.forEach(p => {
                             let totalItemScore = 0;
                             let scoreCount = 0;
-                            quote.scores?.forEach(scoreSet => {
-                                const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === p.id);
-                                if (itemScore) {
-                                    totalItemScore += itemScore.finalScore;
-                                    scoreCount++;
-                                }
-                            });
-                            const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                            if (avgScore > championScore) {
-                                championScore = avgScore;
-                                championBid = p;
-                            }
-                        });
-                        
-                        if (!championBid) return null;
-
-                        // Stage 2: Find all champion bids from all vendors for this item
-                        const allChampionBids = allQuotes.map(q => {
-                            const otherProposals = q.items.filter(qi => qi.requisitionItemId === reqItem.id);
-                            if (otherProposals.length === 0) return null;
-                            let otherChampionBid: QuoteItem | null = null;
-                            let otherChampionScore = -1;
-                            otherProposals.forEach(p => {
-                                let totalItemScore = 0;
-                                let scoreCount = 0;
+                            allQuotes.forEach(q => {
                                 q.scores?.forEach(scoreSet => {
                                     const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === p.id);
                                     if (itemScore) {
@@ -354,50 +328,40 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                                         scoreCount++;
                                     }
                                 });
-                                const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                                if (avgScore > otherChampionScore) {
-                                    otherChampionScore = avgScore;
-                                    otherChampionBid = p;
-                                }
                             });
-                            if (!otherChampionBid) return null;
-                            return { vendorId: q.vendorId, score: otherChampionScore, quoteItemId: otherChampionBid.id };
-                        }).filter((b): b is NonNullable<typeof b> => b !== null).sort((a,b) => b.score - a.score);
+                            const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                            if (avgScore > championScore) {
+                                championScore = avgScore;
+                                championBid = p;
+                            }
+                        });
 
-                        // Stage 3: Determine this vendor's rank
-                        const vendorRankIndex = allChampionBids.findIndex(b => b.vendorId === quote.vendorId);
-                        const rank = vendorRankIndex !== -1 ? vendorRankIndex + 1 : null;
-                        
-                        let status: 'Awarded' | 'Pending_Award' | 'Standby' | null = null;
-                        if (rank === 1) {
-                            status = requisition.status === 'Awarded' || requisition.status === 'Accepted' ? 'Awarded' : 'Pending_Award';
-                        } else if (rank === 2 || rank === 3) {
-                            status = 'Standby';
-                        }
-                        
-                        if (!status) return null;
+                        if (!championBid) return null;
+
+                        const awardDetails = (reqItem.perItemAwardDetails || []) as PerItemAwardDetail[];
+                        const thisVendorDetail = awardDetails.find(d => d.quoteItemId === championBid!.id);
+
+                        if (!thisVendorDetail) return null;
 
                         return {
                             id: championBid!.id,
                             reqItemName: reqItem.name,
                             proposalName: championBid!.name,
-                            rank: rank,
-                            score: championScore.toFixed(2),
-                            status: status
+                            rank: thisVendorDetail.rank,
+                            score: thisVendorDetail.averageScore,
+                            status: thisVendorDetail.status
                         };
 
                     }).filter((item): item is NonNullable<typeof item> => item !== null);
                 }, [requisition, quote, allQuotes]);
 
-                // Determine the main status based on the calculated item statuses
                 const getOverallStatusForVendor = (): QuotationStatus | 'Pending_Award' => {
-                    if (perItemStrategy) {
+                    if (isPerItemStrategy) {
+                        if (itemStatuses.some(s => s.status === 'Declined')) return 'Declined';
                         if (itemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) {
                             return requisition.status === 'Awarded' || requisition.status === 'Accepted' ? 'Awarded' : 'Pending_Award';
                         }
-                        if (itemStatuses.some(s => s.status === 'Standby')) {
-                            return 'Standby';
-                        }
+                        if (itemStatuses.some(s => s.status === 'Standby')) return 'Standby';
                     }
                     return quote.status;
                 };
@@ -412,7 +376,7 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
-                                 {isDeadlinePassed && !perItemStrategy && getRankIcon(quote.rank)}
+                                 {isDeadlinePassed && !isPerItemStrategy && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
                                <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
@@ -435,7 +399,7 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                                         </>
                                     )}
 
-                                     {perItemStrategy && itemStatuses.length > 0 && (
+                                     {isPerItemStrategy && itemStatuses.length > 0 && (
                                         <div className="text-sm space-y-2 pt-2 border-t">
                                             <h4 className="font-semibold">Your Item Statuses</h4>
                                             {itemStatuses.map(item => (
@@ -448,8 +412,8 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-1">
-                                                        <Badge variant={item.status === 'Pending Award' || item.status === 'Awarded' ? 'default' : 'secondary'}>{item.status}</Badge>
-                                                        {item.score && <Badge variant="outline" className="font-mono">{item.score} pts</Badge>}
+                                                        <Badge variant={item.status === 'Pending_Award' || item.status === 'Awarded' ? 'default' : item.status === 'Declined' ? 'destructive' : 'secondary'}>{item.status.replace(/_/g, ' ')}</Badge>
+                                                        {typeof item.score === 'number' && <Badge variant="outline" className="font-mono">{item.score.toFixed(2)} pts</Badge>}
                                                     </div>
                                                 </div>
                                             ))}
@@ -464,7 +428,7 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                                 </div>
                             )}
 
-                             {isAwarded && typeof quote.finalAverageScore === 'number' && !perItemStrategy && (
+                             {isAwarded && typeof quote.finalAverageScore === 'number' && !isPerItemStrategy && (
                                  <div className="text-center pt-2 border-t">
                                     <h4 className="font-semibold text-sm">Final Score</h4>
                                     <p className="text-2xl font-bold text-primary">{quote.finalAverageScore.toFixed(2)}</p>
@@ -3131,7 +3095,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" selected={newDeadlineDate} onSelect={newDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
+                                <Calendar mode="single" selected={newDeadlineDate} onSelect={setNewDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
                             </PopoverContent>
                         </Popover>
                         <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
