@@ -262,7 +262,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, isAwarded, onShowDetails }: { quotes: Quotation[], allQuotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, isAwarded: boolean, onShowDetails: (quote: Quotation) => void }) => {
+const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, onShowDetails }: { quotes: Quotation[], allQuotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, onShowDetails: (quote: Quotation) => void }) => {
     
     if (quotes.length === 0) {
         return (
@@ -315,32 +315,53 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                         const proposals = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
                         if (proposals.length === 0) return null;
 
-                        let championBid = proposals[0];
+                        let championBid: QuoteItem | null = null;
                         let championScore = -1;
 
                         proposals.forEach(p => {
-                            const avgScore = (p.scores?.reduce((acc, s) => acc + s.finalScore, 0) || 0) / (p.scores?.length || 1);
+                            let totalItemScore = 0;
+                            let scoreCount = 0;
+                            quote.scores?.forEach(scoreSet => {
+                                const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === p.id);
+                                if (itemScore) {
+                                    totalItemScore += itemScore.finalScore;
+                                    scoreCount++;
+                                }
+                            });
+                            const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
                             if (avgScore > championScore) {
                                 championScore = avgScore;
                                 championBid = p;
                             }
                         });
+                        
+                        if (!championBid) return null;
 
                         // Stage 2: Find all champion bids from all vendors for this item
                         const allChampionBids = allQuotes.map(q => {
-                            const otherProposals = q.items.filter(qi => qi.requisitionItemId === reqItem.id);
-                            if (otherProposals.length === 0) return null;
-                            let otherChampionBid = otherProposals[0];
-                            let otherChampionScore = -1;
-                             otherProposals.forEach(p => {
-                                const avgScore = (p.scores?.reduce((acc, s) => acc + s.finalScore, 0) || 0) / (p.scores?.length || 1);
-                                if (avgScore > otherChampionScore) {
-                                    otherChampionScore = avgScore;
-                                    otherChampionBid = p;
-                                }
-                            });
-                            return { vendorId: q.vendorId, score: otherChampionScore, quoteItemId: otherChampionBid.id };
-                        }).filter((b): b is NonNullable<typeof b> => b !== null).sort((a,b) => b.score - a.score);
+                             const otherProposals = q.items.filter(qi => qi.requisitionItemId === reqItem.id);
+                             if (otherProposals.length === 0) return null;
+                             let otherChampionBid: QuoteItem | null = null;
+                             let otherChampionScore = -1;
+                              otherProposals.forEach(p => {
+                                let totalItemScore = 0;
+                                let scoreCount = 0;
+                                q.scores?.forEach(scoreSet => {
+                                    const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === p.id);
+                                    if (itemScore) {
+                                        totalItemScore += itemScore.finalScore;
+                                        scoreCount++;
+                                    }
+                                });
+                                 const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                                 if (avgScore > otherChampionScore) {
+                                     otherChampionScore = avgScore;
+                                     otherChampionBid = p;
+                                 }
+                             });
+                             if (!otherChampionBid) return null;
+                             return { vendorId: q.vendorId, score: otherChampionScore, quoteItemId: otherChampionBid.id };
+                         }).filter((b): b is NonNullable<typeof b> => b !== null).sort((a,b) => b.score - a.score);
 
                         // Stage 3: Determine this vendor's rank
                         const vendorRankIndex = allChampionBids.findIndex(b => b.vendorId === quote.vendorId);
@@ -353,7 +374,7 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                         if (!status) return null; // Not in top 3 for this item
 
                         return {
-                            id: championBid.id,
+                            id: championBid!.id,
                             name: reqItem.name, // Use original item name for consistency
                             rank: rank,
                             score: championScore.toFixed(2),
@@ -366,20 +387,22 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                 // Determine the main status based on the calculated item statuses
                 let mainStatus: QuotationStatus | 'Pending_Award' = quote.status;
                 if (perItemStrategy) {
-                    if (itemStatuses.some(s => s.status === 'Pending Award')) {
+                     if (itemStatuses.some(s => s.status === 'Pending Award')) {
                         mainStatus = 'Pending_Award';
                     } else if (itemStatuses.some(s => s.status === 'Standby')) {
                         mainStatus = 'Standby';
                     }
                 }
+                
+                const isAwarded = ['Awarded', 'Accepted', 'Partially_Awarded', 'Pending_Award'].includes(mainStatus);
 
 
                 return (
-                    <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded' || mainStatus === 'Pending_Award') && 'border-primary ring-2 ring-primary')}>
+                    <Card key={quote.id} className={cn("flex flex-col", isAwarded && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
-                                 {(isDeadlinePassed && !perItemStrategy) && getRankIcon(quote.rank)}
+                                 {isDeadlinePassed && !perItemStrategy && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
                                <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
@@ -2404,47 +2427,7 @@ export default function QuotationDetailsPage() {
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
   const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
 
-  const fetchRequisitionAndQuotes = useCallback(async () => {
-      if (!id) return;
-      setLoading(true);
-      try {
-          const [reqResponse, venResponse, quoResponse] = await Promise.all([
-              fetch(`/api/requisitions/${id}`),
-              fetch('/api/vendors'),
-              fetch(`/api/quotations?requisitionId=${id}`),
-          ]);
-          const currentReq = await reqResponse.json();
-          const venData = await venResponse.json();
-          const quoData: Quotation[] = await quoResponse.json();
-
-          setVendors(venData || []);
-
-          if (currentReq) {
-              setRequisition(currentReq);
-              // Sort quotations by creation date descending
-              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-          } else {
-              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
-          }
-
-      } catch (error) {
-          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
-      } finally {
-          setLoading(false);
-      }
-  }, [id, toast]);
-
-  useEffect(() => {
-    if (id && user && allUsers.length > 0) {
-        fetchRequisitionAndQuotes();
-        window.addEventListener('focus', fetchRequisitionAndQuotes);
-        return () => {
-            window.removeEventListener('focus', fetchRequisitionAndQuotes);
-        }
-    }
-  }, [id, user, allUsers, fetchRequisitionAndQuotes]);
-
-  const userRoleName = useMemo(() => {
+   const userRoleName = useMemo(() => {
     if (!user || !user.role) return null;
     return user.role.name;
   }, [user]);
@@ -2546,6 +2529,46 @@ export default function QuotationDetailsPage() {
     const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
     return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
   }, [quotesForDisplay, currentQuotesPage]);
+
+  const fetchRequisitionAndQuotes = useCallback(async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+          const [reqResponse, venResponse, quoResponse] = await Promise.all([
+              fetch(`/api/requisitions/${id}`),
+              fetch('/api/vendors'),
+              fetch(`/api/quotations?requisitionId=${id}`),
+          ]);
+          const currentReq = await reqResponse.json();
+          const venData = await venResponse.json();
+          const quoData: Quotation[] = await quoResponse.json();
+
+          setVendors(venData || []);
+
+          if (currentReq) {
+              setRequisition(currentReq);
+              // Sort quotations by creation date descending
+              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          } else {
+              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
+          }
+
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
+      } finally {
+          setLoading(false);
+      }
+  }, [id, toast]);
+
+  useEffect(() => {
+    if (id && user && allUsers.length > 0) {
+        fetchRequisitionAndQuotes();
+        window.addEventListener('focus', fetchRequisitionAndQuotes);
+        return () => {
+            window.removeEventListener('focus', fetchRequisitionAndQuotes);
+        }
+    }
+  }, [id, user, allUsers, fetchRequisitionAndQuotes]);
   
 
   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
@@ -2843,10 +2866,10 @@ export default function QuotationDetailsPage() {
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} allQuotes={quotations} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} onShowDetails={setSelectedQuoteForDetails} />
+                                    <QuoteComparison quotes={paginatedQuotes} allQuotes={quotations} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} onShowDetails={setSelectedQuoteForDetails} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} allQuotes={quotations} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} onShowDetails={setSelectedQuoteForDetails}/>
+                                    <QuoteComparison quotes={paginatedQuotes} allQuotes={quotations} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} onShowDetails={setSelectedQuoteForDetails}/>
                                 </TabsContent>
                              </Tabs>
                         )}
@@ -3040,7 +3063,7 @@ export default function QuotationDetailsPage() {
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
 
@@ -3331,6 +3354,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
 
 
 
