@@ -57,6 +57,7 @@ export const BestItemAwardDialog = ({
                 let bestProposalForItem: QuoteItem | null = null;
                 let bestItemScore = -1;
 
+                // Find the best scoring proposal from this vendor for this item
                 proposalsForItem.forEach(proposal => {
                     let totalItemScore = 0;
                     let scoreCount = 0;
@@ -77,6 +78,7 @@ export const BestItemAwardDialog = ({
 
                 if (!bestProposalForItem) return null;
 
+                // This object represents the vendor's single best effort for this item
                 return {
                     vendorId: quote.vendorId,
                     vendorName: quote.vendorName,
