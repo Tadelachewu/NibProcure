@@ -2365,6 +2365,36 @@ export default function QuotationDetailsPage() {
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
   const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
 
+  const fetchRequisitionAndQuotes = useCallback(async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+          const [reqResponse, venResponse, quoResponse] = await Promise.all([
+              fetch(`/api/requisitions/${id}`),
+              fetch('/api/vendors'),
+              fetch(`/api/quotations?requisitionId=${id}`),
+          ]);
+          const currentReq = await reqResponse.json();
+          const venData = await venResponse.json();
+          const quoData: Quotation[] = await quoResponse.json();
+
+          setVendors(venData || []);
+
+          if (currentReq) {
+              setRequisition(currentReq);
+              // Sort quotations by creation date descending
+              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          } else {
+              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
+          }
+
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
+      } finally {
+          setLoading(false);
+      }
+  }, [id, toast]);
+
   const userRoleName = useMemo(() => {
     if (!user || !user.role) return null;
     return user.role.name;
@@ -2468,36 +2498,6 @@ export default function QuotationDetailsPage() {
     return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
   }, [quotesForDisplay, currentQuotesPage]);
   
-  const fetchRequisitionAndQuotes = useCallback(async () => {
-      if (!id) return;
-      setLoading(true);
-      try {
-          const [reqResponse, venResponse, quoResponse] = await Promise.all([
-              fetch(`/api/requisitions/${id}`),
-              fetch('/api/vendors'),
-              fetch(`/api/quotations?requisitionId=${id}`),
-          ]);
-          const currentReq = await reqResponse.json();
-          const venData = await venResponse.json();
-          const quoData: Quotation[] = await quoResponse.json();
-
-          setVendors(venData || []);
-
-          if (currentReq) {
-              setRequisition(currentReq);
-              // Sort quotations by creation date descending
-              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-          } else {
-              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
-          }
-
-      } catch (error) {
-          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
-      } finally {
-          setLoading(false);
-      }
-  }, [id, toast]);
-
   useEffect(() => {
     if (id && user && allUsers.length > 0) {
         fetchRequisitionAndQuotes();
@@ -3291,3 +3291,4 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
