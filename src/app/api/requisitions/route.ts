@@ -126,6 +126,7 @@ export async function GET(request: Request) {
                 ]
             },
             // Condition B: Vendor has submitted a quote, so they should always see it.
+            // This also covers single-vendor award scenarios.
             {
                 quotations: {
                     some: {

@@ -167,12 +167,16 @@ export default function VendorDashboardPage() {
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
             
+            // Check for single-vendor award
+            const isSingleVendorAward = vendorQuote && ['Awarded', 'Accepted'].includes(vendorQuote.status);
+
+            // Check for per-item award
             const isPerItemAwarded = (req.rfqSettings as any)?.awardStrategy === 'item' && 
                 req.items.some(item => 
                     (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user?.vendorId && (d.status === 'Awarded' || d.status === 'Accepted'))
                 );
 
-            if (vendorQuote || isPerItemAwarded) {
+            if (vendorQuote || isPerItemAwarded || isSingleVendorAward) {
                 active.push(req);
             } else {
                 open.push(req);
