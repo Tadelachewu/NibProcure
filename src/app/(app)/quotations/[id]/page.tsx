@@ -2464,6 +2464,20 @@ export default function QuotationDetailsPage() {
     return isHierarchicalReviewer || isCommitteeReviewer;
   }, [user, userRoleName, requisition]);
 
+  const { pendingQuotes, scoredQuotes } = useMemo(() => {
+    if (!user || user.role.name !== 'Committee_Member' ) return { pendingQuotes: quotations, scoredQuotes: [] };
+    const pending = quotations.filter(q => !q.scores?.some(s => s.scorerId === user.id));
+    const scored = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id));
+    return { pendingQuotes: pending, scoredQuotes: scored };
+  }, [quotations, user]);
+
+  const quotesForDisplay = (user && user.role.name === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (user && user.role.name === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
+  const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
+  const paginatedQuotes = useMemo(() => {
+    const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
+    return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [quotesForDisplay, currentQuotesPage]);
+  
   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
 
@@ -2628,13 +2642,6 @@ export default function QuotationDetailsPage() {
       return `${financialPart}\n\n${technicalPart}`;
   };
 
-  const { pendingQuotes, scoredQuotes } = useMemo(() => {
-    if (!user || user.role.name !== 'Committee_Member' ) return { pendingQuotes: quotations, scoredQuotes: [] };
-    const pending = quotations.filter(q => !q.scores?.some(s => s.scorerId === user.id));
-    const scored = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id));
-    return { pendingQuotes: pending, scoredQuotes: scored };
-  }, [quotations, user]);
-
   if (loading || !user) {
      return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -2652,13 +2659,6 @@ export default function QuotationDetailsPage() {
   const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
   
   const currentStep = getCurrentStep();
-
-  const quotesForDisplay = (user && user.role.name === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (user && user.role.name === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
-  const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
-  const paginatedQuotes = useMemo(() => {
-    const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
-    return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [quotesForDisplay, currentQuotesPage]);
 
   return (
     <div className="space-y-6">
@@ -3288,3 +3288,4 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
