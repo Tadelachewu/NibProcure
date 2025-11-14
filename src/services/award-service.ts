@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -145,15 +144,14 @@ export async function handleAwardRejection(
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
     
     if (awardStrategy === 'item') {
-        const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisition.id }});
+        const reqItems = await tx.requisitionItem.findMany({ where: { id: { in: declinedItemIds } } });
         let itemsUpdated = 0;
-        for (const itemId of declinedItemIds) {
-            const reqItem = reqItems.find(i => i.id === itemId);
-            if (!reqItem || !reqItem.perItemAwardDetails) continue;
+        for (const reqItem of reqItems) {
+            if (!reqItem.perItemAwardDetails) continue;
 
             const awardDetails = reqItem.perItemAwardDetails as PerItemAwardDetail[];
             const updatedDetails = awardDetails.map(d => 
-                d.vendorId === quote.vendorId && d.status === 'Awarded' 
+                (d.vendorId === quote.vendorId && d.status === 'Awarded') 
                 ? { ...d, status: 'Declined' as const } 
                 : d
             );

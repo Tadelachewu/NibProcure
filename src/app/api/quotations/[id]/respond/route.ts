@@ -82,6 +82,10 @@ export async function POST(
                 awardedQuoteItems = allAwardedItems.length > 0 ? allAwardedItems : quote.items;
             }
 
+            if (awardedQuoteItems.length === 0) {
+              throw new Error("No awarded items found for this vendor to accept.");
+            }
+
             const totalPriceForThisPO = awardedQuoteItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
 
             const newPO = await tx.purchaseOrder.create({
@@ -147,11 +151,11 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            // In a per-item scenario, we need to know which items were declined.
-            // This is implicitly all items awarded to this vendor on this requisition.
-            const declinedItemIds = requisition.items
-                .filter(item => (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user.vendorId && d.status === 'Awarded'))
-                .map(item => item.id);
+            const declinedItemIds = isPerItemAward 
+                ? requisition.items
+                    .filter(item => (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user.vendorId && d.status === 'Awarded'))
+                    .map(item => item.id)
+                : quote.items.map(item => item.requisitionItemId);
                 
             return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds);
         }
@@ -176,5 +180,3 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -25,7 +24,7 @@ import { useRouter } from 'next/navigation';
 const OPEN_PAGE_SIZE = 9;
 const ACTIVE_PAGE_SIZE = 6;
 
-type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed';
+type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed' | 'Declined';
 
 const VendorStatusBadge = ({ status }: { status: RequisitionCardStatus }) => {
   const statusInfo: Record<RequisitionCardStatus, {text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline', className: string}> = {
@@ -33,6 +32,7 @@ const VendorStatusBadge = ({ status }: { status: RequisitionCardStatus }) => {
     'Partially Awarded': { text: 'Partially Awarded', variant: 'default', className: 'bg-green-600 hover:bg-green-700' },
     'Accepted': { text: 'You Accepted', variant: 'default', className: 'bg-blue-600 hover:bg-blue-700' },
     'Invoice Submitted': { text: 'Invoice Submitted', variant: 'default', className: 'bg-purple-600 hover:bg-purple-700' },
+    'Declined': { text: 'You Declined', variant: 'destructive', className: '' },
     'Submitted': { text: 'Submitted', variant: 'secondary', className: '' },
     'Processing': { text: 'Processing', variant: 'secondary', className: '' },
     'Closed': { text: 'Closed', variant: 'outline', className: '' },
@@ -109,25 +109,31 @@ export default function VendorDashboardPage() {
         }
     }, [fetchAllData]);
 
-    const getRequisitionCardStatus = (req: PurchaseRequisition): RequisitionCardStatus => {
+    const getRequisitionCardStatus = useCallback((req: PurchaseRequisition): RequisitionCardStatus => {
         if (!user?.vendorId) return 'Action Required';
 
-        // Check per-item award details first for 'item' strategy
+        // Check overall quote status for this vendor
+        const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
+        if (vendorQuote) {
+            if (vendorQuote.status === 'Accepted') return 'Accepted';
+            if (vendorQuote.status === 'Declined') return 'Declined';
+            if (vendorQuote.status === 'Invoice_Submitted') return 'Invoice Submitted';
+        }
+
+        // Check per-item award details for item-based strategy
         if ((req.rfqSettings as any)?.awardStrategy === 'item') {
             const vendorAwards = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId));
             
-            if (vendorAwards.some(a => a.status === 'Awarded')) return 'Awarded';
             if (vendorAwards.some(a => a.status === 'Accepted')) return 'Accepted';
+            if (vendorAwards.some(a => a.status === 'Declined')) return 'Declined';
+            if (vendorAwards.some(a => a.status === 'Awarded')) return 'Awarded';
             if (vendorAwards.some(a => a.status === 'Standby')) return 'Standby';
         }
 
         // Fallback to overall quote status for 'all' strategy or if no item awards found
-        const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
         if (vendorQuote) {
             if (vendorQuote.status === 'Awarded') return 'Awarded';
             if (vendorQuote.status === 'Partially_Awarded') return 'Partially Awarded';
-            if (vendorQuote.status === 'Accepted') return 'Accepted';
-            if (vendorQuote.status === 'Invoice_Submitted') return 'Invoice Submitted';
             if (vendorQuote.status === 'Standby') return 'Standby';
             
             const isClosedOrFulfilled = req.status === 'Closed' || req.status === 'Fulfilled';
@@ -137,12 +143,12 @@ export default function VendorDashboardPage() {
                 return 'Closed';
             }
             if (vendorQuote.status === 'Submitted') {
-                const isAnyQuoteAwarded = req.quotations?.some(q => q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Partially_Awarded');
+                const isAnyQuoteAwarded = req.quotations?.some(q => ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status));
                 if (isAnyQuoteAwarded) return 'Not Awarded';
                 return 'Submitted';
             }
             
-            return 'Processing'; // Default for other statuses like Rejected, Declined, Failed
+            return 'Processing'; // Default for other statuses like Rejected
         }
         
         // If vendor has no quote but there might be an item-level award (e.g. from a different quote that was deleted/re-evaluated)
@@ -150,7 +156,7 @@ export default function VendorDashboardPage() {
         if (hasAnyItemAward) return 'Awarded';
 
         return 'Action Required';
-    }
+    }, [user]);
 
 
     const { activeRequisitions, openForQuoting } = useMemo(() => {
