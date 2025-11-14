@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -92,6 +91,7 @@ const contractFormSchema = z.object({
  */
 function getVendorChampionItems(quote: Quotation, requisition: PurchaseRequisition): QuoteItem[] {
     const championItems: QuoteItem[] = [];
+    if (!quote?.items) return [];
 
     // Get a set of all unique requisition item IDs from the original requisition
     const allRequisitionItemIds = new Set(requisition.items.map(i => i.id));
@@ -274,7 +274,7 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
         );
     }
 
-    const getStatusVariant = (status: QuotationStatus | 'Pending_Award') => {
+    const getStatusVariant = (status: QuotationStatus | 'Pending_Award' | 'Awarded') => {
         switch (status) {
             case 'Awarded': 
             case 'Accepted': 
@@ -310,6 +310,7 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                 const perItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 
                 const itemStatuses = useMemo(() => {
+                    if (!perItemStrategy) return [];
                     return requisition.items.map(reqItem => {
                         // Stage 1: Find this vendor's champion bid for this item
                         const proposals = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
@@ -339,11 +340,11 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
 
                         // Stage 2: Find all champion bids from all vendors for this item
                         const allChampionBids = allQuotes.map(q => {
-                             const otherProposals = q.items.filter(qi => qi.requisitionItemId === reqItem.id);
-                             if (otherProposals.length === 0) return null;
-                             let otherChampionBid: QuoteItem | null = null;
-                             let otherChampionScore = -1;
-                              otherProposals.forEach(p => {
+                            const otherProposals = q.items.filter(qi => qi.requisitionItemId === reqItem.id);
+                            if (otherProposals.length === 0) return null;
+                            let otherChampionBid: QuoteItem | null = null;
+                            let otherChampionScore = -1;
+                            otherProposals.forEach(p => {
                                 let totalItemScore = 0;
                                 let scoreCount = 0;
                                 q.scores?.forEach(scoreSet => {
@@ -353,29 +354,33 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                                         scoreCount++;
                                     }
                                 });
-                                 const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                                 if (avgScore > otherChampionScore) {
-                                     otherChampionScore = avgScore;
-                                     otherChampionBid = p;
-                                 }
-                             });
-                             if (!otherChampionBid) return null;
-                             return { vendorId: q.vendorId, score: otherChampionScore, quoteItemId: otherChampionBid.id };
-                         }).filter((b): b is NonNullable<typeof b> => b !== null).sort((a,b) => b.score - a.score);
+                                const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                                if (avgScore > otherChampionScore) {
+                                    otherChampionScore = avgScore;
+                                    otherChampionBid = p;
+                                }
+                            });
+                            if (!otherChampionBid) return null;
+                            return { vendorId: q.vendorId, score: otherChampionScore, quoteItemId: otherChampionBid.id };
+                        }).filter((b): b is NonNullable<typeof b> => b !== null).sort((a,b) => b.score - a.score);
 
                         // Stage 3: Determine this vendor's rank
                         const vendorRankIndex = allChampionBids.findIndex(b => b.vendorId === quote.vendorId);
                         const rank = vendorRankIndex !== -1 ? vendorRankIndex + 1 : null;
                         
-                        let status: "Pending Award" | "Standby" | null = null;
-                        if(rank === 1) status = 'Pending Award';
-                        if(rank === 2 || rank === 3) status = 'Standby';
+                        let status: 'Awarded' | 'Pending_Award' | 'Standby' | null = null;
+                        if (rank === 1) {
+                            status = requisition.status === 'Awarded' || requisition.status === 'Accepted' ? 'Awarded' : 'Pending_Award';
+                        } else if (rank === 2 || rank === 3) {
+                            status = 'Standby';
+                        }
                         
-                        if (!status) return null; // Not in top 3 for this item
+                        if (!status) return null;
 
                         return {
                             id: championBid!.id,
-                            name: reqItem.name, // Use original item name for consistency
+                            reqItemName: reqItem.name,
+                            proposalName: championBid!.name,
                             rank: rank,
                             score: championScore.toFixed(2),
                             status: status
@@ -385,14 +390,19 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                 }, [requisition, quote, allQuotes]);
 
                 // Determine the main status based on the calculated item statuses
-                let mainStatus: QuotationStatus | 'Pending_Award' = quote.status;
-                if (perItemStrategy) {
-                     if (itemStatuses.some(s => s.status === 'Pending Award')) {
-                        mainStatus = 'Pending_Award';
-                    } else if (itemStatuses.some(s => s.status === 'Standby')) {
-                        mainStatus = 'Standby';
+                const getOverallStatusForVendor = (): QuotationStatus | 'Pending_Award' => {
+                    if (perItemStrategy) {
+                        if (itemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) {
+                            return requisition.status === 'Awarded' || requisition.status === 'Accepted' ? 'Awarded' : 'Pending_Award';
+                        }
+                        if (itemStatuses.some(s => s.status === 'Standby')) {
+                            return 'Standby';
+                        }
                     }
-                }
+                    return quote.status;
+                };
+
+                const mainStatus = getOverallStatusForVendor();
                 
                 const isAwarded = ['Awarded', 'Accepted', 'Partially_Awarded', 'Pending_Award'].includes(mainStatus);
 
@@ -430,14 +440,15 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                                             <h4 className="font-semibold">Your Item Statuses</h4>
                                             {itemStatuses.map(item => (
                                                 <div key={item.id} className="flex justify-between items-center text-muted-foreground">
-                                                    <span className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2">
                                                         {getRankIcon(item.rank)}
-                                                        <span className="truncate" title={item.name}>
-                                                            {item.name}
-                                                        </span>
-                                                    </span>
+                                                        <div className="flex flex-col">
+                                                          <span className="font-medium text-foreground">{item.proposalName}</span>
+                                                          <span className="text-xs italic">(for: {item.reqItemName})</span>
+                                                        </div>
+                                                    </div>
                                                     <div className="flex items-center gap-1">
-                                                        <Badge variant={item.status === 'Pending Award' ? 'default' : 'secondary'}>{item.status}</Badge>
+                                                        <Badge variant={item.status === 'Pending Award' || item.status === 'Awarded' ? 'default' : 'secondary'}>{item.status}</Badge>
                                                         {item.score && <Badge variant="outline" className="font-mono">{item.score} pts</Badge>}
                                                     </div>
                                                 </div>
@@ -3120,7 +3131,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" selected={newDeadlineDate} onSelect={setNewDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
+                                <Calendar mode="single" selected={newDeadlineDate} onSelect={newDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
                             </PopoverContent>
                         </Popover>
                         <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
@@ -3358,3 +3369,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
 
+
+
+    
