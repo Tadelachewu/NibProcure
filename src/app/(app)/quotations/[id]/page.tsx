@@ -210,7 +210,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[] }) => {
+const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isScoringComplete }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isScoringComplete: boolean }) => {
     
     if (quotes.length === 0) {
         return (
@@ -258,6 +258,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
                 const mainStatus = useMemo(() => {
+                    if (!isScoringComplete) return quote.status;
                     const statusSet = new Set(thisVendorItemStatuses.map(s => s.status));
                     if (statusSet.has('Awarded')) return 'Awarded';
                     if (statusSet.has('Accepted')) return 'Accepted';
@@ -265,7 +266,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                     if (statusSet.has('Declined')) return 'Declined';
                     if (statusSet.has('Standby')) return 'Standby';
                     return quote.status;
-                }, [thisVendorItemStatuses, quote.status]);
+                }, [thisVendorItemStatuses, quote.status, isScoringComplete]);
                 
                 const isAwarded = ['Awarded', 'Accepted', 'Partially_Awarded', 'Pending_Award'].includes(mainStatus);
 
@@ -2824,10 +2825,10 @@ export default function QuotationDetailsPage() {
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isScoringComplete={isScoringComplete} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses}/>
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isScoringComplete={isScoringComplete}/>
                                 </TabsContent>
                              </Tabs>
                         )}
@@ -3314,3 +3315,4 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
