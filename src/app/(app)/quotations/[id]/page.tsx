@@ -85,6 +85,58 @@ const contractFormSchema = z.object({
     notes: z.string().min(10, "Negotiation notes are required.")
 })
 
+/**
+ * For a given vendor's quote, this function groups all their proposed items (including alternatives)
+ * by the original requisition item and selects only the single best-scoring proposal for each.
+ * This ensures a vendor's card only shows their "champion" bid for each item.
+ */
+function getVendorChampionItems(quote: Quotation, requisition: PurchaseRequisition): QuoteItem[] {
+    const championItems: QuoteItem[] = [];
+
+    // Get a set of all unique requisition item IDs from the original requisition
+    const allRequisitionItemIds = new Set(requisition.items.map(i => i.id));
+
+    allRequisitionItemIds.forEach(reqItemId => {
+        // Find all of this vendor's proposals for this single requisition item
+        const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItemId);
+
+        if (proposalsForItem.length === 0) {
+            return; // Vendor did not bid on this item
+        }
+        
+        if (proposalsForItem.length === 1) {
+            championItems.push(proposalsForItem[0]); // Only one proposal, it's the champion by default
+            return;
+        }
+
+        // If there are multiple proposals, find the one with the highest score
+        let bestProposal: QuoteItem = proposalsForItem[0];
+        let bestScore = -1;
+
+        proposalsForItem.forEach(proposal => {
+            let totalScore = 0;
+            let scoreCount = 0;
+            // Sum up the scores for this specific quoteItem from all committee members
+            quote.scores?.forEach(scoreSet => {
+                const itemScore = scoreSet.itemScores?.find(s => s.quoteItemId === proposal.id);
+                if (itemScore) {
+                    totalScore += itemScore.finalScore;
+                    scoreCount++;
+                }
+            });
+            const averageScore = scoreCount > 0 ? totalScore / scoreCount : 0;
+            if (averageScore > bestScore) {
+                bestScore = averageScore;
+                bestProposal = proposal;
+            }
+        });
+        championItems.push(bestProposal);
+    });
+
+    return championItems;
+}
+
+
 function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: PurchaseRequisition; vendors: Vendor[], onQuoteAdded: () => void }) {
     const [isSubmitting, setSubmitting] = useState(false);
     const { toast } = useToast();
@@ -275,9 +327,11 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                 const mainStatus = perItemStrategy ? getOverallStatusForVendor(quote.vendorId) || quote.status : quote.status;
                 
                 const itemAwardDetails = perItemStrategy 
-                    ? requisition.items.flatMap(item => 
-                        (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === quote.vendorId)
-                    )
+                    ? getVendorChampionItems(quote, requisition).map(championItem => {
+                        const originalReqItem = requisition.items.find(i => i.id === championItem.requisitionItemId);
+                        const details = (originalReqItem?.perItemAwardDetails as PerItemAwardDetail[] || []).find(d => d.quoteItemId === championItem.id);
+                        return details;
+                    }).filter(Boolean) as PerItemAwardDetail[]
                     : [];
 
                 return (
@@ -2402,6 +2456,14 @@ export default function QuotationDetailsPage() {
       }
       return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
   }, [user, userRoleName, requisition]);
+  
+  if (loading || !user) {
+     return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
+  if (!requisition) {
+     return <div className="text-center p-8">Requisition not found.</div>;
+  }
 
   const isReviewer = useMemo(() => {
     if (!user || !userRoleName || !requisition) return false;
@@ -2597,15 +2659,6 @@ export default function QuotationDetailsPage() {
     const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
     return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
   }, [quotesForDisplay, currentQuotesPage]);
-
-
-  if (loading || !user) {
-     return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  }
-
-  if (!requisition) {
-     return <div className="text-center p-8">Requisition not found.</div>;
-  }
 
   return (
     <div className="space-y-6">
