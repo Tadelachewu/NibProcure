@@ -91,7 +91,7 @@ const contractFormSchema = z.object({
  */
 function getVendorChampionItems(quote: Quotation, requisition: PurchaseRequisition): QuoteItem[] {
     const championItems: QuoteItem[] = [];
-    if (!quote?.items) return [];
+    if (!quote?.items || !requisition?.items) return [];
 
     // Get a set of all unique requisition item IDs from the original requisition
     const allRequisitionItemIds = new Set(requisition.items.map(i => i.id));
@@ -262,7 +262,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, onShowDetails }: { quotes: Quotation[], allQuotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, onShowDetails: (quote: Quotation) => void }) => {
+const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, onShowDetails, itemStatuses }: { quotes: Quotation[], allQuotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, onShowDetails: (quote: Quotation) => void, itemStatuses: any[] }) => {
     
     if (quotes.length === 0) {
         return (
@@ -306,62 +306,20 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
-                
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
-
-                const itemStatuses = useMemo(() => {
-                    return requisition.items.map(reqItem => {
-                        const proposals = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
-                        if (proposals.length === 0) return null;
-
-                        let championBid: QuoteItem | null = null;
-                        let championScore = -1;
-
-                        proposals.forEach(p => {
-                            let totalItemScore = 0;
-                            let scoreCount = 0;
-                            allQuotes.forEach(q => {
-                                q.scores?.forEach(scoreSet => {
-                                    const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === p.id);
-                                    if (itemScore) {
-                                        totalItemScore += itemScore.finalScore;
-                                        scoreCount++;
-                                    }
-                                });
-                            });
-                            const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                            if (avgScore > championScore) {
-                                championScore = avgScore;
-                                championBid = p;
-                            }
-                        });
-
-                        if (!championBid) return null;
-
-                        const awardDetails = (reqItem.perItemAwardDetails || []) as PerItemAwardDetail[];
-                        const thisVendorDetail = awardDetails.find(d => d.quoteItemId === championBid!.id);
-
-                        if (!thisVendorDetail) return null;
-
-                        return {
-                            id: championBid!.id,
-                            reqItemName: reqItem.name,
-                            proposalName: championBid!.name,
-                            rank: thisVendorDetail.rank,
-                            score: thisVendorDetail.averageScore,
-                            status: thisVendorDetail.status
-                        };
-
-                    }).filter((item): item is NonNullable<typeof item> => item !== null);
-                }, [requisition, quote, allQuotes]);
+                const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
 
                 const getOverallStatusForVendor = (): QuotationStatus | 'Pending_Award' => {
                     if (isPerItemStrategy) {
-                        if (itemStatuses.some(s => s.status === 'Declined')) return 'Declined';
-                        if (itemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) {
-                            return requisition.status === 'Awarded' || requisition.status === 'Accepted' ? 'Awarded' : 'Pending_Award';
+                        if (thisVendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
+                        if (thisVendorItemStatuses.some(s => s.status === 'Pending_Award')) {
+                           return 'Pending_Award';
                         }
-                        if (itemStatuses.some(s => s.status === 'Standby')) return 'Standby';
+                         if (thisVendorItemStatuses.some(s => s.status === 'Awarded')) {
+                            // If notification is sent, show Awarded, otherwise it's still Pending Award from a PO officer perspective
+                            return requisition.status === 'Awarded' ? 'Awarded' : 'Pending_Award';
+                        }
+                        if (thisVendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
                     }
                     return quote.status;
                 };
@@ -399,16 +357,16 @@ const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDead
                                         </>
                                     )}
 
-                                     {isPerItemStrategy && itemStatuses.length > 0 && (
+                                     {isPerItemStrategy && thisVendorItemStatuses.length > 0 && (
                                         <div className="text-sm space-y-2 pt-2 border-t">
                                             <h4 className="font-semibold">Your Item Statuses</h4>
-                                            {itemStatuses.map(item => (
+                                            {thisVendorItemStatuses.map(item => (
                                                 <div key={item.id} className="flex justify-between items-center text-muted-foreground">
                                                     <div className="flex items-center gap-2">
                                                         {getRankIcon(item.rank)}
                                                         <div className="flex flex-col">
-                                                          <span className="font-medium text-foreground">{item.proposalName}</span>
-                                                          <span className="text-xs italic">(for: {item.reqItemName})</span>
+                                                            <span className="font-medium text-foreground">{item.proposalName}</span>
+                                                            <span className="text-xs italic">(for: {item.reqItemName})</span>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-1">
@@ -2500,10 +2458,61 @@ export default function QuotationDetailsPage() {
   
   const quotesForDisplay = (user && user.role.name === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (user && user.role.name === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
   const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
+  
+  const itemStatuses = useMemo(() => {
+    if (!requisition || !quotations || quotations.length === 0) return [];
+    
+    const allItemStatuses: any[] = [];
+
+    requisition.items.forEach(reqItem => {
+        const proposals = quotations.flatMap(quote => 
+            quote.items
+                .filter(qi => qi.requisitionItemId === reqItem.id)
+                .map(proposal => {
+                    let totalScore = 0;
+                    let scoreCount = 0;
+                    quote.scores?.forEach(scoreSet => {
+                        const itemScore = scoreSet.itemScores?.find(s => s.quoteItemId === proposal.id);
+                        if (itemScore) {
+                            totalScore += itemScore.finalScore;
+                            scoreCount++;
+                        }
+                    });
+                    const averageScore = scoreCount > 0 ? totalScore / scoreCount : 0;
+                    return {
+                        vendorId: quote.vendorId,
+                        proposalName: proposal.name,
+                        score: averageScore,
+                    };
+                })
+        ).sort((a, b) => b.score - a.score);
+
+        proposals.forEach((p, index) => {
+            allItemStatuses.push({
+                ...p,
+                reqItemId: reqItem.id,
+                reqItemName: reqItem.name,
+                rank: index + 1,
+            });
+        });
+    });
+
+    return allItemStatuses.map(status => {
+        const awardDetails = (requisition.items.find(i => i.id === status.reqItemId)?.perItemAwardDetails || []) as PerItemAwardDetail[];
+        const thisAwardDetail = awardDetails.find(d => d.vendorId === status.vendorId);
+        return {
+            ...status,
+            status: thisAwardDetail ? thisAwardDetail.status : 'Not Awarded'
+        }
+    });
+
+  }, [requisition, quotations]);
+
   const paginatedQuotes = useMemo(() => {
     const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
     return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
   }, [quotesForDisplay, currentQuotesPage]);
+
 
   const fetchRequisitionAndQuotes = useCallback(async () => {
       if (!id) return;
@@ -2841,10 +2850,10 @@ export default function QuotationDetailsPage() {
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} allQuotes={quotations} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} onShowDetails={setSelectedQuoteForDetails} />
+                                    <QuoteComparison quotes={paginatedQuotes} allQuotes={quotations} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} onShowDetails={setSelectedQuoteForDetails} itemStatuses={itemStatuses} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} allQuotes={quotations} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} onShowDetails={setSelectedQuoteForDetails}/>
+                                    <QuoteComparison quotes={paginatedQuotes} allQuotes={quotations} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} onShowDetails={setSelectedQuoteForDetails} itemStatuses={itemStatuses}/>
                                 </TabsContent>
                              </Tabs>
                         )}
@@ -3336,3 +3345,4 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
