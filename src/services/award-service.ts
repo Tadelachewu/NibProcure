@@ -259,18 +259,26 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
         for (const item of allItems) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-            const declinedAward = currentDetails.find(d => d.status === 'Declined');
             
-            if (declinedAward) {
-                const nextRankToPromote = (declinedAward.rank || 0) + 1;
-                const standbyAward = currentDetails.find(d => d.rank === nextRankToPromote && d.status === 'Standby');
+            // Find the highest rank that has already been declined or failed.
+            const highestDeclinedRank = currentDetails
+                .filter(d => d.status === 'Declined' || d.status === 'Failed')
+                .reduce((maxRank, d) => Math.max(maxRank, d.rank || 0), 0);
+
+            if (highestDeclinedRank > 0) {
+                // Find the first standby vendor with a rank higher than any declined one.
+                const standbyToPromote = currentDetails
+                    .filter(d => d.status === 'Standby' && (d.rank || 0) > highestDeclinedRank)
+                    .sort((a, b) => (a.rank || 99) - (b.rank || 99))[0];
                 
-                if (standbyAward) {
+                if (standbyToPromote) {
                     const updatedDetails = currentDetails.map(d => {
-                        if (d.vendorId === standbyAward.vendorId && d.rank === standbyAward.rank) {
+                        // Promote the standby
+                        if (d.vendorId === standbyToPromote.vendorId && d.rank === standbyToPromote.rank) {
                             return { ...d, status: 'Pending_Award' as const };
                         }
-                        if (d.vendorId === declinedAward.vendorId && d.rank === declinedAward.rank) {
+                        // Mark the previously declined one as failed to prevent re-promotion
+                        if (d.status === 'Declined') {
                             return { ...d, status: 'Failed' as const };
                         }
                         return d;
@@ -283,7 +291,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
                     promotedCount++;
                 } else {
-                    // No more standbys for this item, mark as Failed_to_Award
+                    // No more standbys for this item, mark all declined as Failed_to_Award
                      const updatedDetails = currentDetails.map(d => 
                         d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
                     );
