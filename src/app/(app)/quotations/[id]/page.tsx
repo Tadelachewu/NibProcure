@@ -262,8 +262,8 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, isAwarded, onShowDetails }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, isAwarded: boolean, onShowDetails: (quote: Quotation) => void }) => {
-
+const QuoteComparison = ({ quotes, allQuotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, isAwarded, onShowDetails }: { quotes: Quotation[], allQuotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, isAwarded: boolean, onShowDetails: (quote: Quotation) => void }) => {
+    
     if (quotes.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-lg bg-muted/30">
@@ -317,7 +317,6 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
     const isTechnicalOnlyScorer = user.role.name === 'Committee_Member' && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
     const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
 
-
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {quotes.map(quote => {
@@ -326,14 +325,60 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                 const perItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 const mainStatus = perItemStrategy ? getOverallStatusForVendor(quote.vendorId) || quote.status : quote.status;
                 
-                const championItems = getVendorChampionItems(quote, requisition);
-                const itemAwardDetails = perItemStrategy 
-                    ? championItems.map(championItem => {
-                        const originalReqItem = requisition.items.find(i => i.id === championItem.requisitionItemId);
-                        const details = (originalReqItem?.perItemAwardDetails as PerItemAwardDetail[] || []).find(d => d.quoteItemId === championItem.id);
-                        return details;
-                    }).filter(Boolean) as PerItemAwardDetail[]
-                    : [];
+                const itemStatuses = useMemo(() => {
+                    return requisition.items.map(reqItem => {
+                        // Stage 1: Find this vendor's champion bid for this item
+                        const proposals = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
+                        if (proposals.length === 0) return null;
+
+                        let championBid = proposals[0];
+                        let championScore = -1;
+
+                        proposals.forEach(p => {
+                            const avgScore = (p.scores?.reduce((acc, s) => acc + s.finalScore, 0) || 0) / (p.scores?.length || 1);
+                            if (avgScore > championScore) {
+                                championScore = avgScore;
+                                championBid = p;
+                            }
+                        });
+
+                        // Stage 2: Find all champion bids from all vendors for this item
+                        const allChampionBids = allQuotes.map(q => {
+                            const otherProposals = q.items.filter(qi => qi.requisitionItemId === reqItem.id);
+                            if (otherProposals.length === 0) return null;
+                            let otherChampionBid = otherProposals[0];
+                            let otherChampionScore = -1;
+                             otherProposals.forEach(p => {
+                                const avgScore = (p.scores?.reduce((acc, s) => acc + s.finalScore, 0) || 0) / (p.scores?.length || 1);
+                                if (avgScore > otherChampionScore) {
+                                    otherChampionScore = avgScore;
+                                    otherChampionBid = p;
+                                }
+                            });
+                            return { vendorId: q.vendorId, score: otherChampionScore, quoteItemId: otherChampionBid.id };
+                        }).filter(Boolean).sort((a,b) => b.score - a.score);
+
+                        // Stage 3: Determine this vendor's rank
+                        const vendorRankIndex = allChampionBids.findIndex(b => b.vendorId === quote.vendorId);
+                        const rank = vendorRankIndex !== -1 ? vendorRankIndex + 1 : null;
+                        
+                        let status: "Pending Award" | "Standby" | null = null;
+                        if(rank === 1) status = 'Pending Award';
+                        if(rank === 2 || rank === 3) status = 'Standby';
+                        
+                        if (!status) return null; // Not in top 3 for this item
+
+                        return {
+                            id: championBid.id,
+                            name: championBid.name,
+                            rank: rank,
+                            score: championScore.toFixed(2),
+                            status: status
+                        };
+
+                    }).filter(Boolean);
+                }, [requisition, quote, allQuotes]);
+
 
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded' || mainStatus === 'Pending_Award') && 'border-primary ring-2 ring-primary')}>
@@ -363,20 +408,20 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                         </>
                                     )}
 
-                                     {perItemStrategy && itemAwardDetails.length > 0 && (
+                                     {perItemStrategy && itemStatuses.length > 0 && (
                                         <div className="text-sm space-y-2 pt-2 border-t">
                                             <h4 className="font-semibold">Your Item Statuses</h4>
-                                            {itemAwardDetails.map(detail => (
-                                                <div key={detail.quoteItemId} className="flex justify-between items-center text-muted-foreground">
+                                            {itemStatuses.map(item => (
+                                                <div key={item.id} className="flex justify-between items-center text-muted-foreground">
                                                     <span className="flex items-center gap-2">
-                                                        {getRankIcon(detail.rank)}
-                                                        <span className="truncate" title={detail.proposedItemName}>
-                                                            {detail.proposedItemName}
+                                                        {getRankIcon(item.rank)}
+                                                        <span className="truncate" title={item.name}>
+                                                            {item.name}
                                                         </span>
                                                     </span>
                                                     <div className="flex items-center gap-1">
-                                                        <Badge variant={getStatusVariant(detail.status as any)}>{detail.status.replace(/_/g, ' ')}</Badge>
-                                                        {detail.averageScore && <Badge variant="outline" className="font-mono">{detail.averageScore.toFixed(2)} pts</Badge>}
+                                                        <Badge variant={item.status === 'Pending Award' ? 'default' : 'secondary'}>{item.status}</Badge>
+                                                        {item.score && <Badge variant="outline" className="font-mono">{item.score} pts</Badge>}
                                                     </div>
                                                 </div>
                                             ))}
@@ -2365,36 +2410,6 @@ export default function QuotationDetailsPage() {
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
   const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
 
-  const fetchRequisitionAndQuotes = useCallback(async () => {
-      if (!id) return;
-      setLoading(true);
-      try {
-          const [reqResponse, venResponse, quoResponse] = await Promise.all([
-              fetch(`/api/requisitions/${id}`),
-              fetch('/api/vendors'),
-              fetch(`/api/quotations?requisitionId=${id}`),
-          ]);
-          const currentReq = await reqResponse.json();
-          const venData = await venResponse.json();
-          const quoData: Quotation[] = await quoResponse.json();
-
-          setVendors(venData || []);
-
-          if (currentReq) {
-              setRequisition(currentReq);
-              // Sort quotations by creation date descending
-              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-          } else {
-              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
-          }
-
-      } catch (error) {
-          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
-      } finally {
-          setLoading(false);
-      }
-  }, [id, toast]);
-
   const userRoleName = useMemo(() => {
     if (!user || !user.role) return null;
     return user.role.name;
@@ -2454,13 +2469,6 @@ export default function QuotationDetailsPage() {
     const isCommitteeReviewer = (userRoleName === 'Committee_A_Member' && requisition.status === 'Pending_Committee_A_Recommendation') || (userRoleName === 'Committee_B_Member' && requisition.status === 'Pending_Committee_B_Review');
     return isHierarchicalReviewer || isCommitteeReviewer;
   }, [user, userRoleName, requisition]);
-
-  const { pendingQuotes, scoredQuotes } = useMemo(() => {
-    if (!user || user.role.name !== 'Committee_Member' ) return { pendingQuotes: quotations, scoredQuotes: [] };
-    const pending = quotations.filter(q => !q.scores?.some(s => s.scorerId === user.id));
-    const scored = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id));
-    return { pendingQuotes: pending, scoredQuotes: scored };
-  }, [quotations, user]);
   
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
     if (!requisition || !requisition.status) return 'rfq';
@@ -2490,7 +2498,14 @@ export default function QuotationDetailsPage() {
 
     return 'rfq'; // Default fallback
   }, [requisition, isAwarded, isAccepted, isScoringComplete]);
-
+  
+  const { pendingQuotes, scoredQuotes } = useMemo(() => {
+    if (!user || user.role.name !== 'Committee_Member' ) return { pendingQuotes: quotations, scoredQuotes: [] };
+    const pending = quotations.filter(q => !q.scores?.some(s => s.scorerId === user.id));
+    const scored = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id));
+    return { pendingQuotes: pending, scoredQuotes: scored };
+  }, [quotations, user]);
+  
   const quotesForDisplay = (user && user.role.name === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (user && user.role.name === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
   const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
   const paginatedQuotes = useMemo(() => {
@@ -2498,6 +2513,36 @@ export default function QuotationDetailsPage() {
     return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
   }, [quotesForDisplay, currentQuotesPage]);
   
+  const fetchRequisitionAndQuotes = useCallback(async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+          const [reqResponse, venResponse, quoResponse] = await Promise.all([
+              fetch(`/api/requisitions/${id}`),
+              fetch('/api/vendors'),
+              fetch(`/api/quotations?requisitionId=${id}`),
+          ]);
+          const currentReq = await reqResponse.json();
+          const venData = await venResponse.json();
+          const quoData: Quotation[] = await quoResponse.json();
+
+          setVendors(venData || []);
+
+          if (currentReq) {
+              setRequisition(currentReq);
+              // Sort quotations by creation date descending
+              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+          } else {
+              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
+          }
+
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
+      } finally {
+          setLoading(false);
+      }
+  }, [id, toast]);
+
   useEffect(() => {
     if (id && user && allUsers.length > 0) {
         fetchRequisitionAndQuotes();
@@ -2803,10 +2848,10 @@ export default function QuotationDetailsPage() {
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} onShowDetails={setSelectedQuoteForDetails} />
+                                    <QuoteComparison quotes={paginatedQuotes} allQuotes={quotations} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} onShowDetails={setSelectedQuoteForDetails} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} onShowDetails={setSelectedQuoteForDetails}/>
+                                    <QuoteComparison quotes={paginatedQuotes} allQuotes={quotations} requisition={requisition} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} isAwarded={isAwarded} onShowDetails={setSelectedQuoteForDetails}/>
                                 </TabsContent>
                              </Tabs>
                         )}
@@ -3291,4 +3336,5 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
 
