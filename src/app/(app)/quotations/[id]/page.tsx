@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -325,7 +326,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                 const perItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 const mainStatus = perItemStrategy ? getOverallStatusForVendor(quote.vendorId) || quote.status : quote.status;
                 
-                const championItems = perItemStrategy ? getVendorChampionItems(quote, requisition) : quote.items;
+                const championItems = getVendorChampionItems(quote, requisition);
                 const itemAwardDetails = perItemStrategy 
                     ? championItems.map(championItem => {
                         const originalReqItem = requisition.items.find(i => i.id === championItem.requisitionItemId);
@@ -2430,13 +2431,6 @@ export default function QuotationDetailsPage() {
     const scored = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id));
     return { pendingQuotes: pending, scoredQuotes: scored };
   }, [quotations, user]);
-
-  const quotesForDisplay = (user && user.role.name === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (user && user.role.name === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
-  const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
-  const paginatedQuotes = useMemo(() => {
-    const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
-    return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [quotesForDisplay, currentQuotesPage]);
   
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
     if (!requisition || !requisition.status) return 'rfq';
@@ -2467,6 +2461,13 @@ export default function QuotationDetailsPage() {
     return 'rfq'; // Default fallback
   }, [requisition, isAwarded, isAccepted, isScoringComplete]);
 
+  const quotesForDisplay = (user && user.role.name === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (user && user.role.name === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
+  const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
+  const paginatedQuotes = useMemo(() => {
+    const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
+    return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [quotesForDisplay, currentQuotesPage]);
+  
   const fetchRequisitionAndQuotes = useCallback(async () => {
       if (!id) return;
       setLoading(true);
@@ -2901,7 +2902,7 @@ export default function QuotationDetailsPage() {
                   <AwardCenterDialog
                     requisition={requisition}
                     quotations={quotations}
-                    onFinalize={handleFinalScores}
+                    onFinalize={handleFinalizeScores}
                     onClose={() => setSingleAwardCenterOpen(false)}
                   />
                 </Dialog>
@@ -2915,7 +2916,7 @@ export default function QuotationDetailsPage() {
                   <BestItemAwardDialog
                     requisition={requisition}
                     quotations={quotations}
-                    onFinalize={handleFinalScores}
+                    onFinalize={handleFinalizeScores}
                     isOpen={isBestItemAwardCenterOpen}
                     onClose={() => setBestItemAwardCenterOpen(false)}
                   />
