@@ -210,7 +210,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean }) => {
+const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean }) => {
     
     if (quotes.length === 0) {
         return (
@@ -257,19 +257,19 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                 const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
-                const mainStatus = useMemo(() => {
-                    if (!isAwarded) return quote.status;
+                const mainStatus = (() => {
+                     if (!isScoringComplete) return quote.status;
                     
                     const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
-
+                    
+                    if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
                     if (vendorItemStatuses.some(s => s.status === 'Awarded')) return 'Awarded';
                     if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
                     if (vendorItemStatuses.some(s => s.status === 'Pending_Award')) return 'Pending_Award';
-                    if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
                     if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
 
                     return quote.status;
-                }, [itemStatuses, quote, isAwarded]);
+                })();
                 
                 const isQuoteAwarded = mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded' || mainStatus === 'Pending_Award';
 
@@ -279,7 +279,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
-                                 {isAwarded && getRankIcon(isPerItemStrategy ? undefined : quote.rank)}
+                                 {isScoringComplete && getRankIcon(isPerItemStrategy ? undefined : quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
                                <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
@@ -302,7 +302,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                                         </>
                                     )}
 
-                                     {isPerItemStrategy && isAwarded && thisVendorItemStatuses.length > 0 && (
+                                     {isPerItemStrategy && isScoringComplete && thisVendorItemStatuses.length > 0 && (
                                         <div className="text-sm space-y-2 pt-2 border-t">
                                             <h4 className="font-semibold">Your Item Statuses</h4>
                                             {thisVendorItemStatuses.map(item => (
@@ -331,7 +331,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                                 </div>
                             )}
 
-                             {isAwarded && typeof quote.finalAverageScore === 'number' && !isPerItemStrategy && (
+                             {isScoringComplete && typeof quote.finalAverageScore === 'number' && !isPerItemStrategy && (
                                  <div className="text-center pt-2 border-t">
                                     <h4 className="font-semibold text-sm">Final Score</h4>
                                     <p className="text-2xl font-bold text-primary">{quote.finalAverageScore.toFixed(2)}</p>
@@ -2411,7 +2411,7 @@ export default function QuotationDetailsPage() {
   const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
   
   const itemStatuses = useMemo(() => {
-    if (!isAwarded || !requisition || !quotations || quotations.length === 0) return [];
+    if (!isScoringComplete || !requisition || !quotations || quotations.length === 0) return [];
     
     const allChampionBids: any[] = [];
     for (const reqItem of requisition.items || []) {
@@ -2486,7 +2486,7 @@ export default function QuotationDetailsPage() {
     
     return finalStatuses;
 
-  }, [requisition, quotations, isAwarded]);
+  }, [requisition, quotations, isScoringComplete]);
 
   const paginatedQuotes = useMemo(() => {
     const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
@@ -2834,10 +2834,10 @@ export default function QuotationDetailsPage() {
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded}/>
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete}/>
                                 </TabsContent>
                              </Tabs>
                         )}
@@ -3324,5 +3324,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
 
 

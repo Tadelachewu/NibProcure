@@ -261,14 +261,14 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             
             // Find the highest rank that has already been declined or failed.
-            const highestDeclinedRank = currentDetails
+            const highestFailedRank = currentDetails
                 .filter(d => d.status === 'Declined' || d.status === 'Failed')
                 .reduce((maxRank, d) => Math.max(maxRank, d.rank || 0), 0);
 
-            if (highestDeclinedRank > 0) {
-                // Find the first standby vendor with a rank higher than any declined one.
+            if (highestFailedRank > 0) {
+                // Find the first standby vendor with a rank higher than any failed one.
                 const standbyToPromote = currentDetails
-                    .filter(d => d.status === 'Standby' && (d.rank || 0) > highestDeclinedRank)
+                    .filter(d => d.status === 'Standby' && (d.rank || 0) > highestFailedRank)
                     .sort((a, b) => (a.rank || 99) - (b.rank || 99))[0];
                 
                 if (standbyToPromote) {

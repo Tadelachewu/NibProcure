@@ -167,16 +167,12 @@ export default function VendorDashboardPage() {
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
             
-            // Check for single-vendor award
-            const isSingleVendorAward = vendorQuote && ['Awarded', 'Accepted'].includes(vendorQuote.status);
+            // A requisition is active if the vendor submitted a quote for it, OR if they won an award
+            // even if their original quote was somehow detached (edge case for per-item awards).
+            const isRelated = vendorQuote || 
+                              req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
 
-            // Check for per-item award
-            const isPerItemAwarded = (req.rfqSettings as any)?.awardStrategy === 'item' && 
-                req.items.some(item => 
-                    (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user?.vendorId && (d.status === 'Awarded' || d.status === 'Accepted'))
-                );
-
-            if (vendorQuote || isPerItemAwarded || isSingleVendorAward) {
+            if (isRelated) {
                 active.push(req);
             } else {
                 open.push(req);
