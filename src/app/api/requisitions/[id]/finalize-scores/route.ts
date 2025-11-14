@@ -11,11 +11,9 @@ export async function POST(
   { params }: { params: { id:string } }
 ) {
     const requisitionId = params.id;
-    console.log(`--- FINALIZE-SCORES START for REQ: ${requisitionId} ---`);
     try {
         const body = await request.json();
         const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue } = body;
-        console.log(`[FINALIZE-SCORES] Award Value: ${totalAwardValue}, Strategy: ${awardStrategy}`);
 
         const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
         if (!user) {
@@ -47,7 +45,6 @@ export async function POST(
             const allQuotes = await tx.quotation.findMany({ 
                 where: { requisitionId: requisitionId },
                 include: { items: true, scores: { include: { itemScores: { include: { scores: true } } } } },
-                orderBy: { finalAverageScore: 'desc' } 
             });
 
             if (allQuotes.length === 0) {
@@ -57,26 +54,38 @@ export async function POST(
             const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
 
             if (awardStrategy === 'all') {
-                const awardedVendorIds = Object.keys(awards);
-                const winnerQuote = allQuotes.find(q => q.vendorId === awardedVendorIds[0]);
-
-                if (!winnerQuote) {
-                    throw new Error("Winning vendor's quote could not be found.");
+                // --- SINGLE VENDOR AWARD LOGIC ---
+                const awardedVendorId = Object.keys(awards)[0];
+                if (!awardedVendorId) {
+                    throw new Error("No winning vendor was specified in the single-award strategy.");
                 }
 
-                await tx.quotation.update({
-                    where: { id: winnerQuote.id },
-                    data: { status: 'Pending_Award', rank: 1 }
-                });
+                const quotesSortedByScore = allQuotes
+                    .filter(q => q.status !== 'Declined')
+                    .sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
 
-                const otherQuotes = allQuotes.filter(q => q.id !== winnerQuote.id && q.status !== 'Declined');
-                for (let i = 0; i < otherQuotes.length; i++) {
-                    const status = (i < 2) ? 'Standby' : 'Rejected';
-                    const rank = (i < 2) ? (i + 2) as 2 | 3 : null;
-                    await tx.quotation.update({ where: { id: otherQuotes[i].id }, data: { status, rank } });
+                for (let i = 0; i < quotesSortedByScore.length; i++) {
+                    const quote = quotesSortedByScore[i];
+                    if (quote.vendorId === awardedVendorId) {
+                        await tx.quotation.update({
+                            where: { id: quote.id },
+                            data: { status: 'Pending_Award', rank: 1 }
+                        });
+                    } else if (i > 0 && i <= 2) { // Ranks 2 and 3 become standby
+                        await tx.quotation.update({
+                            where: { id: quote.id },
+                            data: { status: 'Standby', rank: (i + 1) as 2 | 3 }
+                        });
+                    } else { // All others are rejected
+                        await tx.quotation.update({
+                            where: { id: quote.id },
+                            data: { status: 'Rejected', rank: null }
+                        });
+                    }
                 }
 
             } else if (awardStrategy === 'item') {
+                // --- PER-ITEM AWARD LOGIC ---
                 const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
 
                 for (const reqItem of reqItems) {
@@ -102,22 +111,25 @@ export async function POST(
                                      quoteItemId: proposal.id,
                                      proposedItemName: proposal.name,
                                      unitPrice: proposal.unitPrice,
-                                     averageScore: averageScore 
+                                     score: averageScore 
                                  });
                              });
                          }
                     }
 
-                    proposals.sort((a,b) => b.averageScore - a.averageScore);
+                    proposals.sort((a,b) => b.score - a.score);
                     
-                    const rankedProposals = proposals.slice(0, 3).map((p, index) => {
-                        let status: PerItemAwardDetail['status'] = (index === 0) ? 'Pending_Award' : 'Standby';
-                        return { 
-                            ...p, 
-                            rank: index + 1, 
-                            status 
-                        };
-                    });
+                    const rankedProposals = proposals.slice(0, 3).map((p, index) => ({
+                        vendorId: p.vendorId,
+                        vendorName: p.vendorName,
+                        quotationId: p.quotationId,
+                        quoteItemId: p.quoteItemId,
+                        proposedItemName: p.proposedItemName,
+                        unitPrice: p.unitPrice,
+                        score: p.score,
+                        rank: index + 1, 
+                        status: (index === 0) ? 'Pending_Award' : 'Standby'
+                    }));
 
                     await tx.requisitionItem.update({
                         where: { id: reqItem.id },
@@ -148,7 +160,6 @@ export async function POST(
                     }
                 }
             });
-            console.log(`[FINALIZE-SCORES] Requisition ${requisitionId} updated. New status: ${updatedRequisition.status}, Approver: ${updatedRequisition.currentApproverId}`);
 
             await tx.auditLog.create({
                 data: {
@@ -164,11 +175,10 @@ export async function POST(
             
             return updatedRequisition;
         }, {
-            maxWait: 10000,
-            timeout: 20000,
+            maxWait: 15000,
+            timeout: 30000,
         });
         
-        console.log(`--- FINALIZE-SCORES END for REQ: ${requisitionId} ---`);
         return NextResponse.json({ message: 'Award process finalized and routed for review.', requisition: result });
 
     } catch (error) {
