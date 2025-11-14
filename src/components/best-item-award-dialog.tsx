@@ -48,16 +48,18 @@ export const BestItemAwardDialog = ({
     const itemWinners = useMemo(() => {
         if (!requisition.items) return [];
 
+        // For each item in the original requisition...
         return requisition.items.map(reqItem => {
-            // Stage 1: Find each vendor's single "champion" bid for this item.
+            
+            // Stage 1: Internal Vendor Championship. Find each vendor's single best proposal for this item.
             const championBids = eligibleQuotes.map(quote => {
                 const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
-                if (proposalsForItem.length === 0) return null;
+                if (proposalsForItem.length === 0) return null; // Vendor didn't bid on this item.
 
                 let bestProposalForItem: QuoteItem | null = null;
                 let bestItemScore = -1;
 
-                // Find the best scoring proposal from this vendor for this item
+                // Find the best scoring proposal from this single vendor for this single item.
                 proposalsForItem.forEach(proposal => {
                     let totalItemScore = 0;
                     let scoreCount = 0;
@@ -78,7 +80,7 @@ export const BestItemAwardDialog = ({
 
                 if (!bestProposalForItem) return null;
 
-                // This object represents the vendor's single best effort for this item
+                // This object represents the vendor's single best effort ("champion bid") for this item.
                 return {
                     vendorId: quote.vendorId,
                     vendorName: quote.vendorName,
@@ -86,9 +88,9 @@ export const BestItemAwardDialog = ({
                     unitPrice: bestProposalForItem.unitPrice,
                     score: bestItemScore
                 };
-            }).filter((bid): bid is NonNullable<typeof bid> => bid !== null);
+            }).filter((bid): bid is NonNullable<typeof bid> => bid !== null); // Filter out vendors who didn't bid.
             
-            // Stage 2: Rank the "champion bids" to find the winner for this item.
+            // Stage 2: Championship Round. Rank the champion bids against each other for this item.
             championBids.sort((a, b) => b.score - a.score);
             
             const winner = championBids.length > 0 ? championBids[0] : null;
