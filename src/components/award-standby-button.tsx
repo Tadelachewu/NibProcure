@@ -29,10 +29,9 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
                 const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                 const hasDeclinedWinner = details.some(d => d.status === 'Declined');
                 if (!hasDeclinedWinner) return false;
-
-                const highestDeclinedRank = Math.max(...details.filter(d => d.status === 'Declined').map(d => d.rank || 0));
                 
-                const standbyExists = details.some(d => d.status === 'Standby' && (d.rank || 0) > highestDeclinedRank);
+                // Check if a standby exists for this specific item that has a declined winner
+                const standbyExists = details.some(d => d.status === 'Standby');
                 return standbyExists;
             });
         } else {
@@ -58,7 +57,7 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
                 <AlertDialogHeader>
                     <AlertDialogTitle>Confirm Standby Promotion</AlertDialogTitle>
                     <AlertDialogDescription>
-                        This will promote the next highest-ranked standby vendor(s) to the "Awarded" status and restart the review process. This action cannot be undone.
+                        This will promote the next highest-ranked standby vendor(s) to the "Pending Award" status and restart the review process. This action cannot be undone.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -69,3 +68,4 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
         </AlertDialog>
     );
 }
+

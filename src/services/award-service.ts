@@ -260,21 +260,20 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         for (const item of allItems) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             
-            const highestFailedRank = currentDetails
-                .filter(d => d.status === 'Declined' || d.status === 'Failed_to_Award')
-                .reduce((maxRank, d) => Math.max(maxRank, d.rank || 0), 0);
-
-            if (highestFailedRank > 0) {
+            const hasDeclinedWinner = currentDetails.some(d => d.status === 'Declined');
+            
+            if (hasDeclinedWinner) {
                 const standbyToPromote = currentDetails
-                    .filter(d => d.status === 'Standby' && (d.rank || 0) > highestFailedRank)
-                    .sort((a, b) => (a.rank || 99) - (b.rank || 99))[0];
+                    .filter(d => d.status === 'Standby')
+                    .sort((a, b) => (a.rank || 99) - (b.rank || 99))[0]; // Get the highest ranked standby
                 
                 if (standbyToPromote) {
                     const updatedDetails = currentDetails.map(d => {
+                        // Promote the standby
                         if (d.vendorId === standbyToPromote.vendorId && d.rank === standbyToPromote.rank) {
                             return { ...d, status: 'Pending_Award' as const };
                         }
-                        // Keep old 'Declined' statuses, but mark them as 'Failed' to prevent re-promotion
+                        // Mark the old winner as failed to prevent re-promotion
                         if (d.status === 'Declined') {
                             return { ...d, status: 'Failed_to_Award' as const };
                         }
@@ -414,3 +413,4 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
+
