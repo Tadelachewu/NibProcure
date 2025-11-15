@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -130,7 +131,7 @@ export async function GET(request: Request) {
                 quotations: {
                     some: {
                         vendorId: userPayload.user.vendorId,
-                        status: { in: ['Submitted', 'Awarded', 'Accepted', 'Declined', 'Standby', 'Partially_Awarded', 'Invoice_Submitted', 'Failed'] }
+                        status: { in: ['Submitted', 'Awarded', 'Accepted', 'Declined', 'Standby', 'Partially_Awarded', 'Invoice_Submitted', 'Failed', 'Pending_Award'] }
                     }
                 }
             },
@@ -711,3 +712,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    

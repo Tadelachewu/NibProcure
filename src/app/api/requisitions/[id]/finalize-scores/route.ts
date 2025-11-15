@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -54,62 +55,27 @@ export async function POST(
             const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, totalAwardValue);
 
             if (awardStrategy === 'all') {
-                // This is the new "Best-of-Vendor" (champion bid) strategy
-                const vendorScores: { [vendorId: string]: { totalScore: number, championBidsCount: number, vendorName: string, quoteId: string } } = {};
+                const winnerData = awards[Object.keys(awards)[0]];
+                if (!winnerData) throw new Error("Winner data not found for single-vendor award.");
+                const winnerQuote = allQuotes.find(q => q.vendorId === Object.keys(awards)[0]);
+                if (!winnerQuote) throw new Error("Winning quote not found in database.");
 
-                allQuotes.forEach(quote => {
-                    vendorScores[quote.vendorId] = { totalScore: 0, championBidsCount: 0, vendorName: quote.vendorName, quoteId: quote.id };
+                await tx.quotation.update({
+                    where: { id: winnerQuote.id },
+                    data: { status: 'Pending_Award', rank: 1 }
                 });
 
-                const requisitionItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId } });
+                const otherQuotes = allQuotes
+                    .filter(q => q.id !== winnerQuote.id && q.status !== 'Declined')
+                    .sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
 
-                for (const reqItem of requisitionItems) {
-                    for (const vendorId in vendorScores) {
-                        const vendorQuote = allQuotes.find(q => q.vendorId === vendorId);
-                        if (!vendorQuote) continue;
-
-                        const proposalsForItem = vendorQuote.items.filter(i => i.requisitionItemId === reqItem.id);
-                        if (proposalsForItem.length === 0) continue;
-                        
-                        let bestItemScore = -1;
-                        proposalsForItem.forEach(proposal => {
-                            let totalProposalScore = 0;
-                            let scoreCount = 0;
-                            vendorQuote.scores?.forEach(scoreSet => {
-                                const itemScore = scoreSet.itemScores?.find(s => s.quoteItemId === proposal.id);
-                                if (itemScore) {
-                                    totalProposalScore += itemScore.finalScore;
-                                    scoreCount++;
-                                }
-                            });
-                            const averageProposalScore = scoreCount > 0 ? totalProposalScore / scoreCount : 0;
-                            if (averageProposalScore > bestItemScore) {
-                                bestItemScore = averageProposalScore;
-                            }
-                        });
-
-                        if (bestItemScore !== -1) {
-                            vendorScores[vendorId].totalScore += bestItemScore;
-                            vendorScores[vendorId].championBidsCount++;
-                        }
-                    }
-                }
-                
-                const vendorRankings = Object.entries(vendorScores)
-                    .map(([vendorId, data]) => ({
-                        vendorId,
-                        ...data,
-                        averageScore: data.championBidsCount > 0 ? data.totalScore / data.championBidsCount : 0,
-                    }))
-                    .sort((a, b) => b.averageScore - a.averageScore);
-                
-                for (let i = 0; i < vendorRankings.length; i++) {
-                    const rankData = vendorRankings[i];
+                for (let i = 0; i < otherQuotes.length; i++) {
+                    const quote = otherQuotes[i];
                     await tx.quotation.update({
-                        where: { id: rankData.quoteId },
+                        where: { id: quote.id },
                         data: {
-                            status: i === 0 ? 'Pending_Award' : (i <= 2 ? 'Standby' : 'Rejected'),
-                            rank: (i + 1) as 1 | 2 | 3 | null,
+                            status: i < 2 ? 'Standby' : 'Rejected',
+                            rank: i < 2 ? (i + 2) as 2 | 3 : null,
                         }
                     });
                 }
@@ -215,3 +181,5 @@ export async function POST(
         return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
 }
+
+    

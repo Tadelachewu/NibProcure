@@ -262,7 +262,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             
             // Find the highest rank that has already been declined or failed.
             const highestFailedRank = currentDetails
-                .filter(d => d.status === 'Declined' || d.status === 'Failed')
+                .filter(d => d.status === 'Declined' || d.status === 'Failed_to_Award')
                 .reduce((maxRank, d) => Math.max(maxRank, d.rank || 0), 0);
 
             if (highestFailedRank > 0) {
@@ -279,7 +279,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                         }
                         // Mark the previously declined one as failed to prevent re-promotion
                         if (d.status === 'Declined') {
-                            return { ...d, status: 'Failed' as const };
+                            return { ...d, status: 'Failed_to_Award' as const };
                         }
                         return d;
                     });
@@ -387,3 +387,5 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
+
+    
