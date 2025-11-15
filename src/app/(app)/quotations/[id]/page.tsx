@@ -280,7 +280,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
 
 
                 return (
-                    <Card key={quote.id} className={cn("flex flex-col", isQuoteAwarded && 'border-primary ring-2 ring-primary')}>
+                    <Card key={quote.id} className={cn("flex flex-col", isQuoteAwarded && !isPerItemStrategy && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
@@ -2358,7 +2358,6 @@ export default function QuotationDetailsPage() {
 
   const isAwarded = useMemo(() => {
     if (!requisition || !requisition.status) return false;
-    // An award process has started if it's in any review state, or has been decided.
     return requisition.status.startsWith('Pending_') || ['PostApproved', 'Awarded', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled'].includes(requisition.status);
   }, [requisition]);
 
@@ -2418,42 +2417,53 @@ export default function QuotationDetailsPage() {
   const itemStatuses = useMemo(() => {
     if (!requisition || !requisition.items || (requisition.rfqSettings as any)?.awardStrategy !== 'item') return [];
 
-    const allBids: any[] = [];
-    // 1. Gather all "champion bids" for every item from every vendor.
+    // 1. Gather all champion bids for every item from every vendor.
+    const allChampionBids: any[] = [];
     requisition.items.forEach(reqItem => {
         quotations.forEach(quote => {
-            const championBidForItem = quote.items
-                .filter(qi => qi.requisitionItemId === reqItem.id)
-                .map(proposal => {
-                    const avgScore = (proposal as any).finalAverageScore || 0; // Assuming scores are pre-calculated
-                    return { proposal, score: avgScore };
-                })
-                .sort((a, b) => b.score - a.score)[0]; // Get the best one
+            const proposalsForItem = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
+            if (proposalsForItem.length > 0) {
+                const bestProposal = proposalsForItem.map(proposal => {
+                    let totalScore = 0;
+                    let scorerCount = 0;
+                    quote.scores?.forEach(scoreSet => {
+                        const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
+                        if(itemScore) {
+                            totalScore += itemScore.finalScore;
+                            scorerCount++;
+                        }
+                    });
+                    const score = scorerCount > 0 ? totalScore / scorerCount : 0;
+                    return { proposal, score };
+                }).sort((a,b) => b.score - a.score)[0]; // Get the best one
 
-            if (championBidForItem) {
-                allBids.push({
-                    reqItemId: reqItem.id,
-                    reqItemName: reqItem.name,
-                    vendorId: quote.vendorId,
-                    proposalId: championBidForItem.proposal.id,
-                    proposalName: championBidForItem.proposal.name,
-                    score: championBidForItem.score
-                });
+                if (bestProposal) {
+                    allChampionBids.push({
+                        reqItemId: reqItem.id,
+                        reqItemName: reqItem.name,
+                        vendorId: quote.vendorId,
+                        proposalId: bestProposal.proposal.id,
+                        proposalName: bestProposal.proposal.name,
+                        score: bestProposal.score,
+                    });
+                }
             }
         });
     });
-    
-    const finalStatuses: any[] = [];
-    const groupedByItem = allBids.reduce((acc, bid) => {
+
+    // 2. Group by item to rank them
+    const groupedByItem = allChampionBids.reduce((acc, bid) => {
         (acc[bid.reqItemId] = acc[bid.reqItemId] || []).push(bid);
         return acc;
     }, {} as Record<string, any[]>);
 
+    // 3. Rank and assign status
+    const finalStatuses: any[] = [];
     Object.values(groupedByItem).forEach((bids: any[]) => {
         bids.sort((a, b) => b.score - a.score);
         bids.forEach((bid, index) => {
-            let status = 'Rejected';
             const rank = index + 1;
+            let status = 'Rejected';
             
             const dbStatus = requisition.items
                 .find(i => i.id === bid.reqItemId)
@@ -2466,13 +2476,7 @@ export default function QuotationDetailsPage() {
             } else if (rank === 2 || rank === 3) {
                 status = 'Standby';
             }
-
-            finalStatuses.push({
-                ...bid,
-                id: `${bid.vendorId}-${bid.reqItemId}`,
-                rank: rank,
-                status: status,
-            });
+            finalStatuses.push({ ...bid, id: `${bid.vendorId}-${bid.reqItemId}`, rank, status });
         });
     });
     
@@ -3335,3 +3339,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
     
 
+
+
+    
