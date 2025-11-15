@@ -116,8 +116,10 @@ export async function POST(
                 const winningQuote = allQuotes.find(q => q.vendorId === winner.vendorId);
                 if (!winningQuote) throw new Error("Winning quote not found in database.");
 
+                // **FIX START**: Recalculate award value based *only* on champion bids.
                 finalAwardValue = winner.championBids.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
                 finalAwardedItemIds = winner.championBids.map(item => item.id);
+                // **FIX END**
 
                 await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
                 
@@ -200,7 +202,7 @@ export async function POST(
                     status: nextStatus as any,
                     currentApproverId: nextApproverId,
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
-                    totalPrice: finalAwardValue,
+                    totalPrice: finalAwardValue, // Use the correctly calculated value
                     awardedQuoteItemIds: finalAwardedItemIds, // Store the champion bid IDs for single vendor award
                     rfqSettings: {
                         ...(requisition?.rfqSettings as any),

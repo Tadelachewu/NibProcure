@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -607,6 +608,7 @@ export default function VendorRequisitionPage() {
       
       const vendorAwardedItems: QuoteItem[] = [];
       const quote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
+      if (!quote) return [];
       
       // Handle "Award by Best Item" scenario
       if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
@@ -617,9 +619,7 @@ export default function VendorRequisitionPage() {
             awardedQuoteItemIds.add(awardDetails.quoteItemId);
           }
         });
-        if(quote){
-          vendorAwardedItems.push(...quote.items.filter(item => awardedQuoteItemIds.has(item.id)));
-        }
+        vendorAwardedItems.push(...quote.items.filter(item => awardedQuoteItemIds.has(item.id)));
       }
       // Handle single-vendor award scenario
       else if (quote && ['Awarded', 'Partially_Awarded', 'Accepted'].includes(quote.status)) {
@@ -655,7 +655,7 @@ export default function VendorRequisitionPage() {
         if (!id || !token || !user) return;
         
         setLoading(true);
-setError(null);
+        setError(null);
         try {
              const response = await fetch(`/api/requisitions?id=${id}`);
              if (!response.ok) {
@@ -1000,7 +1000,7 @@ setError(null);
                 </Card>
 
                 {submittedQuote && !isEditingQuote ? (
-                    <QuoteDisplayCard quote={submittedQuote} itemsToShow={awardedItems} />
+                    <QuoteDisplayCard quote={submittedQuote} itemsToShow={awardedItems.length > 0 ? awardedItems : submittedQuote.items} />
                 ) : (
                     <QuoteSubmissionForm 
                         requisition={requisition} 
