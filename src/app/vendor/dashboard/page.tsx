@@ -113,26 +113,22 @@ export default function VendorDashboardPage() {
     const getRequisitionCardStatus = useCallback((req: PurchaseRequisition): RequisitionCardStatus => {
         if (!user?.vendorId) return 'Action Required';
 
-        // Check overall quote status for this vendor
-        const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
-        if (vendorQuote) {
-            if (vendorQuote.status === 'Accepted') return 'Accepted';
-            if (vendorQuote.status === 'Declined') return 'Declined';
-            if (vendorQuote.status === 'Invoice_Submitted') return 'Invoice Submitted';
-        }
-
-        // Check per-item award details for item-based strategy
+        // Check for per-item award statuses first, as they are more specific
         if ((req.rfqSettings as any)?.awardStrategy === 'item') {
             const vendorAwards = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId));
             
             if (vendorAwards.some(a => a.status === 'Accepted')) return 'Accepted';
             if (vendorAwards.some(a => a.status === 'Declined')) return 'Declined';
-            if (vendorAwards.some(a => a.status === 'Awarded')) return 'Awarded';
+            if (vendorAwards.some(a => a.status === 'Awarded')) return 'Partially Awarded';
             if (vendorAwards.some(a => a.status === 'Standby')) return 'Standby';
         }
 
-        // Fallback to overall quote status for 'all' strategy or if no item awards found
+        // Fallback to overall quote status if no specific item status takes precedence
+        const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
         if (vendorQuote) {
+            if (vendorQuote.status === 'Accepted') return 'Accepted';
+            if (vendorQuote.status === 'Declined') return 'Declined';
+            if (vendorQuote.status === 'Invoice_Submitted') return 'Invoice Submitted';
             if (vendorQuote.status === 'Awarded') return 'Awarded';
             if (vendorQuote.status === 'Partially_Awarded') return 'Partially Awarded';
             if (vendorQuote.status === 'Standby') return 'Standby';
@@ -143,19 +139,17 @@ export default function VendorDashboardPage() {
             if (isClosedOrFulfilled && wasAwardedToThisVendor) {
                 return 'Closed';
             }
+            
             if (vendorQuote.status === 'Submitted') {
-                const isAnyQuoteAwarded = req.quotations?.some(q => ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status));
-                if (isAnyQuoteAwarded) return 'Not Awarded';
+                const isAnyQuoteAwardedOrAccepted = req.quotations?.some(q => ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status));
+                if (isAnyQuoteAwardedOrAccepted) return 'Not Awarded';
                 return 'Submitted';
             }
             
             return 'Processing'; // Default for other statuses like Rejected
         }
         
-        // If vendor has no quote but there might be an item-level award (e.g. from a different quote that was deleted/re-evaluated)
-        const hasAnyItemAward = req.items.some(item => (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user.vendorId && d.status === 'Awarded'));
-        if (hasAnyItemAward) return 'Awarded';
-
+        // If there's no quote from the vendor, it's open for quoting
         return 'Action Required';
     }, [user]);
 
