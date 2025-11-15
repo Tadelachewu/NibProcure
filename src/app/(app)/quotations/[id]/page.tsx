@@ -254,6 +254,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
             case 'Not Awarded':
             case 'Declined': 
             case 'Failed': 
+            case 'Failed_to_Award':
                 return 'destructive';
             case 'Invoice_Submitted': return 'outline';
         }
@@ -290,7 +291,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                                  {isAwarded && !isPerItemStrategy && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
-                               <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
+                               {!isPerItemStrategy && <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>}
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
@@ -2361,6 +2362,10 @@ export default function QuotationDetailsPage() {
 
   const isAwarded = useMemo(() => {
     if (!requisition || !requisition.status) return false;
+    const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+    if(isPerItemStrategy) {
+        return requisition.items.some(item => (item.perItemAwardDetails as any[])?.length > 0);
+    }
     return requisition.status.startsWith('Pending_') || ['PostApproved', 'Awarded', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled'].includes(requisition.status);
   }, [requisition]);
 
@@ -2420,60 +2425,45 @@ export default function QuotationDetailsPage() {
   const itemStatuses = useMemo(() => {
     if (!requisition || !requisition.items) return [];
 
-    // 1. Gather all champion bids for every item from every vendor.
-    const allBids: any[] = [];
+    const bidsByItem: Record<string, any[]> = {};
     quotations.forEach(quote => {
-        requisition.items.forEach(reqItem => {
-            const proposalsForItem = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
-            if (proposalsForItem.length > 0) {
-                const bestProposal = proposalsForItem.map(proposal => {
-                    let totalScore = 0;
-                    let scorerCount = 0;
-                    quote.scores?.forEach(scoreSet => {
-                        const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                        if(itemScore) {
-                            totalScore += itemScore.finalScore;
-                            scorerCount++;
-                        }
-                    });
-                    const score = scorerCount > 0 ? totalScore / scorerCount : 0;
-                    return { proposal, score };
-                }).sort((a,b) => b.score - a.score)[0]; // Get the best one for this vendor for this item
-
-                if (bestProposal) {
-                    allBids.push({
-                        reqItemId: reqItem.id,
-                        reqItemName: reqItem.name,
-                        vendorId: quote.vendorId,
-                        proposalId: bestProposal.proposal.id,
-                        proposalName: bestProposal.proposal.name,
-                        score: bestProposal.score,
-                    });
-                }
+        quote.items.forEach(proposal => {
+            const reqItemId = proposal.requisitionItemId;
+            if (!bidsByItem[reqItemId]) {
+                bidsByItem[reqItemId] = [];
             }
+            let totalScore = 0;
+            let scorerCount = 0;
+            quote.scores?.forEach(scoreSet => {
+                const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
+                if(itemScore) {
+                    totalScore += itemScore.finalScore;
+                    scorerCount++;
+                }
+            });
+            const score = scorerCount > 0 ? totalScore / scorerCount : 0;
+            bidsByItem[reqItemId].push({
+                vendorId: quote.vendorId,
+                reqItemName: requisition.items.find(ri => ri.id === reqItemId)?.name || 'Unknown',
+                proposalName: proposal.name,
+                proposalId: proposal.id,
+                score: score,
+            });
         });
     });
 
-    // 2. Group by item to rank them
-    const groupedByItem = allBids.reduce((acc, bid) => {
-        (acc[bid.reqItemId] = acc[bid.reqItemId] || []).push(bid);
-        return acc;
-    }, {} as Record<string, any[]>);
-
-    // 3. Create the final list of statuses, correctly ranked
     const finalStatuses: any[] = [];
-    Object.values(groupedByItem).forEach((bids: any[]) => {
-        bids.sort((a, b) => b.score - a.score); // Rank by score
-        
+    Object.values(bidsByItem).forEach((bids: any[]) => {
+        bids.sort((a, b) => b.score - a.score);
         bids.forEach((bid, index) => {
             const rank = index + 1;
             const dbStatus = requisition.items
-                .find(i => i.id === bid.reqItemId)
+                .find(i => i.id === bids[0].reqItemId)
                 ?.perItemAwardDetails?.find(d => d.quoteItemId === bid.proposalId)?.status;
 
             finalStatuses.push({ 
                 ...bid, 
-                id: `${bid.vendorId}-${bid.reqItemId}-${bid.proposalId}`, 
+                id: `${bid.vendorId}-${bids[0].reqItemId}-${bid.proposalId}`, 
                 rank, 
                 status: dbStatus || (rank === 1 ? 'Pending_Award' : rank <= 3 ? 'Standby' : 'Rejected')
             });
@@ -3201,6 +3191,28 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
 
+    const canRestart = useMemo(() => {
+        if ((requisition.rfqSettings as any)?.awardStrategy !== 'item') {
+            return false;
+        }
+        const hasFailedItems = requisition.items.some(item => (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award'));
+        if (!hasFailedItems) return false;
+
+        // Check if there are ANY items that STILL have a promotable standby. If so, we shouldn't allow a restart yet.
+        const hasPromotableStandby = requisition.items.some(item => {
+            const details = (item.perItemAwardDetails as PerItemAwardDetail[] || []);
+            const hasDeclined = details.some(d => d.status === 'Declined');
+            if (hasDeclined) {
+                 const nextRank = (details.find(d => d.status === 'Declined')?.rank || 0) + 1;
+                 return details.some(d => d.rank === nextRank && d.status === 'Standby');
+            }
+            return false;
+        });
+
+        return hasFailedItems && !hasPromotableStandby;
+
+    }, [requisition]);
+    
     const failedItems = useMemo(() => 
         requisition.items.filter(item => 
             (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award')
@@ -3212,7 +3224,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
         return setMinutes(setHours(deadlineDate, hours), minutes);
     }, [deadlineDate, deadlineTime]);
     
-    const canRestart = (requisition.rfqSettings as any)?.awardStrategy === 'item' && failedItems.length > 0;
 
     const handleRestart = async () => {
         if (!user || !deadline || failedItems.length === 0 || selectedVendors.length === 0) {

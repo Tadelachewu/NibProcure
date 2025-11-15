@@ -1,11 +1,10 @@
 
-
 'use client';
 
 import { Button } from './ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Loader2, TrophyIcon } from 'lucide-react';
-import { PurchaseRequisition, Quotation } from '@/lib/types';
+import { PerItemAwardDetail, PurchaseRequisition, Quotation } from '@/lib/types';
 import { useMemo } from 'react';
 
 interface AwardStandbyButtonProps {
@@ -24,13 +23,13 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
         }
 
         if (isPerItemStrategy) {
-            // Check if there is at least one declined item that HAS a standby vendor.
+            // Check if there is at least one item that has a 'Declined' winner AND a 'Standby' vendor.
             return requisition.items.some(item => {
-                const details = (item.perItemAwardDetails || []);
-                const declinedAward = details.find(d => d.status === 'Declined');
-                if (!declinedAward) return false;
+                const details = (item.perItemAwardDetails as PerItemAwardDetail[] || []);
+                const hasDeclinedWinner = details.some(d => d.status === 'Declined');
+                if (!hasDeclinedWinner) return false;
 
-                const nextRank = (declinedAward.rank || 0) + 1;
+                const nextRank = (details.find(d => d.status === 'Declined')?.rank || 0) + 1;
                 const standbyExists = details.some(d => d.rank === nextRank && d.status === 'Standby');
                 return standbyExists;
             });
@@ -57,7 +56,7 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
                 <AlertDialogHeader>
                     <AlertDialogTitle>Confirm Standby Promotion</AlertDialogTitle>
                     <AlertDialogDescription>
-                        This will promote the next highest-ranked standby vendor(s) to the "Awarded" status and restart the review process. This action cannot be undone.
+                        This will promote the next highest-ranked standby vendor(s) to the "Pending Award" status and restart the review process. This action cannot be undone.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
