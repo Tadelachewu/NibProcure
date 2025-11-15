@@ -116,11 +116,10 @@ export async function POST(
                 const winningQuote = allQuotes.find(q => q.vendorId === winner.vendorId);
                 if (!winningQuote) throw new Error("Winning quote not found in database.");
 
-                // **FIX START**: Recalculate award value based *only* on champion bids.
+                // Recalculate award value based *only* on champion bids.
                 finalAwardValue = winner.championBids.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
                 finalAwardedItemIds = winner.championBids.map(item => item.id);
-                // **FIX END**
-
+                
                 await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
                 
                 const otherQuotes = rankedVendors.slice(1);
@@ -139,7 +138,6 @@ export async function POST(
                 }
 
             } else if (awardStrategy === 'item') {
-                // Per-Item Award Logic remains here
                 const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
 
                 for (const reqItem of reqItems) {
