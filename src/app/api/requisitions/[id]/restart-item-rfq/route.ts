@@ -1,8 +1,9 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User, PerItemAwardDetail } from '@/lib/types';
+import { PerItemAwardDetail, User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format } from 'date-fns';
 
@@ -16,10 +17,31 @@ export async function POST(
     const body = await request.json();
     const { userId, itemIds, vendorIds, newDeadline } = body;
 
-    const actor: User | null = await prisma.user.findUnique({ where: { id: userId } });
-    if (!actor || (actor.role as any)?.name !== 'Procurement_Officer' && (actor.role as any)?.name !== 'Admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const actor: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+    if (!actor) {
+      return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
+    
+    // Correct Authorization Logic
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    const userRoleName = (actor.role as any)?.name as UserRole;
+
+    if (userRoleName === 'Admin') {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userId?: string };
+        if (setting.type === 'specific') {
+            isAuthorized = setting.userId === userId;
+        } else { // 'all' case
+            isAuthorized = userRoleName === 'Procurement_Officer';
+        }
+    }
+    
+    if (!isAuthorized) {
+        return NextResponse.json({ error: 'Unauthorized to restart this RFQ.' }, { status: 403 });
+    }
+
 
     if (!itemIds || itemIds.length === 0 || !vendorIds || vendorIds.length === 0 || !newDeadline) {
       return NextResponse.json({ error: 'Missing required parameters: itemIds, vendorIds, and newDeadline.' }, { status: 400 });
