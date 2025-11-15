@@ -274,7 +274,19 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                 const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
-                const mainStatus = getOverallStatusForVendor(quote, itemStatuses, isAwarded);
+                const mainStatus = useMemo(() => {
+                    if (!isAwarded) return quote.status;
+                    
+                    const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
+                    
+                    if (vendorItemStatuses.some(s => s.status === 'Awarded')) return 'Awarded';
+                    if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
+                    if (vendorItemStatuses.some(s => s.status === 'Pending_Award')) return 'Pending_Award';
+                    if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
+                    if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
+                    
+                    return quote.status;
+                }, [quote, itemStatuses, isAwarded]);
                 
                 const isQuoteAwarded = mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded' || mainStatus === 'Pending_Award';
 
@@ -2349,7 +2361,8 @@ export default function QuotationDetailsPage() {
     if (quotations.length === 0) return false;
 
     // Check if every assigned member has finalized their scores.
-    return allMemberIds.every(memberId => {
+    const uniqueMemberIds = [...new Set(allMemberIds)];
+    return uniqueMemberIds.every(memberId => {
         const member = allUsers.find(u => u.id === memberId);
         return member?.committeeAssignments?.some(a => a.requisitionId === requisition.id && a.scoresSubmitted) || false;
     });
@@ -2358,7 +2371,7 @@ export default function QuotationDetailsPage() {
   const isAwarded = useMemo(() => {
     if (!requisition || !requisition.status) return false;
     return [
-        'Awarded', 'PostApproved', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled'
+      'Awarded', 'PostApproved', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled'
     ].includes(requisition.status) || requisition.status.startsWith('Pending_');
   }, [requisition]);
 
@@ -2379,31 +2392,30 @@ export default function QuotationDetailsPage() {
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
     if (!requisition || !requisition.status) return 'rfq';
     const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
-
-    if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
-    if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
-
+    
+    if (['PreApproved'].includes(requisition.status)) return 'rfq';
+    if (['Accepting_Quotes'].includes(requisition.status) && !deadlinePassed) return 'rfq';
+    
     const inScoringProcess = [
         'Accepting_Quotes', // Post-deadline
-        'Scoring_In_Progress',
-        'Scoring_Complete'
+        'Scoring_In_Progress'
     ].includes(requisition.status);
     
     if (inScoringProcess && deadlinePassed) {
-        return isScoringComplete ? 'award' : 'committee';
+        return 'committee';
     }
 
-    if (requisition.status === 'Award_Declined') return 'award';
-
-    const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded';
+    if (['Scoring_Complete', 'Award_Declined'].includes(requisition.status)) return 'award';
+    
+    const inReviewProcess = requisition.status.startsWith('Pending_') || ['PostApproved', 'Awarded'].includes(requisition.status);
     if (inReviewProcess) return 'award';
-
+    
     if (isAccepted) {
-      return requisition.status === 'PO_Created' || requisition.status === 'Closed' || requisition.status === 'Fulfilled' ? 'completed' : 'finalize';
+      return ['PO_Created', 'Closed', 'Fulfilled'].includes(requisition.status) ? 'completed' : 'finalize';
     }
 
     return 'rfq'; // Default fallback
-  }, [requisition, isAwarded, isAccepted, isScoringComplete]);
+  }, [requisition, isAccepted]);
   
   const { pendingQuotes, scoredQuotes } = useMemo(() => {
     if (!user || user.role.name !== 'Committee_Member' ) return { pendingQuotes: quotations, scoredQuotes: [] };
@@ -2462,7 +2474,6 @@ export default function QuotationDetailsPage() {
 
           if (currentReq) {
               setRequisition(currentReq);
-              // Sort quotations by creation date descending
               setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
           } else {
               toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
@@ -2488,20 +2499,32 @@ export default function QuotationDetailsPage() {
 
   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
-
-        const quoteItemsById: { [key: string]: { price: number; quantity: number } } = {};
-        quotations.forEach(q => {
-            q.items.forEach(i => {
-                quoteItemsById[i.id] = { price: i.unitPrice, quantity: i.quantity };
+        
+        let totalAwardValue = 0;
+        if(awardStrategy === 'all') {
+            const winnerData = awards[Object.keys(awards)[0]];
+            const winnerQuote = quotations.find(q => q.vendorId === Object.keys(awards)[0]);
+            
+            if (winnerQuote && winnerData) {
+                totalAwardValue = winnerData.items.reduce((sum: number, item: any) => {
+                    const quoteItem = winnerQuote.items.find(i => i.id === item.quoteItemId);
+                    return sum + (quoteItem ? quoteItem.unitPrice * quoteItem.quantity : 0);
+                }, 0);
+            }
+        } else {
+            const quoteItemsById: { [key: string]: { price: number; quantity: number } } = {};
+            quotations.forEach(q => {
+                q.items.forEach(i => {
+                    quoteItemsById[i.id] = { price: i.unitPrice, quantity: i.quantity };
+                });
             });
-        });
 
-        const totalAwardValue = Object.values(awards).flatMap((a: any) => a.items)
-            .reduce((sum, item: any) => {
-                const quoteItem = quoteItemsById[item.quoteItemId];
-                return sum + (quoteItem ? quoteItem.price * quoteItem.quantity : 0);
-            }, 0);
-
+            totalAwardValue = Object.values(awards).flatMap((a: any) => a.items)
+                .reduce((sum, item: any) => {
+                    const quoteItem = quoteItemsById[item.quoteItemId];
+                    return sum + (quoteItem ? quoteItem.price * quoteItem.quantity : 0);
+                }, 0);
+        }
 
         setIsFinalizing(true);
         try {

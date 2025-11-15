@@ -260,24 +260,20 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         for (const item of allItems) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             
-            // Find the highest rank that has already been declined or failed.
             const highestFailedRank = currentDetails
                 .filter(d => d.status === 'Declined' || d.status === 'Failed_to_Award')
                 .reduce((maxRank, d) => Math.max(maxRank, d.rank || 0), 0);
 
             if (highestFailedRank > 0) {
-                // Find the first standby vendor with a rank higher than any failed one.
                 const standbyToPromote = currentDetails
                     .filter(d => d.status === 'Standby' && (d.rank || 0) > highestFailedRank)
                     .sort((a, b) => (a.rank || 99) - (b.rank || 99))[0];
                 
                 if (standbyToPromote) {
                     const updatedDetails = currentDetails.map(d => {
-                        // Promote the standby
                         if (d.vendorId === standbyToPromote.vendorId && d.rank === standbyToPromote.rank) {
                             return { ...d, status: 'Pending_Award' as const };
                         }
-                        // Mark the previously declined one as failed to prevent re-promotion
                         if (d.status === 'Declined') {
                             return { ...d, status: 'Failed_to_Award' as const };
                         }
@@ -291,7 +287,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
                     promotedCount++;
                 } else {
-                    // No more standbys for this item, mark all declined as Failed_to_Award
                      const updatedDetails = currentDetails.map(d => 
                         d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
                     );
@@ -307,7 +302,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             throw new Error('No declined items with an available standby vendor found to promote.');
         }
 
-        // Recalculate total value based on newly promoted and previously accepted items
         const updatedRequisitionItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
         for (const item of updatedRequisitionItems) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
@@ -345,15 +339,45 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         const nextStandby = await tx.quotation.findFirst({
             where: { requisitionId, status: 'Standby' },
             orderBy: { rank: 'asc' },
-            include: { items: true }
+            include: { items: true, scores: { include: { itemScores: true } } }
         });
 
         if (!nextStandby) {
             throw new Error('No standby vendor found to promote.');
         }
 
-        const newTotalPrice = nextStandby.totalPrice;
-        const newAwardedItemIds = nextStandby.items.map(item => item.id);
+        // To get the accurate price, we must re-calculate based on the standby vendor's champion bids
+        let newTotalPrice = 0;
+        let newAwardedItemIds: string[] = [];
+
+        if (requisition.items) {
+             for(const reqItem of requisition.items) {
+                 const proposalsForItem = nextStandby.items.filter(i => i.requisitionItemId === reqItem.id);
+                 if (proposalsForItem.length > 0) {
+                    let bestProposalForItem = proposalsForItem[0];
+                    let bestScore = -1;
+
+                    for (const proposal of proposalsForItem) {
+                        let totalScore = 0;
+                        let scoreCount = 0;
+                        nextStandby.scores.forEach(scoreSet => {
+                            const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
+                            if (itemScore) {
+                                totalScore += itemScore.finalScore;
+                                scoreCount++;
+                            }
+                        });
+                        const avgScore = scoreCount > 0 ? totalScore / scoreCount : 0;
+                        if (avgScore > bestScore) {
+                            bestScore = avgScore;
+                            bestProposalForItem = proposal;
+                        }
+                    }
+                    newTotalPrice += bestProposalForItem.unitPrice * bestProposalForItem.quantity;
+                    newAwardedItemIds.push(bestProposalForItem.id);
+                 }
+             }
+        }
         
         const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalPrice);
         
@@ -387,5 +411,3 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
-
-    

@@ -125,13 +125,11 @@ export async function GET(request: Request) {
                     },
                 ]
             },
-            // Condition B: Vendor has submitted a quote, so they should always see it.
-            // This also covers single-vendor award scenarios.
+            // Condition B: Vendor has submitted a quote for this req, so they should always see it.
             {
                 quotations: {
                     some: {
                         vendorId: userPayload.user.vendorId,
-                        status: { in: ['Submitted', 'Awarded', 'Accepted', 'Declined', 'Standby', 'Partially_Awarded', 'Invoice_Submitted', 'Failed', 'Pending_Award'] }
                     }
                 }
             },
@@ -712,5 +710,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
