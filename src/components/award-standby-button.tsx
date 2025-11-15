@@ -5,7 +5,7 @@
 import { Button } from './ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Loader2, TrophyIcon } from 'lucide-react';
-import { PurchaseRequisition, Quotation } from '@/lib/types';
+import { PerItemAwardDetail, PurchaseRequisition, Quotation } from '@/lib/types';
 import { useMemo } from 'react';
 
 interface AwardStandbyButtonProps {
@@ -26,12 +26,13 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
         if (isPerItemStrategy) {
             // Check if there is at least one declined item that HAS a standby vendor.
             return requisition.items.some(item => {
-                const details = (item.perItemAwardDetails || []);
-                const declinedAward = details.find(d => d.status === 'Declined');
-                if (!declinedAward) return false;
+                const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                const hasDeclinedWinner = details.some(d => d.status === 'Declined');
+                if (!hasDeclinedWinner) return false;
 
-                const nextRank = (declinedAward.rank || 0) + 1;
-                const standbyExists = details.some(d => d.rank === nextRank && d.status === 'Standby');
+                const highestDeclinedRank = Math.max(...details.filter(d => d.status === 'Declined').map(d => d.rank || 0));
+                
+                const standbyExists = details.some(d => d.status === 'Standby' && (d.rank || 0) > highestDeclinedRank);
                 return standbyExists;
             });
         } else {

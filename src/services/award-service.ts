@@ -274,6 +274,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                         if (d.vendorId === standbyToPromote.vendorId && d.rank === standbyToPromote.rank) {
                             return { ...d, status: 'Pending_Award' as const };
                         }
+                        // Keep old 'Declined' statuses, but mark them as 'Failed' to prevent re-promotion
                         if (d.status === 'Declined') {
                             return { ...d, status: 'Failed_to_Award' as const };
                         }
@@ -287,6 +288,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
                     promotedCount++;
                 } else {
+                     // If no standby is found, ensure all 'Declined' statuses are moved to 'Failed_to_Award'
                      const updatedDetails = currentDetails.map(d => 
                         d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
                     );
@@ -305,6 +307,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         const updatedRequisitionItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
         for (const item of updatedRequisitionItems) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
+             // Now sum up the value of ALL items that are currently pending or accepted.
              const winningAward = details.find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
              if (winningAward) {
                  newTotalValue += winningAward.unitPrice * item.quantity;
