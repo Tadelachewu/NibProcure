@@ -3,7 +3,7 @@
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
-import { User, UserRole, PerItemAwardDetail } from '@/lib/types';
+import { User, UserRole, PerItemAwardDetail, QuoteItem } from '@/lib/types';
 
 const roleToStatusMap: Record<string, string> = {
     'Committee_B_Member': 'Pending_Committee_B_Review',

@@ -214,15 +214,17 @@ const getOverallStatusForVendor = (quote: Quotation, itemStatuses: any[], isAwar
   if (!isAwarded) {
     return quote.status;
   }
+  
+  if ((quote.requisition?.rfqSettings as any)?.awardStrategy === 'item') {
+    const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
+    if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
+    if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
+    if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially_Awarded';
+    if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
+    return 'Not Awarded'; // If they bid but didn't get any award/standby
+  }
 
-  const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
-  
-  if (vendorItemStatuses.some(s => s.status === 'Awarded')) return 'Awarded';
-  if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
-  if (vendorItemStatuses.some(s => s.status === 'Pending_Award')) return 'Pending_Award';
-  if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
-  if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
-  
+  // Fallback for single-vendor award strategy
   return quote.status;
 };
 
@@ -244,13 +246,15 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
             case 'Awarded': 
             case 'Accepted': 
             case 'Pending_Award':
+            case 'Partially_Awarded':
                 return 'default';
-            case 'Partially_Awarded': return 'default';
             case 'Standby': return 'secondary';
             case 'Submitted': return 'outline';
-            case 'Rejected': return 'destructive';
-            case 'Declined': return 'destructive';
-            case 'Failed': return 'destructive';
+            case 'Rejected': 
+            case 'Not Awarded':
+            case 'Declined': 
+            case 'Failed': 
+                return 'destructive';
             case 'Invoice_Submitted': return 'outline';
         }
     }
@@ -271,11 +275,10 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
-                const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
-
                 const mainStatus = getOverallStatusForVendor(quote, itemStatuses, isAwarded);
-                
+                const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
+
                 const isQuoteAwarded = mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded' || mainStatus === 'Pending_Award';
 
 
@@ -284,10 +287,10 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
-                                 {(isAwarded && !isPerItemStrategy) && getRankIcon(quote.rank)}
+                                 {isAwarded && !isPerItemStrategy && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
-                               {!isPerItemStrategy && <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>}
+                               <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
@@ -2415,12 +2418,12 @@ export default function QuotationDetailsPage() {
   const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
   
   const itemStatuses = useMemo(() => {
-    if (!requisition || !requisition.items || (requisition.rfqSettings as any)?.awardStrategy !== 'item') return [];
+    if (!requisition || !requisition.items) return [];
 
     // 1. Gather all champion bids for every item from every vendor.
-    const allChampionBids: any[] = [];
-    requisition.items.forEach(reqItem => {
-        quotations.forEach(quote => {
+    const allBids: any[] = [];
+    quotations.forEach(quote => {
+        requisition.items.forEach(reqItem => {
             const proposalsForItem = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
             if (proposalsForItem.length > 0) {
                 const bestProposal = proposalsForItem.map(proposal => {
@@ -2435,10 +2438,10 @@ export default function QuotationDetailsPage() {
                     });
                     const score = scorerCount > 0 ? totalScore / scorerCount : 0;
                     return { proposal, score };
-                }).sort((a,b) => b.score - a.score)[0]; // Get the best one
+                }).sort((a,b) => b.score - a.score)[0]; // Get the best one for this vendor for this item
 
                 if (bestProposal) {
-                    allChampionBids.push({
+                    allBids.push({
                         reqItemId: reqItem.id,
                         reqItemName: reqItem.name,
                         vendorId: quote.vendorId,
@@ -2452,31 +2455,28 @@ export default function QuotationDetailsPage() {
     });
 
     // 2. Group by item to rank them
-    const groupedByItem = allChampionBids.reduce((acc, bid) => {
+    const groupedByItem = allBids.reduce((acc, bid) => {
         (acc[bid.reqItemId] = acc[bid.reqItemId] || []).push(bid);
         return acc;
     }, {} as Record<string, any[]>);
 
-    // 3. Rank and assign status
+    // 3. Create the final list of statuses, correctly ranked
     const finalStatuses: any[] = [];
     Object.values(groupedByItem).forEach((bids: any[]) => {
-        bids.sort((a, b) => b.score - a.score);
+        bids.sort((a, b) => b.score - a.score); // Rank by score
+        
         bids.forEach((bid, index) => {
             const rank = index + 1;
-            let status = 'Rejected';
-            
             const dbStatus = requisition.items
                 .find(i => i.id === bid.reqItemId)
                 ?.perItemAwardDetails?.find(d => d.quoteItemId === bid.proposalId)?.status;
 
-            if (dbStatus) {
-                status = dbStatus;
-            } else if (rank === 1) {
-                status = 'Pending_Award';
-            } else if (rank === 2 || rank === 3) {
-                status = 'Standby';
-            }
-            finalStatuses.push({ ...bid, id: `${bid.vendorId}-${bid.reqItemId}`, rank, status });
+            finalStatuses.push({ 
+                ...bid, 
+                id: `${bid.vendorId}-${bid.reqItemId}-${bid.proposalId}`, 
+                rank, 
+                status: dbStatus || (rank === 1 ? 'Pending_Award' : rank <= 3 ? 'Standby' : 'Rejected')
+            });
         });
     });
     
@@ -2507,7 +2507,7 @@ export default function QuotationDetailsPage() {
           setVendors(venData || []);
 
           if (currentReq) {
-              setRequisition(currentReq);
+              setRequisition({...currentReq, quotations: quoData});
               setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
           } else {
               toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
@@ -3039,7 +3039,7 @@ export default function QuotationDetailsPage() {
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
 
