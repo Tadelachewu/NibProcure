@@ -239,7 +239,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
         );
     }
 
-    const getStatusVariant = (status: QuotationStatus | 'Pending_Award' | 'Awarded') => {
+    const getStatusVariant = (status: QuotationStatus | 'Pending_Award' | 'Awarded' | 'Rejected') => {
         switch (status) {
             case 'Awarded': 
             case 'Accepted': 
@@ -274,19 +274,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                 const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
-                const mainStatus = useMemo(() => {
-                    if (!isAwarded) return quote.status;
-                    
-                    const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
-                    
-                    if (vendorItemStatuses.some(s => s.status === 'Awarded')) return 'Awarded';
-                    if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
-                    if (vendorItemStatuses.some(s => s.status === 'Pending_Award')) return 'Pending_Award';
-                    if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
-                    if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
-                    
-                    return quote.status;
-                }, [quote, itemStatuses, isAwarded]);
+                const mainStatus = getOverallStatusForVendor(quote, itemStatuses, isAwarded);
                 
                 const isQuoteAwarded = mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded' || mainStatus === 'Pending_Award';
 
@@ -296,10 +284,10 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
-                                 {isAwarded && getRankIcon(isPerItemStrategy ? undefined : quote.rank)}
+                                 {(isAwarded && !isPerItemStrategy) && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
-                               <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
+                               {!isPerItemStrategy && <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>}
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
@@ -332,7 +320,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-1">
-                                                        <Badge variant={item.status === 'Pending_Award' || item.status === 'Awarded' ? 'default' : item.status === 'Declined' ? 'destructive' : 'secondary'}>{item.status.replace(/_/g, ' ')}</Badge>
+                                                        <Badge variant={item.status === 'Pending_Award' || item.status === 'Awarded' ? 'default' : item.status === 'Declined' || item.status === 'Failed_to_Award' ? 'destructive' : 'secondary'}>{item.status.replace(/_/g, ' ')}</Badge>
                                                         {typeof item.score === 'number' && <Badge variant="outline" className="font-mono">{item.score.toFixed(2)} pts</Badge>}
                                                     </div>
                                                 </div>
@@ -2370,10 +2358,10 @@ export default function QuotationDetailsPage() {
 
   const isAwarded = useMemo(() => {
     if (!requisition || !requisition.status) return false;
-    return [
-      'Awarded', 'PostApproved', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled'
-    ].includes(requisition.status) || requisition.status.startsWith('Pending_');
+    // An award process has started if it's in any review state, or has been decided.
+    return requisition.status.startsWith('Pending_') || ['PostApproved', 'Awarded', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled'].includes(requisition.status);
   }, [requisition]);
+
 
   const isAssignedCommitteeMember = useMemo(() => {
       if (!user || !userRoleName || userRoleName !== 'Committee_Member' || !requisition) {
@@ -2428,28 +2416,70 @@ export default function QuotationDetailsPage() {
   const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
   
   const itemStatuses = useMemo(() => {
-    if (!requisition || !quotations || quotations.length === 0) return [];
-    
-    let finalStatuses: any[] = [];
-    if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
-        Object.values(requisition.items).forEach((item) => {
-            if (item.perItemAwardDetails) {
-                 const details = (item.perItemAwardDetails as PerItemAwardDetail[]).map(detail => ({
-                    ...detail,
-                    id: `${detail.vendorId}-${item.id}`,
-                    reqItemId: item.id,
-                    reqItemName: item.name,
-                    proposalId: detail.quoteItemId,
-                    proposalName: detail.proposedItemName,
-                 }));
-                 finalStatuses.push(...details);
+    if (!requisition || !requisition.items || (requisition.rfqSettings as any)?.awardStrategy !== 'item') return [];
+
+    const allBids: any[] = [];
+    // 1. Gather all "champion bids" for every item from every vendor.
+    requisition.items.forEach(reqItem => {
+        quotations.forEach(quote => {
+            const championBidForItem = quote.items
+                .filter(qi => qi.requisitionItemId === reqItem.id)
+                .map(proposal => {
+                    const avgScore = (proposal as any).finalAverageScore || 0; // Assuming scores are pre-calculated
+                    return { proposal, score: avgScore };
+                })
+                .sort((a, b) => b.score - a.score)[0]; // Get the best one
+
+            if (championBidForItem) {
+                allBids.push({
+                    reqItemId: reqItem.id,
+                    reqItemName: reqItem.name,
+                    vendorId: quote.vendorId,
+                    proposalId: championBidForItem.proposal.id,
+                    proposalName: championBidForItem.proposal.name,
+                    score: championBidForItem.score
+                });
             }
         });
-    }
+    });
+    
+    const finalStatuses: any[] = [];
+    const groupedByItem = allBids.reduce((acc, bid) => {
+        (acc[bid.reqItemId] = acc[bid.reqItemId] || []).push(bid);
+        return acc;
+    }, {} as Record<string, any[]>);
 
+    Object.values(groupedByItem).forEach((bids: any[]) => {
+        bids.sort((a, b) => b.score - a.score);
+        bids.forEach((bid, index) => {
+            let status = 'Rejected';
+            const rank = index + 1;
+            
+            const dbStatus = requisition.items
+                .find(i => i.id === bid.reqItemId)
+                ?.perItemAwardDetails?.find(d => d.quoteItemId === bid.proposalId)?.status;
+
+            if (dbStatus) {
+                status = dbStatus;
+            } else if (rank === 1) {
+                status = 'Pending_Award';
+            } else if (rank === 2 || rank === 3) {
+                status = 'Standby';
+            }
+
+            finalStatuses.push({
+                ...bid,
+                id: `${bid.vendorId}-${bid.reqItemId}`,
+                rank: rank,
+                status: status,
+            });
+        });
+    });
+    
     return finalStatuses;
 
-  }, [requisition, quotations]);
+}, [requisition, quotations]);
+
 
   const paginatedQuotes = useMemo(() => {
     const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
@@ -3304,3 +3334,4 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
