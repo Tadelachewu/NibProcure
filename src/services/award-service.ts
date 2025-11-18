@@ -349,10 +349,14 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${promotedCount} standby award(s). Re-routing for approval.` };
 
     } else { // Single Vendor Strategy
-        const nextStandby = await tx.quotation.findFirst({
+        // **FIX START**: Correctly find the next best standby vendor by score
+        const standbyQuotes = await tx.quotation.findMany({
             where: { requisitionId, status: 'Standby' },
-            orderBy: { rank: 'asc' },
+            orderBy: { finalAverageScore: 'desc' }, // Sort by score, highest first
         });
+
+        const nextStandby = standbyQuotes[0];
+        // **FIX END**
 
         if (!nextStandby) {
             throw new Error('No standby vendor found to promote.');
