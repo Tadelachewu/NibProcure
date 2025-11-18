@@ -24,7 +24,7 @@ import { useRouter } from 'next/navigation';
 const OPEN_PAGE_SIZE = 9;
 const ACTIVE_PAGE_SIZE = 6;
 
-type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed' | 'Declined' | 'Failed to Award';
+type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed' | 'Declined' | 'Failed_to_Award';
 
 const VendorStatusBadge = ({ status }: { status: RequisitionCardStatus }) => {
   const statusInfo: Record<RequisitionCardStatus, {text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline', className: string}> = {
@@ -37,7 +37,7 @@ const VendorStatusBadge = ({ status }: { status: RequisitionCardStatus }) => {
     'Processing': { text: 'Processing', variant: 'secondary', className: '' },
     'Closed': { text: 'Closed', variant: 'outline', className: '' },
     'Not Awarded': { text: 'Not Awarded', variant: 'destructive', className: 'bg-gray-500 hover:bg-gray-600' },
-    'Failed to Award': { text: 'Not Awarded', variant: 'destructive', className: 'bg-gray-500 hover:bg-gray-600' },
+    'Failed_to_Award': { text: 'Not Awarded', variant: 'destructive', className: 'bg-gray-500 hover:bg-gray-600' },
     'Action Required': { text: 'Action Required', variant: 'default', className: '' },
     'Standby': { text: 'On Standby', variant: 'outline', className: 'border-amber-500 text-amber-600' },
   };
@@ -114,51 +114,59 @@ export default function VendorDashboardPage() {
         if (!user?.vendorId) return 'Action Required';
 
         const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
-
-        // Highest priority: final states
-        if (vendorQuote?.status === 'Invoice_Submitted') return 'Invoice Submitted';
-        if (vendorQuote?.status === 'Accepted') return 'Accepted';
-        if (vendorQuote?.status === 'Declined') return 'Declined';
-        
         const isPerItemAward = (req.rfqSettings as any)?.awardStrategy === 'item';
 
-        if (isPerItemAward) {
-            const vendorAwards = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId));
-            
-            // Check for highest priority per-item statuses
-            if (vendorAwards.some(a => a.status === 'Accepted')) return 'Accepted';
-            if (vendorAwards.some(a => a.status === 'Declined')) return 'Declined';
-            if (vendorAwards.some(a => a.status === 'Awarded')) return 'Partially Awarded';
-            if (vendorAwards.some(a => a.status === 'Standby')) return 'Standby';
+        // Highest priority statuses from the vendor's main quote
+        if (vendorQuote) {
+            if (vendorQuote.status === 'Invoice_Submitted') return 'Invoice Submitted';
+            if (vendorQuote.status === 'Accepted') return 'Accepted';
+            if (vendorQuote.status === 'Declined') return 'Declined';
         }
 
-        // Fallback for single-vendor awards or if no specific item status takes precedence
-        if (vendorQuote) {
-            if (vendorQuote.status === 'Awarded') return 'Awarded';
-            if (vendorQuote.status === 'Partially_Awarded') return 'Partially Awarded';
-            if (vendorQuote.status === 'Standby') return 'Standby';
-            
-            const isClosedOrFulfilled = req.status === 'Closed' || req.status === 'Fulfilled';
-            if (isClosedOrFulfilled && (vendorQuote.status === 'Accepted' || vendorQuote.status === 'Awarded' || vendorQuote.status === 'Partially_Awarded')) {
-                return 'Closed';
-            }
+        let vendorItemStatuses: PerItemAwardStatus[] = [];
+        if (isPerItemAward) {
+            vendorItemStatuses = req.items.flatMap(item => 
+                (item.perItemAwardDetails as PerItemAwardDetail[] || [])
+                .filter(d => d.vendorId === user.vendorId)
+                .map(d => d.status)
+            );
+        } else if (vendorQuote) { // For single-vendor award, derive item statuses from quote status
+            if (vendorQuote.status === 'Awarded') vendorItemStatuses.push('Awarded');
+            if (vendorQuote.status === 'Partially_Awarded') vendorItemStatuses.push('Awarded');
+            if (vendorQuote.status === 'Standby') vendorItemStatuses.push('Standby');
+        }
 
+        // Check for highest priority statuses derived from items
+        if (vendorItemStatuses.includes('Accepted')) return 'Accepted';
+        if (vendorItemStatuses.includes('Declined')) return 'Declined';
+        if (vendorItemStatuses.includes('Awarded')) {
+            const allAwarded = req.items.every(item => {
+                const details = (item.perItemAwardDetails as PerItemAwardDetail[] || []);
+                return details.some(d => d.vendorId === user.vendorId && (d.status === 'Awarded' || d.status === 'Accepted'));
+            });
+            return allAwarded ? 'Awarded' : 'Partially Awarded';
+        }
+        if (vendorItemStatuses.includes('Standby')) return 'Standby';
+
+        // Check statuses from the main quote again if no item-level status took precedence
+        if (vendorQuote) {
             if (vendorQuote.status === 'Submitted') {
-                const isAnyOtherVendorAwarded = req.quotations?.some(q => q.vendorId !== user.vendorId && ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status));
-                if (isAnyOtherVendorAwarded) return 'Not Awarded';
+                if (req.status === 'Closed' || req.status === 'Fulfilled') return 'Not Awarded';
+                if (req.quotations?.some(q => q.vendorId !== user.vendorId && ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status))) return 'Not Awarded';
                 return 'Submitted';
             }
         }
         
-        // If the vendor has no quote but there might be a per-item standby or award
-        if(isPerItemAward) {
-            const vendorAwards = req.items.flatMap(item => (item.perItemAwardDetails as any[])?.filter(d => d.vendorId === user.vendorId));
-            if (vendorAwards.some(a => a.status === 'Failed_to_Award')) return 'Failed to Award';
-            if (vendorAwards.length > 0) return 'Processing'; // It means they were ranked but status is not final
+        // If related but no other status fits, it means they can quote
+        const isRelated = vendorQuote || vendorItemStatuses.length > 0;
+        if (!isRelated) {
+            return 'Action Required';
         }
 
-        // Default if no other status fits, which means they can quote
-        return 'Action Required';
+        // Final fallbacks
+        if (req.status === 'Closed' || req.status === 'Fulfilled') return 'Closed';
+        
+        return 'Processing'; // Default for other intermediate states
     }, [user]);
 
 
