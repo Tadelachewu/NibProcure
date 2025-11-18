@@ -604,35 +604,36 @@ export default function VendorRequisitionPage() {
     const canEditQuote = submittedQuote?.status === 'Submitted' && !isAwardProcessStarted && !isDeadlinePassed && allowEdits;
 
     const awardedItems = useMemo(() => {
-      if (!requisition || !user?.vendorId) return [];
-      
-      const vendorAwardedItems: QuoteItem[] = [];
-      const quote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
-      if (!quote) return [];
-      
-      // Handle "Award by Best Item" scenario
-      if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
-        const awardedQuoteItemIds = new Set<string>();
-        requisition.items.forEach(reqItem => {
-          const awardDetails = (reqItem.perItemAwardDetails || []).find(detail => detail.vendorId === user.vendorId && (detail.status === 'Awarded' || detail.status === 'Accepted'));
-          if (awardDetails) {
-            awardedQuoteItemIds.add(awardDetails.quoteItemId);
-          }
-        });
-        vendorAwardedItems.push(...quote.items.filter(item => awardedQuoteItemIds.has(item.id)));
-      }
-      // Handle single-vendor award scenario
-      else if (quote && ['Awarded', 'Partially_Awarded', 'Accepted'].includes(quote.status)) {
-        if (requisition.awardedQuoteItemIds && requisition.awardedQuoteItemIds.length > 0) {
-          const awardedIds = new Set(requisition.awardedQuoteItemIds);
-          vendorAwardedItems.push(...quote.items.filter(item => awardedIds.has(item.id)));
-        } else {
-          // If awardedQuoteItemIds is empty, it means the whole quote was awarded
-          vendorAwardedItems.push(...quote.items);
+        if (!requisition || !user?.vendorId) return [];
+        
+        const quote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
+        if (!quote) return [];
+        
+        const awardedQuoteItemIds = new Set(requisition.awardedQuoteItemIds || []);
+        
+        // Handle "Award by Best Item" scenario
+        if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
+            const awardedForThisVendor = new Set<string>();
+            requisition.items.forEach(reqItem => {
+            const awardDetails = (reqItem.perItemAwardDetails || []).find(detail => detail.vendorId === user.vendorId && (detail.status === 'Awarded' || detail.status === 'Accepted'));
+            if (awardDetails) {
+                awardedForThisVendor.add(awardDetails.quoteItemId);
+            }
+            });
+            return quote.items.filter(item => awardedForThisVendor.has(item.id));
         }
-      }
+        
+        // Handle single-vendor award scenario
+        if (awardedQuoteItemIds.size > 0) {
+            return quote.items.filter(item => awardedQuoteItemIds.has(item.id));
+        }
 
-      return vendorAwardedItems;
+        // Fallback for older single-vendor awards or if awardedQuoteItemIds is empty
+        if (['Awarded', 'Partially_Awarded', 'Accepted'].includes(quote.status)) {
+            return quote.items;
+        }
+
+        return [];
     }, [requisition, user]);
     
     const isAwarded = useMemo(() => {
@@ -777,7 +778,7 @@ export default function VendorRequisitionPage() {
                     </div>
                 )}
                 <div className="space-y-2">
-                    {itemsToShow && itemsToShow.map((item, index) => (
+                    {itemsToShow && itemsToShow.length > 0 ? itemsToShow.map((item, index) => (
                         <Card key={`${item.requisitionItemId}-${index}`} className="p-3">
                             <div className="flex justify-between">
                                 <div>
@@ -793,7 +794,9 @@ export default function VendorRequisitionPage() {
                                 </div>
                             )}
                         </Card>
-                    ))}
+                    )) : (
+                        <div className="text-sm text-muted-foreground text-center p-4">No specific items awarded from this quote.</div>
+                    )}
                 </div>
                 {quote.notes && (
                     <div>
@@ -803,7 +806,7 @@ export default function VendorRequisitionPage() {
                 )}
                  <Separator />
                  <div className="text-right font-bold text-2xl">
-                    Total Quoted Price: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
+                    Total Awarded Price: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
                  </div>
                  {isAccepted && purchaseOrder && (
                     <CardFooter className="p-0 pt-4">

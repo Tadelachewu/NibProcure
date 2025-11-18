@@ -60,7 +60,7 @@ export async function POST(
                 throw new Error("No quotes found to process for this requisition.");
             }
             
-            let finalAwardValue = totalAwardValue;
+            let finalAwardValue = 0;
             let finalAwardedItemIds: string[] = [];
 
             if (awardStrategy === 'all') {
@@ -139,6 +139,7 @@ export async function POST(
 
             } else if (awardStrategy === 'item') {
                 const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
+                finalAwardValue = totalAwardValue; // Use the pre-calculated value from the dialog for per-item
 
                 for (const reqItem of reqItems) {
                     let proposals: any[] = [];

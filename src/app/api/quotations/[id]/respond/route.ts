@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -76,10 +77,15 @@ export async function POST(
                     where: { id: quoteId },
                     data: { status: 'Accepted' }
                 });
-                const allAwardedItems = quote.items.filter(item => 
-                    requisition.awardedQuoteItemIds.includes(item.id)
-                );
-                awardedQuoteItems = allAwardedItems.length > 0 ? allAwardedItems : quote.items;
+                
+                // Use the centrally stored awarded item IDs to build the PO
+                const awardedIds = new Set(requisition.awardedQuoteItemIds || []);
+                if (awardedIds.size > 0) {
+                  awardedQuoteItems = quote.items.filter(item => awardedIds.has(item.id));
+                } else {
+                  // Fallback for older requisitions: award all items in the quote
+                  awardedQuoteItems = quote.items;
+                }
             }
 
             if (awardedQuoteItems.length === 0) {
