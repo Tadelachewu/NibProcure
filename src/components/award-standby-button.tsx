@@ -23,6 +23,7 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
         }
 
         if (isPerItemStrategy) {
+            // Check if there is at least one item that has a declined winner AND a standby vendor.
             return requisition.items.some(item => {
                 const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                 const hasDeclinedWinner = details.some(d => d.status === 'Declined');
@@ -32,6 +33,7 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
                 return standbyExists;
             });
         } else {
+            // For single-vendor strategy, just check if any quote is on standby.
             return quotations.some(q => q.status === 'Standby');
         }
     }, [requisition, quotations, isPerItemStrategy]);

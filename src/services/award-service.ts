@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -261,82 +260,67 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         let promotedCount = 0;
         let auditDetailsMessage = 'Promoted standby vendors: ';
 
-        const allItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId } });
-
-        // Phase 1: Determine all promotions that need to happen
-        const promotionPlan: { itemId: string; vendorId: string; rank: number }[] = [];
-        for (const item of allItems) {
+        // 1. Iterate through each item to find opportunities for promotion
+        for (const item of requisition.items) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             const hasDeclinedWinner = currentDetails.some(d => d.status === 'Declined');
 
+            // Only proceed if an item has a declined winner
             if (hasDeclinedWinner) {
                 const standbyToPromote = currentDetails
                     .filter(d => d.status === 'Standby')
-                    .sort((a, b) => (a.rank || 99) - (b.rank || 99))[0];
+                    .sort((a, b) => (a.rank || 99) - (b.rank || 99))[0]; // Get the one with the lowest rank number
 
                 if (standbyToPromote) {
-                    promotionPlan.push({
-                        itemId: item.id,
-                        vendorId: standbyToPromote.vendorId,
-                        rank: standbyToPromote.rank,
+                    const updatedDetails = currentDetails.map(d => {
+                        // Promote the identified standby vendor
+                        if (d.vendorId === standbyToPromote.vendorId && d.rank === standbyToPromote.rank) {
+                            promotedCount++;
+                            auditDetailsMessage += `${d.vendorName} for item ${item.name}. `;
+                            return { ...d, status: 'Pending_Award' as const };
+                        }
+                        // Mark the previously declined winner as failed to avoid re-processing
+                        if (d.status === 'Declined') {
+                            return { ...d, status: 'Failed_to_Award' as const };
+                        }
+                        return d;
                     });
-                }
-            }
-        }
-
-        if (promotionPlan.length === 0) {
-            // Handle case where there are declined items but no standbys left
-             for(const item of allItems) {
-                const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-                if (currentDetails.some(d => d.status === 'Declined')) {
-                    const updatedDetails = currentDetails.map(d => d.status === 'Declined' ? {...d, status: 'Failed_to_Award' as const} : d);
+                    
+                    await tx.requisitionItem.update({
+                        where: { id: item.id },
+                        data: { perItemAwardDetails: updatedDetails as any }
+                    });
+                } else {
+                    // No standbys left for this declined item, so we finalize its declined state
+                    const updatedDetails = currentDetails.map(d => 
+                        d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
+                    );
                     await tx.requisitionItem.update({
                         where: { id: item.id },
                         data: { perItemAwardDetails: updatedDetails as any }
                     });
                 }
             }
+        }
+
+        if (promotedCount === 0) {
             await tx.purchaseRequisition.update({ where: { id: requisitionId }, data: { status: 'Scoring_Complete' }});
-            return { message: 'No more standby vendors available for the declined items. The process is complete for those items.'};
+            return { message: 'No more standby vendors available for any declined items. The award process is now complete for this requisition.'};
         }
 
-
-        // Phase 2: Execute the plan
-        for (const item of allItems) {
-            const planForItem = promotionPlan.find(p => p.itemId === item.id);
-            if (planForItem) {
-                const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-                const updatedDetails = currentDetails.map(d => {
-                    // Promote the planned standby
-                    if (d.vendorId === planForItem.vendorId && d.rank === planForItem.rank) {
-                        promotedCount++;
-                        auditDetailsMessage += `${d.vendorName} for item ${item.name}. `;
-                        return { ...d, status: 'Pending_Award' as const };
-                    }
-                    // Mark the declined one as failed
-                    if (d.status === 'Declined') {
-                        return { ...d, status: 'Failed_to_Award' as const };
-                    }
-                    return d;
-                });
-                await tx.requisitionItem.update({
-                    where: { id: item.id },
-                    data: { perItemAwardDetails: updatedDetails as any }
-                });
-            }
-        }
-
-        // Phase 3: Recalculate and route
+        // 2. Recalculate the new total award value based on the current state
         const updatedRequisitionItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
         let newTotalValue = 0;
         for (const item of updatedRequisitionItems) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
+             // Sum the value of all items that are either already accepted or now pending award
              const winningAward = details.find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
              if (winningAward) {
                  newTotalValue += winningAward.unitPrice * item.quantity;
              }
         }
 
+        // 3. Get the next approval step and route the requisition
         const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalValue);
 
         await tx.purchaseRequisition.update({
@@ -365,7 +349,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         const nextStandby = await tx.quotation.findFirst({
             where: { requisitionId, status: 'Standby' },
             orderBy: { rank: 'asc' },
-            include: { items: true, scores: { include: { itemScores: true } } }
         });
 
         if (!nextStandby) {
@@ -390,6 +373,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             data: { status: 'Pending_Award' }
         });
         
+        // Mark the previously declined quote as fully failed.
         await tx.quotation.updateMany({
             where: { requisitionId: requisitionId, status: 'Declined' },
             data: { status: 'Failed' }
