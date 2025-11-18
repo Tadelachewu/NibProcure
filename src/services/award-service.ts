@@ -349,22 +349,61 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         const nextStandby = await tx.quotation.findFirst({
             where: { requisitionId, status: 'Standby' },
             orderBy: { rank: 'asc' },
+            include: {
+                items: true,
+                scores: { include: { itemScores: true } }
+            }
         });
 
         if (!nextStandby) {
             throw new Error('No standby vendor found to promote.');
         }
+
+        // --- NEW LOGIC START ---
+        // Recalculate the new award value based on the promoted vendor's champion bids
+        let newTotalValue = 0;
+        const newAwardedItemIds: string[] = [];
+
+        for (const reqItem of requisition.items) {
+            const proposalsForItem = nextStandby.items.filter(i => i.requisitionItemId === reqItem.id);
+            if (proposalsForItem.length === 0) continue;
+
+            let bestProposalScore = -1;
+            let championBid: QuoteItem | null = null;
+
+            for (const proposal of proposalsForItem) {
+                let currentProposalScore = 0;
+                let scorerCount = 0;
+                for (const scoreSet of nextStandby.scores) {
+                    const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
+                    if (itemScore) {
+                        currentProposalScore += itemScore.finalScore;
+                        scorerCount++;
+                    }
+                }
+                const avgScore = scorerCount > 0 ? currentProposalScore / scorerCount : 0;
+                if (avgScore > bestProposalScore) {
+                    bestProposalScore = avgScore;
+                    championBid = proposal;
+                }
+            }
+            
+            if (championBid) {
+                newTotalValue += championBid.unitPrice * championBid.quantity;
+                newAwardedItemIds.push(championBid.id);
+            }
+        }
+        // --- NEW LOGIC END ---
         
-        const newTotalPrice = nextStandby.totalPrice;
-        
-        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalPrice);
+        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalValue);
         
         await tx.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
                 status: nextStatus as any,
-                totalPrice: newTotalPrice,
+                totalPrice: newTotalValue, // Use the recalculated value
                 currentApproverId: nextApproverId,
+                awardedQuoteItemIds: newAwardedItemIds, // Update with the new champion bids
             }
         });
         
