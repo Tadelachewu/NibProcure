@@ -325,7 +325,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                                                     <div className="flex items-center gap-2">
                                                         {getRankIcon(item.rank)}
                                                         <div className="flex flex-col">
-                                                            <span className="font-medium text-foreground">{item.proposalName}</span>
+                                                            <span className="font-medium text-foreground">{item.proposedItemName}</span>
                                                             <span className="text-xs italic">(for: {item.reqItemName})</span>
                                                         </div>
                                                     </div>
@@ -2455,8 +2455,9 @@ export default function QuotationDetailsPage() {
                         reqItemId: reqItem.id,
                         reqItemName: reqItem.name,
                         vendorId: quote.vendorId,
+                        vendorName: quote.vendorName,
                         proposalId: bestProposal.proposal.id,
-                        proposalName: bestProposal.proposal.name,
+                        proposedItemName: bestProposal.proposal.name,
                         score: bestProposal.score,
                     });
                 }
@@ -3347,4 +3348,5 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
 
