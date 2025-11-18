@@ -277,9 +277,17 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
             {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
-                const mainStatus = getOverallStatusForVendor(quote, itemStatuses, isAwarded);
                 const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
-                const showOverallStatus = !isPerItemStrategy || mainStatus === 'Not Awarded';
+                
+                // Get the main status for the card badge
+                let mainStatus: QuotationStatus | 'Not Awarded' = quote.status;
+                if(isPerItemStrategy && isAwarded) {
+                    if (thisVendorItemStatuses.some(s => s.status === 'Accepted')) mainStatus = 'Accepted';
+                    else if (thisVendorItemStatuses.some(s => s.status === 'Declined')) mainStatus = 'Declined';
+                    else if (thisVendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) mainStatus = 'Partially_Awarded';
+                    else if (thisVendorItemStatuses.some(s => s.status === 'Standby')) mainStatus = 'Standby';
+                    else mainStatus = 'Not Awarded';
+                }
 
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Partially_Awarded') && !isPerItemStrategy && 'border-primary ring-2 ring-primary')}>
@@ -289,7 +297,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                                  {isAwarded && !isPerItemStrategy && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
-                               {showOverallStatus && <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>}
+                               <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
@@ -1982,7 +1990,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                         ))}
                                                                     </div>
                                                                     <div>
-                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-700">Technical ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
+                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
                                                                         {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
                                                                             <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
                                                                                 <div className="flex justify-between items-center font-medium">
@@ -3036,7 +3044,7 @@ export default function QuotationDetailsPage() {
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
 
@@ -3053,7 +3061,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
@@ -3069,7 +3077,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     };
 
@@ -3339,3 +3347,4 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
