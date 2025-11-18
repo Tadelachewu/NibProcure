@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { Button } from './ui/button';
@@ -24,25 +23,22 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
         }
 
         if (isPerItemStrategy) {
-            // Check if there is at least one declined item that HAS a standby vendor.
             return requisition.items.some(item => {
                 const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                 const hasDeclinedWinner = details.some(d => d.status === 'Declined');
                 if (!hasDeclinedWinner) return false;
                 
-                // Check if a standby exists for this specific item that has a declined winner
                 const standbyExists = details.some(d => d.status === 'Standby');
                 return standbyExists;
             });
         } else {
-            // Single vendor strategy: check if there's any quote with a 'Standby' status.
             return quotations.some(q => q.status === 'Standby');
         }
     }, [requisition, quotations, isPerItemStrategy]);
 
 
     if (!canPromote) {
-        return null; // Don't render the button if no promotion is possible.
+        return null;
     }
 
     return (
@@ -68,4 +64,3 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
         </AlertDialog>
     );
 }
-

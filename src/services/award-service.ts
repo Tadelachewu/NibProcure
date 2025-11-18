@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -254,29 +253,23 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
     if (awardStrategy === 'item') {
         let promotedCount = 0;
         
-        // Fetch all items at once to modify them in a loop
         const allItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
 
-        // Loop through every item to check if its winner has declined.
         for (const item of allItems) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             const hasDeclinedWinner = currentDetails.some(d => d.status === 'Declined');
             
-            // Only proceed if this item needs a promotion.
             if (hasDeclinedWinner) {
-                // Find the standby with the lowest rank number (e.g., rank 2 is better than rank 3)
                 const standbyToPromote = currentDetails
                     .filter(d => d.status === 'Standby')
                     .sort((a, b) => (a.rank || 99) - (b.rank || 99))[0]; 
                 
                 if (standbyToPromote) {
                     const updatedDetails = currentDetails.map(d => {
-                        // Promote the standby
                         if (d.vendorId === standbyToPromote.vendorId && d.rank === standbyToPromote.rank) {
                             promotedCount++;
                             return { ...d, status: 'Pending_Award' as const };
                         }
-                        // Mark the old declined winner as terminally failed
                         if (d.status === 'Declined') {
                             return { ...d, status: 'Failed_to_Award' as const };
                         }
@@ -288,7 +281,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                         data: { perItemAwardDetails: updatedDetails as any }
                     });
                 } else {
-                     // If no standby is found, mark all 'Declined' as 'Failed_to_Award'
                      const updatedDetails = currentDetails.map(d => 
                         d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
                     );
@@ -304,12 +296,10 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             throw new Error('No declined items with an available standby vendor were found to promote.');
         }
 
-        // After all promotions, refetch all items to correctly calculate the new total value
         const updatedRequisitionItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
         let newTotalValue = 0;
         for (const item of updatedRequisitionItems) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-             // Sum up the value of ALL items that are currently pending or have been accepted.
              const winningAward = details.find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
              if (winningAward) {
                  newTotalValue += winningAward.unitPrice * item.quantity;
@@ -323,7 +313,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             data: {
                 status: nextStatus as any,
                 currentApproverId: nextApproverId,
-                totalPrice: newTotalValue, // Update the total price to reflect the new set of winners
+                totalPrice: newTotalValue,
             }
         });
         
@@ -369,7 +359,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             data: { status: 'Pending_Award' }
         });
         
-        // Also mark the original declined vendor as "Failed" to prevent re-promotion loops
         await tx.quotation.updateMany({
             where: { requisitionId: requisitionId, status: 'Declined' },
             data: { status: 'Failed' }
