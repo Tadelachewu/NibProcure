@@ -30,50 +30,37 @@ interface ApprovalSummaryDialogProps {
 
 export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: ApprovalSummaryDialogProps) {
   if (!requisition) return null;
-  
+
+  const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+
   const sortedQuotes = requisition.quotations?.sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)) || [];
   
   const declinedQuote = sortedQuotes.find(q => q.status === 'Declined');
   const isPromotedStandby = !!declinedQuote;
   
-  // The winner is the one currently pending award, not necessarily the top-scored one if they declined.
   const winner = sortedQuotes.find(q => q.status === 'Pending_Award' || q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Partially_Awarded');
   
   const topThree = sortedQuotes.slice(0, 3);
   
-  const winningVendor = winner?.vendorName || 'N/A';
+  let winningVendors: {id: string, name: string}[] = [];
 
-  const isItemAwarded = (item: any, winningQuotes: Quotation[]) => {
-    if (!requisition.awardedQuoteItemIds) return false;
-    // Check if any of the awarded item IDs belong to this original requisition item
-    return requisition.awardedQuoteItemIds.some(awardedId => {
-        for (const quote of winningQuotes) {
-            if (!quote.items) continue; // Safety check
-            for (const quoteItem of quote.items) {
-                if (quoteItem.id === awardedId && quoteItem.requisitionItemId === item.id) {
-                    return true;
-                }
-            }
+  if(isPerItemStrategy) {
+    const uniqueVendorIds = new Set<string>();
+    requisition.items.forEach(item => {
+        const award = (item.perItemAwardDetails || []).find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
+        if(award) {
+            uniqueVendorIds.add(award.vendorId);
         }
-        return false;
     });
-  };
+    const allQuotes = requisition.quotations || [];
+    winningVendors = allQuotes
+      .filter(q => uniqueVendorIds.has(q.vendorId))
+      .map(q => ({ id: q.vendorId, name: q.vendorName }));
+  } else if (winner) {
+    winningVendors = [{ id: winner.vendorId, name: winner.vendorName }];
+  }
 
-  const getWinningProposal = (item: any, winningQuotes: Quotation[]) => {
-      if (!requisition.awardedQuoteItemIds) return null;
 
-      for(const awardedId of requisition.awardedQuoteItemIds) {
-          for (const quote of winningQuotes) {
-              if (!quote.items) continue;
-              const foundItem = quote.items.find(quoteItem => quoteItem.id === awardedId && quoteItem.requisitionItemId === item.id);
-              if (foundItem) {
-                  return foundItem;
-              }
-          }
-      }
-      return null;
-  };
-  
   const getRankIcon = (rank?: number) => {
     switch(rank) {
       case 1: return <Crown className="h-4 w-4 text-amber-400" />;
@@ -112,7 +99,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                         <AlertCircle className="h-4 w-4" />
                                         <AlertTitle>Promoted Standby Vendor</AlertTitle>
                                         <AlertDescription>
-                                            The original winning vendor, <strong>{declinedQuote.vendorName}</strong>, has declined the award. This recommendation is for the next vendor in line.
+                                            The original winning vendor has declined the award. This recommendation is for the next vendor(s) in line.
                                         </AlertDescription>
                                     </Alert>
                                 )}
@@ -125,89 +112,90 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                             <p className="text-2xl font-bold">{requisition.totalPrice.toLocaleString()} ETB</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-muted-foreground">{isPromotedStandby ? 'Promoted Winning Vendor' : 'Recommended Winning Vendor'}</p>
-                                            <p className="text-lg font-semibold">{winningVendor}</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {isPerItemStrategy ? 'Winning Vendors' : 'Recommended Winning Vendor'}
+                                            </p>
+                                            <div className="text-lg font-semibold">
+                                                {winningVendors.length > 0 ? winningVendors.map(v => v.name).join(', ') : 'N/A'}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                                 <Separator />
-                                {/* Award Details */}
-                                <div>
-                                    <h4 className="font-semibold text-lg mb-2">Vendor Comparison</h4>
-                                    <div className="border rounded-md">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Rank</TableHead>
-                                                <TableHead>Vendor</TableHead>
-                                                <TableHead className="text-right">Final Score</TableHead>
-                                                <TableHead className="text-right">Total Price</TableHead>
-                                                <TableHead>Status</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {topThree.length > 0 ? (
-                                                topThree.map((quote) => (
-                                                <TableRow key={quote.id} className={quote.id === winner?.id ? 'bg-green-500/10' : ''}>
-                                                    <TableCell className="font-bold flex items-center gap-1">{getRankIcon(quote.rank)} {quote.rank || 'N/A'}</TableCell>
-                                                    <TableCell>{quote.vendorName}</TableCell>
-                                                    <TableCell className="text-right font-mono">{quote.finalAverageScore?.toFixed(2) || 'N/A'}</TableCell>
-                                                    <TableCell className="text-right font-mono">{quote.totalPrice.toLocaleString()} ETB</TableCell>
-                                                    <TableCell><Badge variant={quote.status === 'Declined' ? 'destructive' : 'outline'}>{quote.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                                </TableRow>
-                                                ))
-                                            ) : (
-                                                <TableRow>
-                                                    <TableCell colSpan={5} className="text-center h-24">No quotations found.</TableCell>
-                                                </TableRow>
-                                            )}
-                                        </TableBody>
-                                    </Table>
+                                
+                                {isPerItemStrategy ? (
+                                    <div>
+                                        <h4 className="font-semibold text-lg mb-2">Award by Best Item Breakdown</h4>
+                                        <div className="border rounded-md">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Requested Item</TableHead>
+                                                        <TableHead>Winning Vendor</TableHead>
+                                                        <TableHead>Proposed Item & Price</TableHead>
+                                                        <TableHead className="text-right">Total</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {requisition.items.map(item => {
+                                                        const award = (item.perItemAwardDetails || []).find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
+                                                        return (
+                                                            <TableRow key={item.id}>
+                                                                <TableCell className="font-medium">{item.name}</TableCell>
+                                                                <TableCell>{award?.vendorName || 'N/A'}</TableCell>
+                                                                <TableCell>
+                                                                    {award ? (
+                                                                        <>
+                                                                            <p>{award.proposedItemName}</p>
+                                                                            <p className="text-xs text-muted-foreground font-mono">@{award.unitPrice.toLocaleString()} ETB</p>
+                                                                        </>
+                                                                    ) : 'N/A'}
+                                                                </TableCell>
+                                                                <TableCell className="text-right font-semibold">
+                                                                    {award ? (award.unitPrice * item.quantity).toLocaleString() : 'N/A'} ETB
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        )
+                                                    })}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                        The winner is recommended based on the combined evaluation criteria: 
-                                        <strong> {requisition.evaluationCriteria?.financialWeight}% Financial</strong> and 
-                                        <strong> {requisition.evaluationCriteria?.technicalWeight}% Technical</strong>.
-                                    </p>
-                                </div>
-                                 <Separator />
-                                  <div>
-                                    <h4 className="font-semibold text-lg mb-2">Awarded Items</h4>
-                                     <div className="border rounded-md">
+                                ) : (
+                                    <div>
+                                        <h4 className="font-semibold text-lg mb-2">Vendor Comparison</h4>
+                                        <div className="border rounded-md">
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
-                                                    <TableHead>Item</TableHead>
-                                                    <TableHead>Quantity</TableHead>
-                                                    <TableHead>Winning Vendor</TableHead>
-                                                    <TableHead className="text-right">Unit Price</TableHead>
-                                                    <TableHead className="text-right">Total</TableHead>
+                                                    <TableHead>Rank</TableHead>
+                                                    <TableHead>Vendor</TableHead>
+                                                    <TableHead className="text-right">Final Score</TableHead>
+                                                    <TableHead className="text-right">Total Price</TableHead>
+                                                    <TableHead>Status</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
-                                                {requisition.items.length > 0 ? (
-                                                    requisition.items.map(item => {
-                                                        const winningProposal = getWinningProposal(item, sortedQuotes);
-                                                        const vendorName = winningProposal ? sortedQuotes.find(q => q.items.some(qi => qi.id === winningProposal.id))?.vendorName : 'N/A';
-                                                        return (
-                                                            <TableRow key={item.id} className={isItemAwarded(item, sortedQuotes) ? "bg-green-500/5" : ""}>
-                                                                <TableCell>{item.name}</TableCell>
-                                                                <TableCell>{item.quantity}</TableCell>
-                                                                <TableCell>{vendorName}</TableCell>
-                                                                <TableCell className="text-right">{winningProposal ? winningProposal.unitPrice.toLocaleString() : 'N/A'}</TableCell>
-                                                                <TableCell className="text-right">{winningProposal ? (winningProposal.unitPrice * item.quantity).toLocaleString() : 'N/A'}</TableCell>
-                                                            </TableRow>
-                                                        )
-                                                    })
+                                                {topThree.length > 0 ? (
+                                                    topThree.map((quote) => (
+                                                    <TableRow key={quote.id} className={quote.id === winner?.id ? 'bg-green-500/10' : ''}>
+                                                        <TableCell className="font-bold flex items-center gap-1">{getRankIcon(quote.rank)} {quote.rank || 'N/A'}</TableCell>
+                                                        <TableCell>{quote.vendorName}</TableCell>
+                                                        <TableCell className="text-right font-mono">{quote.finalAverageScore?.toFixed(2) || 'N/A'}</TableCell>
+                                                        <TableCell className="text-right font-mono">{quote.totalPrice.toLocaleString()} ETB</TableCell>
+                                                        <TableCell><Badge variant={quote.status === 'Declined' ? 'destructive' : 'outline'}>{quote.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                    </TableRow>
+                                                    ))
                                                 ) : (
                                                     <TableRow>
-                                                        <TableCell colSpan={5} className="h-24 text-center">No items in winning quote.</TableCell>
+                                                        <TableCell colSpan={5} className="text-center h-24">No quotations found.</TableCell>
                                                     </TableRow>
                                                 )}
                                             </TableBody>
                                         </Table>
-                                     </div>
-                                  </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <Separator />
                                 {/* Requisition Snapshot */}
