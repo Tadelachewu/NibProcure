@@ -241,7 +241,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
         );
     }
 
-    const getStatusVariant = (status: QuotationStatus | 'Pending_Award' | 'Awarded' | 'Rejected') => {
+    const getStatusVariant = (status: QuotationStatus | 'Pending_Award' | 'Awarded' | 'Rejected' | 'Not Awarded') => {
         switch (status) {
             case 'Awarded': 
             case 'Accepted': 
@@ -253,6 +253,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
             case 'Rejected': 
             case 'Not Awarded':
             case 'Declined': 
+            case 'Failed_to_Award':
             case 'Failed': 
                 return 'destructive';
             case 'Invoice_Submitted': return 'outline';
@@ -278,19 +279,17 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 const mainStatus = getOverallStatusForVendor(quote, itemStatuses, isAwarded);
                 const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
-
-                const isQuoteAwarded = mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded' || mainStatus === 'Pending_Award';
-
+                const showOverallStatus = !isPerItemStrategy || mainStatus === 'Not Awarded';
 
                 return (
-                    <Card key={quote.id} className={cn("flex flex-col", isQuoteAwarded && !isPerItemStrategy && 'border-primary ring-2 ring-primary')}>
+                    <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Partially_Awarded') && !isPerItemStrategy && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
                                  {isAwarded && !isPerItemStrategy && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
-                               <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
+                               {showOverallStatus && <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>}
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
@@ -323,7 +322,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-1">
-                                                        <Badge variant={item.status === 'Pending_Award' || item.status === 'Awarded' ? 'default' : item.status === 'Declined' || item.status === 'Failed_to_Award' ? 'destructive' : 'secondary'}>{item.status.replace(/_/g, ' ')}</Badge>
+                                                        <Badge variant={getStatusVariant(item.status as any)}>{item.status.replace(/_/g, ' ')}</Badge>
                                                         {typeof item.score === 'number' && <Badge variant="outline" className="font-mono">{item.score.toFixed(2)} pts</Badge>}
                                                     </div>
                                                 </div>
@@ -2420,12 +2419,15 @@ export default function QuotationDetailsPage() {
   const itemStatuses = useMemo(() => {
     if (!requisition || !requisition.items) return [];
 
-    // 1. Gather all champion bids for every item from every vendor.
-    const allBids: any[] = [];
-    quotations.forEach(quote => {
-        requisition.items.forEach(reqItem => {
+    const finalStatuses: any[] = [];
+    
+    // Group all champion bids by the original requisition item
+    const bidsByItem = requisition.items.reduce((acc, reqItem) => {
+        const itemBids: any[] = [];
+        quotations.forEach(quote => {
             const proposalsForItem = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
             if (proposalsForItem.length > 0) {
+                // Find the best proposal from this vendor for this item
                 const bestProposal = proposalsForItem.map(proposal => {
                     let totalScore = 0;
                     let scorerCount = 0;
@@ -2438,10 +2440,10 @@ export default function QuotationDetailsPage() {
                     });
                     const score = scorerCount > 0 ? totalScore / scorerCount : 0;
                     return { proposal, score };
-                }).sort((a,b) => b.score - a.score)[0]; // Get the best one for this vendor for this item
+                }).sort((a,b) => b.score - a.score)[0]; // Get the best one
 
                 if (bestProposal) {
-                    allBids.push({
+                    itemBids.push({
                         reqItemId: reqItem.id,
                         reqItemName: reqItem.name,
                         vendorId: quote.vendorId,
@@ -2452,17 +2454,12 @@ export default function QuotationDetailsPage() {
                 }
             }
         });
-    });
-
-    // 2. Group by item to rank them
-    const groupedByItem = allBids.reduce((acc, bid) => {
-        (acc[bid.reqItemId] = acc[bid.reqItemId] || []).push(bid);
+        acc[reqItem.id] = itemBids;
         return acc;
     }, {} as Record<string, any[]>);
 
-    // 3. Create the final list of statuses, correctly ranked
-    const finalStatuses: any[] = [];
-    Object.values(groupedByItem).forEach((bids: any[]) => {
+    // Rank and assign statuses within each item group
+    Object.values(bidsByItem).forEach((bids: any[]) => {
         bids.sort((a, b) => b.score - a.score); // Rank by score
         
         bids.forEach((bid, index) => {
@@ -3056,7 +3053,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
@@ -3072,7 +3069,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
         }
     };
 
@@ -3196,7 +3193,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     const { user } = useAuth();
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
@@ -3220,7 +3217,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/restart-item-rfq`, {
                 method: 'POST',
@@ -3242,7 +3239,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     };
     
