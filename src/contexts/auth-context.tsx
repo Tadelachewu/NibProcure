@@ -51,7 +51,7 @@ interface AuthContextType {
   settings: Setting[];
   rfqQuorum: number;
   committeeQuorum: number;
-  login: (token: string, user: User, role: UserRole) => void;
+  login: (token: string, user: User, roles: UserRole[]) => void;
   logout: () => void;
   loading: boolean;
   switchUser: (userId: string) => void;
@@ -157,13 +157,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const storedToken = localStorage.getItem('authToken');
           
           if (storedToken) {
-              const decoded = decodeJwt<{ exp: number, iat: number } & User>(storedToken);
+              const decoded = decodeJwt<{ exp: number, iat: number, roles: UserRole[] } & User>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
                   const fullUser = users.find((u: User) => u.id === decoded.id) || decoded;
-                  const formattedRole = (fullUser.role as any)?.name ? (fullUser.role as any).name : fullUser.role as UserRole;
+                  const primaryRole = (fullUser.roles && fullUser.roles.length > 0) ? (fullUser.roles[0] as any)?.name || fullUser.roles[0] : null;
                   setUser(fullUser);
                   setToken(storedToken);
-                  setRole(formattedRole.replace(/ /g, '_'));
+                  setRole(primaryRole);
               } else {
                   localStorage.removeItem('authToken');
               }
@@ -177,11 +177,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth();
   }, [fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
 
-  const login = (newToken: string, loggedInUser: User, loggedInRole: UserRole) => {
+  const login = (newToken: string, loggedInUser: User, loggedInRoles: UserRole[]) => {
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
-    setRole((loggedInRole as string).replace(/ /g, '_') as UserRole);
+    // For now, we'll just take the first role as the primary role for the session.
+    // A role switcher can be implemented later to allow users to switch between their roles.
+    setRole(loggedInRoles && loggedInRoles.length > 0 ? loggedInRoles[0] : null);
   };
 
   const logout = () => {
@@ -203,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if(response.ok) {
               const result = await response.json();
-              login(result.token, result.user, result.role);
+              login(result.token, result.user, result.roles);
               window.location.href = '/';
           } else {
               console.error("Failed to switch user.")
