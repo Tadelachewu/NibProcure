@@ -34,7 +34,7 @@ export function RequisitionsForQuotingTable() {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const router = useRouter();
-  const { user, allUsers, role, token, committeeQuorum } = useAuth();
+  const { user, role, token, committeeQuorum } = useAuth();
 
 
   useEffect(() => {
@@ -60,7 +60,7 @@ export function RequisitionsForQuotingTable() {
     if (user) {
         fetchRequisitions();
     }
-  }, [user, role, allUsers, token]);
+  }, [user, token]);
   
   const totalPages = Math.ceil(requisitions.length / PAGE_SIZE);
   const paginatedData = useMemo(() => {
