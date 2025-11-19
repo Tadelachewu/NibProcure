@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -52,6 +52,7 @@ import Link from 'next/link';
 
 
 const PAGE_SIZE = 10;
+const REFRESH_INTERVAL = 30000; // 30 seconds
 
 export function AwardReviewsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
@@ -69,7 +70,7 @@ export function AwardReviewsTable() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
 
-  const fetchRequisitions = async () => {
+  const fetchRequisitions = useCallback(async () => {
     if (!user || !token) {
       setLoading(false);
       return;
@@ -88,11 +89,13 @@ export function AwardReviewsTable() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, token]);
 
   useEffect(() => {
     fetchRequisitions();
-  }, [user, token]);
+    const intervalId = setInterval(fetchRequisitions, REFRESH_INTERVAL);
+    return () => clearInterval(intervalId);
+  }, [fetchRequisitions]);
 
   const handleAction = (req: PurchaseRequisition, type: 'approve' | 'reject') => {
     setSelectedRequisition(req);
@@ -165,7 +168,7 @@ export function AwardReviewsTable() {
   }, [requisitions, currentPage]);
 
 
-  if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading && requisitions.length === 0) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (error) return <div className="text-destructive text-center p-8">{error}</div>;
 
   return (

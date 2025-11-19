@@ -23,6 +23,7 @@ import { useRouter } from 'next/navigation';
 
 const OPEN_PAGE_SIZE = 9;
 const ACTIVE_PAGE_SIZE = 6;
+const REFRESH_INTERVAL = 15000; // 15 seconds
 
 type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed' | 'Declined' | 'Failed_to_Award';
 
@@ -103,12 +104,9 @@ export default function VendorDashboardPage() {
     }, [token, user]);
 
     useEffect(() => {
-        const handleFocus = () => fetchAllData();
         fetchAllData();
-        window.addEventListener('focus', handleFocus);
-        return () => {
-            window.removeEventListener('focus', handleFocus);
-        }
+        const intervalId = setInterval(fetchAllData, REFRESH_INTERVAL);
+        return () => clearInterval(intervalId);
     }, [fetchAllData]);
 
     const getRequisitionCardStatus = useCallback((req: PurchaseRequisition): RequisitionCardStatus => {
@@ -214,7 +212,7 @@ export default function VendorDashboardPage() {
     return (
         <div className="space-y-8">
 
-            {loading && <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}
+            {loading && allRequisitions.length === 0 && <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}
             {error && <p className="text-destructive">Error: {error}</p>}
 
             {!loading && !error && (

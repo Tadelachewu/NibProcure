@@ -48,6 +48,7 @@ import { Badge } from './ui/badge';
 
 
 const PAGE_SIZE = 10;
+const REFRESH_INTERVAL = 30000; // 30 seconds
 
 export function ApprovalsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
@@ -85,13 +86,10 @@ export function ApprovalsTable() {
   useEffect(() => {
     if (user) {
         fetchRequisitions();
+        const intervalId = setInterval(fetchRequisitions, REFRESH_INTERVAL);
+        return () => clearInterval(intervalId);
     } else {
         setLoading(false);
-    }
-    
-    window.addEventListener('focus', fetchRequisitions);
-    return () => {
-        window.removeEventListener('focus', fetchRequisitions);
     }
   }, [user, fetchRequisitions]);
 
@@ -180,7 +178,7 @@ export function ApprovalsTable() {
   };
 
 
-  if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading && requisitions.length === 0) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (error) return <div className="text-destructive">{error}</div>;
 
   return (

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -59,6 +58,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 
 
 const PAGE_SIZE = 10;
+const REFRESH_INTERVAL = 30000; // 30 seconds
 
 export function RequisitionsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
@@ -94,10 +94,8 @@ export function RequisitionsTable() {
 
   useEffect(() => {
     fetchRequisitions();
-    window.addEventListener('focus', fetchRequisitions);
-    return () => {
-        window.removeEventListener('focus', fetchRequisitions);
-    }
+    const intervalId = setInterval(fetchRequisitions, REFRESH_INTERVAL);
+    return () => clearInterval(intervalId);
   }, [fetchRequisitions]);
   
   const handleSubmitForApproval = async (req: PurchaseRequisition) => {
@@ -213,7 +211,7 @@ export function RequisitionsTable() {
     }
   }
 
-  if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading && requisitions.length === 0) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (error) return <div className="text-destructive">Error: {error}</div>;
 
   return (

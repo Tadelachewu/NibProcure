@@ -1,8 +1,7 @@
 
-
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -27,6 +26,7 @@ import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Fil
 import { useAuth } from '@/contexts/auth-context';
 
 const PAGE_SIZE = 10;
+const REFRESH_INTERVAL = 30000; // 30 seconds
 
 export function RequisitionsForQuotingTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
@@ -37,30 +37,33 @@ export function RequisitionsForQuotingTable() {
   const { user, allUsers, role, token, committeeQuorum } = useAuth();
 
 
-  useEffect(() => {
-    const fetchRequisitions = async () => {
-        if (!user || !token) return;
-        try {
-            setLoading(true);
-            const response = await fetch(`/api/requisitions?forQuoting=true`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) {
-                throw new Error('Failed to fetch requisitions');
-            }
-            const data: PurchaseRequisition[] = await response.json();
-            setRequisitions(data);
-
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'An unknown error occurred');
-        } finally {
-            setLoading(false);
+  const fetchRequisitions = useCallback(async () => {
+    if (!user || !token) return;
+    try {
+        setLoading(true);
+        const response = await fetch(`/api/requisitions?forQuoting=true`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) {
+            throw new Error('Failed to fetch requisitions');
         }
-    };
+        const data: PurchaseRequisition[] = await response.json();
+        setRequisitions(data);
+
+    } catch (e) {
+        setError(e instanceof Error ? e.message : 'An unknown error occurred');
+    } finally {
+        setLoading(false);
+    }
+  }, [user, token]);
+
+  useEffect(() => {
     if (user) {
         fetchRequisitions();
+        const intervalId = setInterval(fetchRequisitions, REFRESH_INTERVAL);
+        return () => clearInterval(intervalId);
     }
-  }, [user, role, allUsers, token]);
+  }, [user, fetchRequisitions]);
   
   const totalPages = Math.ceil(requisitions.length / PAGE_SIZE);
   const paginatedData = useMemo(() => {
@@ -144,7 +147,7 @@ export function RequisitionsForQuotingTable() {
     return <Badge variant="outline">{req.status.replace(/_/g, ' ')}</Badge>;
   }
 
-  if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading && requisitions.length === 0) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (error) return <div className="text-destructive">Error: {error}</div>;
 
   return (
