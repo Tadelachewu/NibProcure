@@ -186,9 +186,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (storedToken) {
               const decoded = decodeJwt<User & { roles: UserRole[] }>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
-                  setUser(decoded); // The user object from token should have a simple array of role names
+                  setUser(decoded); // The user object from token has a simple array of role names
                   setToken(storedToken);
-                  // The primary role will be set in the next effect
               } else {
                   localStorage.removeItem('authToken');
               }
@@ -196,15 +195,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error) {
           console.error("Failed to initialize auth from localStorage", error);
           localStorage.clear();
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     initializeAuth();
   }, [fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
   
-  // This effect is crucial. It derives the primary role and combined permissions
-  // whenever the user object or the base rolePermissions map changes.
-  // This solves the race condition where redirection was attempted before permissions were ready.
   const combinedPermissions = useMemo(() => {
     if (!user || !user.roles || loading) return {};
 
@@ -252,7 +249,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if(response.ok) {
               const result = await response.json();
               login(result.token, result.user);
-              window.location.href = '/';
+              
+              // New role-aware redirection logic
+              const primaryRole = getPrimaryRole(result.user.roles);
+              if (primaryRole === 'Vendor') {
+                  window.location.href = '/vendor/dashboard';
+              } else {
+                  window.location.href = '/';
+              }
           } else {
               console.error("Failed to switch user.")
           }
