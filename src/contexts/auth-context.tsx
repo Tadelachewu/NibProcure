@@ -68,6 +68,26 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Define a hierarchy or precedence for roles. Higher number = higher precedence.
+const rolePrecedence: Record<UserRole, number> = {
+  Admin: 10,
+  Procurement_Officer: 9,
+  Finance: 8,
+  Approver: 7,
+  Receiving: 6,
+  Requester: 5,
+  Committee: 4,
+  Committee_A_Member: 3,
+  Committee_B_Member: 3,
+  Committee_Member: 3,
+  Manager_Procurement_Division: 7,
+  Director_Supply_Chain_and_Property_Management: 7,
+  VP_Resources_and_Facilities: 7,
+  President: 7,
+  Vendor: 1,
+};
+
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -144,6 +164,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Failed to fetch settings", error);
     }
   }, []);
+  
+  // This combines all permissions from all of a user's roles into one array.
+  const combinedPermissions = useMemo(() => {
+    if (!user?.roles) return [];
+    
+    const userRoleNames = (user.roles as any[]).map(r => r.name);
+    const permissionsSet = new Set<string>();
+
+    userRoleNames.forEach(roleName => {
+        const permissionsForRole = rolePermissions[roleName as UserRole] || [];
+        permissionsForRole.forEach(path => permissionsSet.add(path));
+    });
+    
+    // Create a new "combined" role entry in the permissions object for the current user
+    const newPermissions = { ...rolePermissions };
+    newPermissions['Combined' as UserRole] = Array.from(permissionsSet);
+    
+    return newPermissions;
+
+  }, [user, rolePermissions]);
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -160,7 +200,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const decoded = decodeJwt<{ exp: number, iat: number, roles: UserRole[] } & User>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
                   const fullUser = users.find((u: User) => u.id === decoded.id) || decoded;
-                  const primaryRole = (fullUser.roles && fullUser.roles.length > 0) ? (fullUser.roles[0] as any)?.name || fullUser.roles[0] : null;
+                  
+                  // Determine the primary role based on precedence
+                  const userRoles = (fullUser.roles as any[]).map(r => r.name as UserRole);
+                  const primaryRole = userRoles.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0))[0] || null;
+                  
                   setUser(fullUser);
                   setToken(storedToken);
                   setRole(primaryRole);
@@ -177,11 +221,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth();
   }, [fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
 
-  const login = (newToken: string, loggedInUser: User, loggedInRoles: UserRole[]) => {
+  const login = (newToken: string, loggedInUser: User, loggedInRoles: any[]) => {
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
-    setRole(Array.isArray(loggedInRoles) && loggedInRoles.length > 0 ? loggedInRoles[0] : null);
+    
+    // On login, determine the primary role based on precedence
+    const userRoleNames = loggedInRoles.map(r => r.name as UserRole);
+    const primaryRole = userRoleNames.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0))[0] || null;
+    setRole(primaryRole);
   };
 
   const logout = () => {
@@ -278,7 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
       allUsers,
       departments,
-      rolePermissions,
+      rolePermissions: combinedPermissions, // Use the combined permissions
       rfqSenderSetting,
       approvalThresholds,
       committeeConfig,
@@ -298,7 +346,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetchAllUsers,
       fetchAllSettings,
       fetchAllDepartments
-  }), [user, token, role, loading, allUsers, departments, rolePermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
+  }), [user, token, role, loading, allUsers, departments, combinedPermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
 
 
   return (
@@ -315,5 +363,3 @@ export function useAuth() {
   }
   return context;
 }
-
-    

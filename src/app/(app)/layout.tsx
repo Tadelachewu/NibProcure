@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
@@ -43,10 +42,12 @@ export default function AppLayout({
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
-
+  
+  // The rolePermissions from useAuth() now returns a "Combined" entry with all merged permissions.
+  // We use that for determining what to display in the navigation.
   const accessibleNavItems = useMemo(() => {
     if (!role) return [];
-    const allowedPaths = rolePermissions[role] || [];
+    const allowedPaths = rolePermissions['Combined' as any] || [];
     return navItems.filter(item => allowedPaths.includes(item.path));
   }, [role, rolePermissions]);
 
@@ -91,23 +92,14 @@ export default function AppLayout({
   
   // Page-level access check
   useEffect(() => {
-    // --- DEBUGGING START ---
-    console.log('[Layout Security Check] Running...');
-    console.log(`[Layout Security Check] Current Path: ${pathname}`);
-    console.log(`[Layout Security Check] Auth Loading: ${loading}`);
-    console.log(`[Layout Security Check] User Role: ${role}`);
-    // --- DEBUGGING END ---
-
     if (loading || !role || !pathname) {
-        console.log('[Layout Security Check] Aborting: Still loading auth data.');
         return; // Wait for all data
     }
 
-    const allowedPaths = rolePermissions[role] || [];
-    console.log(`[Layout Security Check] Allowed paths for role "${role}":`, allowedPaths);
-
+    // Use the combined permissions for the security check
+    const allowedPaths = rolePermissions['Combined' as any] || [];
+    
     if (allowedPaths.length === 0 && role !== 'Admin') { 
-        console.log('[Layout Security Check] REDIRECT: No allowed paths found for this role. Logging out.');
         router.push('/login');
         return;
     }
@@ -115,20 +107,15 @@ export default function AppLayout({
     const currentPath = pathname.split('?')[0];
 
     const isAllowed = allowedPaths.some(p => {
-        if (p === '/') return currentPath === '/'; // Exact match for root
-        // Exact match (e.g., /dashboard) or sub-path match (e.g., /requisitions/123 starts with /requisitions)
+        if (p === '/') return currentPath === '/';
         return currentPath === p || currentPath.startsWith(`${p}/`);
     });
 
-    console.log(`[Layout Security Check] Is path "${currentPath}" allowed? ${isAllowed}`);
-
     if (!isAllowed) {
         const defaultPath = allowedPaths[0];
-        console.log(`[Layout Security Check] REDIRECT: Path not allowed. Redirecting to default path: ${defaultPath}`);
         if (defaultPath) {
             router.push(defaultPath);
         } else {
-             console.log('[Layout Security Check] REDIRECT: No default path found. Redirecting to login.');
              router.push('/login');
         }
     }
@@ -204,4 +191,3 @@ export default function AppLayout({
     </SidebarProvider>
   );
 }
-
