@@ -19,28 +19,32 @@ export async function GET(request: Request) {
     }
     
     let whereClause: any = {};
-    const userRole = userPayload.role.replace(/ /g, '_') as UserRole;
+    const userRoles = (userPayload.user.roles as any[]).map(r => r.name) as UserRole[];
     const userId = userPayload.user.id;
 
-    if (userRole === 'Committee_A_Member') {
-        whereClause.status = 'Pending_Committee_A_Recommendation';
-    } else if (userRole === 'Committee_B_Member') {
-        whereClause.status = 'Pending_Committee_B_Review';
-    } else if (userRole === 'Admin' || userRole === 'Procurement_Officer') {
-       const allCommitteeRoles = await prisma.role.findMany({ where: { name: { startsWith: 'Committee_', endsWith: '_Member' } } });
-       const allReviewStatuses = allCommitteeRoles.map(r => `Pending_${r.name}`);
-        allReviewStatuses.push('Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval');
+    // Start with a base condition: the user is the direct current approver
+    const orConditions = [{ currentApproverId: userId }];
 
-       whereClause = { 
-         status: { 
-           in: allReviewStatuses
-         }
-      };
-    } else { // This handles hierarchical roles
-      whereClause = { 
-        currentApproverId: userId,
-      };
+    // Add conditions for any group-based roles the user has (e.g., Committee A)
+    userRoles.forEach(roleName => {
+        orConditions.push({ status: `Pending_${roleName}` });
+    });
+
+    // For high-level users, we also show them everything that is pending *any* kind of review
+    // for better visibility.
+    if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+        // Fetch all possible roles to dynamically create all possible "Pending" statuses
+        const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
+        const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
+        
+        // Add all possible pending statuses to the query for admins/officers
+        orConditions.push({ status: { in: allPossiblePendingStatuses } });
+
+        // Also include PostApproved for the final notification step
+        orConditions.push({ status: 'PostApproved' });
     }
+    
+    whereClause.OR = orConditions;
     
     const requisitions = await prisma.purchaseRequisition.findMany({
       where: whereClause,
