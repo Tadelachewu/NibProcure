@@ -2388,31 +2388,26 @@ export default function QuotationDetailsPage() {
   
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
     if (!requisition || !requisition.status) return 'rfq';
-    const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
-    
-    if (['PreApproved'].includes(requisition.status)) return 'rfq';
-    if (['Accepting_Quotes'].includes(requisition.status) && !deadlinePassed) return 'rfq';
-    
-    const inScoringProcess = [
-        'Accepting_Quotes', // Post-deadline
-        'Scoring_In_Progress'
-    ].includes(requisition.status);
-    
-    if (inScoringProcess && deadlinePassed) {
-        return 'committee';
-    }
 
-    if (['Scoring_Complete', 'Award_Declined'].includes(requisition.status)) return 'award';
-    
-    const inReviewProcess = requisition.status.startsWith('Pending_') || ['PostApproved', 'Awarded'].includes(requisition.status);
-    if (inReviewProcess) return 'award';
-    
-    if (isAccepted) {
-      return ['PO_Created', 'Closed', 'Fulfilled'].includes(requisition.status) ? 'completed' : 'finalize';
-    }
+    const status = requisition.status.replace(/_/g, ' ');
 
+    if (status === 'PreApproved') return 'rfq';
+    if (status === 'Accepting Quotes') {
+        const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+        return deadlinePassed ? 'committee' : 'rfq';
+    }
+    if (status === 'Scoring In Progress') return 'committee';
+    if (status === 'Scoring Complete' || status === 'Award Declined') return 'award';
+    
+    if (status.startsWith('Pending ') || status === 'PostApproved' || status === 'Awarded') return 'award';
+
+    if (status === 'PO Created' || status === 'Fulfilled' || status === 'Closed') {
+        return isAccepted ? 'completed' : 'finalize';
+    }
+    
     return 'rfq'; // Default fallback
-  }, [requisition, isAccepted]);
+}, [requisition, isAccepted]);
+
   
   const { pendingQuotes, scoredQuotes } = useMemo(() => {
     if (!user || user.role.name !== 'Committee_Member' ) return { pendingQuotes: quotations, scoredQuotes: [] };
@@ -2499,7 +2494,6 @@ export default function QuotationDetailsPage() {
 
   const fetchRequisitionAndQuotes = useCallback(async () => {
       if (!id) return;
-      setLoading(true);
       try {
           const [reqResponse, venResponse, quoResponse] = await Promise.all([
               fetch(`/api/requisitions/${id}`),
@@ -2528,6 +2522,7 @@ export default function QuotationDetailsPage() {
 
   useEffect(() => {
     if (id && user && allUsers.length > 0) {
+        setLoading(true);
         const handleFocus = () => fetchRequisitionAndQuotes();
         fetchRequisitionAndQuotes();
         window.addEventListener('focus', handleFocus);
@@ -3203,7 +3198,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     const { user } = useAuth();
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
@@ -3227,7 +3222,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/restart-item-rfq`, {
                 method: 'POST',
@@ -3352,3 +3347,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
 
+
+
+    
