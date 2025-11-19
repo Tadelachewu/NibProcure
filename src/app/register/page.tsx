@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -86,7 +87,7 @@ export default function RegisterPage() {
         const result = await response.json();
 
         if (response.ok) {
-            authLogin(result.token, result.user, result.role);
+            authLogin(result.token, result.user, result.roles);
             toast({
                 title: 'Registration Successful',
                 description: `Welcome, ${result.user.name}! Your vendor application is pending verification.`,

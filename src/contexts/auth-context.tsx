@@ -181,8 +181,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
-    // For now, we'll just take the first role as the primary role for the session.
-    // A role switcher can be implemented later to allow users to switch between their roles.
     setRole(loggedInRoles && loggedInRoles.length > 0 ? loggedInRoles[0] : null);
   };
 
