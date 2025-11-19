@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -115,7 +116,7 @@ export function ApprovalsTable() {
         rfqSenderId = rfqSenderSetting.userId;
       } else {
         // Fallback to the first available Procurement Officer if 'all' is selected or specific user not found
-        const firstProcOfficer = allUsers.find(u => u.role === 'Procurement_Officer');
+        const firstProcOfficer = allUsers.find(u => (u.roles as any[]).some(r => r.name === 'Procurement_Officer'));
         rfqSenderId = firstProcOfficer?.id || null;
       }
     }
@@ -339,3 +340,5 @@ export function ApprovalsTable() {
     </>
   );
 }
+
+    

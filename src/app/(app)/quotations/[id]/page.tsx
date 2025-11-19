@@ -229,7 +229,7 @@ const getOverallStatusForVendor = (quote: Quotation, itemStatuses: any[], isAwar
 };
 
 
-const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean }) => {
+const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean }) => {
     
     if (quotes.length === 0) {
         return (
@@ -269,7 +269,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
         }
     }
 
-    const isTechnicalOnlyScorer = user.role.name === 'Committee_Member' && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
+    const isTechnicalOnlyScorer = role === 'Committee_Member' && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
     const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
 
     return (
@@ -357,7 +357,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, is
                             <Button className="w-full" variant="outline" onClick={() => onViewDetails(quote)}>
                                 <Eye className="mr-2 h-4 w-4" /> View Full Quote
                             </Button>
-                             {user.role.name === 'Committee_Member' && isDeadlinePassed && (
+                             {role === 'Committee_Member' && isDeadlinePassed && (
                                 <Button className="w-full" variant={hasUserScored ? "secondary" : "default"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
                                     {hasUserScored ? 'View Your Score' : 'Score this Quote'}
@@ -579,7 +579,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         }
     }
 
-    const committeeMembers = useMemo(() => allUsers.filter(u => u.role.name === 'Committee_Member'), [allUsers]);
+    const committeeMembers = useMemo(() => allUsers.filter(u => (u.roles as any[])?.some(r => r.name === 'Committee_Member')), [allUsers]);
     const assignedFinancialMembers = useMemo(() => allUsers.filter(u => requisition.financialCommitteeMemberIds?.includes(u.id)), [allUsers, requisition]);
     const assignedTechnicalMembers = useMemo(() => allUsers.filter(u => requisition.technicalCommitteeMemberIds?.includes(u.id)), [allUsers, requisition]);
     const allAssignedMemberIds = useMemo(() => [...(requisition.financialCommitteeMemberIds || []), ...(requisition.technicalCommitteeMemberIds || [])], [requisition]);
@@ -2126,7 +2126,7 @@ const OverdueReportDialog = ({ isOpen, onClose, member }: { isOpen: boolean, onC
                      <div className="p-4 border rounded-md bg-muted/50">
                         <p><span className="font-semibold">Member Name:</span> {member.name}</p>
                         <p><span className="font-semibold">Email:</span> {member.email}</p>
-                        <p><span className="font-semibold">Assigned Role:</span> {member.role.name.replace(/_/g, ' ')}</p>
+                        <p><span className="font-semibold">Assigned Role:</span> {(member.roles as any[])?.map(r => r.name).join(', ').replace(/_/g, ' ')}</p>
                      </div>
                 </div>
                 <DialogFooter>
@@ -2295,7 +2295,7 @@ export default function QuotationDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const { user, allUsers, rolePermissions, rfqSenderSetting, committeeQuorum } = useAuth();
+  const { user, allUsers, role, rolePermissions, rfqSenderSetting, committeeQuorum } = useAuth();
   const id = params.id as string;
 
   const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
@@ -2320,22 +2320,17 @@ export default function QuotationDetailsPage() {
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
   const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
 
-   const userRoleName = useMemo(() => {
-    if (!user || !user.role) return null;
-    return user.role.name;
-  }, [user]);
-
   const isAuthorized = useMemo(() => {
-    if (!user || !userRoleName) return false;
-    if (userRoleName === 'Admin') return true;
+    if (!user || !role) return false;
+    if (role === 'Admin') return true;
     if (rfqSenderSetting.type === 'specific') {
       return user.id === rfqSenderSetting.userId;
     }
     if (rfqSenderSetting.type === 'all') {
-      return userRoleName === 'Procurement_Officer';
+      return role === 'Procurement_Officer';
     }
     return false;
-  }, [user, userRoleName, rfqSenderSetting]);
+  }, [user, role, rfqSenderSetting]);
   
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
 
@@ -2373,18 +2368,18 @@ export default function QuotationDetailsPage() {
 
 
   const isAssignedCommitteeMember = useMemo(() => {
-      if (!user || !userRoleName || userRoleName !== 'Committee_Member' || !requisition) {
+      if (!user || !role || role !== 'Committee_Member' || !requisition) {
           return false;
       }
       return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
-  }, [user, userRoleName, requisition]);
+  }, [user, role, requisition]);
   
   const isReviewer = useMemo(() => {
-    if (!user || !userRoleName || !requisition) return false;
+    if (!user || !role || !requisition) return false;
     const isHierarchicalReviewer = requisition.currentApproverId === user.id;
-    const isCommitteeReviewer = (userRoleName === 'Committee_A_Member' && requisition.status === 'Pending_Committee_A_Recommendation') || (userRoleName === 'Committee_B_Member' && requisition.status === 'Pending_Committee_B_Review');
+    const isCommitteeReviewer = (role === 'Committee_A_Member' && requisition.status === 'Pending_Committee_A_Recommendation') || (role === 'Committee_B_Member' && requisition.status === 'Pending_Committee_B_Review');
     return isHierarchicalReviewer || isCommitteeReviewer;
-  }, [user, userRoleName, requisition]);
+  }, [user, role, requisition]);
   
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
     if (!requisition || !requisition.status) return 'rfq';
@@ -2415,13 +2410,13 @@ export default function QuotationDetailsPage() {
   }, [requisition, isAccepted]);
   
   const { pendingQuotes, scoredQuotes } = useMemo(() => {
-    if (!user || user.role.name !== 'Committee_Member' ) return { pendingQuotes: quotations, scoredQuotes: [] };
+    if (!user || role !== 'Committee_Member' ) return { pendingQuotes: quotations, scoredQuotes: [] };
     const pending = quotations.filter(q => !q.scores?.some(s => s.scorerId === user.id));
     const scored = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id));
     return { pendingQuotes: pending, scoredQuotes: scored };
-  }, [quotations, user]);
+  }, [quotations, user, role]);
   
-  const quotesForDisplay = (user && user.role.name === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (user && user.role.name === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
+  const quotesForDisplay = (user && role === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (user && role === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
   const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
   
   const itemStatuses = useMemo(() => {
@@ -2694,7 +2689,7 @@ export default function QuotationDetailsPage() {
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
   
-  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer || userRoleName === 'Procurement_Officer');
+  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer || role === 'Procurement_Officer');
   
   return (
     <div className="space-y-6">
@@ -2835,15 +2830,15 @@ export default function QuotationDetailsPage() {
                             </div>
                         ) : (
                              <Tabs value={committeeTab} onValueChange={(value) => setCommitteeTab(value as any)} defaultValue="pending">
-                                {user && user.role.name === 'Committee_Member' && <TabsList className="mb-4">
+                                {user && role === 'Committee_Member' && <TabsList className="mb-4">
                                     <TabsTrigger value="pending">Pending Your Score ({pendingQuotes.length})</TabsTrigger>
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete}/>
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete}/>
                                 </TabsContent>
                              </Tabs>
                         )}
@@ -2895,7 +2890,7 @@ export default function QuotationDetailsPage() {
              />
         )}
 
-        {userRoleName && (
+        {role && (
           (
             (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Award_Declined') &&
             isAuthorized
@@ -2997,7 +2992,7 @@ export default function QuotationDetailsPage() {
             </Card>
         )}
 
-        {isAccepted && requisition.status !== 'PO_Created' && userRoleName && userRoleName !== 'Committee_Member' && (
+        {isAccepted && requisition.status !== 'PO_Created' && role && role !== 'Committee_Member' && (
             <ContractManagement requisition={requisition} onContractFinalized={fetchRequisitionAndQuotes} />
         )}
          {requisition && (
@@ -3353,7 +3348,4 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
     
 
-
-
-
-
+    

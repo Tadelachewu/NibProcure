@@ -159,7 +159,7 @@ export default function AppLayout({
                 </Link>
               </SidebarMenuItem>
             )}
-             {role === 'Procurement Officer' && (
+             {role === 'Procurement_Officer' && (
               <>
                 <SidebarMenuItem>
                   <Link href="/vendors">
@@ -308,3 +308,5 @@ export default function AppLayout({
     </SidebarProvider>
   );
 }
+
+    
