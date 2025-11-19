@@ -57,7 +57,7 @@ export function DepartmentManagementEditor() {
   const [departmentHeadId, setDepartmentHeadId] = useState<string | null>(null);
   
   const { toast } = useToast();
-  const { user: actor, allUsers, fetchAllUsers, fetchAllDepartments } = useAuth();
+  const { user: actor, allUsers, fetchAllUsers } = useAuth();
 
   const fetchDepartments = async () => {
     setIsLoading(true);
@@ -115,6 +115,7 @@ export function DepartmentManagementEditor() {
         
         setDialogOpen(false);
         await fetchDepartments();
+        await fetchAllUsers(); // Also refresh users to get updated department links
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
@@ -165,10 +166,11 @@ export function DepartmentManagementEditor() {
   
   const potentialHeadsForSelectedDept = useMemo(() => {
     if (!departmentToEdit) {
-        // When creating a new department, we don't know the members yet, so show all potential heads.
-        return allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as any[]).some(r => r.name === 'Vendor' || r.name === 'Requester'));
+      // When CREATING a new department, no users belong to it yet.
+      // Show all non-vendor/requester users as potential heads.
+      return allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as any[]).some(r => r.name === 'Vendor' || r.name === 'Requester'));
     }
-    // When editing, filter for users who belong to the department being edited.
+    // When EDITING, only show users who are members of the department being edited.
     return allUsers.filter(u => u.departmentId === departmentToEdit.id);
   }, [allUsers, departmentToEdit]);
 
@@ -283,7 +285,7 @@ export function DepartmentManagementEditor() {
                         <SelectContent>
                              <SelectItem value="null">None</SelectItem>
                             {potentialHeadsForSelectedDept.map(user => (
-                                <SelectItem key={user.id} value={user.id}>{user.name} ({(user.roles[0] as any).name.replace(/_/g, ' ')})</SelectItem>
+                                <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
