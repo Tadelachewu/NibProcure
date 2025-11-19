@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from './ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Trash2, Edit, Users, X } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, Edit, Users, X, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
 import { Department, User, UserRole } from '@/lib/types';
 import {
   AlertDialog,
@@ -67,12 +67,15 @@ const userEditFormSchema = userFormSchema.extend({
 
 type UserFormValues = z.infer<typeof userFormSchema>;
 
+const PAGE_SIZE = 10;
+
 export function UserManagementEditor() {
   const { allUsers, fetchAllUsers, user: actor, departments, fetchAllDepartments, rolePermissions } = useAuth();
   const [roles, setRoles] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
 
   const form = useForm<UserFormValues>({
@@ -90,7 +93,7 @@ export function UserManagementEditor() {
     setIsLoading(true);
     try {
       await Promise.all([fetchAllUsers(), fetchAllDepartments()]);
-      setRoles(Object.keys(rolePermissions).filter(r => r !== 'Vendor'));
+      setRoles(Object.keys(rolePermissions)); // Include all roles now
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not load initial data.' });
     } finally {
@@ -188,7 +191,11 @@ export function UserManagementEditor() {
     setDialogOpen(true);
   };
   
-  const manageableUsers = allUsers.filter(u => Array.isArray(u.roles) && !u.roles.some((r: any) => r.name === 'Vendor'));
+  const totalPages = Math.ceil(allUsers.length / PAGE_SIZE);
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return allUsers.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [allUsers, currentPage]);
 
   return (
     <Card>
@@ -217,16 +224,16 @@ export function UserManagementEditor() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {isLoading && manageableUsers.length === 0 ? (
+                    {isLoading && paginatedUsers.length === 0 ? (
                          <TableRow>
                             <TableCell colSpan={6} className="h-24 text-center">
                                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto" />
                             </TableCell>
                         </TableRow>
-                    ) : manageableUsers.length > 0 ? (
-                        manageableUsers.map((user, index) => (
+                    ) : paginatedUsers.length > 0 ? (
+                        paginatedUsers.map((user, index) => (
                             <TableRow key={user.id}>
-                                <TableCell className="text-muted-foreground">{index + 1}</TableCell>
+                                <TableCell className="text-muted-foreground">{(currentPage - 1) * PAGE_SIZE + index + 1}</TableCell>
                                 <TableCell className="font-semibold">{user.name}</TableCell>
                                 <TableCell>{user.email}</TableCell>
                                 <TableCell>
@@ -236,7 +243,7 @@ export function UserManagementEditor() {
                                     ))}
                                   </div>
                                 </TableCell>
-                                <TableCell>{user.department}</TableCell>
+                                <TableCell>{user.department || 'N/A'}</TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex gap-2 justify-end">
                                         <Button variant="outline" size="sm" onClick={() => openDialog(user)}>
@@ -284,6 +291,19 @@ export function UserManagementEditor() {
                 </TableBody>
             </Table>
         </div>
+        {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-muted-foreground">
+                    Page {currentPage} of {totalPages} ({allUsers.length} total users)
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}><ChevronLeft /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages}><ChevronRight /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronsRight /></Button>
+                </div>
+            </div>
+        )}
       </CardContent>
        <Dialog open={isDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) { setUserToEdit(null); form.reset(); } setDialogOpen(isOpen); }}>
         <DialogContent>
@@ -358,5 +378,3 @@ export function UserManagementEditor() {
     </Card>
   );
 }
-
-    
