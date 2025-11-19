@@ -25,13 +25,12 @@ export async function POST(
     
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    const userRoleName = (actor.role as any)?.name as UserRole;
-
-    if (userRoleName === 'Admin') {
-        isAuthorized = true;
-    } else if (rfqSenderSetting && rfqSenderSetting.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+    if (rfqSenderSetting && rfqSenderSetting.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const userRoleName = (actor.role as any)?.name as UserRole;
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
-        if (setting.type === 'specific') {
+        if (userRoleName === 'Admin') {
+            isAuthorized = true;
+        } else if (setting.type === 'specific') {
             isAuthorized = setting.userId === userId;
         } else { // 'all' case
             isAuthorized = userRoleName === 'Procurement_Officer';
@@ -85,7 +84,7 @@ export async function POST(
         // 4. Create the audit log inside the transaction
         await tx.auditLog.create({
             data: {
-                transactionId: requisition.transactionId,
+                transactionId: requisition.transactionId!,
                 user: { connect: { id: actor.id } },
                 action: 'RESTART_ITEM_RFQ',
                 entity: 'Requisition',
@@ -95,6 +94,9 @@ export async function POST(
         });
         
         return { updatedRequisition, vendorsToNotify, itemNames };
+    }, {
+      maxWait: 10000,
+      timeout: 15000,
     });
     
     // --- End of Transaction ---

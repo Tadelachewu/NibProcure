@@ -2684,12 +2684,8 @@ export default function QuotationDetailsPage() {
       return `${financialPart}\n\n${technicalPart}`;
   };
 
-  if (loading || !user) {
+  if (loading || !user || !requisition) {
      return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  }
-
-  if (!requisition) {
-     return <div className="text-center p-8">Requisition not found.</div>;
   }
 
   const canManageCommittees = isAuthorized;
@@ -3356,6 +3352,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
 
 
 
