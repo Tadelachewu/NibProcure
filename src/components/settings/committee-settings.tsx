@@ -114,26 +114,48 @@ export function CommitteeSettings() {
         }
     };
 
-    const handleRoleChange = async (user: User, newRoleName: UserRole) => {
+    const handleRoleChange = async (userToUpdate: User, committeeRoleName: UserRole, action: 'add' | 'remove') => {
         if (!actor) return;
-        const userToUpdate = allUsers.find(u => u.id === user.id);
-        if (!userToUpdate) return;
+        
+        const currentRoles = (userToUpdate.roles as any[]).map(r => r.name) as UserRole[];
+        let newRoles: UserRole[];
+
+        if (action === 'add') {
+            if (!currentRoles.includes(committeeRoleName)) {
+                newRoles = [...currentRoles, committeeRoleName];
+            } else {
+                return; // Role already exists, do nothing
+            }
+        } else { // remove
+            // Prevent removing the last role if it's the committee role
+            if(currentRoles.length === 1 && currentRoles[0] === committeeRoleName) {
+                toast({ variant: 'destructive', title: 'Action Prevented', description: 'Cannot remove the only role a user has. Assign a new primary role first.' });
+                return;
+            }
+            newRoles = currentRoles.filter(r => r !== committeeRoleName);
+        }
     
         try {
             const response = await fetch('/api/users', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    ...userToUpdate, 
-                    role: newRoleName, // Pass the role name directly
+                    id: userToUpdate.id,
+                    name: userToUpdate.name,
+                    email: userToUpdate.email,
+                    departmentId: userToUpdate.departmentId,
+                    roles: newRoles, // Pass the array of role names
                     actorUserId: actor.id 
                 })
             });
-            if (!response.ok) throw new Error("Failed to update role");
+            if (!response.ok) {
+                 const errorData = await response.json();
+                throw new Error(errorData.error || "Failed to update role");
+            }
             
             toast({
                 title: `User Role Updated`,
-                description: `${user.name} is now a ${newRoleName.replace(/_/g, ' ')}.`,
+                description: `${userToUpdate.name} was ${action === 'add' ? 'added to' : 'removed from'} ${committeeRoleName.replace(/_/g, ' ')}.`,
             });
             await fetchAllUsers(); // Refresh the user list
         } catch (e) {
@@ -186,8 +208,8 @@ export function CommitteeSettings() {
         if (!committee) return null;
         
         const roleName: UserRole = `Committee_${committeeKey}_Member`;
-        const members = allUsers.filter(u => (u.role as any)?.name === roleName);
-        const nonMembers = allUsers.filter(u => (u.role as any)?.name !== roleName && (u.role as any)?.name !== 'Admin' && (u.role as any)?.name !== 'Vendor')
+        const members = allUsers.filter(u => (u.roles as any[]).some(r => r.name === roleName));
+        const nonMembers = allUsers.filter(u => !(u.roles as any[]).some(r => r.name === roleName) && !(u.roles as any[]).some(r => r.name === 'Admin') && !(u.roles as any[]).some(r => r.name === 'Vendor'))
             .filter(u => departmentFilters[committeeKey] === 'all' || u.departmentId === departmentFilters[committeeKey])
             .filter(u => u.name.toLowerCase().includes(searchTerms[committeeKey]?.toLowerCase() || ''));
 
@@ -223,7 +245,7 @@ export function CommitteeSettings() {
                                                 <p className="text-xs text-muted-foreground">{user.department}</p>
                                             </div>
                                         </div>
-                                        <Button size="sm" variant="ghost" onClick={() => handleRoleChange(user, 'Committee_Member')}><UserX className="h-4 w-4" /></Button>
+                                        <Button size="sm" variant="ghost" onClick={() => handleRoleChange(user, roleName, 'remove')}><UserX className="h-4 w-4" /></Button>
                                     </div>
                                 )) : <p className="text-sm text-muted-foreground text-center py-4">No members assigned.</p>}
                              </ScrollArea>
@@ -253,7 +275,7 @@ export function CommitteeSettings() {
                                                 <p className="text-xs text-muted-foreground">{user.department}</p>
                                             </div>
                                         </div>
-                                        <Button size="sm" variant="outline" onClick={() => handleRoleChange(user, roleName)}><UserCheck className="h-4 w-4 mr-2" /> Add</Button>
+                                        <Button size="sm" variant="outline" onClick={() => handleRoleChange(user, roleName, 'add')}><UserCheck className="h-4 w-4 mr-2" /> Add</Button>
                                     </div>
                                 ))}
                              </ScrollArea>

@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from './ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Trash2, Edit, Users } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, Edit, Users, X } from 'lucide-react';
 import { Department, User, UserRole } from '@/lib/types';
 import {
   AlertDialog,
@@ -48,11 +48,13 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { useAuth } from '@/contexts/auth-context';
+import { Badge } from './ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 const userFormSchema = z.object({
   name: z.string().min(2, "Name is required."),
   email: z.string().email("Invalid email address."),
-  role: z.string().min(1, "Role is required."),
+  roles: z.array(z.string()).min(1, "At least one role is required."),
   departmentId: z.string().min(1, "Department is required."),
   password: z.string().optional(),
 });
@@ -76,7 +78,7 @@ export function UserManagementEditor() {
     defaultValues: {
       name: '',
       email: '',
-      role: '',
+      roles: [],
       departmentId: '',
       password: '',
     },
@@ -133,7 +135,7 @@ export function UserManagementEditor() {
       });
       setDialogOpen(false);
       setUserToEdit(null);
-      form.reset({ name: '', email: '', role: '', departmentId: '', password: '' });
+      form.reset({ name: '', email: '', roles: [], departmentId: '', password: '' });
       fetchData();
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
@@ -173,13 +175,13 @@ export function UserManagementEditor() {
       form.reset({
         name: user.name,
         email: user.email,
-        role: (user.role as any)?.name || user.role,
+        roles: (user.roles as any[]).map(r => r.name),
         departmentId: user.departmentId || '',
         password: '',
       });
     } else {
       setUserToEdit(null);
-      form.reset({ name: '', email: '', role: '', departmentId: '', password: '' });
+      form.reset({ name: '', email: '', roles: [], departmentId: '', password: '' });
     }
     setDialogOpen(true);
   };
@@ -205,7 +207,7 @@ export function UserManagementEditor() {
                         <TableHead className="w-16">#</TableHead>
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead>Role</TableHead>
+                        <TableHead>Roles</TableHead>
                         <TableHead>Department</TableHead>
                         <TableHead className="text-right w-40">Actions</TableHead>
                     </TableRow>
@@ -223,7 +225,13 @@ export function UserManagementEditor() {
                                 <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                                 <TableCell className="font-semibold">{user.name}</TableCell>
                                 <TableCell>{user.email}</TableCell>
-                                <TableCell>{(user.role as any).name ? (user.role as any).name.replace(/_/g, ' ') : user.role}</TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap gap-1">
+                                    {(user.roles as any[]).map(role => (
+                                      <Badge key={role.id} variant="secondary">{role.name.replace(/_/g, ' ')}</Badge>
+                                    ))}
+                                  </div>
+                                </TableCell>
                                 <TableCell>{user.department}</TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex gap-2 justify-end">
@@ -233,7 +241,7 @@ export function UserManagementEditor() {
                                         </Button>
                                         <AlertDialog>
                                             <AlertDialogTrigger asChild>
-                                                <Button variant="destructive" size="sm" disabled={(user.role as any).name === 'Admin'}>
+                                                <Button variant="destructive" size="sm" disabled={(user.roles as any[]).some(r => r.name === 'Admin')}>
                                                     <Trash2 className="mr-2 h-4 w-4" />
                                                     Delete
                                                 </Button>
@@ -284,8 +292,52 @@ export function UserManagementEditor() {
                 <FormField control={form.control} name="name" render={({ field }) => ( <FormItem className="col-span-2"><FormLabel>Full Name</FormLabel><FormControl><Input placeholder="e.g. John Doe" {...field} /></FormControl><FormMessage /></FormItem> )} />
                 <FormField control={form.control} name="email" render={({ field }) => ( <FormItem className="col-span-2"><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="e.g. john.doe@example.com" {...field} /></FormControl><FormMessage /></FormItem> )} />
                 <FormField control={form.control} name="password" render={({ field }) => ( <FormItem className="col-span-2"><FormLabel>Password</FormLabel><FormControl><Input type="password" placeholder={userToEdit ? "Leave blank to keep current password" : ""} {...field} /></FormControl><FormMessage /></FormItem> )} />
-                <FormField control={form.control} name="role" render={({ field }) => ( <FormItem><FormLabel>Role</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a role" /></SelectTrigger></FormControl><SelectContent>{roles.map(role => <SelectItem key={role} value={role}>{role.replace(/_/g, ' ')}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                <FormField control={form.control} name="departmentId" render={({ field }) => ( <FormItem><FormLabel>Department</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a department" /></SelectTrigger></FormControl><SelectContent>{departments.map(dept => <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField
+                    control={form.control}
+                    name="roles"
+                    render={({ field }) => (
+                        <FormItem className="col-span-2">
+                        <FormLabel>Roles</FormLabel>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                            <FormControl>
+                                <Button variant="outline" role="combobox" className="w-full justify-between">
+                                <div className="flex gap-1 flex-wrap">
+                                {field.value.length > 0 ? field.value.map(role => (
+                                    <Badge key={role} variant="secondary">{role.replace(/_/g, ' ')}</Badge>
+                                )) : "Select roles..."}
+                                </div>
+                                </Button>
+                            </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                <Command>
+                                <CommandInput placeholder="Search roles..." />
+                                <CommandEmpty>No roles found.</CommandEmpty>
+                                <CommandGroup>
+                                {roles.map(role => (
+                                    <CommandItem
+                                        key={role}
+                                        onSelect={() => {
+                                            const newRoles = field.value.includes(role)
+                                            ? field.value.filter(r => r !== role)
+                                            : [...field.value, role];
+                                            field.onChange(newRoles);
+                                        }}
+                                    >
+                                    <Check className={cn("mr-2 h-4 w-4", field.value.includes(role) ? "opacity-100" : "opacity-0")}/>
+                                    {role.replace(/_/g, ' ')}
+                                    </CommandItem>
+                                ))}
+                                </CommandGroup>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <FormField control={form.control} name="departmentId" render={({ field }) => ( <FormItem className="col-span-2"><FormLabel>Department</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a department" /></SelectTrigger></FormControl><SelectContent>{departments.map(dept => <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                 
               </div>
               <DialogFooter>

@@ -27,7 +27,7 @@ export type User = {
   name: string;
   email: string;
   password?: string; // Should not be sent to client
-  role: UserRole;
+  roles: UserRole[] | { name: UserRole }[]; // Can be an array of strings or objects
   vendorId?: string;
   departmentId?: string;
   department?: string;
@@ -67,7 +67,7 @@ export type RequisitionStatus =
 
 export type Urgency = 'Low' | 'Medium' | 'High' | 'Critical';
 
-export type PerItemAwardStatus = 'Awarded' | 'Standby' | 'Declined' | 'Accepted' | 'Pending_Award';
+export type PerItemAwardStatus = 'Awarded' | 'Standby' | 'Declined' | 'Accepted' | 'Pending_Award' | 'Failed_to_Award';
 
 export type PerItemAwardDetail = {
   rank: number;
@@ -87,6 +87,8 @@ export type RequisitionItem = {
   quantity: number;
   unitPrice: number;
   perItemAwardDetails?: PerItemAwardDetail[];
+  reopenDeadline?: Date;
+  reopenVendorIds?: string[];
 };
 
 export type QuestionType = 'text' | 'boolean' | 'multiple_choice' | 'file';
