@@ -57,7 +57,7 @@ export function DepartmentManagementEditor() {
   const [departmentHeadId, setDepartmentHeadId] = useState<string | null>(null);
   
   const { toast } = useToast();
-  const { user: actor, allUsers } = useAuth();
+  const { user: actor, allUsers, fetchAllUsers, fetchAllDepartments } = useAuth();
 
   const fetchDepartments = async () => {
     setIsLoading(true);
@@ -74,6 +74,8 @@ export function DepartmentManagementEditor() {
   };
 
   useEffect(() => {
+    fetchAllUsers();
+    fetchAllDepartments();
     fetchDepartments();
   }, []);
 
@@ -162,9 +164,7 @@ export function DepartmentManagementEditor() {
     setDialogOpen(true);
   }
 
-  const potentialHeadsForSelectedDept = departmentToEdit
-    ? allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as any[]).some(r => r.name === 'Vendor' || r.name === 'Requester') && u.departmentId === departmentToEdit.id)
-    : allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as any[]).some(r => r.name === 'Vendor' || r.name === 'Requester'));
+  const potentialHeads = allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as any[]).some(r => r.name === 'Vendor' || r.name === 'Requester'));
 
 
   return (
@@ -203,7 +203,7 @@ export function DepartmentManagementEditor() {
                             <TableRow key={dept.id}>
                                 <TableCell className="font-semibold">{dept.name}</TableCell>
                                 <TableCell className="text-muted-foreground">{dept.description}</TableCell>
-                                <TableCell>{dept.head?.name || <span className="text-muted-foreground italic">Not Assigned</span>}</TableCell>
+                                <TableCell>{dept.head?.name ?? <span className="text-muted-foreground italic">Not Assigned</span>}</TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex gap-2 justify-end">
                                         <Button variant="outline" size="sm" onClick={() => openDialog(dept)}>
@@ -270,8 +270,8 @@ export function DepartmentManagementEditor() {
                         </SelectTrigger>
                         <SelectContent>
                              <SelectItem value="null">None</SelectItem>
-                            {potentialHeadsForSelectedDept.map(user => (
-                                <SelectItem key={user.id} value={user.id}>{user.name} ({(Array.isArray(user.roles) && (user.roles[0] as any)?.name) ? (user.roles[0] as any).name.replace(/_/g, ' ') : ''})</SelectItem>
+                            {potentialHeads.map(user => (
+                                <SelectItem key={user.id} value={user.id}>{user.name} ({ (user.roles[0] as any)?.name.replace(/_/g, ' ')})</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
