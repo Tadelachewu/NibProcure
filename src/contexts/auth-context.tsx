@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
@@ -72,11 +71,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const rolePrecedence: Record<string, number> = {
   Admin: 10,
   Procurement_Officer: 9,
-  Finance: 8,
-  Approver: 7,
-  Receiving: 6,
-  Requester: 5,
-  Committee: 4,
+  Committee: 8,
+  Finance: 7,
+  Approver: 6,
+  Receiving: 5,
+  Requester: 4,
   Committee_A_Member: 3,
   Committee_B_Member: 3,
   Committee_Member: 3,
@@ -87,15 +86,13 @@ const rolePrecedence: Record<string, number> = {
   Vendor: 1,
 };
 
-const getPrimaryRole = (roles: {name: UserRole}[] | UserRole[]): UserRole | null => {
+const getPrimaryRole = (roles: UserRole[]): UserRole | null => {
     if (!roles || roles.length === 0) return null;
     
-    const roleNames = roles.map(r => typeof r === 'string' ? r : r.name);
-    
     // Sort by precedence (descending)
-    roleNames.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0));
+    const sortedRoles = [...roles].sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0));
     
-    return (roleNames[0] as UserRole) || null;
+    return sortedRoles[0] || null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -177,9 +174,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   // This combines all permissions from all of a user's roles into one array.
   const combinedPermissions = useMemo(() => {
-    if (!user?.roles) return {};
+    if (!user || !user.roles) return {};
     
-    const userRoleNames = (user.roles as any[]).map(r => r.name);
+    // User roles should now be a simple array of strings
+    const userRoleNames = user.roles as UserRole[];
     const permissionsSet = new Set<string>();
 
     userRoleNames.forEach(roleName => {
@@ -187,9 +185,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         permissionsForRole.forEach(path => permissionsSet.add(path));
     });
     
-    // Create a new "combined" role entry in the permissions object for the current user
-    const newPermissions = { ...rolePermissions };
-    newPermissions['Combined' as any] = Array.from(permissionsSet);
+    // Create a new "Combined" role entry in the permissions object for the current user
+    const newPermissions = { ...rolePermissions, Combined: Array.from(permissionsSet) };
     
     return newPermissions;
 
@@ -198,28 +195,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
-      const users = await fetchAllUsers();
       await Promise.all([
+        fetchAllUsers(),
         fetchAllSettings(),
         fetchAllDepartments()
       ]);
       try {
           const storedToken = localStorage.getItem('authToken');
-          
           if (storedToken) {
               const decoded = decodeJwt<User & { roles: UserRole[] }>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
-                  // The decoded token only has role names. We need the full user object from our state.
-                  const fullUser = users.find((u: User) => u.id === decoded.id);
-                  
-                  if (fullUser) {
-                    const primaryRole = getPrimaryRole(fullUser.roles as {name: UserRole}[]);
-                    setUser(fullUser);
-                    setToken(storedToken);
-                    setRole(primaryRole);
-                  } else {
-                    localStorage.removeItem('authToken');
-                  }
+                  const primaryRole = getPrimaryRole(decoded.roles);
+                  setUser(decoded); // The decoded user object already has the simple roles array
+                  setToken(storedToken);
+                  setRole(primaryRole);
               } else {
                   localStorage.removeItem('authToken');
               }

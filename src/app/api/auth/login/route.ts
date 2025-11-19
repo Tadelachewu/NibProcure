@@ -1,4 +1,3 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -11,11 +10,11 @@ import type { User, UserRole } from '@/lib/types';
 const rolePrecedence: Record<string, number> = {
   Admin: 10,
   Procurement_Officer: 9,
-  Finance: 8,
-  Approver: 7,
-  Receiving: 6,
-  Requester: 5,
-  Committee: 4,
+  Committee: 8,
+  Finance: 7,
+  Approver: 6,
+  Receiving: 5,
+  Requester: 4,
   Committee_A_Member: 3,
   Committee_B_Member: 3,
   Committee_Member: 3,
@@ -46,7 +45,7 @@ export async function POST(request: Request) {
             include: {
                 vendor: true,
                 department: true,
-                roles: true, // Include the roles relation
+                roles: true,
             }
         });
 
@@ -61,12 +60,13 @@ export async function POST(request: Request) {
             if (!primaryRole) {
                 return NextResponse.json({ error: 'User has no assigned role.' }, { status: 403 });
             }
+            
+            const roleNames = user.roles.map(r => r.name as UserRole);
 
-            const finalUser: User = {
+            const finalUser: Omit<User, 'roles'> & { roles: UserRole[] } = {
                 ...userWithoutPassword,
                 department: user.department?.name,
-                // Pass the full roles array to the token and user object
-                roles: user.roles, 
+                roles: roleNames, // Return a simple array of role names
             };
 
             const jwtSecret = process.env.JWT_SECRET;
@@ -79,20 +79,18 @@ export async function POST(request: Request) {
                     id: finalUser.id, 
                     name: finalUser.name,
                     email: finalUser.email,
-                    // The token should contain all roles for context
-                    roles: user.roles.map(r => r.name),
+                    roles: roleNames, // Token contains the array of role names
                     vendorId: finalUser.vendorId,
                     department: finalUser.department,
                 }, 
                 jwtSecret, 
-                { expiresIn: '1d' } // Token expires in 1 day
+                { expiresIn: '1d' }
             );
             
             return NextResponse.json({ 
                 user: finalUser, 
                 token, 
-                // Return the single primary role for the auth context to use
-                role: primaryRole
+                role: primaryRole // Return the single primary role for the auth context
             });
         }
         

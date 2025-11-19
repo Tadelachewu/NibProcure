@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect } from 'react';
@@ -38,7 +37,7 @@ export default function HomePage() {
     } else {
       // This is a fallback for roles that might have no pages (like a newly created role).
       // For Admin, always go to settings if no other path is found.
-      if ((user.roles as any[]).some(r => r.name === 'Admin')) {
+      if (user.roles?.includes('Admin')) {
         router.push('/settings');
         return;
       }

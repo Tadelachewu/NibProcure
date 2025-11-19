@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
@@ -92,14 +91,15 @@ export default function AppLayout({
   
   // Page-level access check
   useEffect(() => {
-    if (loading || !role || !pathname || !rolePermissions) {
-        return; // Wait for all data to be loaded
+    if (loading || !role || !pathname || !rolePermissions || !user) {
+        return; // Wait for all auth data to be loaded
     }
     
     // The 'Combined' key now holds the merged permissions for the current user
     const allowedPaths = rolePermissions['Combined'] || [];
     
-    if (user && allowedPaths.length === 0 && !user.roles.some((r: any) => r.name === 'Admin')) { 
+    // If somehow permissions are empty and user is not admin, logout
+    if (user && allowedPaths.length === 0 && !user.roles?.includes('Admin')) { 
         console.warn(`No permissions found for user roles. Logging out.`);
         logout();
         return;
@@ -112,25 +112,25 @@ export default function AppLayout({
         return;
     }
 
+    // Check if the current path is allowed, including sub-paths
     const isAllowed = allowedPaths.some(p => {
-        if (p === '/') return currentPath === '/';
+        if (p === '/') return currentPath === '/'; // Exact match for root
         // Allow access to sub-paths, e.g., /requisitions/edit/123 if /requisitions is allowed
         return currentPath === p || currentPath.startsWith(`${p}/`);
     });
-
-    // Don't redirect if on an allowed path
+    
     if (isAllowed) {
         return;
     }
-
+    
     // If not allowed, determine where to redirect
     const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
 
+    // Redirect to default path if it's different, otherwise, as a last resort, logout
     if (defaultPath && defaultPath !== currentPath) {
         router.push(defaultPath);
-    } else if (!defaultPath && user && !user.roles.some((r: any) => r.name === 'Admin')) {
-        // If no default path and not admin, redirect to login as a fallback
-        router.push('/login');
+    } else if (!defaultPath && !user.roles?.includes('Admin')) {
+        logout();
     }
   }, [pathname, loading, role, user, router, rolePermissions, logout]);
 
