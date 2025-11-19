@@ -51,7 +51,7 @@ interface AuthContextType {
   settings: Setting[];
   rfqQuorum: number;
   committeeQuorum: number;
-  login: (token: string, user: User, roles: {name: UserRole}[]) => void;
+  login: (token: string, user: User, role: UserRole) => void;
   logout: () => void;
   loading: boolean;
   switchUser: (userId: string) => void;
@@ -233,12 +233,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth();
   }, [fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
 
-  const login = (newToken: string, loggedInUser: User, loggedInRoles: {name: UserRole}[]) => {
+  const login = (newToken: string, loggedInUser: User, primaryRole: UserRole) => {
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
-    
-    const primaryRole = getPrimaryRole(loggedInRoles);
     setRole(primaryRole);
   };
 
@@ -261,7 +259,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if(response.ok) {
               const result = await response.json();
-              login(result.token, result.user, result.user.roles);
+              login(result.token, result.user, result.role);
               window.location.href = '/';
           } else {
               console.error("Failed to switch user.")

@@ -34,7 +34,7 @@ const getPrimaryRole = (roles: {name: UserRole}[]): UserRole | null => {
     // Sort by precedence (descending)
     roleNames.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0));
     
-    return roleNames[0] || null;
+    return (roleNames[0] as UserRole) || null;
 }
 
 export async function POST(request: Request) {
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
                     id: finalUser.id, 
                     name: finalUser.name,
                     email: finalUser.email,
-                    // The token should contain all roles for context, while the response has a primary role
+                    // The token should contain all roles for context
                     roles: user.roles.map(r => r.name),
                     vendorId: finalUser.vendorId,
                     department: finalUser.department,
