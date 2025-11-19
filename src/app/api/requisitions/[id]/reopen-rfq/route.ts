@@ -16,7 +16,7 @@ export async function POST(
     const body = await request.json();
     const { userId, newDeadline } = body;
 
-    const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+    const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -24,16 +24,16 @@ export async function POST(
     // Correct Authorization Logic
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    const userRoleName = (user.role as any)?.name as UserRole;
+    const userRoles = (user.roles as any[]).map(r => r.name) as UserRole[];
 
-    if (userRoleName === 'Admin') {
+    if (userRoles.includes('Admin')) {
         isAuthorized = true;
     } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
         if (setting.type === 'specific') {
             isAuthorized = setting.userId === userId;
         } else { // 'all' case
-            isAuthorized = userRoleName === 'Procurement_Officer';
+            isAuthorized = userRoles.includes('Procurement_Officer');
         }
     }
 

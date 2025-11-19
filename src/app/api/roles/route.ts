@@ -132,22 +132,22 @@ export async function DELETE(request: Request) {
     }
     
     const coreRoles: string[] = [
-        'ADMIN', 
-        'PROCUREMENT_OFFICER', 
-        'REQUESTER', 
-        'APPROVER', 
-        'VENDOR',
-        'FINANCE',
-        'RECEIVING',
-        'COMMITTEE',
-        'COMMITTEE_A_MEMBER',
-        'COMMITTEE_B_MEMBER',
-        'COMMITTEE_MEMBER',
-        'MANAGER_PROCUREMENT_DIVISION',
-        'DIRECTOR_SUPPLY_CHAIN_AND_PROPERTY_MANAGEMENT',
-        'VP_RESOURCES_AND_FACILITIES',
-        'PRESIDENT'
-    ];
+        'Admin', 
+        'Procurement_Officer', 
+        'Requester', 
+        'Approver', 
+        'Vendor',
+        'Finance',
+        'Receiving',
+        'Committee',
+        'Committee_A_Member',
+        'Committee_B_Member',
+        'Committee_Member',
+        'Manager_Procurement_Division',
+        'Director_Supply_Chain_and_Property_Management',
+        'VP_Resources_and_Facilities',
+        'President'
+    ].map(r => r.toUpperCase());
     if (coreRoles.includes(roleToDelete.name.toUpperCase())) {
         return NextResponse.json({ error: `Cannot delete core system role: ${roleToDelete.name.replace(/_/g, ' ')}` }, { status: 403 });
     }

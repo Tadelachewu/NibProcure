@@ -10,7 +10,7 @@ export async function GET() {
       include: {
         user: {
             include: {
-                role: true
+                roles: true
             }
         },
       },
@@ -22,7 +22,7 @@ export async function GET() {
     const formattedLogs = logs.map(log => ({
         ...log,
         user: log.user?.name || 'System', // Fallback for system actions
-        role: log.user?.role?.name.replace(/_/g, ' ') || 'System',
+        role: log.user?.roles.map(r => r.name).join(', ').replace(/_/g, ' ') || 'System',
     }));
 
     return NextResponse.json(formattedLogs);

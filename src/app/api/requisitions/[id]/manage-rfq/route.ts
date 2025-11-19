@@ -24,7 +24,7 @@ export async function POST(
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
-        include: { role: true }
+        include: { roles: true }
     });
 
     if (!user) {
@@ -34,13 +34,17 @@ export async function POST(
     // Correct Authorization Logic
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    const userRoleName = user.role.name as UserRole;
+    const userRoleName = user.roles.map(r => r.name)[0] as UserRole;
 
-    if (rfqSenderSetting?.value?.type === 'specific') {
-        isAuthorized = rfqSenderSetting.value.userId === userId;
-    } else { // 'all' case
-        isAuthorized = userRoleName === 'Procurement_Officer' || userRoleName === 'Admin';
+    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+      const setting = rfqSenderSetting.value as { type: string, userId?: string };
+      if (setting.type === 'specific') {
+          isAuthorized = setting.userId === userId;
+      } else { // 'all' case
+          isAuthorized = user.roles.some(r => r.name === 'Procurement_Officer' || r.name === 'Admin');
+      }
     }
+
 
     if (!isAuthorized) {
       return NextResponse.json({ error: 'Unauthorized to manage this RFQ based on system settings.' }, { status: 403 });
