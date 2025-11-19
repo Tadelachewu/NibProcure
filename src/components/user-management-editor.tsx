@@ -50,6 +50,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useAuth } from '@/contexts/auth-context';
 import { Badge } from './ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Check, Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
+import { cn } from '@/lib/utils';
 
 const userFormSchema = z.object({
   name: z.string().min(2, "Name is required."),
@@ -186,6 +188,8 @@ export function UserManagementEditor() {
     setDialogOpen(true);
   };
   
+  const manageableUsers = allUsers.filter(u => !(u.roles as any[]).some(r => r.name === 'Vendor'));
+
   return (
     <Card>
       <CardHeader>
@@ -213,14 +217,14 @@ export function UserManagementEditor() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {isLoading && allUsers.length === 0 ? (
+                    {isLoading && manageableUsers.length === 0 ? (
                          <TableRow>
                             <TableCell colSpan={6} className="h-24 text-center">
                                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto" />
                             </TableCell>
                         </TableRow>
-                    ) : allUsers.length > 0 ? (
-                        allUsers.map((user, index) => (
+                    ) : manageableUsers.length > 0 ? (
+                        manageableUsers.map((user, index) => (
                             <TableRow key={user.id}>
                                 <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                                 <TableCell className="font-semibold">{user.name}</TableCell>
