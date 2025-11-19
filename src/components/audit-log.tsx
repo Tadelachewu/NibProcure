@@ -60,10 +60,6 @@ export function AuditLog() {
 
   useEffect(() => {
     fetchLogs();
-    window.addEventListener('focus', fetchLogs);
-    return () => {
-      window.removeEventListener('focus', fetchLogs);
-    };
   }, [fetchLogs]);
 
   const uniqueRoles = useMemo(() => ['all', ...Array.from(new Set(logs.map(log => log.role)))], [logs]);
@@ -115,7 +111,7 @@ export function AuditLog() {
     return 'outline';
   };
   
-   if (role !== 'Procurement Officer' && role !== 'Admin') {
+   if (role !== 'Procurement_Officer' && role !== 'Admin') {
     return (
         <Card>
             <CardHeader>

@@ -538,10 +538,6 @@ export function InvoicesPage() {
 
   useEffect(() => {
     fetchAllData();
-    window.addEventListener('focus', fetchAllData);
-    return () => {
-        window.removeEventListener('focus', fetchAllData);
-    }
   }, [fetchAllData]);
   
   const totalPages = Math.ceil(invoices.length / PAGE_SIZE);

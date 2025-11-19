@@ -94,10 +94,6 @@ export function RequisitionsTable() {
 
   useEffect(() => {
     fetchRequisitions();
-    window.addEventListener('focus', fetchRequisitions);
-    return () => {
-        window.removeEventListener('focus', fetchRequisitions);
-    }
   }, [fetchRequisitions]);
   
   const handleSubmitForApproval = async (req: PurchaseRequisition) => {

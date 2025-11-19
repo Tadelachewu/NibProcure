@@ -104,10 +104,6 @@ export default function VendorDashboardPage() {
 
     useEffect(() => {
         fetchAllData();
-        window.addEventListener('focus', fetchAllData);
-        return () => {
-            window.removeEventListener('focus', fetchAllData);
-        }
     }, [fetchAllData]);
 
     const getRequisitionCardStatus = useCallback((req: PurchaseRequisition): RequisitionCardStatus => {

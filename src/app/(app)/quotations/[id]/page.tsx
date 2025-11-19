@@ -2527,15 +2527,8 @@ export default function QuotationDetailsPage() {
   }, [id, toast]);
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
     if (id && user && allUsers.length > 0) {
         fetchRequisitionAndQuotes();
-        intervalId = setInterval(fetchRequisitionAndQuotes, 10000); // Poll every 10 seconds
-        window.addEventListener('focus', fetchRequisitionAndQuotes);
-    }
-    return () => {
-        clearInterval(intervalId);
-        window.removeEventListener('focus', fetchRequisitionAndQuotes);
     }
   }, [id, user, allUsers, fetchRequisitionAndQuotes]);
   
@@ -3363,6 +3356,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
 
 
 

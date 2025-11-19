@@ -118,10 +118,6 @@ export function VendorsPage() {
 
   useEffect(() => {
     fetchVendors();
-    window.addEventListener('focus', fetchVendors);
-    return () => {
-        window.removeEventListener('focus', fetchVendors);
-    }
   }, [fetchVendors]);
 
   const totalPages = Math.ceil(vendors.length / PAGE_SIZE);

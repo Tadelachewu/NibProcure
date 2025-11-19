@@ -67,10 +67,6 @@ export function ContractsPage() {
   
   useEffect(() => {
     fetchContracts();
-    window.addEventListener('focus', fetchContracts);
-    return () => {
-        window.removeEventListener('focus', fetchContracts);
-    }
   }, [fetchContracts]);
 
   const filteredContracts = useMemo(() => {

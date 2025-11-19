@@ -63,10 +63,6 @@ export function VendorVerificationPage() {
 
   useEffect(() => {
     fetchVendors();
-    window.addEventListener('focus', fetchVendors);
-    return () => {
-        window.removeEventListener('focus', fetchVendors);
-    }
   }, [fetchVendors]);
 
   const handleOpenDialog = (vendor: Vendor, type: 'verify' | 'reject') => {
