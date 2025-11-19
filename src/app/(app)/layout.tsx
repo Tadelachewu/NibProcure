@@ -46,7 +46,7 @@ export default function AppLayout({
   const accessibleNavItems = useMemo(() => {
     if (!role) return [];
     // Use the special 'Combined' key which holds the union of all permissions
-    const allowedPaths = rolePermissions['Combined' as any] || [];
+    const allowedPaths = rolePermissions['Combined'] || [];
     return navItems.filter(item => allowedPaths.includes(item.path));
   }, [role, rolePermissions]);
 
@@ -97,15 +97,20 @@ export default function AppLayout({
     }
     
     // The 'Combined' key now holds the merged permissions for the current user
-    const allowedPaths = rolePermissions['Combined' as any] || [];
+    const allowedPaths = rolePermissions['Combined'] || [];
     
-    if (user && allowedPaths.length === 0 && role !== 'Admin') { 
-        console.warn(`No permissions found for role: ${role}. Logging out.`);
+    if (user && allowedPaths.length === 0 && !user.roles.some((r: any) => r.name === 'Admin')) { 
+        console.warn(`No permissions found for user roles. Logging out.`);
         logout();
         return;
     }
     
     const currentPath = pathname.split('?')[0];
+
+    // Always allow access to dashboard for any logged-in user
+    if (currentPath === '/dashboard') {
+        return;
+    }
 
     const isAllowed = allowedPaths.some(p => {
         if (p === '/') return currentPath === '/';
@@ -123,8 +128,8 @@ export default function AppLayout({
 
     if (defaultPath && defaultPath !== currentPath) {
         router.push(defaultPath);
-    } else if (!defaultPath) {
-        // If no default path, redirect to login as a fallback
+    } else if (!defaultPath && user && !user.roles.some((r: any) => r.name === 'Admin')) {
+        // If no default path and not admin, redirect to login as a fallback
         router.push('/login');
     }
   }, [pathname, loading, role, user, router, rolePermissions, logout]);

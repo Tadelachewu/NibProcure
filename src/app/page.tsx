@@ -26,7 +26,7 @@ export default function HomePage() {
     } 
     
     // Use the 'Combined' key which holds the merged permissions for the current user.
-    const allowedPaths = rolePermissions['Combined' as any] || [];
+    const allowedPaths = rolePermissions['Combined'] || [];
     
     // Prefer dashboard if available, otherwise take the first available path.
     const defaultPath = allowedPaths.includes('/dashboard') 
@@ -36,9 +36,14 @@ export default function HomePage() {
     if (defaultPath) {
       router.push(defaultPath);
     } else {
-      console.error(`User with roles [${user.roles?.map((r:any) => r.name).join(', ')}] has no default path defined. Logging out.`);
-      // If a role truly has no pages, redirect to login to prevent a crash.
-      router.push('/login');
+      // This is a fallback for roles that might have no pages (like a newly created role).
+      // For Admin, always go to settings if no other path is found.
+      if ((user.roles as any[]).some(r => r.name === 'Admin')) {
+        router.push('/settings');
+        return;
+      }
+      console.error(`User with roles has no default path defined. Logging out.`);
+      logout();
     }
     
   }, [user, loading, role, router, rolePermissions]);

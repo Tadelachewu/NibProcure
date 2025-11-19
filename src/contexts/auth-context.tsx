@@ -44,14 +44,14 @@ interface AuthContextType {
   role: UserRole | null;
   allUsers: User[];
   departments: Department[];
-  rolePermissions: Record<UserRole, string[]>;
+  rolePermissions: Record<string, string[]>;
   rfqSenderSetting: RfqSenderSetting;
   approvalThresholds: ApprovalThreshold[];
   committeeConfig: CommitteeConfig;
   settings: Setting[];
   rfqQuorum: number;
   committeeQuorum: number;
-  login: (token: string, user: User, roles: UserRole[]) => void;
+  login: (token: string, user: User, roles: {name: UserRole}[]) => void;
   logout: () => void;
   loading: boolean;
   switchUser: (userId: string) => void;
@@ -69,7 +69,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Define a hierarchy or precedence for roles. Higher number = higher precedence.
-const rolePrecedence: Record<UserRole, number> = {
+const rolePrecedence: Record<string, number> = {
   Admin: 10,
   Procurement_Officer: 9,
   Finance: 8,
@@ -87,11 +87,15 @@ const rolePrecedence: Record<UserRole, number> = {
   Vendor: 1,
 };
 
-const getPrimaryRole = (roles: {name: UserRole}[]): UserRole | null => {
+const getPrimaryRole = (roles: {name: UserRole}[] | UserRole[]): UserRole | null => {
     if (!roles || roles.length === 0) return null;
-    const userRoleNames = roles.map(r => r.name);
-    userRoleNames.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0));
-    return userRoleNames[0] || null;
+    
+    const roleNames = roles.map(r => typeof r === 'string' ? r : r.name);
+    
+    // Sort by precedence (descending)
+    roleNames.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0));
+    
+    return (roleNames[0] as UserRole) || null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -203,15 +207,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const storedToken = localStorage.getItem('authToken');
           
           if (storedToken) {
-              const decoded = decodeJwt<User & { roles: { name: UserRole }[] }>(storedToken);
+              const decoded = decodeJwt<User & { roles: UserRole[] }>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
-                  const fullUser = users.find((u: User) => u.id === decoded.id) || decoded;
+                  // The decoded token only has role names. We need the full user object from our state.
+                  const fullUser = users.find((u: User) => u.id === decoded.id);
                   
-                  const primaryRole = getPrimaryRole(fullUser.roles as {name: UserRole}[]);
-
-                  setUser(fullUser);
-                  setToken(storedToken);
-                  setRole(primaryRole);
+                  if (fullUser) {
+                    const primaryRole = getPrimaryRole(fullUser.roles as {name: UserRole}[]);
+                    setUser(fullUser);
+                    setToken(storedToken);
+                    setRole(primaryRole);
+                  } else {
+                    localStorage.removeItem('authToken');
+                  }
               } else {
                   localStorage.removeItem('authToken');
               }
@@ -253,7 +261,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if(response.ok) {
               const result = await response.json();
-              login(result.token, result.user, result.roles);
+              login(result.token, result.user, result.user.roles);
               window.location.href = '/';
           } else {
               console.error("Failed to switch user.")
