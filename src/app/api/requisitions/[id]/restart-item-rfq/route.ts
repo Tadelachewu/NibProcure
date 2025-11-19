@@ -51,26 +51,21 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
     }
 
-    // Start of a new pattern: Run DB operations in a transaction, then do slow stuff after.
-    const { updatedRequisition, vendorsToNotify, itemNames } = await prisma.$transaction(async (tx) => {
-        // 1. Reset the award details for the specific failed items
+    // --- Start of Transaction ---
+    const { vendorsToNotify, itemNames } = await prisma.$transaction(async (tx) => {
+        // 1. Reset the award details and set new RFQ data for the specific failed items
         for (const itemId of itemIds) {
             await tx.requisitionItem.update({
                 where: { id: itemId },
-                data: { perItemAwardDetails: Prisma.JsonNull }
+                data: { 
+                    perItemAwardDetails: Prisma.JsonNull,
+                    reopenDeadline: new Date(newDeadline),
+                    reopenVendorIds: vendorIds,
+                }
             });
         }
-
-        // 2. Set the requisition back to an active bidding state
-        const updatedRequisition = await tx.purchaseRequisition.update({
-            where: { id: requisitionId },
-            data: {
-                status: 'Accepting_Quotes',
-                deadline: new Date(newDeadline),
-            }
-        });
         
-        // 3. Get the data needed for notifications
+        // 2. Get the data needed for notifications
         const vendorsToNotify = await tx.vendor.findMany({
             where: { id: { in: vendorIds } }
         });
@@ -81,7 +76,7 @@ export async function POST(
 
         const itemNames = itemsToReTender.map(i => i.name).join(', ');
 
-        // 4. Create the audit log inside the transaction
+        // 3. Create the audit log inside the transaction
         await tx.auditLog.create({
             data: {
                 transactionId: requisition.transactionId!,
@@ -93,7 +88,7 @@ export async function POST(
             }
         });
         
-        return { updatedRequisition, vendorsToNotify, itemNames };
+        return { vendorsToNotify, itemNames };
     }, {
       maxWait: 10000,
       timeout: 15000,
@@ -101,7 +96,7 @@ export async function POST(
     
     // --- End of Transaction ---
 
-    // 5. Send emails *after* the transaction has successfully completed
+    // 4. Send emails *after* the transaction has successfully completed
     for (const vendor of vendorsToNotify) {
         const emailHtml = `
             <h1>New Request for Quotation for Specific Items</h1>
@@ -120,7 +115,7 @@ export async function POST(
         }).catch(console.error); // Log email errors without crashing
     }
 
-    return NextResponse.json({ message: 'RFQ for failed items has been successfully restarted.', requisition: updatedRequisition });
+    return NextResponse.json({ message: 'RFQ for failed items has been successfully restarted.' });
 
   } catch (error) {
     console.error('Failed to restart item RFQ:', error);

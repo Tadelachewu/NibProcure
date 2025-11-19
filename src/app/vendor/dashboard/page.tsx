@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail } from '@/lib/types';
+import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail, RequisitionItem } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -173,14 +173,20 @@ export default function VendorDashboardPage() {
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
             
+            // Check if any item in this requisition is specifically re-opened for this vendor
+            const hasReopenedItemForVendor = req.items.some(item => 
+                item.reopenDeadline && isPast(new Date(item.reopenDeadline)) === false &&
+                item.reopenVendorIds?.includes(user?.vendorId || '')
+            );
+
             // A requisition is active if the vendor submitted a quote for it, OR if they won an award
-            // even if their original quote was somehow detached (edge case for per-item awards).
             const isRelated = vendorQuote || 
                               req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
 
             if (isRelated) {
                 active.push(req);
-            } else {
+            } else if (hasReopenedItemForVendor || req.status === 'Accepting_Quotes') {
+                // It's open if it's generally accepting quotes, OR has a specific re-opened item for this vendor
                 open.push(req);
             }
         });
