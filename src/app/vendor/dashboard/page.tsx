@@ -103,10 +103,11 @@ export default function VendorDashboardPage() {
     }, [token, user]);
 
     useEffect(() => {
+        const handleFocus = () => fetchAllData();
         fetchAllData();
-        window.addEventListener('focus', fetchAllData);
+        window.addEventListener('focus', handleFocus);
         return () => {
-            window.removeEventListener('focus', fetchAllData);
+            window.removeEventListener('focus', handleFocus);
         }
     }, [fetchAllData]);
 

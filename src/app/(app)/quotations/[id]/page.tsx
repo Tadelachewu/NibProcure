@@ -2528,10 +2528,11 @@ export default function QuotationDetailsPage() {
 
   useEffect(() => {
     if (id && user && allUsers.length > 0) {
+        const handleFocus = () => fetchRequisitionAndQuotes();
         fetchRequisitionAndQuotes();
-        window.addEventListener('focus', fetchRequisitionAndQuotes);
+        window.addEventListener('focus', handleFocus);
         return () => {
-            window.removeEventListener('focus', fetchRequisitionAndQuotes);
+            window.removeEventListener('focus', handleFocus);
         }
     }
   }, [id, user, allUsers, fetchRequisitionAndQuotes]);
@@ -3045,7 +3046,7 @@ export default function QuotationDetailsPage() {
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
 
@@ -3348,5 +3349,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
 
 
