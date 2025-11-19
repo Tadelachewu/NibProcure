@@ -23,7 +23,6 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
     
-    // Correct Authorization Logic
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
     const userRoleName = (actor.role as any)?.name as UserRole;
@@ -53,8 +52,9 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
     }
 
-    const transactionResult = await prisma.$transaction(async (tx) => {
-        // Reset the award details for the specific failed items
+    // Start of a new pattern: Run DB operations in a transaction, then do slow stuff after.
+    const { updatedRequisition, vendorsToNotify, itemNames } = await prisma.$transaction(async (tx) => {
+        // 1. Reset the award details for the specific failed items
         for (const itemId of itemIds) {
             await tx.requisitionItem.update({
                 where: { id: itemId },
@@ -62,7 +62,7 @@ export async function POST(
             });
         }
 
-        // Set the requisition back to an active bidding state
+        // 2. Set the requisition back to an active bidding state
         const updatedRequisition = await tx.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
@@ -71,6 +71,7 @@ export async function POST(
             }
         });
         
+        // 3. Get the data needed for notifications
         const vendorsToNotify = await tx.vendor.findMany({
             where: { id: { in: vendorIds } }
         });
@@ -81,23 +82,7 @@ export async function POST(
 
         const itemNames = itemsToReTender.map(i => i.name).join(', ');
 
-        for (const vendor of vendorsToNotify) {
-            const emailHtml = `
-                <h1>New Request for Quotation for Specific Items</h1>
-                <p>Hello ${vendor.name},</p>
-                <p>A new Request for Quotation (RFQ) has been issued for specific items from requisition <strong>${requisition.title}</strong>.</p>
-                <p><strong>Items:</strong> ${itemNames}</p>
-                <p><strong>New Submission Deadline:</strong> ${format(new Date(newDeadline), 'PPpp')}</p>
-                <p>Please log in to the vendor portal to view the full details and submit your quotation.</p>
-                <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
-            `;
-            await sendEmail({
-                to: vendor.email,
-                subject: `New RFQ for items from: ${requisition.title}`,
-                html: emailHtml
-            });
-        }
-        
+        // 4. Create the audit log inside the transaction
         await tx.auditLog.create({
             data: {
                 transactionId: requisition.transactionId,
@@ -108,15 +93,39 @@ export async function POST(
                 details: `Restarted RFQ for items: ${itemNames}. Sent to ${vendorsToNotify.length} vendors.`
             }
         });
-
-        return updatedRequisition;
+        
+        return { updatedRequisition, vendorsToNotify, itemNames };
     });
+    
+    // --- End of Transaction ---
 
-    return NextResponse.json({ message: 'RFQ for failed items has been successfully restarted.', requisition: transactionResult });
+    // 5. Send emails *after* the transaction has successfully completed
+    for (const vendor of vendorsToNotify) {
+        const emailHtml = `
+            <h1>New Request for Quotation for Specific Items</h1>
+            <p>Hello ${vendor.name},</p>
+            <p>A new Request for Quotation (RFQ) has been issued for specific items from requisition <strong>${requisition.title}</strong>.</p>
+            <p><strong>Items:</strong> ${itemNames}</p>
+            <p><strong>New Submission Deadline:</strong> ${format(new Date(newDeadline), 'PPpp')}</p>
+            <p>Please log in to the vendor portal to view the full details and submit your quotation.</p>
+            <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
+        `;
+        // We don't await here to avoid holding up the server response. Emails can send in the background.
+        sendEmail({
+            to: vendor.email,
+            subject: `New RFQ for items from: ${requisition.title}`,
+            html: emailHtml
+        }).catch(console.error); // Log email errors without crashing
+    }
+
+    return NextResponse.json({ message: 'RFQ for failed items has been successfully restarted.', requisition: updatedRequisition });
 
   } catch (error) {
     console.error('Failed to restart item RFQ:', error);
     if (error instanceof Error) {
+        if ((error as any).code === 'P2028') {
+            return NextResponse.json({ error: 'Database transaction timed out. This may happen if sending notifications takes too long. Please try again.', details: 'Transaction Timeout' }, { status: 504 });
+        }
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
