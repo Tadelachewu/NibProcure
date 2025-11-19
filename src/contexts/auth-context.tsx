@@ -87,11 +87,13 @@ const rolePrecedence: Record<string, number> = {
   Vendor: 1,
 };
 
-const getPrimaryRole = (roles: UserRole[]): UserRole | null => {
+const getPrimaryRole = (roles: (UserRole[] | { name: UserRole }[])): UserRole | null => {
     if (!roles || roles.length === 0) return null;
+
+    const roleNames = roles.map(r => (typeof r === 'string' ? r : r.name));
     
     // Sort by precedence (descending)
-    const sortedRoles = [...roles].sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0));
+    const sortedRoles = [...roleNames].sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0));
     
     return sortedRoles[0] || null;
 }
@@ -176,28 +178,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
+      const storedToken = localStorage.getItem('authToken');
+      
+      if (storedToken) {
+        const decoded = decodeJwt<User & { roles: UserRole[] }>(storedToken);
+        if (decoded && decoded.exp * 1000 > Date.now()) {
+          setUser(decoded);
+          setToken(storedToken);
+        } else {
+          localStorage.removeItem('authToken');
+        }
+      }
+      
       await Promise.all([
         fetchAllUsers(),
         fetchAllSettings(),
         fetchAllDepartments()
       ]);
-      try {
-          const storedToken = localStorage.getItem('authToken');
-          if (storedToken) {
-              const decoded = decodeJwt<User & { roles: UserRole[] }>(storedToken);
-              if (decoded && decoded.exp * 1000 > Date.now()) {
-                  setUser(decoded); // The user object from token has a simple array of role names
-                  setToken(storedToken);
-              } else {
-                  localStorage.removeItem('authToken');
-              }
-          }
-      } catch (error) {
-          console.error("Failed to initialize auth from localStorage", error);
-          localStorage.clear();
-      } finally {
-        setLoading(false);
-      }
+      
+      setLoading(false);
     };
     initializeAuth();
   }, [fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
@@ -218,7 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (user && user.roles) {
-      setRole(getPrimaryRole(user.roles as UserRole[]));
+      setRole(getPrimaryRole(user.roles));
     }
   }, [user]);
 
@@ -226,7 +225,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
-    setRole(getPrimaryRole(loggedInUser.roles as UserRole[]));
+    setRole(getPrimaryRole(loggedInUser.roles));
   };
 
   const logout = () => {
@@ -240,6 +239,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const switchUser = async (userId: string) => {
       const targetUser = allUsers.find((u: any) => u.id === userId);
       if (targetUser) {
+          const isVendor = (targetUser.roles as {name: UserRole}[]).some(r => r.name === 'Vendor');
+          
           const response = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -250,9 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const result = await response.json();
               login(result.token, result.user);
               
-              // New role-aware redirection logic
-              const primaryRole = getPrimaryRole(result.user.roles);
-              if (primaryRole === 'Vendor') {
+              if (isVendor) {
                   window.location.href = '/vendor/dashboard';
               } else {
                   window.location.href = '/';
