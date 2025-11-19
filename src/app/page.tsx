@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect } from 'react';
@@ -6,7 +7,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { Loader2 } from 'lucide-react';
 
 export default function HomePage() {
-  const { user, loading, role, rolePermissions: permissions } = useAuth();
+  const { user, loading, role, rolePermissions } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -24,7 +25,8 @@ export default function HomePage() {
       return;
     } 
     
-    const allowedPaths = permissions[role] || [];
+    // Use the 'Combined' key which holds the merged permissions for the current user.
+    const allowedPaths = rolePermissions['Combined' as any] || [];
     
     // Prefer dashboard if available, otherwise take the first available path.
     const defaultPath = allowedPaths.includes('/dashboard') 
@@ -34,12 +36,12 @@ export default function HomePage() {
     if (defaultPath) {
       router.push(defaultPath);
     } else {
-      console.error(`User role ${role} has no default path defined. Logging out.`);
+      console.error(`User with roles [${user.roles?.map((r:any) => r.name).join(', ')}] has no default path defined. Logging out.`);
       // If a role truly has no pages, redirect to login to prevent a crash.
       router.push('/login');
     }
     
-  }, [user, loading, role, router, permissions]);
+  }, [user, loading, role, router, rolePermissions]);
 
   return (
     <div className="flex h-screen w-full items-center justify-center">

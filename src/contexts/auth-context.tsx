@@ -87,6 +87,12 @@ const rolePrecedence: Record<UserRole, number> = {
   Vendor: 1,
 };
 
+const getPrimaryRole = (roles: {name: UserRole}[]): UserRole | null => {
+    if (!roles || roles.length === 0) return null;
+    const userRoleNames = roles.map(r => r.name);
+    userRoleNames.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0));
+    return userRoleNames[0] || null;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -167,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   // This combines all permissions from all of a user's roles into one array.
   const combinedPermissions = useMemo(() => {
-    if (!user?.roles) return [];
+    if (!user?.roles) return {};
     
     const userRoleNames = (user.roles as any[]).map(r => r.name);
     const permissionsSet = new Set<string>();
@@ -179,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // Create a new "combined" role entry in the permissions object for the current user
     const newPermissions = { ...rolePermissions };
-    newPermissions['Combined' as UserRole] = Array.from(permissionsSet);
+    newPermissions['Combined' as any] = Array.from(permissionsSet);
     
     return newPermissions;
 
@@ -197,14 +203,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const storedToken = localStorage.getItem('authToken');
           
           if (storedToken) {
-              const decoded = decodeJwt<{ exp: number, iat: number, roles: UserRole[] } & User>(storedToken);
+              const decoded = decodeJwt<User & { roles: { name: UserRole }[] }>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
                   const fullUser = users.find((u: User) => u.id === decoded.id) || decoded;
                   
-                  // Determine the primary role based on precedence
-                  const userRoles = (fullUser.roles as any[]).map(r => r.name as UserRole);
-                  const primaryRole = userRoles.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0))[0] || null;
-                  
+                  const primaryRole = getPrimaryRole(fullUser.roles as {name: UserRole}[]);
+
                   setUser(fullUser);
                   setToken(storedToken);
                   setRole(primaryRole);
@@ -221,14 +225,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth();
   }, [fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
 
-  const login = (newToken: string, loggedInUser: User, loggedInRoles: any[]) => {
+  const login = (newToken: string, loggedInUser: User, loggedInRoles: {name: UserRole}[]) => {
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
     
-    // On login, determine the primary role based on precedence
-    const userRoleNames = loggedInRoles.map(r => r.name as UserRole);
-    const primaryRole = userRoleNames.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0))[0] || null;
+    const primaryRole = getPrimaryRole(loggedInRoles);
     setRole(primaryRole);
   };
 

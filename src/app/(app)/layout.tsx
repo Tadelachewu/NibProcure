@@ -43,13 +43,13 @@ export default function AppLayout({
   const pathname = usePathname();
   const { toast } = useToast();
   
-  // The rolePermissions from useAuth() now returns a "Combined" entry with all merged permissions.
-  // We use that for determining what to display in the navigation.
   const accessibleNavItems = useMemo(() => {
     if (!role) return [];
+    // Use the special 'Combined' key which holds the union of all permissions
     const allowedPaths = rolePermissions['Combined' as any] || [];
     return navItems.filter(item => allowedPaths.includes(item.path));
   }, [role, rolePermissions]);
+
 
   const handleLogout = useCallback(() => {
     toast({
@@ -92,15 +92,16 @@ export default function AppLayout({
   
   // Page-level access check
   useEffect(() => {
-    if (loading || !role || !pathname) {
-        return; // Wait for all data
+    if (loading || !role || !pathname || !rolePermissions) {
+        return; // Wait for all data to be loaded
     }
-
-    // Use the combined permissions for the security check
+    
+    // The 'Combined' key now holds the merged permissions for the current user
     const allowedPaths = rolePermissions['Combined' as any] || [];
     
-    if (allowedPaths.length === 0 && role !== 'Admin') { 
-        router.push('/login');
+    if (user && allowedPaths.length === 0 && role !== 'Admin') { 
+        console.warn(`No permissions found for role: ${role}. Logging out.`);
+        logout();
         return;
     }
     
@@ -108,18 +109,25 @@ export default function AppLayout({
 
     const isAllowed = allowedPaths.some(p => {
         if (p === '/') return currentPath === '/';
+        // Allow access to sub-paths, e.g., /requisitions/edit/123 if /requisitions is allowed
         return currentPath === p || currentPath.startsWith(`${p}/`);
     });
 
-    if (!isAllowed) {
-        const defaultPath = allowedPaths[0];
-        if (defaultPath) {
-            router.push(defaultPath);
-        } else {
-             router.push('/login');
-        }
+    // Don't redirect if on an allowed path
+    if (isAllowed) {
+        return;
     }
-  }, [pathname, loading, role, router, rolePermissions]);
+
+    // If not allowed, determine where to redirect
+    const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
+
+    if (defaultPath && defaultPath !== currentPath) {
+        router.push(defaultPath);
+    } else if (!defaultPath) {
+        // If no default path, redirect to login as a fallback
+        router.push('/login');
+    }
+  }, [pathname, loading, role, user, router, rolePermissions, logout]);
 
 
   if (loading || !user || !role) {
