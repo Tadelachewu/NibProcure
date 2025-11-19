@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -25,7 +26,7 @@ const rolePrecedence: Record<string, number> = {
   Vendor: 1,
 };
 
-const getPrimaryRole = (roles: {name: UserRole}[]): UserRole | null => {
+const getPrimaryRole = (roles: {name: string}[]): UserRole | null => {
     if (!roles || roles.length === 0) return null;
     
     const roleNames = roles.map(r => r.name);
@@ -90,7 +91,6 @@ export async function POST(request: Request) {
             return NextResponse.json({ 
                 user: finalUser, 
                 token, 
-                role: primaryRole // Return the single primary role for the auth context
             });
         }
         

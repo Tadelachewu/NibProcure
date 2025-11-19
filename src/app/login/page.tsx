@@ -42,7 +42,7 @@ export default function LoginPage() {
       const result = await response.json();
 
       if (response.ok) {
-        authLogin(result.token, result.user, result.roles);
+        authLogin(result.token, result.user);
         toast({
           title: 'Login Successful',
           description: `Welcome back, ${result.user.name}!`,

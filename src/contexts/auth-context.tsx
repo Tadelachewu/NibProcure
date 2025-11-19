@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
@@ -50,7 +51,7 @@ interface AuthContextType {
   settings: Setting[];
   rfqQuorum: number;
   committeeQuorum: number;
-  login: (token: string, user: User, role: UserRole) => void;
+  login: (token: string, user: User) => void;
   logout: () => void;
   loading: boolean;
   switchUser: (userId: string) => void;
@@ -102,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
-  const [rolePermissions, setRolePermissions] = useState<Record<UserRole, string[]>>(defaultRolePermissions);
+  const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>(defaultRolePermissions);
   const [rfqSenderSetting, setRfqSenderSetting] = useState<RfqSenderSetting>({ type: 'all' });
   const [approvalThresholds, setApprovalThresholds] = useState<ApprovalThreshold[]>([]);
   const [committeeConfig, setCommitteeConfig] = useState<CommitteeConfig>({});
@@ -172,26 +173,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
   
-  // This combines all permissions from all of a user's roles into one array.
-  const combinedPermissions = useMemo(() => {
-    if (!user || !user.roles) return {};
-    
-    // User roles should now be a simple array of strings
-    const userRoleNames = user.roles as UserRole[];
-    const permissionsSet = new Set<string>();
-
-    userRoleNames.forEach(roleName => {
-        const permissionsForRole = rolePermissions[roleName as UserRole] || [];
-        permissionsForRole.forEach(path => permissionsSet.add(path));
-    });
-    
-    // Create a new "Combined" role entry in the permissions object for the current user
-    const newPermissions = { ...rolePermissions, Combined: Array.from(permissionsSet) };
-    
-    return newPermissions;
-
-  }, [user, rolePermissions]);
-
   useEffect(() => {
     const initializeAuth = async () => {
       setLoading(true);
@@ -205,10 +186,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (storedToken) {
               const decoded = decodeJwt<User & { roles: UserRole[] }>(storedToken);
               if (decoded && decoded.exp * 1000 > Date.now()) {
-                  const primaryRole = getPrimaryRole(decoded.roles);
-                  setUser(decoded); // The decoded user object already has the simple roles array
+                  setUser(decoded); // The user object from token should have a simple array of role names
                   setToken(storedToken);
-                  setRole(primaryRole);
+                  // The primary role will be set in the next effect
               } else {
                   localStorage.removeItem('authToken');
               }
@@ -221,12 +201,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     initializeAuth();
   }, [fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
+  
+  // This effect is crucial. It derives the primary role and combined permissions
+  // whenever the user object or the base rolePermissions map changes.
+  // This solves the race condition where redirection was attempted before permissions were ready.
+  const combinedPermissions = useMemo(() => {
+    if (!user || !user.roles || loading) return {};
 
-  const login = (newToken: string, loggedInUser: User, primaryRole: UserRole) => {
+    const userRoleNames = user.roles as UserRole[];
+    const permissionsSet = new Set<string>();
+
+    userRoleNames.forEach(roleName => {
+        const permissionsForRole = rolePermissions[roleName as UserRole] || [];
+        permissionsForRole.forEach(path => permissionsSet.add(path));
+    });
+    
+    return { ...rolePermissions, Combined: Array.from(permissionsSet) };
+  }, [user, rolePermissions, loading]);
+
+  useEffect(() => {
+    if (user && user.roles) {
+      setRole(getPrimaryRole(user.roles as UserRole[]));
+    }
+  }, [user]);
+
+  const login = (newToken: string, loggedInUser: User) => {
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
-    setRole(primaryRole);
+    setRole(getPrimaryRole(loggedInUser.roles as UserRole[]));
   };
 
   const logout = () => {
@@ -248,7 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           if(response.ok) {
               const result = await response.json();
-              login(result.token, result.user, result.role);
+              login(result.token, result.user);
               window.location.href = '/';
           } else {
               console.error("Failed to switch user.")
