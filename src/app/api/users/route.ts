@@ -10,15 +10,15 @@ export async function GET() {
     const users = await prisma.user.findMany({
         include: { 
             department: true,
-            role: true, // Include the full role object
+            roles: true, // Include the roles relation
             committeeAssignments: true,
         }
     });
-    // Return the full user object with the nested role
+    // Return the full user object with the nested roles
     const formattedUsers = users.map(u => ({
         ...u,
         department: u.department?.name || 'N/A',
-        // The role object is now correctly nested, no flattening needed here.
+        // The roles object is now correctly nested, no flattening needed here.
     }));
     return NextResponse.json(formattedUsers);
   } catch (error) {
@@ -30,15 +30,15 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email, password, role, departmentId, actorUserId } = body;
+    const { name, email, password, roles, departmentId, actorUserId } = body;
     
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { role: true }});
-    if (!actor || actor.role.name !== 'Admin') {
+    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    if (!name || !email || !password || !role || !departmentId) {
-      return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
+    if (!name || !email || !password || !roles || !Array.isArray(roles) || roles.length === 0 || !departmentId) {
+      return NextResponse.json({ error: 'All fields including at least one role are required' }, { status: 400 });
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -53,7 +53,9 @@ export async function POST(request: Request) {
             name,
             email,
             password: hashedPassword,
-            role: { connect: { name: role.replace(/ /g, '_') } },
+            roles: {
+              connect: roles.map((roleName: string) => ({ name: roleName.replace(/ /g, '_') }))
+            },
             department: { connect: { id: departmentId } },
         }
     });
@@ -65,7 +67,7 @@ export async function POST(request: Request) {
             action: 'CREATE_USER',
             entity: 'User',
             entityId: newUser.id,
-            details: `Created new user "${name}" with role ${role}.`,
+            details: `Created new user "${name}" with roles: ${roles.join(', ')}.`,
         }
     });
 
@@ -82,18 +84,18 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
    try {
     const body = await request.json();
-    const { id, name, email, role, departmentId, password, actorUserId } = body;
+    const { id, name, email, roles, departmentId, password, actorUserId } = body;
 
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { role: true }});
-    if (!actor || actor.role.name !== 'Admin') {
+    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    if (!id || !name || !email || !role || !departmentId) {
+    if (!id || !name || !email || !roles || !Array.isArray(roles) || !departmentId) {
       return NextResponse.json({ error: 'User ID and all fields are required' }, { status: 400 });
     }
     
-    const oldUser = await prisma.user.findUnique({ where: { id }, include: { role: true } });
+    const oldUser = await prisma.user.findUnique({ where: { id }, include: { roles: true } });
     if (!oldUser) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -101,7 +103,9 @@ export async function PATCH(request: Request) {
     const updateData: any = {
         name,
         email,
-        role: { connect: { name: role.replace(/ /g, '_') } },
+        roles: {
+          set: roles.map((roleName: string) => ({ name: roleName.replace(/ /g, '_') }))
+        },
         department: { connect: { id: departmentId } },
     };
     
@@ -121,7 +125,7 @@ export async function PATCH(request: Request) {
             action: 'UPDATE_USER',
             entity: 'User',
             entityId: id,
-            details: `Updated user "${oldUser.name}". Name: ${oldUser.name} -> ${name}. Role: ${oldUser.role.name.replace(/_/g, ' ')} -> ${role}.`,
+            details: `Updated user "${oldUser.name}". Name: ${oldUser.name} -> ${name}. Roles: ${oldUser.roles.map(r=>r.name).join(', ')} -> ${roles.join(', ')}.`,
         }
     });
 
@@ -140,8 +144,8 @@ export async function DELETE(request: Request) {
     const body = await request.json();
     const { id, actorUserId } = body;
 
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { role: true }});
-    if (!actor || actor.role.name !== 'Admin') {
+    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -149,12 +153,12 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
     
-    const userToDelete = await prisma.user.findUnique({ where: { id }, include: { role: true } });
+    const userToDelete = await prisma.user.findUnique({ where: { id }, include: { roles: true } });
     if (!userToDelete) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    if (userToDelete.role.name === 'Admin') {
+    if (userToDelete.roles.some(r => r.name === 'Admin')) {
         return NextResponse.json({ error: 'Cannot delete an Admin user.' }, { status: 403 });
     }
     
