@@ -8,7 +8,11 @@ export async function GET() {
   try {
     const logs = await prisma.auditLog.findMany({
       include: {
-        user: true, // Include the user who performed the action
+        user: {
+            include: {
+                role: true
+            }
+        },
       },
       orderBy: {
         timestamp: 'desc',
@@ -18,7 +22,7 @@ export async function GET() {
     const formattedLogs = logs.map(log => ({
         ...log,
         user: log.user?.name || 'System', // Fallback for system actions
-        role: log.user?.role.replace(/_/g, ' ') || 'System',
+        role: log.user?.role?.name.replace(/_/g, ' ') || 'System',
     }));
 
     return NextResponse.json(formattedLogs);
