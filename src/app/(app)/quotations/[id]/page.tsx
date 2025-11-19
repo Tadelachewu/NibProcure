@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -68,6 +67,7 @@ import { AwardStandbyButton } from '@/components/award-standby-button';
 
 
 const PAGE_SIZE = 6;
+const REFRESH_INTERVAL = 30000; // 30 seconds
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -2523,12 +2523,9 @@ export default function QuotationDetailsPage() {
   useEffect(() => {
     if (id && user && allUsers.length > 0) {
         setLoading(true);
-        const handleFocus = () => fetchRequisitionAndQuotes();
         fetchRequisitionAndQuotes();
-        window.addEventListener('focus', handleFocus);
-        return () => {
-            window.removeEventListener('focus', handleFocus);
-        }
+        const intervalId = setInterval(fetchRequisitionAndQuotes, REFRESH_INTERVAL);
+        return () => clearInterval(intervalId);
     }
   }, [id, user, allUsers, fetchRequisitionAndQuotes]);
   
@@ -2684,12 +2681,8 @@ export default function QuotationDetailsPage() {
       return `${financialPart}\n\n${technicalPart}`;
   };
 
-  if (loading || !user) {
+  if (loading || !user || !requisition) {
      return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  }
-
-  if (!requisition) {
-     return <div className="text-center p-8">Requisition not found.</div>;
   }
 
   const canManageCommittees = isAuthorized;
@@ -3244,7 +3237,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
         }
     };
     
@@ -3348,5 +3341,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
 
+
+    
 
     
