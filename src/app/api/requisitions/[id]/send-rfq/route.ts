@@ -22,7 +22,7 @@ export async function POST(
 
     const user = await prisma.user.findUnique({
         where: {id: userId},
-        include: { role: true }
+        include: { roles: true }
     });
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -30,13 +30,20 @@ export async function POST(
     
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    const userRoleName = user.role.name as UserRole;
+    const userRoles = user.roles.map(r => r.name as UserRole);
 
-    if (rfqSenderSetting?.value?.type === 'specific') {
-        isAuthorized = rfqSenderSetting.value.userId === userId;
-    } else { // 'all' case
-        isAuthorized = userRoleName === 'Procurement_Officer' || userRoleName === 'Admin';
+    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userId?: string };
+
+        if (userRoles.includes('Admin')) {
+            isAuthorized = true;
+        } else if (setting.type === 'specific') {
+            isAuthorized = setting.userId === userId;
+        } else { // 'all' case
+            isAuthorized = userRoles.includes('Procurement_Officer');
+        }
     }
+
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized: You do not have permission to send RFQs based on the current system settings.' }, { status: 403 });
