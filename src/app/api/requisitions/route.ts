@@ -8,27 +8,7 @@ import { getUserByToken, decodeJwt } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { differenceInMinutes, format, isPast } from 'date-fns';
-
-
-const roleToStatusMap: Record<string, string> = {
-    'Committee_B_Member': 'Pending_Committee_B_Review',
-    'Committee_A_Member': 'Pending_Committee_A_Recommendation',
-    'Manager_Procurement_Division': 'Pending_Managerial_Approval',
-    'Director_Supply_Chain_and_Property_Management': 'Pending_Director_Approval',
-    'VP_Resources_and_Facilities': 'Pending_VP_Approval',
-    'President': 'Pending_President_Approval'
-};
-
-
-function getNextStatusFromRole(role: string): string {
-    const status = roleToStatusMap[role];
-    if (!status) {
-        // Fallback for roles without a specific pending status, though this shouldn't happen in the approval flow
-        return 'Pending_Approval';
-    }
-    return status;
-}
-
+import { getNextApprovalStep } from '@/services/award-service';
 
 
 export async function GET(request: Request) {
@@ -43,7 +23,6 @@ export async function GET(request: Request) {
   const token = authHeader?.split(' ')[1];
   let userPayload: { user: User, roles: UserRole[] } | null = null;
   if(token) {
-    // Note: getUserByToken now returns roles array
     const decodedUser = decodeJwt<User & { roles: UserRole[] }>(token);
     if(decodedUser) {
         userPayload = { user: decodedUser, roles: decodedUser.roles };
@@ -53,26 +32,14 @@ export async function GET(request: Request) {
   try {
     let whereClause: any = {};
     
-    const allPendingStatuses = [
-      'Pending_Approval',
-      'Pending_Committee_B_Review',
-      'Pending_Committee_A_Recommendation',
-      'Pending_Managerial_Approval',
-      'Pending_Director_Approval',
-      'Pending_VP_Approval',
-      'Pending_President_Approval'
-    ];
-
     if (forAwardReview === 'true' && userPayload) {
         const userRoles = userPayload.roles;
         const userId = userPayload.user.id;
         
         const orConditions = [];
 
-        // Condition 1: The user is the specific `currentApproverId` (for hierarchical roles)
         orConditions.push({ currentApproverId: userId });
 
-        // Condition 2: The status matches a committee role this user has
         if (userRoles.includes('Committee_A_Member')) {
             orConditions.push({ status: 'Pending_Committee_A_Recommendation' });
         }
@@ -80,7 +47,6 @@ export async function GET(request: Request) {
             orConditions.push({ status: 'Pending_Committee_B_Review' });
         }
 
-        // For Admins and Procurement Officers, show all items pending any form of award review
         if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
              orConditions.push({ status: { in: [
                 'Pending_Committee_A_Recommendation',
@@ -93,7 +59,6 @@ export async function GET(request: Request) {
              ] } });
         }
         
-        // Condition 3: Show items the user has already reviewed for historical context
         orConditions.push({ reviews: { some: { reviewerId: userId } } });
 
         whereClause.OR = orConditions;
@@ -104,7 +69,6 @@ export async function GET(request: Request) {
         }
         
         whereClause.OR = [
-            // Condition A: Open for bidding (not yet quoted by this vendor)
             {
                 AND: [
                     { status: 'Accepting_Quotes' }, 
@@ -127,7 +91,6 @@ export async function GET(request: Request) {
                     },
                 ]
             },
-            // Condition B: Vendor has submitted a quote for this req, so they should always see it.
             {
                 quotations: {
                     some: {
@@ -135,7 +98,6 @@ export async function GET(request: Request) {
                     }
                 }
             },
-             // Condition C: Vendor has won a per-item award, even if they didn't win the whole quote.
             {
                 items: {
                   some: {
@@ -149,12 +111,10 @@ export async function GET(request: Request) {
 
     } else if (forQuoting) {
         if (userPayload?.roles.includes('Committee_Member')) {
-            // **SECURITY FIX**: Committee members ONLY see requisitions they are assigned to.
             whereClause.OR = [
                 { financialCommitteeMembers: { some: { id: userPayload.user.id } } },
                 { technicalCommitteeMembers: { some: { id: userPayload.user.id } } },
             ];
-            // And they should only see items that are actually in a scoring state
             whereClause.AND = [
                 ...(whereClause.AND || []),
                 {
@@ -172,24 +132,29 @@ export async function GET(request: Request) {
                 },
             ];
         } else {
-            // Procurement/Admin see all items in the quoting lifecycle
              whereClause.OR = [
                 { status: 'PreApproved' },
                 { status: 'PostApproved' },
-                ...allPendingStatuses.map(s => ({ status: s })),
                 { status: 'Accepting_Quotes' },
                 { status: 'Scoring_In_Progress' },
                 { status: 'Scoring_Complete' },
                 { status: 'Award_Declined' },
                 { status: 'Awarded' },
+                { status: 'Pending_Approval' },
+                { status: 'Pending_Committee_B_Review' },
+                { status: 'Pending_Committee_A_Recommendation' },
+                { status: 'Pending_Managerial_Approval' },
+                { status: 'Pending_Director_Approval' },
+                { status: 'Pending_VP_Approval' },
+                { status: 'Pending_President_Approval' }
             ];
         }
     } else {
       if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
       if (approverId) {
         whereClause.OR = [
-            { currentApproverId: approverId }, // Items currently pending this user's approval
-            { reviews: { some: { reviewerId: approverId } } } // Items this user has actioned
+            { currentApproverId: approverId },
+            { reviews: { some: { reviewerId: approverId } } }
         ];
       }
       
@@ -329,14 +294,13 @@ export async function PATCH(
             dataToUpdate.status = 'Rejected';
             dataToUpdate.currentApprover = { disconnect: true };
             auditAction = 'REJECT_REQUISITION';
-            auditDetails = `Requisition ${id} was rejected by ${user.roles.map(r=>r.name).join(', ').replace(/_/g, ' ')} with comment: "${comment}".`;
+            auditDetails = `Requisition ${id} was rejected by department head with comment: "${comment}".`;
         } else { // Department head approves
              dataToUpdate.status = 'PreApproved'; 
              dataToUpdate.currentApprover = { disconnect: true };
              auditAction = 'PRE_APPROVE_REQUISITION';
-             auditDetails = `Requisition ${id} was pre-approved by ${user.roles.map(r=>r.name).join(', ').replace(/_/g, ' ')} with comment: "${comment}". Ready for RFQ.`;
+             auditDetails = `Requisition ${id} was pre-approved by department head with comment: "${comment}". Ready for RFQ.`;
         }
-        // Set the approver who took the action
         dataToUpdate.approver = { connect: { id: userId } };
         
         await prisma.review.create({
@@ -350,20 +314,12 @@ export async function PATCH(
 
 
     } else if (requisition.status.startsWith('Pending_')) {
+        const userRoles = (user.roles as any[]).map(r => r.name);
+        
         let isDesignatedApprover = false;
-        const userRoles = user.roles.map(r => r.name);
-
-        // Check if user has the correct Committee role for the status
-        if (
-            (userRoles.includes('Committee_A_Member') && requisition.status === 'Pending_Committee_A_Recommendation') ||
-            (userRoles.includes('Committee_B_Member') && requisition.status === 'Pending_Committee_B_Review')
-        ) {
-            isDesignatedApprover = true;
-        }
-        // Check for individual hierarchical approvers
-        else if (requisition.currentApproverId === userId) {
-            isDesignatedApprover = true;
-        }
+        if (userRoles.includes('Committee_A_Member') && requisition.status === 'Pending_Committee_A_Recommendation') isDesignatedApprover = true;
+        else if (userRoles.includes('Committee_B_Member') && requisition.status === 'Pending_Committee_B_Review') isDesignatedApprover = true;
+        else if (requisition.currentApproverId === userId) isDesignatedApprover = true;
 
         if (!isDesignatedApprover) {
             return NextResponse.json({ error: 'You are not the designated approver for this item.' }, { status: 403 });
@@ -371,39 +327,14 @@ export async function PATCH(
         
         if (newStatus === 'Rejected') {
              return await prisma.$transaction(async (tx) => {
-                const quotationsToDelete = await tx.quotation.findMany({
-                    where: { requisitionId: id },
-                    include: { scores: { include: { itemScores: { include: { scores: true } } } } }
-                });
-
-                const scoreSetIds = quotationsToDelete.flatMap(q => q.scores.map(s => s.id));
-                const itemScoreIds = quotationsToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
-
-                if (itemScoreIds.length > 0) {
-                    await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
-                }
-                if (scoreSetIds.length > 0) {
-                    await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
-                }
-                if (scoreSetIds.length > 0) {
-                    await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
-                }
-                await tx.quotation.deleteMany({ where: { requisitionId: id } });
+                await tx.quotation.deleteMany({ where: { requisitionId: id }});
                 
-                await tx.committeeAssignment.deleteMany({ where: { requisitionId: id }});
-
-                const updatedReq = await tx.purchaseRequisition.update({
+                await tx.purchaseRequisition.update({
                     where: { id: id },
                     data: {
                         status: 'Rejected',
                         currentApproverId: null,
-                        committeeName: null,
-                        committeePurpose: null,
-                        scoringDeadline: null,
                         awardedQuoteItemIds: [],
-                        awardResponseDeadline: null,
-                        financialCommitteeMembers: { set: [] },
-                        technicalCommitteeMembers: { set: [] },
                     }
                 });
 
@@ -415,44 +346,18 @@ export async function PATCH(
                         action: 'REJECT_AWARD',
                         entity: 'Requisition',
                         entityId: id,
-                        details: `Award for requisition ${id} was rejected by ${user.roles.map(r=>r.name).join(', ').replace(/_/g, ' ')}. All quotes and scores have been reset. Reason: "${comment}".`,
+                        details: `Award for requisition ${id} was rejected by ${userRoles.join(', ').replace(/_/g, ' ')}. All quotes and scores have been reset. Reason: "${comment}".`,
                     }
                 });
-                return NextResponse.json(updatedReq);
+                return NextResponse.json({ message: "Award rejected."});
              });
-        } else if (newStatus === 'Approved') { // Using "Approved" as the action from the frontend
+        } else if (newStatus === 'Approved') {
              return await prisma.$transaction(async (tx) => {
-                const approvalMatrix = await tx.approvalThreshold.findMany({ include: { steps: { include: { role: true }, orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }});
-                const totalValue = requisition.totalPrice;
-                const relevantTier = approvalMatrix.find(tier => totalValue >= tier.min && (tier.max === null || totalValue <= tier.max));
-
-                if (!relevantTier) {
-                    throw new Error('No approval tier configured for this award value.');
-                }
+                const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
                 
-                const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getNextStatusFromRole(step.role.name));
-                
-                if (currentStepIndex !== -1 && currentStepIndex < relevantTier.steps.length - 1) {
-                    const nextStep = relevantTier.steps[currentStepIndex + 1];
-                    dataToUpdate.status = getNextStatusFromRole(nextStep.role.name);
-
-                    if (!nextStep.role.name.includes('Committee')) {
-                        const nextApprover = await tx.user.findFirst({ where: { roles: { some: { name: nextStep.role.name } } }});
-                        if (nextApprover) {
-                          dataToUpdate.currentApprover = { connect: { id: nextApprover.id } };
-                        } else {
-                          dataToUpdate.currentApprover = { disconnect: true };
-                        }
-                    } else {
-                        dataToUpdate.currentApprover = { disconnect: true };
-                    }
-                    auditDetails = `Award approved by ${user.roles.map(r=>r.name).join(', ').replace(/_/g, ' ')}. Advanced to ${nextStep.role.name.replace(/_/g, ' ')}.`;
-                } else {
-                    // This is the final approval. Set to PostApproved to await manual notification.
-                    dataToUpdate.status = 'PostApproved';
-                    dataToUpdate.currentApprover = { disconnect: true };
-                    auditDetails = `Final award approval for requisition ${id} granted by ${user.roles.map(r=>r.name).join(', ').replace(/_/g, ' ')}. Ready for vendor notification.`;
-                }
+                dataToUpdate.status = nextStatus;
+                dataToUpdate.currentApproverId = nextApproverId;
+                auditDetails = serviceAuditDetails;
                 auditAction = 'APPROVE_AWARD_STEP';
 
                 const updatedRequisition = await tx.purchaseRequisition.update({
@@ -466,7 +371,7 @@ export async function PATCH(
                             requisition: { connect: { id: id } },
                             author: { connect: { id: userId } },
                             decision: 'APPROVED',
-                            decisionBody: user.roles.map(r=>r.name).join(', ').replace(/_/g, ' '),
+                            decisionBody: (user.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' '),
                             justification: minute.justification,
                             attendees: {
                                 connect: minute.attendeeIds.map((id: string) => ({ id }))
@@ -476,7 +381,6 @@ export async function PATCH(
                     auditDetails += ` Minute recorded.`;
                 }
 
-                // Also create a "Review" record to track this specific approval action
                 await tx.review.create({
                     data: {
                         requisition: { connect: { id: id } },
@@ -512,7 +416,7 @@ export async function PATCH(
         if (department?.headId) {
             dataToUpdate.currentApprover = { connect: { id: department.headId } };
             dataToUpdate.status = 'Pending_Approval';
-        } else { // No department head, move to PreApproved for RFQ sender
+        } else {
             dataToUpdate.status = 'PreApproved';
             dataToUpdate.currentApprover = { disconnect: true };
         }
@@ -616,7 +520,6 @@ export async function POST(request: Request) {
             include: { items: true, customQuestions: true, evaluationCriteria: true }
         });
         
-        // Now update with the transactionId
         const finalReq = await tx.purchaseRequisition.update({
             where: { id: createdReq.id },
             data: { transactionId: createdReq.id }
@@ -667,7 +570,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const canDelete = (requisition.requesterId === userId) || (user.roles.some(r => r.name === 'Procurement_Officer' || r.name === 'Admin'));
+    const canDelete = (requisition.requesterId === userId) || ((user.roles as any[]).some(r => r.name === 'Procurement_Officer' || r.name === 'Admin'));
 
     if (!canDelete) {
       return NextResponse.json({ error: 'You are not authorized to delete this requisition.' }, { status: 403 });
@@ -714,5 +617,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    

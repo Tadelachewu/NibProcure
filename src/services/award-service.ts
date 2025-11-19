@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -14,24 +13,29 @@ const roleToStatusMap: Record<string, string> = {
     'President': 'Pending_President_Approval'
 };
 
+function getStatusFromRole(roleName: string): string {
+    const status = roleToStatusMap[roleName];
+    if (!status) {
+      throw new Error(`Could not find a valid pending status for the role: ${roleName}`);
+    }
+    return status;
+}
+
 
 /**
- * Finds the correct initial status and approver for a given value tier.
+ * Finds the correct next approval step for a given requisition.
  * @param tx - Prisma transaction client.
- * @param totalAwardValue - The value of the award.
- * @returns An object with the next status and approver ID.
+ * @param requisition - The full requisition object.
+ * @param actor - The user performing the current approval.
+ * @returns An object with the next status, next approver ID, and a detailed audit message.
  */
-export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwardValue: number) {
+export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisition: any, actor: User) {
+    const totalAwardValue = requisition.totalPrice;
+    
     const approvalMatrix = await tx.approvalThreshold.findMany({
       include: {
         steps: {
-          include: {
-            role: { 
-              select: {
-                name: true
-              }
-            }
-          },
+          include: { role: { select: { name: true } } },
           orderBy: { order: 'asc' }
         }
       },
@@ -50,33 +54,62 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, totalAwa
         return { 
             nextStatus: 'PostApproved', 
             nextApproverId: null, 
-            auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier, which has no approval steps. Approved for vendor notification.`
+            auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier which has no approval steps. Approved for vendor notification.`
+        };
+    }
+    
+    // Find where we are in the current sequence
+    const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getStatusFromRole(step.role.name));
+
+    if (currentStepIndex === -1) {
+        // This is the first time we are routing this, so we start from step 0.
+        const firstStep = relevantTier.steps[0];
+        const nextStatus = getStatusFromRole(firstStep.role.name);
+        
+        let nextApproverId: string | null = null;
+        if (!firstStep.role.name.includes('Committee')) {
+             const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: firstStep.role.name } } }});
+             if (!approverUser) throw new Error(`Could not find a user for the role: ${firstStep.role.name.replace(/_/g, ' ')}`);
+             nextApproverId = approverUser.id;
+        }
+
+        return { 
+            nextStatus, 
+            nextApproverId,
+            auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.name.replace(/_/g, ' ')} for approval.`
         };
     }
 
-    const firstStep = relevantTier.steps[0];
-    
-    const nextStatus = roleToStatusMap[firstStep.role.name];
-    if (!nextStatus) {
-      throw new Error(`Could not find a valid pending status for the role: ${firstStep.role.name}`);
-    }
-
-    let nextApproverId: string | null = null;
-    
-    if (!firstStep.role.name.includes('Committee')) {
-        const approverUser = await tx.user.findFirst({ where: { role: { name: firstStep.role.name } }});
-        if (!approverUser) {
-            throw new Error(`Could not find a user for the role: ${firstStep.role.name.replace(/_/g, ' ')}`);
+    // We are in an existing sequence, find the next step.
+    if (currentStepIndex < relevantTier.steps.length - 1) {
+        const nextStep = relevantTier.steps[currentStepIndex + 1];
+        const nextStatus = getStatusFromRole(nextStep.role.name);
+        
+        let nextApproverId: string | null = null;
+        if (!nextStep.role.name.includes('Committee')) {
+             const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: nextStep.role.name } } }});
+             if (approverUser) {
+                nextApproverId = approverUser.id;
+             } else {
+                 throw new Error(`Could not find a user for the next approval role: ${nextStep.role.name.replace(/_/g, ' ')}`);
+             }
         }
-        nextApproverId = approverUser.id;
+        
+        return {
+            nextStatus,
+            nextApproverId,
+            auditDetails: `Award approved by ${(actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ')}. Advanced to ${nextStep.role.name.replace(/_/g, ' ')}.`
+        };
+    } else {
+        // This was the final step in the chain.
+        return {
+            nextStatus: 'PostApproved',
+            nextApproverId: null,
+            auditDetails: `Final award approval for requisition ${requisition.id} granted by ${(actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ')}. Ready for vendor notification.`
+        };
     }
-
-    return { 
-        nextStatus, 
-        nextApproverId,
-        auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.name.replace(/_/g, ' ')} for approval.`
-    };
 }
+
 
 /**
  * Performs a "deep clean" of a requisition, deleting all quotes, scores,
@@ -324,7 +357,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         }
 
         // 3. Get the next approval step and route the requisition
-        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalValue);
+        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, updatedRequisition, actor);
 
         await tx.purchaseRequisition.update({
             where: { id: requisitionId },
@@ -349,20 +382,17 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${promotedCount} standby award(s). Re-routing for approval.` };
 
     } else { // Single Vendor Strategy
-        // **FIX START**: Correctly find the next best standby vendor by score
         const standbyQuotes = await tx.quotation.findMany({
             where: { requisitionId, status: 'Standby' },
-            orderBy: { finalAverageScore: 'desc' }, // Sort by score, highest first
+            orderBy: { finalAverageScore: 'desc' },
         });
 
         const nextStandby = standbyQuotes[0];
-        // **FIX END**
 
         if (!nextStandby) {
             throw new Error('No standby vendor found to promote.');
         }
 
-        // --- Champion Bid Recalculation for Promoted Vendor ---
         const standbyQuoteDetails = requisition.quotations.find(q => q.id === nextStandby.id);
         if(!standbyQuoteDetails) throw new Error("Could not find full quote details for standby vendor.");
 
@@ -402,9 +432,8 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         if (newAwardedItemIds.length === 0) {
             throw new Error("Could not determine champion bids for the promoted standby vendor.");
         }
-        // --- End Recalculation ---
         
-        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, newTotalValue);
+        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: newTotalValue }, actor);
         
         await tx.purchaseRequisition.update({
             where: { id: requisitionId },

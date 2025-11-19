@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -16,23 +15,23 @@ export async function POST(
         const body = await request.json();
         const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue } = body;
 
-        const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+        const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
         
         const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
         let isAuthorized = false;
-        const userRoleName = user.role.name as UserRole;
+        const userRoles = (user.roles as any[]).map(r => r.name) as UserRole[];
 
-        if (userRoleName === 'Admin' || userRoleName === 'Committee') {
+        if (userRoles.includes('Admin') || userRoles.includes('Committee')) {
             isAuthorized = true;
         } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
             const setting = rfqSenderSetting.value as { type: string, userId?: string };
             if (setting.type === 'specific') {
                 isAuthorized = setting.userId === userId;
             } else { // 'all' case
-                isAuthorized = userRoleName === 'Procurement_Officer';
+                isAuthorized = userRoles.includes('Procurement_Officer');
             }
         }
 
@@ -64,7 +63,6 @@ export async function POST(
             let finalAwardedItemIds: string[] = [];
 
             if (awardStrategy === 'all') {
-                // "Best of Vendor" calculation
                 const vendorScores: { [vendorId: string]: { totalScore: number; count: number; championBids: QuoteItem[] } } = {};
 
                 for (const quote of allQuotes) {
@@ -116,7 +114,6 @@ export async function POST(
                 const winningQuote = allQuotes.find(q => q.vendorId === winner.vendorId);
                 if (!winningQuote) throw new Error("Winning quote not found in database.");
 
-                // Recalculate award value based *only* on champion bids.
                 finalAwardValue = winner.championBids.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
                 finalAwardedItemIds = winner.championBids.map(item => item.id);
                 
@@ -139,7 +136,7 @@ export async function POST(
 
             } else if (awardStrategy === 'item') {
                 const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
-                finalAwardValue = totalAwardValue; // Use the pre-calculated value from the dialog for per-item
+                finalAwardValue = totalAwardValue;
 
                 for (const reqItem of reqItems) {
                     let proposals: any[] = [];
@@ -193,7 +190,7 @@ export async function POST(
                 }
             }
 
-            const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, finalAwardValue);
+            const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: finalAwardValue }, user);
 
             const updatedRequisition = await tx.purchaseRequisition.update({
                 where: { id: requisitionId },
@@ -201,8 +198,8 @@ export async function POST(
                     status: nextStatus as any,
                     currentApproverId: nextApproverId,
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
-                    totalPrice: finalAwardValue, // Use the correctly calculated value
-                    awardedQuoteItemIds: finalAwardedItemIds, // Store the champion bid IDs for single vendor award
+                    totalPrice: finalAwardValue,
+                    awardedQuoteItemIds: finalAwardedItemIds,
                     rfqSettings: {
                         ...(requisition?.rfqSettings as any),
                         awardStrategy: awardStrategy,
