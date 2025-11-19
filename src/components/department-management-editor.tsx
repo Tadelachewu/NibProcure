@@ -203,7 +203,13 @@ export function DepartmentManagementEditor() {
                             <TableRow key={dept.id}>
                                 <TableCell className="font-semibold">{dept.name}</TableCell>
                                 <TableCell className="text-muted-foreground">{dept.description}</TableCell>
-                                <TableCell>{dept.head?.name ?? <span className="text-muted-foreground italic">Not Assigned</span>}</TableCell>
+                                <TableCell>
+                                    {dept.head?.name ? (
+                                        dept.head.name
+                                    ) : (
+                                        <span className="text-muted-foreground italic">Not Assigned</span>
+                                    )}
+                                </TableCell>
                                 <TableCell className="text-right">
                                     <div className="flex gap-2 justify-end">
                                         <Button variant="outline" size="sm" onClick={() => openDialog(dept)}>
@@ -271,7 +277,7 @@ export function DepartmentManagementEditor() {
                         <SelectContent>
                              <SelectItem value="null">None</SelectItem>
                             {potentialHeads.map(user => (
-                                <SelectItem key={user.id} value={user.id}>{user.name} ({ (user.roles[0] as any)?.name.replace(/_/g, ' ')})</SelectItem>
+                                <SelectItem key={user.id} value={user.id}>{user.name} ({(user.roles[0] as any).name.replace(/_/g, ' ')})</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
