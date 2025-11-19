@@ -24,8 +24,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name, description, actorUserId } = body;
 
-    const actor = await prisma.user.findUnique({ where: { id: actorUserId }, include: { role: true } });
-    if (!actor || actor.role.name !== 'Admin') {
+    const actor = await prisma.user.findUnique({ where: { id: actorUserId }, include: { roles: true } });
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -82,8 +82,8 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const { id, name, description, actorUserId } = body;
 
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { role: true }});
-    if (!actor || actor.role.name !== 'Admin') {
+    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -117,8 +117,8 @@ export async function DELETE(request: Request) {
     const body = await request.json();
     const { id, actorUserId } = body;
 
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { role: true }});
-    if (!actor || actor.role.name !== 'Admin') {
+    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
