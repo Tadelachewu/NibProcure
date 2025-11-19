@@ -2522,10 +2522,10 @@ export default function QuotationDetailsPage() {
   }, [id, toast]);
 
   useEffect(() => {
-    if (id && user && allUsers.length > 0) {
+    if (id && user) {
         fetchRequisitionAndQuotes();
     }
-  }, [id, user, allUsers, fetchRequisitionAndQuotes]);
+  }, [id, user, fetchRequisitionAndQuotes]);
   
 
   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
