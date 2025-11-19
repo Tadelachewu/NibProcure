@@ -32,7 +32,7 @@ interface CommitteeConfig {
 }
 
 export function CommitteeSettings() {
-    const { allUsers, updateUserRole, committeeConfig, updateCommitteeConfig, fetchAllUsers, fetchAllSettings } = useAuth();
+    const { allUsers, fetchAllUsers, committeeConfig, updateCommitteeConfig, fetchAllSettings } = useAuth();
     const { toast } = useToast();
     const [isSaving, setIsSaving] = useState(false);
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -208,8 +208,8 @@ export function CommitteeSettings() {
         if (!committee) return null;
         
         const roleName: UserRole = `Committee_${committeeKey}_Member`;
-        const members = allUsers.filter(u => (u.roles as any[]).some(r => r.name === roleName));
-        const nonMembers = allUsers.filter(u => !(u.roles as any[]).some(r => r.name === roleName) && !(u.roles as any[]).some(r => r.name === 'Admin') && !(u.roles as any[]).some(r => r.name === 'Vendor'))
+        const members = allUsers.filter(u => Array.isArray(u.roles) && (u.roles as any[]).some(r => r.name === roleName));
+        const nonMembers = allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as any[]).some(r => r.name === roleName || r.name === 'Admin' || r.name === 'Vendor'))
             .filter(u => departmentFilters[committeeKey] === 'all' || u.departmentId === departmentFilters[committeeKey])
             .filter(u => u.name.toLowerCase().includes(searchTerms[committeeKey]?.toLowerCase() || ''));
 
@@ -328,3 +328,5 @@ export function CommitteeSettings() {
         </div>
     );
 }
+
+    

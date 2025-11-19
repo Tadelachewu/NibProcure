@@ -188,7 +188,7 @@ export function UserManagementEditor() {
     setDialogOpen(true);
   };
   
-  const manageableUsers = allUsers.filter(u => !(u.roles as any[]).some(r => r.name === 'Vendor'));
+  const manageableUsers = allUsers.filter(u => Array.isArray(u.roles) && !u.roles.some((r: any) => r.name === 'Vendor'));
 
   return (
     <Card>
@@ -358,3 +358,5 @@ export function UserManagementEditor() {
     </Card>
   );
 }
+
+    

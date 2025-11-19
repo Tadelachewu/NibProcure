@@ -181,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('authToken', newToken);
     setToken(newToken);
     setUser(loggedInUser);
-    setRole(loggedInRoles && loggedInRoles.length > 0 ? loggedInRoles[0] : null);
+    setRole(Array.isArray(loggedInRoles) && loggedInRoles.length > 0 ? loggedInRoles[0] : null);
   };
 
   const logout = () => {
@@ -315,3 +315,5 @@ export function useAuth() {
   }
   return context;
 }
+
+    
