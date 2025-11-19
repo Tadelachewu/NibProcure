@@ -82,7 +82,9 @@ function ProcurementOfficerDashboard({ setActiveView }: { setActiveView: (view: 
             ]);
             const reqData = await reqResponse.json();
             const invData = await invResponse.json();
-            setRequisitions(reqData);
+            
+            // Fix: Handle both array and object responses from the API
+            setRequisitions(Array.isArray(reqData) ? reqData : reqData.requisitions || []);
             setInvoices(invData);
         } catch (error) {
             console.error("Failed to fetch dashboard data:", error);
