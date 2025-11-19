@@ -2,7 +2,7 @@
 'use server';
 
 import { NextResponse } from 'next/server';
-import { prisma, Prisma } from '@/lib/prisma';
+import { prisma, Prisma } from '@prisma/client';
 import { PerItemAwardDetail, User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format } from 'date-fns';
