@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -75,7 +75,6 @@ export function DepartmentManagementEditor() {
 
   useEffect(() => {
     fetchAllUsers();
-    fetchAllDepartments();
     fetchDepartments();
   }, []);
 
@@ -115,7 +114,7 @@ export function DepartmentManagementEditor() {
         });
         
         setDialogOpen(false);
-        fetchDepartments();
+        await fetchDepartments();
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
@@ -163,8 +162,15 @@ export function DepartmentManagementEditor() {
     }
     setDialogOpen(true);
   }
-
-  const potentialHeads = allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as any[]).some(r => r.name === 'Vendor' || r.name === 'Requester'));
+  
+  const potentialHeadsForSelectedDept = useMemo(() => {
+    if (!departmentToEdit) {
+        // When creating a new department, we don't know the members yet, so show all potential heads.
+        return allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as any[]).some(r => r.name === 'Vendor' || r.name === 'Requester'));
+    }
+    // When editing, filter for users who belong to the department being edited.
+    return allUsers.filter(u => u.departmentId === departmentToEdit.id);
+  }, [allUsers, departmentToEdit]);
 
 
   return (
@@ -276,7 +282,7 @@ export function DepartmentManagementEditor() {
                         </SelectTrigger>
                         <SelectContent>
                              <SelectItem value="null">None</SelectItem>
-                            {potentialHeads.map(user => (
+                            {potentialHeadsForSelectedDept.map(user => (
                                 <SelectItem key={user.id} value={user.id}>{user.name} ({(user.roles[0] as any).name.replace(/_/g, ' ')})</SelectItem>
                             ))}
                         </SelectContent>
