@@ -31,7 +31,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
 import {
@@ -164,8 +163,8 @@ export function DepartmentManagementEditor() {
   }
 
   const potentialHeadsForSelectedDept = departmentToEdit
-    ? allUsers.filter(u => u.departmentId === departmentToEdit.id && (u.role as any)?.name !== 'Vendor' && (u.role as any)?.name !== 'Requester')
-    : allUsers.filter(u => (u.role as any)?.name !== 'Vendor' && (u.role as any)?.name !== 'Requester');
+    ? allUsers.filter(u => Array.isArray(u.roles) && !u.roles.some((r: any) => r.name === 'Vendor' || r.name === 'Requester') && u.departmentId === departmentToEdit.id)
+    : allUsers.filter(u => Array.isArray(u.roles) && !u.roles.some((r: any) => r.name === 'Vendor' || r.name === 'Requester'));
 
 
   return (
@@ -272,7 +271,7 @@ export function DepartmentManagementEditor() {
                         <SelectContent>
                              <SelectItem value="null">None</SelectItem>
                             {potentialHeadsForSelectedDept.map(user => (
-                                <SelectItem key={user.id} value={user.id}>{user.name} ({(user.role as any).name.replace(/_/g, ' ')})</SelectItem>
+                                <SelectItem key={user.id} value={user.id}>{user.name} ({ (user.roles as any[])[0].name.replace(/_/g, ' ') })</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
