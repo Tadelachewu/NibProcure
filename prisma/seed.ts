@@ -201,7 +201,7 @@ async function main() {
       update: {
           name: userData.name,
           email: userData.email,
-          role: { connect: { name: formattedRoleName } },
+          roles: { connect: { name: formattedRoleName } },
           department: departmentId ? { connect: { id: departmentId } } : undefined,
       },
       create: {
@@ -209,7 +209,7 @@ async function main() {
           name: userData.name,
           email: userData.email,
           password: hashedPassword,
-          role: { connect: { name: formattedRoleName } },
+          roles: { connect: { name: formattedRoleName } },
           department: departmentId ? { connect: { id: departmentId } } : undefined,
       },
     });
@@ -247,14 +247,14 @@ async function main() {
           update: {
               name: vendorUser.name,
               email: vendorUser.email,
-              role: { connect: { name: formattedRoleName } },
+              roles: { connect: { name: formattedRoleName } },
           },
           create: {
               id: vendorUser.id,
               name: vendorUser.name,
               email: vendorUser.email,
               password: hashedPassword,
-              role: { connect: { name: formattedRoleName } },
+              roles: { connect: { name: formattedRoleName } },
           }
       });
 
@@ -559,4 +559,3 @@ main()
     await prisma.$disconnect();
   });
 
-    
