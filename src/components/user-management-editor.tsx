@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from './ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Trash2, Edit, Users, X, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, Edit, Users, X, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Check } from 'lucide-react';
 import { Department, User, UserRole } from '@/lib/types';
 import {
   AlertDialog,
@@ -50,7 +50,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { useAuth } from '@/contexts/auth-context';
 import { Badge } from './ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { Check, Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
 import { cn } from '@/lib/utils';
 
 const userFormSchema = z.object({
