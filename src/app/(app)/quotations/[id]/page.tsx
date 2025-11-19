@@ -2527,12 +2527,15 @@ export default function QuotationDetailsPage() {
   }, [id, toast]);
 
   useEffect(() => {
+    let intervalId: NodeJS.Timeout;
     if (id && user && allUsers.length > 0) {
         fetchRequisitionAndQuotes();
+        intervalId = setInterval(fetchRequisitionAndQuotes, 10000); // Poll every 10 seconds
         window.addEventListener('focus', fetchRequisitionAndQuotes);
-        return () => {
-            window.removeEventListener('focus', fetchRequisitionAndQuotes);
-        }
+    }
+    return () => {
+        clearInterval(intervalId);
+        window.removeEventListener('focus', fetchRequisitionAndQuotes);
     }
   }, [id, user, allUsers, fetchRequisitionAndQuotes]);
   
@@ -3203,6 +3206,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     const { toast } = useToast();
     const [isOpen, setIsOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [selectedItems, setSelectedItems] = useState<string[]>([]);
     const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
@@ -3221,8 +3225,8 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     const canRestart = (requisition.rfqSettings as any)?.awardStrategy === 'item' && failedItems.length > 0;
 
     const handleRestart = async () => {
-        if (!user || !deadline || failedItems.length === 0 || selectedVendors.length === 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Please select vendors and a new deadline.' });
+        if (!user || !deadline || selectedItems.length === 0 || selectedVendors.length === 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please select items, vendors, and a new deadline.' });
             return;
         }
 
@@ -3233,7 +3237,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     userId: user.id,
-                    itemIds: failedItems.map(item => item.id),
+                    itemIds: selectedItems,
                     vendorIds: selectedVendors,
                     newDeadline: deadline,
                 }),
@@ -3242,7 +3246,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to restart RFQ for items.');
             }
-            toast({ title: 'RFQ Restarted', description: 'The RFQ for the failed items has been sent to new vendors.' });
+            toast({ title: 'RFQ Restarted', description: 'The RFQ for the selected items has been sent to new vendors.' });
             onRfqRestarted();
             setIsOpen(false);
         } catch (error) {
@@ -3265,14 +3269,25 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Restart RFQ for Failed Items</DialogTitle>
-                    <DialogDescription>Select new vendors to send a Request for Quotation for the items that failed to be awarded.</DialogDescription>
+                    <DialogDescription>Select items and new vendors to send a Request for Quotation for the items that failed to be awarded.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div>
                         <Label>Items to Re-tender</Label>
-                        <ul className="list-disc pl-5 text-sm text-muted-foreground">
-                            {failedItems.map(item => <li key={item.id}>{item.name}</li>)}
-                        </ul>
+                        <ScrollArea className="h-32 border rounded-md p-2 mt-2">
+                            {failedItems.map(item => (
+                                <div key={item.id} className="flex items-center space-x-2 p-1">
+                                    <Checkbox 
+                                        id={`item-restart-${item.id}`} 
+                                        checked={selectedItems.includes(item.id)}
+                                        onCheckedChange={(checked) => {
+                                            setSelectedItems(prev => checked ? [...prev, item.id] : prev.filter(id => id !== item.id));
+                                        }}
+                                    />
+                                    <Label htmlFor={`item-restart-${item.id}`} className="font-normal">{item.name}</Label>
+                                </div>
+                            ))}
+                        </ScrollArea>
                     </div>
                      <div className="space-y-2">
                         <Label>New Quotation Submission Deadline</Label>
@@ -3311,7 +3326,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                    <Button onClick={handleRestart} disabled={isSubmitting || selectedVendors.length === 0 || !deadline}>
+                    <Button onClick={handleRestart} disabled={isSubmitting || selectedItems.length === 0 || selectedVendors.length === 0 || !deadline}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2"/>}
                         Send New RFQ
                     </Button>
@@ -3348,5 +3363,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
 
 
