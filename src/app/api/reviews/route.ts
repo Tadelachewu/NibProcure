@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { decodeJwt } from '@/lib/auth';
@@ -19,6 +21,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     
+    // Correctly get roles from the decoded token payload
     const userRoles = (userPayload.roles as string[]) || [];
     const userId = userPayload.id;
 
