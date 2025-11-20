@@ -21,9 +21,8 @@ function getStatusFromRole(roleName: string): string {
     return status;
 }
 
-
 /**
- * Finds the correct next approval step for a given requisition.
+ * Finds the correct next approval step for a given requisition based on its current status and value.
  * @param tx - Prisma transaction client.
  * @param requisition - The full requisition object.
  * @param actor - The user performing the current approval.
@@ -54,28 +53,26 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         return { 
             nextStatus: 'PostApproved', 
             nextApproverId: null, 
-            auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier which has no approval steps. Approved for vendor notification.`
+            auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier which has no approval steps. Auto-approved for vendor notification.`
         };
     }
     
-    // **REVISED LOGIC START**
-    // Correctly find the current step index based on the REQUISITION's status, not the actor's role.
+    // **REWRITTEN LOGIC**
+    // Find the current step index based on the requisition's actual status.
     const currentStepIndex = relevantTier.steps.findIndex(step => {
-      try {
-        // The requisition status is the source of truth for its current step.
-        return requisition.status === getStatusFromRole(step.role.name);
-      } catch {
-        return false;
-      }
+        try {
+            return requisition.status === getStatusFromRole(step.role.name);
+        } catch {
+            return false;
+        }
     });
 
     if (currentStepIndex === -1) {
-        // This is the first time we are routing this award for this tier.
+        // This is the first time this award is being routed for this tier. Start from the beginning.
         const firstStep = relevantTier.steps[0];
         const nextStatus = getStatusFromRole(firstStep.role.name);
         
         let nextApproverId: string | null = null;
-        // Do not assign an approver if the next step is a committee review.
         if (!firstStep.role.name.includes('Committee')) {
              const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: firstStep.role.name } } }});
              if (!approverUser) throw new Error(`Could not find a user for the role: ${firstStep.role.name.replace(/_/g, ' ')}`);
@@ -88,7 +85,6 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
             auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.name.replace(/_/g, ' ')} for approval.`
         };
     }
-    // **REVISED LOGIC END**
 
     // We are in an existing sequence, find the next step.
     if (currentStepIndex < relevantTier.steps.length - 1) {

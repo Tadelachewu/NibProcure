@@ -59,8 +59,6 @@ export async function GET(request: Request) {
              ] } });
         }
         
-        orConditions.push({ reviews: { some: { reviewerId: userId } } });
-
         whereClause.OR = orConditions;
 
     } else if (forVendor === 'true') {
@@ -266,6 +264,7 @@ export async function PATCH(
   try {
     const body = await request.json();
     const { id, status, userId, comment, minute } = body;
+    const updateData = body;
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
 
@@ -285,8 +284,75 @@ export async function PATCH(
     let dataToUpdate: any = {};
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
+    
+    if (requisition.status.startsWith('Pending_') && newStatus === 'Approved') {
+        const userRoles = (user.roles as any[]).map(r => r.name);
+        
+        let isDesignatedApprover = false;
+        const requiredRoleForStatus = requisition.status.replace('Pending_', '');
+        if (userRoles.includes(requiredRoleForStatus)) isDesignatedApprover = true;
+        else if (requisition.currentApproverId === userId) isDesignatedApprover = true;
+        else if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) isDesignatedApprover = true;
 
-    if (requisition.status === 'Pending_Approval') {
+
+        if (!isDesignatedApprover) {
+            return NextResponse.json({ error: 'You are not the designated approver for this item.' }, { status: 403 });
+        }
+        
+        return await prisma.$transaction(async (tx) => {
+            const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
+            
+            dataToUpdate.status = nextStatus;
+            dataToUpdate.currentApproverId = nextApproverId;
+            auditDetails = serviceAuditDetails;
+            auditAction = 'APPROVE_AWARD_STEP';
+
+            const updatedRequisition = await tx.purchaseRequisition.update({
+                where: { id },
+                data: dataToUpdate,
+            });
+            
+            if (minute) {
+                await tx.minute.create({
+                    data: {
+                        requisition: { connect: { id: id } },
+                        author: { connect: { id: userId } },
+                        decision: 'APPROVED',
+                        decisionBody: (user.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' '),
+                        justification: minute.justification,
+                        attendees: {
+                            connect: minute.attendeeIds.map((id: string) => ({ id }))
+                        }
+                    }
+                });
+                auditDetails += ` Minute recorded.`;
+            }
+
+            await tx.review.create({
+                data: {
+                    requisition: { connect: { id: id } },
+                    reviewer: { connect: { id: userId } },
+                    decision: 'APPROVED',
+                    comment: comment,
+                }
+            });
+
+            await tx.auditLog.create({
+                data: {
+                    transactionId: updatedRequisition.transactionId,
+                    user: { connect: { id: user.id } },
+                    timestamp: new Date(),
+                    action: auditAction,
+                    entity: 'Requisition',
+                    entityId: id,
+                    details: auditDetails,
+                }
+            });
+
+            return NextResponse.json(updatedRequisition);
+        });
+
+    } else if (requisition.status === 'Pending_Approval') {
         if (requisition.currentApproverId !== userId) {
             return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
         }
@@ -312,102 +378,6 @@ export async function PATCH(
             }
         });
 
-
-    } else if (requisition.status.startsWith('Pending_')) {
-        const userRoles = (user.roles as any[]).map(r => r.name);
-        
-        let isDesignatedApprover = false;
-        if (userRoles.includes('Committee_A_Member') && requisition.status === 'Pending_Committee_A_Recommendation') isDesignatedApprover = true;
-        else if (userRoles.includes('Committee_B_Member') && requisition.status === 'Pending_Committee_B_Review') isDesignatedApprover = true;
-        else if (requisition.currentApproverId === userId) isDesignatedApprover = true;
-
-        if (!isDesignatedApprover) {
-            return NextResponse.json({ error: 'You are not the designated approver for this item.' }, { status: 403 });
-        }
-        
-        if (newStatus === 'Rejected') {
-             return await prisma.$transaction(async (tx) => {
-                await tx.quotation.deleteMany({ where: { requisitionId: id }});
-                
-                await tx.purchaseRequisition.update({
-                    where: { id: id },
-                    data: {
-                        status: 'Rejected',
-                        currentApproverId: null,
-                        awardedQuoteItemIds: [],
-                    }
-                });
-
-                await tx.auditLog.create({
-                    data: {
-                        transactionId: requisition.transactionId,
-                        user: { connect: { id: user.id } },
-                        timestamp: new Date(),
-                        action: 'REJECT_AWARD',
-                        entity: 'Requisition',
-                        entityId: id,
-                        details: `Award for requisition ${id} was rejected by ${userRoles.join(', ').replace(/_/g, ' ')}. All quotes and scores have been reset. Reason: "${comment}".`,
-                    }
-                });
-                return NextResponse.json({ message: "Award rejected."});
-             });
-        } else if (newStatus === 'Approved') {
-             return await prisma.$transaction(async (tx) => {
-                const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
-                
-                dataToUpdate.status = nextStatus;
-                dataToUpdate.currentApproverId = nextApproverId;
-                auditDetails = serviceAuditDetails;
-                auditAction = 'APPROVE_AWARD_STEP';
-
-                const updatedRequisition = await tx.purchaseRequisition.update({
-                    where: { id },
-                    data: dataToUpdate,
-                });
-                
-                if (minute) {
-                    await tx.minute.create({
-                        data: {
-                            requisition: { connect: { id: id } },
-                            author: { connect: { id: userId } },
-                            decision: 'APPROVED',
-                            decisionBody: (user.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' '),
-                            justification: minute.justification,
-                            attendees: {
-                                connect: minute.attendeeIds.map((id: string) => ({ id }))
-                            }
-                        }
-                    });
-                    auditDetails += ` Minute recorded.`;
-                }
-
-                await tx.review.create({
-                    data: {
-                        requisition: { connect: { id: id } },
-                        reviewer: { connect: { id: userId } },
-                        decision: 'APPROVED',
-                        comment: comment,
-                    }
-                });
-
-                 await tx.auditLog.create({
-                    data: {
-                        transactionId: updatedRequisition.transactionId,
-                        user: { connect: { id: user.id } },
-                        timestamp: new Date(),
-                        action: auditAction,
-                        entity: 'Requisition',
-                        entityId: id,
-                        details: auditDetails,
-                    }
-                });
-
-                return NextResponse.json(updatedRequisition);
-             });
-        } else {
-             return NextResponse.json({ error: 'Invalid action for this requisition state.' }, { status: 400 });
-        }
-        
 
     } else if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
         const isRequester = requisition.requesterId === userId;
