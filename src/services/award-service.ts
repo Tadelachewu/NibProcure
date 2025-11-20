@@ -58,15 +58,14 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         };
     }
     
-    // Find where we are in the current sequence
-    let currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getStatusFromRole(step.role.name));
-
-    // If the current step isn't found by status (e.g. an Admin is acting), find it by role
-    if (currentStepIndex === -1 && actor.roles) {
-      const actorRoles = (actor.roles as any[]).map(r => r.name);
-      currentStepIndex = relevantTier.steps.findIndex(step => actorRoles.includes(step.role.name));
-    }
-
+    // Correctly find the current step index based on the REQUISITION's status, not the actor's role.
+    const currentStepIndex = relevantTier.steps.findIndex(step => {
+      try {
+        return requisition.status === getStatusFromRole(step.role.name);
+      } catch {
+        return false;
+      }
+    });
 
     if (currentStepIndex === -1) {
         // This is the first time we are routing this, so we start from step 0.
