@@ -30,17 +30,17 @@ export async function GET(request: Request) {
         orConditions.push({ status: `Pending_${roleName}` });
     });
     
-    // New Condition: Also include items this user has reviewed in the last 5 minutes.
-    // This makes the UI feel persistent after an action.
-    orConditions.push({
-        reviews: {
-            some: {
-                reviewerId: userId,
-                // Look for reviews in the last 5 minutes to keep the view clean
-                createdAt: { gte: addMinutes(new Date(), -5) }
+    const url = new URL(request.url);
+    if (url.searchParams.get('includeActioned') === 'true') {
+        orConditions.push({
+            reviews: {
+                some: {
+                    reviewerId: userId,
+                    createdAt: { gte: addMinutes(new Date(), -5) }
+                }
             }
-        }
-    });
+        });
+    }
     
     // For high-level users, we also show them everything that is pending *any* kind of review for oversight
     if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
@@ -56,6 +56,41 @@ export async function GET(request: Request) {
       where: whereClause,
       include: {
         requester: { select: { name: true } },
+        items: true, // Make sure items are included for the dialog
+        quotations: { // Include quotations and their relevant nested data
+            include: {
+                items: true,
+                scores: {
+                    include: {
+                        scorer: true,
+                        itemScores: {
+                            include: {
+                                scores: true,
+                            },
+                        },
+                    },
+                },
+            }
+        },
+        auditTrail: {
+            include: {
+                user: {
+                    select: {
+                        name: true,
+                        roles: true
+                    }
+                }
+            },
+            orderBy: {
+                timestamp: 'desc'
+            }
+        },
+        minutes: {
+            include: {
+                author: true,
+                attendees: true
+            }
+        }
       },
       orderBy: {
         createdAt: 'desc',

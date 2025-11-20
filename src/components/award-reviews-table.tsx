@@ -69,14 +69,19 @@ export function AwardReviewsTable() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
 
-  const fetchRequisitions = useCallback(async () => {
+  const fetchRequisitions = useCallback(async (includeActioned = false) => {
     if (!user || !token) {
       setLoading(false);
       return;
     }
     try {
       setLoading(true);
-      const response = await fetch(`/api/reviews`, {
+      let apiUrl = '/api/reviews';
+      if (includeActioned) {
+        apiUrl += `?includeActioned=true`;
+      }
+      
+      const response = await fetch(apiUrl, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for award review');
@@ -147,8 +152,14 @@ export function AwardReviewsTable() {
         description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       
-      // Re-fetch the data to get the updated list which now includes the recently-actioned item.
-      await fetchRequisitions();
+      // Update the local state instead of a full re-fetch
+      setRequisitions(prevReqs => 
+        prevReqs.map(req => 
+          req.id === selectedRequisition.id 
+            ? { ...req, status: 'PostApproved', currentApproverId: null } // A generic "processed" state
+            : req
+        )
+      );
 
     } catch (error) {
       toast({
@@ -315,7 +326,7 @@ export function AwardReviewsTable() {
       </Dialog>
     </Card>
     {selectedRequisition && (
-        <ApprovalSummaryDialog
+        <ApprovalSummaryDialog 
             requisition={selectedRequisition} 
             isOpen={isDetailsDialogOpen} 
             onClose={() => setDetailsDialogOpen(false)} 
