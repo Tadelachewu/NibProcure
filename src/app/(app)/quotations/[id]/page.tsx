@@ -839,7 +839,7 @@ const RFQActionDialog = ({
 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
@@ -861,7 +861,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -882,7 +882,7 @@ const RFQActionDialog = ({
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
             onClose();
         }
     };
@@ -952,8 +952,8 @@ const RFQActionDialog = ({
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Close</Button></DialogClose>
-                    <Button onClick={handleSubmit} disabled={isSubmitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
-                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    <Button onClick={handleSubmit} disabled={submitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
+                            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                         Confirm {action.charAt(0).toUpperCase() + action.slice(1)}
                     </Button>
                 </DialogFooter>
@@ -966,7 +966,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const [distributionType, setDistributionType] = useState('all');
     const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
     const [vendorSearch, setVendorSearch] = useState("");
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
     const [cpoAmount, setCpoAmount] = useState<number | undefined>(requisition.cpoAmount);
@@ -1852,24 +1852,10 @@ const ScoringProgressTracker = ({
 };
 
 const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClose }: { requisition: PurchaseRequisition; quotations: Quotation[], isOpen: boolean, onClose: () => void }) => {
+    const { toast } = useToast();
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const printRef = useRef<HTMLDivElement>(null);
-    const { toast } = useToast();
-
-    const getCriterionName = (criterionId: string, type: 'FINANCIAL' | 'TECHNICAL') => {
-        const criteria = type === 'FINANCIAL'
-          ? requisition.evaluationCriteria?.financialCriteria
-          : requisition.evaluationCriteria?.technicalCriteria;
-        return criteria?.find(c => c.id === criterionId)?.name || 'Unknown Criterion';
-    }
-
-    const getItemName = (quoteItemId: string) => {
-        for (const quote of quotations) {
-            const item = quote.items.find(i => i.id === quoteItemId);
-            if (item) return item.name;
-        }
-        return 'Unknown Item';
-    }
+    const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy || 'all';
 
     const handleGeneratePdf = async () => {
         const input = printRef.current;
@@ -1879,11 +1865,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
         toast({ title: "Generating PDF...", description: "This may take a moment." });
 
         try {
-            const canvas = await html2canvas(input, {
-                scale: 2, // Increase resolution
-                useCORS: true,
-                backgroundColor: null // Important for dark mode
-            });
+            const canvas = await html2canvas(input, { scale: 2, useCORS: true, backgroundColor: null });
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -1891,33 +1873,35 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             const imgWidth = canvas.width;
             const imgHeight = canvas.height;
             const ratio = imgWidth / imgHeight;
-            let width = pdfWidth - 20; // with margin
+            let width = pdfWidth - 20;
             let height = width / ratio;
 
-             if (height > pdfHeight - 20) {
-                 height = pdfHeight - 20;
-                 width = height * ratio;
+            if (height > pdfHeight - 20) {
+                height = pdfHeight - 20;
+                width = height * ratio;
             }
 
             const x = (pdfWidth - width) / 2;
             const y = 10;
-
-            // Add a white background to the PDF before adding the image
-            pdf.setFillColor(255, 255, 255);
-            pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
-
             pdf.addImage(imgData, 'PNG', x, y, width, height);
-
             pdf.save(`Scoring-Report-${requisition.id}.pdf`);
             toast({ title: "PDF Generated", description: "Your report has been downloaded." });
-
         } catch (error) {
             console.error(error);
             toast({ variant: 'destructive', title: "PDF Generation Failed", description: "An error occurred while creating the PDF." });
         } finally {
             setIsGeneratingPdf(false);
         }
-    }
+    };
+    
+    const getRankIcon = (rank?: number) => {
+        switch(rank) {
+          case 1: return <Crown className="h-4 w-4 text-amber-400" />;
+          case 2: return <Trophy className="h-4 w-4 text-slate-400" />;
+          case 3: return <Medal className="h-4 w-4 text-amber-600" />;
+          default: return null;
+        }
+    };
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -1925,96 +1909,73 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                 <DialogHeader>
                     <DialogTitle>Cumulative Scoring Report: How The Award Was Won</DialogTitle>
                     <DialogDescription>
-                        A detailed breakdown of committee scores for requisition {requisition.id}, explaining the award decision.
+                        A detailed breakdown of committee scores for requisition {requisition.id}, explaining the award decision based on the '{awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}' strategy.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="flex-grow overflow-hidden">
                     <ScrollArea className="h-full">
                         <div ref={printRef} className="p-1 space-y-6 bg-background text-foreground print:bg-white print:text-black">
-                            {/* Header for PDF */}
                             <div className="hidden print:block text-center mb-8 pt-4">
                                 <Image src="/logo.png" alt="Logo" width={40} height={40} className="mx-auto mb-2" />
-                                <h1 className="text-2xl font-bold text-black">Scoring &amp; Award Justification Report</h1>
+                                <h1 className="text-2xl font-bold text-black">Scoring & Award Justification Report</h1>
                                 <p className="text-gray-600">{requisition.title}</p>
                                 <p className="text-sm text-gray-500">{requisition.id}</p>
                                 <p className="text-sm text-gray-500">Report Generated: {format(new Date(), 'PPpp')}</p>
                             </div>
-
-                            {quotations.sort((a, b) => (a.rank || 99) - (b.rank || 99)).map(quote => (
-                                <Card key={quote.id} className="break-inside-avoid print:border-gray-300 print:shadow-none print:rounded-lg">
-                                    <CardHeader className="print:bg-gray-100 print:rounded-t-lg">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <CardTitle className="text-xl">{quote.vendorName}</CardTitle>
-                                                <CardDescription className="print:text-gray-700 pt-1">
-                                                    Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> |
-                                                    Rank: <span className="font-bold">{quote.rank || 'N/A'}</span> |
-                                                    Total Price: <span className="font-bold">{quote.totalPrice.toLocaleString()} ETB</span>
-                                                </CardDescription>
-                                            </div>
-                                            <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
-                                        </div>
+                            
+                            {awardStrategy === 'all' ? (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Overall Vendor Ranking</CardTitle>
                                     </CardHeader>
-                                    <CardContent className="p-4 space-y-4">
-                                        {quote.scores && quote.scores.length > 0 ? (
-                                            quote.scores.map(scoreSet => (
-                                                <div key={scoreSet.scorerId} className="p-3 border rounded-md break-inside-avoid print:border-gray-200">
-                                                    <div className="flex items-center justify-between mb-3 pb-2 border-b print:border-gray-200">
-                                                        <div className="flex items-center gap-3">
-                                                            <Avatar className="h-8 w-8">
-                                                                <AvatarImage src={`https://picsum.photos/seed/${scoreSet.scorerId}/32/32`} />
-                                                                <AvatarFallback>{scoreSet.scorer?.name?.charAt(0) || 'U'}</AvatarFallback>
-                                                            </Avatar>
-                                                            <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
-                                                        </div>
-                                                        <div className="text-right">
-                                                        <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
-                                                        <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPp')}</p>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="space-y-4">
-                                                        {scoreSet.itemScores?.map(itemScore => (
-                                                            <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
-                                                                <h4 className="font-semibold text-sm mb-2 print:text-gray-800 border-b pb-1">Item: {getItemName(itemScore.quoteItemId)}</h4>
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 mt-2">
-                                                                    <div>
-                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-700">Financial ({requisition.evaluationCriteria?.financialWeight}%)</h5>
-                                                                        {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
-                                                                            <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
-                                                                                <div className="flex justify-between items-center font-medium">
-                                                                                    <p>{getCriterionName(s.financialCriterionId!, 'FINANCIAL')}</p>
-                                                                                    <p className="font-bold">{s.score}/100</p>
-                                                                                </div>
-                                                                                {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                    <div>
-                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
-                                                                        {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
-                                                                            <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
-                                                                                <div className="flex justify-between items-center font-medium">
-                                                                                    <p>{getCriterionName(s.technicalCriterionId!, 'TECHNICAL')}</p>
-                                                                                    <p className="font-bold">{s.score}/100</p>
-                                                                                </div>
-                                                                                {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-
-
-                                                    {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
-                                                </div>
-                                            ))
-                                        ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
+                                    <CardContent>
+                                        <Table>
+                                            <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead className="text-right">Final Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                            <TableBody>
+                                                {quotations.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)).map(q => (
+                                                    <TableRow key={q.id}>
+                                                        <TableCell className="font-bold flex items-center gap-1">{getRankIcon(q.rank)} {q.rank}</TableCell>
+                                                        <TableCell>{q.vendorName}</TableCell>
+                                                        <TableCell className="text-right font-mono">{q.finalAverageScore?.toFixed(2)}</TableCell>
+                                                        <TableCell><Badge variant="outline">{q.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
                                     </CardContent>
                                 </Card>
-                            ))}
+                            ) : (
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Award Breakdown by Item</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {requisition.items.map(item => {
+                                            const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
+                                            return (
+                                                <div key={item.id} className="mb-4 p-4 border rounded-md">
+                                                    <h4 className="font-semibold">{item.name}</h4>
+                                                    <Table>
+                                                        <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                                        <TableBody>
+                                                            {awards.map(award => (
+                                                                <TableRow key={award.quoteItemId}>
+                                                                    <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
+                                                                    <TableCell>{award.vendorName}</TableCell>
+                                                                    <TableCell>{award.proposedItemName}</TableCell>
+                                                                    <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
+                                                                    <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                                </TableRow>
+                                                            ))}
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
+                                            )
+                                        })}
+                                    </CardContent>
+                                </Card>
+                            )}
+
                         </div>
                     </ScrollArea>
                 </div>
@@ -3293,7 +3254,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
                                     <Calendar mode="single" selected={deadlineDate} onSelect={setDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
                                 </PopoverContent>
                             </Popover>
-                            <Input type="time" className="w-32" value={deadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
+                            <Input type="time" className="w-32" value={deadlineTime} onChange={(e) => setDeadlineTime(e.target.value)}/>
                         </div>
                     </div>
                     <div>
@@ -3355,5 +3316,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
