@@ -18,7 +18,7 @@ export async function POST(
     const body = await request.json();
     const { userId, itemIds, vendorIds, newDeadline } = body;
 
-    const actor: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { role: true } });
+    const actor: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
@@ -26,7 +26,7 @@ export async function POST(
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
     if (rfqSenderSetting && rfqSenderSetting.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const userRoleName = (actor.role as any)?.name as UserRole;
+        const userRoleName = (actor.roles as any[])[0]?.name as UserRole;
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
         if (userRoleName === 'Admin') {
             isAuthorized = true;
