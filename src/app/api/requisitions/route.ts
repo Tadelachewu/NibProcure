@@ -138,6 +138,9 @@ export async function GET(request: Request) {
                     'Scoring_Complete',
                     'Award_Declined',
                     'Awarded',
+                    'PO_Created',
+                    'Fulfilled',
+                    'Closed',
                     ...allPossiblePendingStatuses,
                 ]
             };
