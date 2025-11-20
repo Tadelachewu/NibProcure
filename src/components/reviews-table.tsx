@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -18,7 +18,7 @@ import {
   CardDescription,
 } from './ui/card';
 import { Button } from './ui/button';
-import { PurchaseRequisition, User } from '@/lib/types';
+import { PurchaseRequisition } from '@/lib/types';
 import { format } from 'date-fns';
 import {
   Check,
@@ -29,10 +29,8 @@ import {
   Eye,
   Inbox,
   Loader2,
-  Users,
   X,
   FileText,
-  FileBarChart2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -50,14 +48,13 @@ import { ApprovalSummaryDialog } from './approval-summary-dialog';
 import { Badge } from './ui/badge';
 import Link from 'next/link';
 
-
 const PAGE_SIZE = 10;
 
 export function ReviewsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, token, allUsers } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,19 +64,23 @@ export function ReviewsTable() {
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
-  
 
-  const fetchRequisitions = async () => {
+  const fetchRequisitions = useCallback(async (includeActioned = false) => {
     if (!user || !token) {
       setLoading(false);
       return;
     }
     try {
       setLoading(true);
-      const response = await fetch(`/api/requisitions?forReview=true`, {
+      let apiUrl = '/api/reviews';
+      if (includeActioned) {
+        apiUrl += `?includeActionedFor=${user.id}`;
+      }
+      
+      const response = await fetch(apiUrl, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!response.ok) throw new Error('Failed to fetch requisitions for review');
+      if (!response.ok) throw new Error('Failed to fetch requisitions for award review');
       
       const data: PurchaseRequisition[] = await response.json();
       setRequisitions(data);
@@ -88,11 +89,11 @@ export function ReviewsTable() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, token]);
 
   useEffect(() => {
     fetchRequisitions();
-  }, [user, token]);
+  }, [fetchRequisitions]);
 
   const handleAction = (req: PurchaseRequisition, type: 'approve' | 'reject') => {
     setSelectedRequisition(req);
@@ -137,12 +138,19 @@ export function ReviewsTable() {
             minute,
         }),
       });
-      if (!response.ok) throw new Error(`Failed to ${actionType} requisition award`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to ${actionType} requisition award`);
+      }
+      
       toast({
         title: "Success",
         description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
-      fetchRequisitions();
+      
+      // Re-fetch the data, including the item just actioned on.
+      fetchRequisitions(true);
+
     } catch (error) {
       toast({
         variant: 'destructive',
@@ -172,9 +180,9 @@ export function ReviewsTable() {
     <>
     <Card>
       <CardHeader>
-        <CardTitle>Award Recommendations for Review</CardTitle>
+        <CardTitle>Award Reviews</CardTitle>
         <CardDescription>
-          Review and act on award recommendations that require your committee's approval.
+          Review and act on award recommendations that require your final approval.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -197,14 +205,20 @@ export function ReviewsTable() {
                   const isLoadingAction = activeActionId === req.id;
                   
                   let isActionable = false;
-                    if (user && req.status) {
-                        const requiredRole = req.status.replace('Pending_', '');
-                        if(user.role === requiredRole) {
+                  if (user && req.status) {
+                      const userRoles = (user.roles as any[]).map(r => r.name);
+                      
+                      if (req.currentApproverId === user.id) {
+                          isActionable = true;
+                      } 
+                      else if (req.status.startsWith('Pending_')) {
+                          const requiredRoleForStatus = req.status.replace('Pending_', '');
+                          if (userRoles.includes(requiredRoleForStatus)) {
                             isActionable = true;
-                        } else if (req.currentApproverId === user.id) {
-                            isActionable = true;
-                        }
-                    }
+                          }
+                      }
+                  }
+
 
                   return (
                     <TableRow key={req.id}>
