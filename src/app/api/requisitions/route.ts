@@ -96,7 +96,7 @@ export async function GET(request: Request) {
                   some: {
                     perItemAwardDetails: {
                       path: '$[*].vendorId',
-                      array_contains: userPayload.vendorId,
+                      equals: userPayload.vendorId,
                     },
                   },
                 },
@@ -609,3 +609,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
