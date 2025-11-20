@@ -274,7 +274,7 @@ export async function PATCH(
 
     const requisition = await prisma.purchaseRequisition.findUnique({ 
         where: { id },
-        include: { department: true, requester: true }
+        include: { department: true, requester: true, roles: true }
     });
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
@@ -297,7 +297,7 @@ export async function PATCH(
             return NextResponse.json({ error: 'You are not authorized to approve this item at its current step.' }, { status: 403 });
         }
         
-        return await prisma.$transaction(async (tx) => {
+        const transactionResult = await prisma.$transaction(async (tx) => {
             const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
             
             dataToUpdate.status = nextStatus;
@@ -347,8 +347,10 @@ export async function PATCH(
                 }
             });
 
-            return NextResponse.json(updatedRequisition);
+            return updatedRequisition;
         });
+
+        return NextResponse.json(transactionResult);
 
     } else if (requisition.status === 'Pending_Approval') {
         if (requisition.currentApproverId !== userId) {

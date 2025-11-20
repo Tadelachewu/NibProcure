@@ -13,12 +13,8 @@ const roleToStatusMap: Record<string, string> = {
     'President': 'Pending_President_Approval'
 };
 
-function getStatusFromRole(roleName: string): string {
-    const status = roleToStatusMap[roleName];
-    if (!status) {
-      throw new Error(`Could not find a valid pending status for the role: ${roleName}`);
-    }
-    return status;
+function getStatusFromRole(roleName: string): string | null {
+    return roleToStatusMap[roleName] || null;
 }
 
 /**
@@ -57,64 +53,47 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         };
     }
     
-    // Find the current step index based on the requisition's status, NOT the actor's role.
-    const currentStepIndex = relevantTier.steps.findIndex(step => {
-        try {
-            return requisition.status === getStatusFromRole(step.role.name);
-        } catch {
-            return false;
-        }
+    let currentStepIndex = relevantTier.steps.findIndex(step => {
+        const status = getStatusFromRole(step.role.name);
+        return status === requisition.status;
     });
 
+    // If the current status is not in the chain (e.g. it's the first routing for this tier), start at the beginning.
     if (currentStepIndex === -1) {
-        // This is the first time this award is being routed for this tier. Start from the beginning.
-        const firstStep = relevantTier.steps[0];
-        const nextStatus = getStatusFromRole(firstStep.role.name);
-        
-        let nextApproverId: string | null = null;
-        if (!firstStep.role.name.includes('Committee')) {
-             const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: firstStep.role.name } } }});
-             if (!approverUser) throw new Error(`Could not find a user for the role: ${firstStep.role.name.replace(/_/g, ' ')}`);
-             nextApproverId = approverUser.id;
-        }
-
-        return { 
-            nextStatus, 
-            nextApproverId,
-            auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.name.replace(/_/g, ' ')} for approval.`
-        };
+       currentStepIndex = -1; // This will effectively start the loop from index 0
     }
-
-    // We are in an existing sequence, find the next step.
-    if (currentStepIndex < relevantTier.steps.length - 1) {
-        const nextStep = relevantTier.steps[currentStepIndex + 1];
+    
+    let nextStepIndex = currentStepIndex + 1;
+    while(nextStepIndex < relevantTier.steps.length) {
+        const nextStep = relevantTier.steps[nextStepIndex];
         const nextStatus = getStatusFromRole(nextStep.role.name);
         
-        let nextApproverId: string | null = null;
-        if (!nextStep.role.name.includes('Committee')) {
-             const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: nextStep.role.name } } }});
-             if (approverUser) {
+        if(nextStatus) { // Found a valid next step
+            let nextApproverId: string | null = null;
+            if (!nextStep.role.name.includes('Committee')) {
+                const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: nextStep.role.name } } }});
+                if (!approverUser) throw new Error(`Could not find a user for the role: ${nextStep.role.name.replace(/_/g, ' ')}`);
                 nextApproverId = approverUser.id;
-             } else {
-                 throw new Error(`Could not find a user for the next approval role: ${nextStep.role.name.replace(/_/g, ' ')}`);
-             }
+            }
+            const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
+             return {
+                nextStatus,
+                nextApproverId,
+                auditDetails: `Award approved by ${actorRoles}. Advanced to ${nextStep.role.name.replace(/_/g, ' ')}.`
+            };
         }
         
-        const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
-        return {
-            nextStatus,
-            nextApproverId,
-            auditDetails: `Award approved by ${actorRoles}. Advanced to ${nextStep.role.name.replace(/_/g, ' ')}.`
-        };
-    } else {
-        // This was the final step in the chain.
-        const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
-        return {
-            nextStatus: 'PostApproved',
-            nextApproverId: null,
-            auditDetails: `Final award approval for requisition ${requisition.id} granted by ${actorRoles}. Ready for vendor notification.`
-        };
+        // If the role is invalid (e.g. Admin), skip it and check the next one
+        nextStepIndex++;
     }
+
+    // If we've gone through all the steps, it's the final approval.
+    const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
+    return {
+        nextStatus: 'PostApproved',
+        nextApproverId: null,
+        auditDetails: `Final award approval for requisition ${requisition.id} granted by ${actorRoles}. Ready for vendor notification.`
+    };
 }
 
 
