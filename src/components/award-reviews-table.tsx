@@ -76,9 +76,7 @@ export function AwardReviewsTable() {
     }
     try {
       setLoading(true);
-      let apiUrl = '/api/reviews';
-      
-      const response = await fetch(apiUrl, {
+      const response = await fetch(`/api/reviews`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for award review');
@@ -149,7 +147,6 @@ export function AwardReviewsTable() {
         description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       
-      // Re-fetch the data. Since the API now includes actioned items, it will persist.
       fetchRequisitions(true);
 
     } catch (error) {
@@ -208,14 +205,13 @@ export function AwardReviewsTable() {
                   let isActionable = false;
                   if (user && req.status) {
                       const userRoles = (user.roles as any[]).map(r => r.name);
+                      const requiredRoleForStatus = req.status.replace('Pending_', '');
+                      
                       if (req.currentApproverId === user.id) {
                           isActionable = true;
                       } 
-                      else if (req.status.startsWith('Pending_')) {
-                          const requiredRoleForStatus = req.status.replace('Pending_', '');
-                          if (userRoles.includes(requiredRoleForStatus)) {
-                            isActionable = true;
-                          }
+                      else if (req.status.startsWith('Pending_') && userRoles.includes(requiredRoleForStatus)) {
+                          isActionable = true;
                       }
                   }
 

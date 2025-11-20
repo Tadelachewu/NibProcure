@@ -64,8 +64,13 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         let nextApproverId: string | null = null;
         if (!nextRoleName.includes('Committee')) {
             const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: nextRoleName } } }});
-            if (!approverUser) throw new Error(`Could not find a user for the role: ${nextRoleName.replace(/_/g, ' ')}`);
-            nextApproverId = approverUser.id;
+            if (!approverUser) {
+                // If a specific approver role is not found (e.g. "President"), we should not throw an error, but rather log a warning.
+                // In a real system, there should be robust error handling or fallback mechanisms.
+                console.warn(`Could not find a user for the role: ${nextRoleName.replace(/_/g, ' ')}. The approval will be unassigned.`);
+            } else {
+                 nextApproverId = approverUser.id;
+            }
         }
 
         const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');

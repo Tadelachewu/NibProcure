@@ -79,8 +79,8 @@ export function RequisitionsForQuotingTable() {
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
     
     // Handle terminal or high-priority statuses first
-    if (req.status === 'PO_Created') {
-        return <Badge variant="default" className="bg-green-700">PO Created</Badge>;
+    if (req.status === 'PO_Created' || req.status === 'Closed' || req.status === 'Fulfilled') {
+        return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
     }
     
     if (req.status === 'Award_Declined') {
