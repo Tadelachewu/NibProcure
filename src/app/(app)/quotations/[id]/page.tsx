@@ -2279,6 +2279,8 @@ export default function QuotationDetailsPage() {
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
   const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
+  const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
+  const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
 
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
@@ -3316,6 +3318,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
