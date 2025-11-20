@@ -4,10 +4,10 @@
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
-import { getUserByToken, decodeJwt } from '@/lib/auth';
+import { decodeJwt } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
-import { differenceInMinutes, format, isPast } from 'date-fns';
+import { isPast } from 'date-fns';
 import { getNextApprovalStep } from '@/services/award-service';
 
 
@@ -21,11 +21,11 @@ export async function GET(request: Request) {
 
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.split(' ')[1];
-  let userPayload: { user: User, roles: UserRole[] } | null = null;
+  let userPayload: (User & { roles: { name: UserRole }[] }) | null = null;
   if(token) {
-    const decodedUser = decodeJwt<User & { roles: UserRole[] }>(token);
+    const decodedUser = decodeJwt<User & { roles: { name: UserRole }[] }>(token);
     if(decodedUser) {
-        userPayload = { user: decodedUser, roles: decodedUser.roles };
+        userPayload = decodedUser;
     }
   }
 
@@ -33,36 +33,31 @@ export async function GET(request: Request) {
     let whereClause: any = {};
     
     if (forAwardReview === 'true' && userPayload) {
-        const userRoles = userPayload.roles;
-        const userId = userPayload.user.id;
+        const userRoles = userPayload.roles.map(r => r.name);
+        const userId = userPayload.id;
         
         const orConditions = [];
 
+        // Can see if they are the direct current approver
         orConditions.push({ currentApproverId: userId });
 
-        if (userRoles.includes('Committee_A_Member')) {
-            orConditions.push({ status: 'Pending_Committee_A_Recommendation' });
-        }
-        if (userRoles.includes('Committee_B_Member')) {
-            orConditions.push({ status: 'Pending_Committee_B_Review' });
-        }
+        // Can see if they are part of a committee whose turn it is
+        userRoles.forEach(roleName => {
+            orConditions.push({ status: `Pending_${roleName}` });
+        });
 
+        // Admins and Procurement Officers can see all reviews for better oversight
         if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-             orConditions.push({ status: { in: [
-                'Pending_Committee_A_Recommendation',
-                'Pending_Committee_B_Review',
-                'Pending_Managerial_Approval',
-                'Pending_Director_Approval',
-                'Pending_VP_Approval',
-                'Pending_President_Approval',
-                'PostApproved',
-             ] } });
+             const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
+             const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
+             orConditions.push({ status: { in: allPossiblePendingStatuses } });
+             orConditions.push({ status: 'PostApproved' });
         }
         
         whereClause.OR = orConditions;
 
     } else if (forVendor === 'true') {
-        if (!userPayload || !userPayload.user.vendorId) {
+        if (!userPayload || !userPayload.vendorId) {
              return NextResponse.json({ error: 'Unauthorized: No valid vendor found for this user.' }, { status: 403 });
         }
         
@@ -75,14 +70,14 @@ export async function GET(request: Request) {
                     {
                         OR: [
                         { allowedVendorIds: { isEmpty: true } },
-                        { allowedVendorIds: { has: userPayload.user.vendorId } },
+                        { allowedVendorIds: { has: userPayload.vendorId } },
                         ],
                     },
                     {
                         NOT: {
                         quotations: {
                             some: {
-                            vendorId: userPayload.user.vendorId,
+                            vendorId: userPayload.vendorId,
                             },
                         },
                         },
@@ -92,7 +87,7 @@ export async function GET(request: Request) {
             {
                 quotations: {
                     some: {
-                        vendorId: userPayload.user.vendorId,
+                        vendorId: userPayload.vendorId,
                     }
                 }
             },
@@ -100,7 +95,8 @@ export async function GET(request: Request) {
                 items: {
                   some: {
                     perItemAwardDetails: {
-                      array_contains: [{vendorId: userPayload.user.vendorId}],
+                      path: '$[*].vendorId',
+                      array_contains: userPayload.vendorId,
                     },
                   },
                 },
@@ -108,10 +104,10 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        if (userPayload?.roles.includes('Committee_Member')) {
+        if (userPayload?.roles.some(r => r.name === 'Committee_Member')) {
             whereClause.OR = [
-                { financialCommitteeMembers: { some: { id: userPayload.user.id } } },
-                { technicalCommitteeMembers: { some: { id: userPayload.user.id } } },
+                { financialCommitteeMembers: { some: { id: userPayload.id } } },
+                { technicalCommitteeMembers: { some: { id: userPayload.id } } },
             ];
             whereClause.AND = [
                 ...(whereClause.AND || []),
@@ -124,28 +120,31 @@ export async function GET(request: Request) {
                             'Award_Declined',
                             'Awarded',
                             'PostApproved',
-                            'PO_Created'
+                            'PO_Created',
+                            'Closed',
+                            'Fulfilled'
                         ],
                     },
                 },
             ];
         } else {
-             whereClause.OR = [
-                { status: 'PreApproved' },
-                { status: 'PostApproved' },
-                { status: 'Accepting_Quotes' },
-                { status: 'Scoring_In_Progress' },
-                { status: 'Scoring_Complete' },
-                { status: 'Award_Declined' },
-                { status: 'Awarded' },
-                { status: 'Pending_Approval' },
-                { status: 'Pending_Committee_B_Review' },
-                { status: 'Pending_Committee_A_Recommendation' },
-                { status: 'Pending_Managerial_Approval' },
-                { status: 'Pending_Director_Approval' },
-                { status: 'Pending_VP_Approval' },
-                { status: 'Pending_President_Approval' }
-            ];
+             whereClause.status = {
+                in: [
+                    'PreApproved',
+                    'PostApproved',
+                    'Accepting_Quotes',
+                    'Scoring_In_Progress',
+                    'Scoring_Complete',
+                    'Award_Declined',
+                    'Awarded',
+                    'Pending_Committee_B_Review',
+                    'Pending_Committee_A_Recommendation',
+                    'Pending_Managerial_Approval',
+                    'Pending_Director_Approval',
+                    'Pending_VP_Approval',
+                    'Pending_President_Approval'
+                ]
+            };
         }
     } else {
       if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
@@ -156,8 +155,8 @@ export async function GET(request: Request) {
         ];
       }
       
-      if (userPayload && userPayload.roles.includes('Requester') && !statusParam && !approverId) {
-        whereClause.requesterId = userPayload.user.id;
+      if (userPayload && userPayload.roles.some(r => r.name === 'Requester') && !statusParam && !approverId) {
+        whereClause.requesterId = userPayload.id;
       }
     }
 
@@ -288,15 +287,14 @@ export async function PATCH(
     if (requisition.status.startsWith('Pending_') && newStatus === 'Approved') {
         const userRoles = (user.roles as any[]).map(r => r.name);
         
-        let isDesignatedApprover = false;
+        let isAuthorizedToApprove = false;
         const requiredRoleForStatus = requisition.status.replace('Pending_', '');
-        if (userRoles.includes(requiredRoleForStatus)) isDesignatedApprover = true;
-        else if (requisition.currentApproverId === userId) isDesignatedApprover = true;
-        else if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) isDesignatedApprover = true;
+        if (userRoles.includes(requiredRoleForStatus)) isAuthorizedToApprove = true;
+        else if (requisition.currentApproverId === userId) isAuthorizedToApprove = true;
+        else if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) isAuthorizedToApprove = true;
 
-
-        if (!isDesignatedApprover) {
-            return NextResponse.json({ error: 'You are not the designated approver for this item.' }, { status: 403 });
+        if (!isAuthorizedToApprove) {
+            return NextResponse.json({ error: 'You are not authorized to approve this item at its current step.' }, { status: 403 });
         }
         
         return await prisma.$transaction(async (tx) => {

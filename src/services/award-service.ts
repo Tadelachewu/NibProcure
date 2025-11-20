@@ -57,8 +57,7 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         };
     }
     
-    // **REWRITTEN LOGIC**
-    // Find the current step index based on the requisition's actual status.
+    // Find the current step index based on the requisition's status, NOT the actor's role.
     const currentStepIndex = relevantTier.steps.findIndex(step => {
         try {
             return requisition.status === getStatusFromRole(step.role.name);
