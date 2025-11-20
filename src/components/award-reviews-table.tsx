@@ -69,14 +69,14 @@ export function AwardReviewsTable() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
 
-  const fetchRequisitions = useCallback(async () => {
+  const fetchRequisitions = useCallback(async (includeActioned = false) => {
     if (!user || !token) {
       setLoading(false);
       return;
     }
     try {
       setLoading(true);
-      const apiUrl = '/api/reviews';
+      let apiUrl = '/api/reviews';
       
       const response = await fetch(apiUrl, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -149,8 +149,8 @@ export function AwardReviewsTable() {
         description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       
-      // Re-fetch data to get the updated state from the server.
-      fetchRequisitions();
+      // Re-fetch the data. Since the API now includes actioned items, it will persist.
+      fetchRequisitions(true);
 
     } catch (error) {
       toast({
@@ -208,12 +208,9 @@ export function AwardReviewsTable() {
                   let isActionable = false;
                   if (user && req.status) {
                       const userRoles = (user.roles as any[]).map(r => r.name);
-                      
-                      // Actionable if you are the specific person assigned to approve
                       if (req.currentApproverId === user.id) {
                           isActionable = true;
                       } 
-                      // Or if the status is pending for a role you have
                       else if (req.status.startsWith('Pending_')) {
                           const requiredRoleForStatus = req.status.replace('Pending_', '');
                           if (userRoles.includes(requiredRoleForStatus)) {
