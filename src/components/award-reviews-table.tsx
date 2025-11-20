@@ -145,7 +145,7 @@ export function AwardReviewsTable() {
         description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       
-      // Instead of re-fetching, update the local state
+      // Instead of re-fetching, update the local state to show the change immediately
       setRequisitions(prev => 
         prev.map(req => 
           req.id === selectedRequisition.id 
@@ -211,11 +211,14 @@ export function AwardReviewsTable() {
                   if (user && req.status) {
                       const userRoles = (user.roles as any[]).map(r => r.name);
                       
+                      // Actionable if you are the specific person assigned to approve
                       if (req.currentApproverId === user.id) {
                           isActionable = true;
-                      } else {
+                      } 
+                      // Or if the status is pending for a role you have
+                      else if (req.status.startsWith('Pending_')) {
                           const requiredRoleForStatus = req.status.replace('Pending_', '');
-                          if (userRoles.includes(requiredRoleForStatus) || userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+                          if (userRoles.includes(requiredRoleForStatus)) {
                             isActionable = true;
                           }
                       }
