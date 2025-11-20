@@ -54,7 +54,7 @@ import Link from 'next/link';
 const PAGE_SIZE = 10;
 
 export function AwardReviewsTable() {
-  const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
+  const [requisitions, setRequisitions] = useState<(PurchaseRequisition & { isActionable?: boolean })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, token } = useAuth();
@@ -81,7 +81,7 @@ export function AwardReviewsTable() {
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for award review');
       
-      const data: PurchaseRequisition[] = await response.json();
+      const data: (PurchaseRequisition & { isActionable?: boolean })[] = await response.json();
       setRequisitions(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
@@ -201,15 +201,8 @@ export function AwardReviewsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
+                  const isActionable = req.isActionable ?? false;
                   
-                  let isActionable = false;
-                  if (user && req.status.startsWith('Pending_')) {
-                    const userRoles = (user.roles as any[]).map(r => r.name);
-                    const requiredRoleForStatus = req.status.replace('Pending_', '');
-                    isActionable = user.id === req.currentApproverId || userRoles.includes(requiredRoleForStatus);
-                  }
-
-
                   return (
                     <TableRow key={req.id}>
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>

@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { decodeJwt } from '@/lib/auth';
-import { UserRole } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 import { addMinutes } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
@@ -23,20 +23,15 @@ export async function GET(request: Request) {
     const userRoles = userPayload.roles || [];
     const userId = userPayload.id;
 
-    // This is the core logic change. We now fetch requisitions that are either:
-    // 1. Currently pending the user's action.
-    // 2. OR, have a 'Review' record created by this user, making the view persistent.
     const orConditions: any[] = [
         { currentApproverId: userId },
         { reviews: { some: { reviewerId: userId } } }
     ];
 
-    // Add conditions for any group-based roles the user has
     userRoles.forEach(roleName => {
         orConditions.push({ status: `Pending_${roleName}` });
     });
     
-    // For high-level users, we also show them everything that is pending *any* kind of review for oversight
     if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
         const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
         const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
@@ -85,7 +80,6 @@ export async function GET(request: Request) {
       },
     });
 
-    // Manually fetch and attach audit trails
     const transactionIds = requisitions.map(r => r.transactionId).filter(Boolean) as string[];
     const auditLogs = await prisma.auditLog.findMany({
       where: {
@@ -109,23 +103,38 @@ export async function GET(request: Request) {
         if (!acc[log.transactionId]) {
           acc[log.transactionId] = [];
         }
-        const userRoles = (log.user?.roles as any[])?.map(r => r.name).join(', ') || 'System';
+        const logUserRoles = (log.user?.roles as any[])?.map(r => r.name).join(', ') || 'System';
         acc[log.transactionId].push({
           ...log,
           user: log.user?.name || 'System',
-          role: userRoles.replace(/_/g, ' '),
-          approverComment: log.details, // Use details for comment
+          role: logUserRoles.replace(/_/g, ' '),
+          approverComment: log.details,
         });
       }
       return acc;
     }, {} as Record<string, any[]>);
 
-    const requisitionsWithAudit = requisitions.map(req => ({
-      ...req,
-      auditTrail: logsByTransaction[req.transactionId!] || []
-    }));
+    const requisitionsWithDetails = requisitions.map(req => {
+      let isActionable = false;
+      if (req.status.startsWith('Pending_')) {
+        if (req.currentApproverId === userId) {
+          isActionable = true;
+        } else {
+          const requiredRole = req.status.replace('Pending_', '');
+          if (userRoles.includes(requiredRole as UserRole)) {
+            isActionable = true;
+          }
+        }
+      }
+      
+      return {
+        ...req,
+        isActionable,
+        auditTrail: logsByTransaction[req.transactionId!] || []
+      };
+    });
 
-    return NextResponse.json(requisitionsWithAudit);
+    return NextResponse.json(requisitionsWithDetails);
   } catch (error) {
     console.error('Failed to fetch requisitions for review:', error);
     if (error instanceof Error) {
