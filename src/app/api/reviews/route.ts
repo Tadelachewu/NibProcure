@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { decodeJwt } from '@/lib/auth';
@@ -22,25 +24,18 @@ export async function GET(request: Request) {
     const userRoles = (userPayload.roles as string[]) || [];
     const userId = userPayload.id;
 
-    // Base condition: Items currently pending this user's approval
-    const orConditions: any[] = [{ currentApproverId: userId }];
+    // This is the core logic change. We now fetch requisitions that are either:
+    // 1. Currently pending the user's action.
+    // 2. OR, have a 'Review' record created by this user, making the view persistent.
+    const orConditions: any[] = [
+        { currentApproverId: userId },
+        { reviews: { some: { reviewerId: userId } } }
+    ];
 
     // Add conditions for any group-based roles the user has
     userRoles.forEach(roleName => {
         orConditions.push({ status: `Pending_${roleName}` });
     });
-    
-    const url = new URL(request.url);
-    if (url.searchParams.get('includeActioned') === 'true') {
-        orConditions.push({
-            reviews: {
-                some: {
-                    reviewerId: userId,
-                    createdAt: { gte: addMinutes(new Date(), -5) }
-                }
-            }
-        });
-    }
     
     // For high-level users, we also show them everything that is pending *any* kind of review for oversight
     if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {

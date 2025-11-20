@@ -69,17 +69,14 @@ export function AwardReviewsTable() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
 
-  const fetchRequisitions = useCallback(async (includeActioned = false) => {
+  const fetchRequisitions = useCallback(async () => {
     if (!user || !token) {
       setLoading(false);
       return;
     }
     try {
       setLoading(true);
-      let apiUrl = '/api/reviews';
-      if (includeActioned) {
-        apiUrl += `?includeActioned=true`;
-      }
+      const apiUrl = '/api/reviews';
       
       const response = await fetch(apiUrl, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -152,14 +149,8 @@ export function AwardReviewsTable() {
         description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       
-      // Update the local state instead of a full re-fetch
-      setRequisitions(prevReqs => 
-        prevReqs.map(req => 
-          req.id === selectedRequisition.id 
-            ? { ...req, status: 'PostApproved', currentApproverId: null } // A generic "processed" state
-            : req
-        )
-      );
+      // Re-fetch data to get the updated state from the server.
+      fetchRequisitions();
 
     } catch (error) {
       toast({
