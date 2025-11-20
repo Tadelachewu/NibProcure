@@ -29,13 +29,22 @@ interface CalculatedItem {
     totalTechnicalScore: number;
     finalItemScore: number;
 }
+
+interface CalculatedItemBids {
+    requisitionItemId: string;
+    requisitionItemName: string;
+    allProposals: CalculatedItem[];
+    championBid: CalculatedItem;
+}
+
 interface CalculatedQuote {
     vendorId: string;
     vendorName: string;
-    items: CalculatedItem[];
+    itemBids: CalculatedItemBids[];
     finalVendorScore: number;
     rank?: number;
 }
+
 
 // --- CALCULATION HELPERS ---
 
@@ -125,7 +134,7 @@ function useAwardCalculations(requisition: PurchaseRequisition, quotations: Quot
 
         // --- Single Vendor Calculation ---
         const calculatedQuotes: CalculatedQuote[] = quotations.map(quote => {
-            const championBids: CalculatedItem[] = [];
+            const itemBids: CalculatedItemBids[] = [];
 
             for (const reqItem of requisition.items) {
                 const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
@@ -135,18 +144,24 @@ function useAwardCalculations(requisition: PurchaseRequisition, quotations: Quot
                     calculateItemScores(proposal, evaluationCriteria, quote.scores || [])
                 );
 
-                const championBid = calculatedProposals.sort((a, b) => b.finalItemScore - a.finalItemScore)[0];
-                championBids.push(championBid);
+                const championBid = [...calculatedProposals].sort((a, b) => b.finalItemScore - a.finalItemScore)[0];
+                
+                itemBids.push({
+                    requisitionItemId: reqItem.id,
+                    requisitionItemName: reqItem.name,
+                    allProposals: calculatedProposals,
+                    championBid: championBid
+                });
             }
 
-            const finalVendorScore = championBids.length > 0
-                ? championBids.reduce((acc, item) => acc + item.finalItemScore, 0) / championBids.length
+            const finalVendorScore = itemBids.length > 0
+                ? itemBids.reduce((acc, bid) => acc + bid.championBid.finalItemScore, 0) / itemBids.length
                 : 0;
 
             return {
                 vendorId: quote.vendorId,
                 vendorName: quote.vendorName,
-                items: championBids,
+                itemBids: itemBids,
                 finalVendorScore,
             };
         });
@@ -279,20 +294,27 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                {vendor.items.map(item => (
-                                    <details key={item.quoteItemId} className="p-4 border rounded-lg bg-muted/30">
-                                        <summary className="font-semibold cursor-pointer">Champion Bid for "{requisition.items.find(ri => ri.id === item.quoteItemId.split('-')[0])?.name}": {item.itemName} &rarr; Final Score: {item.finalItemScore.toFixed(2)}</summary>
-                                        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                            <ScoreTable title="Financial Evaluation" scores={item.financialScores} weight={requisition.evaluationCriteria!.financialWeight} totalScore={item.totalFinancialScore} />
-                                            <ScoreTable title="Technical Evaluation" scores={item.technicalScores} weight={requisition.evaluationCriteria!.technicalWeight} totalScore={item.totalTechnicalScore} />
-                                        </div>
-                                        <Separator className="my-4"/>
-                                        <div className="flex items-center justify-end gap-4 text-sm font-medium">
-                                            <span>Financial Score ({item.totalFinancialScore.toFixed(2)}) * {requisition.evaluationCriteria!.financialWeight}%</span>
-                                            <span>+</span>
-                                             <span>Technical Score ({item.totalTechnicalScore.toFixed(2)}) * {requisition.evaluationCriteria!.technicalWeight}%</span>
-                                            <span>=</span>
-                                            <span className="text-lg font-bold text-primary">{item.finalItemScore.toFixed(2)}</span>
+                                {vendor.itemBids.map(itemBid => (
+                                    <details key={itemBid.requisitionItemId} className="p-4 border rounded-lg bg-muted/30">
+                                        <summary className="font-semibold cursor-pointer">
+                                            Proposals for "{itemBid.requisitionItemName}" &rarr; Champion Bid: "{itemBid.championBid.itemName}" ({itemBid.championBid.finalItemScore.toFixed(2)} pts)
+                                        </summary>
+                                        <div className="mt-4 space-y-4">
+                                            {itemBid.allProposals.map(proposal => (
+                                                 <Card key={proposal.quoteItemId} className={cn("p-4", proposal.quoteItemId === itemBid.championBid.quoteItemId && "border-primary")}>
+                                                    <div className="flex justify-between items-center mb-4">
+                                                        <h4 className="font-semibold text-base">{proposal.itemName}</h4>
+                                                        <Badge variant={proposal.quoteItemId === itemBid.championBid.quoteItemId ? "default" : "outline"}>
+                                                            {proposal.quoteItemId === itemBid.championBid.quoteItemId && <Check className="mr-1 h-3 w-3"/>}
+                                                            Final Score: {proposal.finalItemScore.toFixed(2)}
+                                                        </Badge>
+                                                    </div>
+                                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                                        <ScoreTable title="Financial Evaluation" scores={proposal.financialScores} weight={requisition.evaluationCriteria!.financialWeight} totalScore={proposal.totalFinancialScore} />
+                                                        <ScoreTable title="Technical Evaluation" scores={proposal.technicalScores} weight={requisition.evaluationCriteria!.technicalWeight} totalScore={proposal.totalTechnicalScore} />
+                                                    </div>
+                                                 </Card>
+                                            ))}
                                         </div>
                                     </details>
                                 ))}
