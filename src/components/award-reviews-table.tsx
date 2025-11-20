@@ -18,7 +18,7 @@ import {
   CardDescription,
 } from './ui/card';
 import { Button } from './ui/button';
-import { PurchaseRequisition, User, UserRole } from '@/lib/types';
+import { PurchaseRequisition, User } from '@/lib/types';
 import { format } from 'date-fns';
 import {
   Check,
@@ -137,12 +137,23 @@ export function AwardReviewsTable() {
             minute,
         }),
       });
-      if (!response.ok) throw new Error(`Failed to ${actionType} requisition award`);
+      const updatedReq = await response.json();
+      if (!response.ok) throw new Error(updatedReq.error || `Failed to ${actionType} requisition award`);
+      
       toast({
         title: "Success",
         description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
-      fetchRequisitions();
+      
+      // Instead of re-fetching, update the local state
+      setRequisitions(prev => 
+        prev.map(req => 
+          req.id === selectedRequisition.id 
+          ? { ...req, status: updatedReq.status, currentApproverId: updatedReq.currentApproverId } 
+          : req
+        )
+      );
+
     } catch (error) {
       toast({
         variant: 'destructive',
@@ -198,16 +209,15 @@ export function AwardReviewsTable() {
                   
                   let isActionable = false;
                   if (user && req.status) {
-                      const userRole = (user.role as any)?.name || user.role;
+                      const userRoles = (user.roles as any[]).map(r => r.name);
                       
-                      if (
-                          (userRole === 'Committee_A_Member' && req.status === 'Pending_Committee_A_Recommendation') ||
-                          (userRole === 'Committee_B_Member' && req.status === 'Pending_Committee_B_Review')
-                      ) {
+                      if (req.currentApproverId === user.id) {
                           isActionable = true;
-                      }
-                      else if (req.currentApproverId === user.id) {
-                          isActionable = true;
+                      } else {
+                          const requiredRoleForStatus = req.status.replace('Pending_', '');
+                          if (userRoles.includes(requiredRoleForStatus) || userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+                            isActionable = true;
+                          }
                       }
                   }
 
