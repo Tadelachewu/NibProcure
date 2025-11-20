@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -583,7 +582,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
 
 export default function VendorRequisitionPage() {
     const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
-    const [purchaseOrder, setPurchaseOrder] = useState<PurchaseOrder | null>(null);
+    const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [isResponding, setIsResponding] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -651,6 +650,19 @@ export default function VendorRequisitionPage() {
         );
     }, [requisition, user]);
 
+    const isAccepted = useMemo(() => {
+        if (!requisition || !user?.vendorId) return false;
+        // Check single-vendor award status
+        const vendorQuote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
+        if (vendorQuote?.status === 'Accepted') {
+            return true;
+        }
+        // Check per-item award status
+        return requisition.items.some(item =>
+            (item.perItemAwardDetails || []).some(detail => detail.vendorId === user.vendorId && detail.status === 'Accepted')
+        );
+    }, [requisition, user]);
+
 
     const fetchRequisitionData = async () => {
         if (!id || !token || !user) return;
@@ -680,8 +692,9 @@ export default function VendorRequisitionPage() {
                  setSubmittedQuote(vendorSubmittedQuote);
                  const poResponse = await fetch('/api/purchase-orders');
                  const allPOs: PurchaseOrder[] = await poResponse.json();
-                 const poForThisVendor = allPOs.find(p => p.requisitionId === foundReq.id && p.vendor.id === user.vendorId);
-                 setPurchaseOrder(poForThisVendor || null);
+                 // Now there can be multiple POs, find all associated with this vendor and req
+                 const vendorPOs = allPOs.filter(p => p.requisitionId === foundReq.id && p.vendor.id === user.vendorId);
+                 setPurchaseOrders(vendorPOs);
              } else {
                 setSubmittedQuote(null);
              }
@@ -734,7 +747,6 @@ export default function VendorRequisitionPage() {
     if (error) return <div className="text-destructive text-center p-8">{error}</div>;
     if (!requisition) return <div className="text-center p-8">Requisition not found.</div>;
 
-    const isAccepted = submittedQuote?.status === 'Accepted';
     const hasResponded = submittedQuote?.status === 'Accepted' || submittedQuote?.status === 'Declined';
     const hasSubmittedInvoice = submittedQuote?.status === 'Invoice_Submitted';
     const isResponseDeadlineExpired = requisition.awardResponseDeadline ? isPast(new Date(requisition.awardResponseDeadline)) : false;
@@ -808,7 +820,7 @@ export default function VendorRequisitionPage() {
                  <div className="text-right font-bold text-2xl">
                     Total Awarded Price: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
                  </div>
-                 {isAccepted && purchaseOrder && (
+                 {isAccepted && purchaseOrders.length > 0 && (
                     <CardFooter className="p-0 pt-4">
                          <Dialog open={isInvoiceFormOpen} onOpenChange={setInvoiceFormOpen}>
                             <DialogTrigger asChild>
@@ -816,11 +828,11 @@ export default function VendorRequisitionPage() {
                                     {hasSubmittedInvoice ? (
                                         <><CircleCheck className="mr-2"/> Invoice Submitted</>
                                     ) : (
-                                        <><FileUp className="mr-2"/> Submit Invoice</>
+                                        <><FileUp className="mr-2"/> Submit Invoice for PO {purchaseOrders[0].id}</>
                                     )}
                                 </Button>
                             </DialogTrigger>
-                            <InvoiceSubmissionForm po={purchaseOrder} onInvoiceSubmitted={() => { setInvoiceFormOpen(false); fetchRequisitionData(); }} />
+                            <InvoiceSubmissionForm po={purchaseOrders[0]} onInvoiceSubmitted={() => { setInvoiceFormOpen(false); fetchRequisitionData(); }} />
                         </Dialog>
                     </CardFooter>
                  )}
