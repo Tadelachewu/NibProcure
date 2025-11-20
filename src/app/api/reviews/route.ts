@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { decodeJwt } from '@/lib/auth';
@@ -79,19 +81,6 @@ export async function GET(request: Request) {
                 },
             }
         },
-        auditTrail: {
-            include: {
-                user: {
-                    select: {
-                        name: true,
-                        roles: true
-                    }
-                }
-            },
-            orderBy: {
-                timestamp: 'desc'
-            }
-        },
         minutes: {
           include: {
             author: true,
@@ -104,7 +93,44 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json(requisitions);
+    // Manually fetch and attach audit trails
+    const transactionIds = requisitions.map(r => r.transactionId).filter(Boolean) as string[];
+    const auditLogs = await prisma.auditLog.findMany({
+      where: {
+        transactionId: { in: transactionIds }
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+            roles: true,
+          }
+        }
+      },
+      orderBy: {
+        timestamp: 'desc'
+      }
+    });
+
+    const logsByTransaction = auditLogs.reduce((acc, log) => {
+      if (log.transactionId) {
+        if (!acc[log.transactionId]) {
+          acc[log.transactionId] = [];
+        }
+        acc[log.transactionId].push({
+          ...log,
+          user: { name: log.user?.name || 'System' }
+        });
+      }
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    const requisitionsWithAudit = requisitions.map(req => ({
+      ...req,
+      auditTrail: logsByTransaction[req.transactionId] || []
+    }));
+
+    return NextResponse.json(requisitionsWithAudit);
   } catch (error) {
     console.error('Failed to fetch requisitions for review:', error);
     if (error instanceof Error) {
