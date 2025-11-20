@@ -229,7 +229,7 @@ const getOverallStatusForVendor = (quote: Quotation, itemStatuses: any[], isAwar
 };
 
 
-const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean }) => {
+const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete, isReviewer }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean, isReviewer: boolean }) => {
     
     if (quotes.length === 0) {
         return (
@@ -357,7 +357,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             <Button className="w-full" variant="outline" onClick={() => onViewDetails(quote)}>
                                 <Eye className="mr-2 h-4 w-4" /> View Full Quote
                             </Button>
-                             {role === 'Committee_Member' && isDeadlinePassed && (
+                             {role === 'Committee_Member' && isDeadlinePassed && !isReviewer && (
                                 <Button className="w-full" variant={hasUserScored ? "secondary" : "default"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
                                     {hasUserScored ? 'View Your Score' : 'Score this Quote'}
@@ -2755,7 +2755,7 @@ export default function QuotationDetailsPage() {
             <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
         )}
         
-        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && isAuthorized && (
+        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && isAuthorized && !isReviewer && (
             <div className="grid md:grid-cols-2 gap-6 items-start">
                 <RFQDistribution
                     requisition={requisition}
@@ -2782,7 +2782,7 @@ export default function QuotationDetailsPage() {
             isAuthorized={isAuthorized}
         />
 
-        {(readyForCommitteeAssignment && canManageCommittees && !isAwarded) && (
+        {(readyForCommitteeAssignment && canManageCommittees && !isAwarded && !isReviewer) && (
             <EvaluationCommitteeManagement
                 requisition={requisition}
                 onCommitteeUpdated={fetchRequisitionAndQuotes}
@@ -2793,9 +2793,9 @@ export default function QuotationDetailsPage() {
         )}
 
 
-        {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
+        {(currentStep !== 'rfq' || isReviewer) && (
             <>
-                {canManageCommittees && currentStep !== 'committee' && readyForCommitteeAssignment && !isAwarded && (
+                {canManageCommittees && currentStep !== 'committee' && readyForCommitteeAssignment && !isAwarded && !isReviewer && (
                      <div className="hidden">
                         <EvaluationCommitteeManagement
                             requisition={requisition}
@@ -2836,15 +2836,15 @@ export default function QuotationDetailsPage() {
                             </div>
                         ) : (
                              <Tabs value={committeeTab} onValueChange={(value) => setCommitteeTab(value as any)} defaultValue="pending">
-                                {user && role === 'Committee_Member' && <TabsList className="mb-4">
+                                {user && role === 'Committee_Member' && !isReviewer && <TabsList className="mb-4">
                                     <TabsTrigger value="pending">Pending Your Score ({pendingQuotes.length})</TabsTrigger>
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isReviewer={isReviewer} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete}/>
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isReviewer={isReviewer}/>
                                 </TabsContent>
                              </Tabs>
                         )}
@@ -2887,7 +2887,7 @@ export default function QuotationDetailsPage() {
             </>
         )}
 
-        {isAssignedCommitteeMember && (
+        {isAssignedCommitteeMember && !isReviewer && (
              <CommitteeActions
                 user={user}
                 requisition={requisition}
@@ -2896,7 +2896,7 @@ export default function QuotationDetailsPage() {
              />
         )}
 
-        {role && (
+        {role && !isReviewer && (
           (
             (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Award_Declined') &&
             isAuthorized
@@ -2913,7 +2913,7 @@ export default function QuotationDetailsPage() {
           )
         )}
         
-        {(requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined') && isAuthorized && (
+        {(requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined') && isAuthorized && !isReviewer && (
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Awarding Center</CardTitle>
@@ -2971,7 +2971,7 @@ export default function QuotationDetailsPage() {
       )}
 
 
-        {isReadyForNotification && isAuthorized && (
+        {isReadyForNotification && isAuthorized && !isReviewer && (
             <Card className="mt-6 border-amber-500">
                  <CardHeader>
                     <CardTitle>Action Required: Notify Vendor</CardTitle>
@@ -2998,7 +2998,7 @@ export default function QuotationDetailsPage() {
             </Card>
         )}
 
-        {isAccepted && requisition.status !== 'PO_Created' && role && role !== 'Committee_Member' && (
+        {isAccepted && requisition.status !== 'PO_Created' && role && role !== 'Committee_Member' && !isReviewer && (
             <ContractManagement requisition={requisition} onContractFinalized={fetchRequisitionAndQuotes} />
         )}
          {requisition && (
@@ -3355,4 +3355,5 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
