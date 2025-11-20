@@ -839,7 +839,7 @@ const RFQActionDialog = ({
 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
@@ -882,7 +882,7 @@ const RFQActionDialog = ({
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
             onClose();
         }
     };
@@ -966,7 +966,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const [distributionType, setDistributionType] = useState('all');
     const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
     const [vendorSearch, setVendorSearch] = useState("");
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
     const [cpoAmount, setCpoAmount] = useState<number | undefined>(requisition.cpoAmount);
@@ -2034,7 +2034,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
 const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess }: { isOpen: boolean, onClose: () => void, member: User, requisition: PurchaseRequisition, onSuccess: () => void }) => {
     const { toast } = useToast();
     const { user } = useAuth();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadline, setNewDeadline] = useState<Date|undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
 
@@ -2051,7 +2051,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/extend-scoring-deadline`, {
                 method: 'POST',
@@ -2071,7 +2071,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
         } catch (error) {
              toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     }
 
@@ -3355,4 +3355,5 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
