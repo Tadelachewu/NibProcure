@@ -128,6 +128,7 @@ export async function GET(request: Request) {
                 },
             ];
         } else {
+             const allPossiblePendingStatuses = (await prisma.role.findMany({ select: { name: true }})).map(r => `Pending_${r.name}`);
              whereClause.status = {
                 in: [
                     'PreApproved',
@@ -137,12 +138,7 @@ export async function GET(request: Request) {
                     'Scoring_Complete',
                     'Award_Declined',
                     'Awarded',
-                    'Pending_Committee_B_Review',
-                    'Pending_Committee_A_Recommendation',
-                    'Pending_Managerial_Approval',
-                    'Pending_Director_Approval',
-                    'Pending_VP_Approval',
-                    'Pending_President_Approval'
+                    ...allPossiblePendingStatuses,
                 ]
             };
         }
@@ -274,7 +270,7 @@ export async function PATCH(
 
     const requisition = await prisma.purchaseRequisition.findUnique({ 
         where: { id },
-        include: { department: true, requester: true }
+        include: { department: true, requester: true, items: true, quotations: { include: { items: true, scores: { include: { itemScores: true } } } } }
     });
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
@@ -291,11 +287,11 @@ export async function PATCH(
         let isAuthorizedToApprove = false;
         if (requisition.currentApproverId === userId) {
             isAuthorizedToApprove = true;
-        } else if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-            isAuthorizedToApprove = true;
         } else {
              const requiredRoleForStatus = requisition.status.replace('Pending_', '');
-             if (userRoles.includes(requiredRoleForStatus)) isAuthorizedToApprove = true;
+             if (userRoles.includes(requiredRoleForStatus) || userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+                isAuthorizedToApprove = true;
+             }
         }
 
         if (!isAuthorizedToApprove) {
@@ -359,7 +355,7 @@ export async function PATCH(
 
     // This is the initial departmental approval
     } else if (requisition.status === 'Pending_Approval') {
-        if (requisition.currentApproverId !== userId) {
+        if (requisition.currentApproverId !== userId && !user.roles.some(r => r.name === 'Admin')) {
             return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
         }
         if (newStatus === 'Rejected') {
