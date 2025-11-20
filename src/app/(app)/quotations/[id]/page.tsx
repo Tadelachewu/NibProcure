@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -861,6 +860,7 @@ const RFQActionDialog = ({
             return;
         }
 
+        setIsSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -2310,14 +2310,12 @@ export default function QuotationDetailsPage() {
   const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
   const [selectedQuoteForDetails, setSelectedQuoteForDetails] = useState<Quotation | null>(null);
   const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
+  const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
-  const [isChangingAward, setIsChangingAward] = useState(false);
-  const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
-  const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
   const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
 
   const isAuthorized = useMemo(() => {
@@ -2689,14 +2687,14 @@ export default function QuotationDetailsPage() {
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
   const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
   
-  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer || role === 'Procurement_Officer');
+  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
   
   return (
     <div className="space-y-6">
        <div className="flex items-center justify-between">
-          <Button variant="outline" onClick={() => router.push('/quotations')}>
+          <Button variant="outline" onClick={() => router.back()}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to All Requisitions
+              Back
           </Button>
            {canViewCumulativeReport && (
                 <Button variant="secondary" onClick={() => setReportOpen(true)}>
@@ -3032,7 +3030,7 @@ export default function QuotationDetailsPage() {
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
 
