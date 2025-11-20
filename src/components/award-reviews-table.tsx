@@ -69,7 +69,7 @@ export function AwardReviewsTable() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
 
-  const fetchRequisitions = useCallback(async (includeActioned = false) => {
+  const fetchRequisitions = useCallback(async () => {
     if (!user || !token) {
       setLoading(false);
       return;
@@ -147,7 +147,7 @@ export function AwardReviewsTable() {
         description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       
-      fetchRequisitions(true);
+      fetchRequisitions();
 
     } catch (error) {
       toast({
@@ -203,16 +203,10 @@ export function AwardReviewsTable() {
                   const isLoadingAction = activeActionId === req.id;
                   
                   let isActionable = false;
-                  if (user && req.status) {
-                      const userRoles = (user.roles as any[]).map(r => r.name);
-                      const requiredRoleForStatus = req.status.replace('Pending_', '');
-                      
-                      if (req.currentApproverId === user.id) {
-                          isActionable = true;
-                      } 
-                      else if (req.status.startsWith('Pending_') && userRoles.includes(requiredRoleForStatus)) {
-                          isActionable = true;
-                      }
+                  if (user && req.status.startsWith('Pending_')) {
+                    const userRoles = (user.roles as any[]).map(r => r.name);
+                    const requiredRoleForStatus = req.status.replace('Pending_', '');
+                    isActionable = user.id === req.currentApproverId || userRoles.includes(requiredRoleForStatus);
                   }
 
 
