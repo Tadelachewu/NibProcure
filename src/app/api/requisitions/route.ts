@@ -95,8 +95,7 @@ export async function GET(request: Request) {
                 items: {
                   some: {
                     perItemAwardDetails: {
-                      path: '$[*].vendorId',
-                      equals: userPayload.vendorId,
+                      array_contains: [{vendorId: userPayload.vendorId}],
                     },
                   },
                 },
