@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { PurchaseOrder, PurchaseRequisition, Quotation, QuoteItem } from '@/lib/types';
+import { PurchaseOrder, PurchaseRequisition, Quotation, QuoteItem, PerItemAwardDetail } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -602,66 +602,41 @@ export default function VendorRequisitionPage() {
 
     const canEditQuote = submittedQuote?.status === 'Submitted' && !isAwardProcessStarted && !isDeadlinePassed && allowEdits;
 
-    const awardedItems = useMemo(() => {
+    const awardedItems = useMemo((): PerItemAwardDetail[] => {
         if (!requisition || !user?.vendorId) return [];
-        
-        const quote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
-        if (!quote) return [];
-        
-        const awardedQuoteItemIds = new Set(requisition.awardedQuoteItemIds || []);
-        
-        // Handle "Award by Best Item" scenario
-        if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
-            const awardedForThisVendor = new Set<string>();
-            requisition.items.forEach(reqItem => {
-            const awardDetails = (reqItem.perItemAwardDetails || []).find(detail => detail.vendorId === user.vendorId && (detail.status === 'Awarded' || detail.status === 'Accepted'));
-            if (awardDetails) {
-                awardedForThisVendor.add(awardDetails.quoteItemId);
-            }
-            });
-            return quote.items.filter(item => awardedForThisVendor.has(item.id));
-        }
-        
-        // Handle single-vendor award scenario
-        if (awardedQuoteItemIds.size > 0) {
-            return quote.items.filter(item => awardedQuoteItemIds.has(item.id));
-        }
-
-        // Fallback for older single-vendor awards or if awardedQuoteItemIds is empty
-        if (['Awarded', 'Partially_Awarded', 'Accepted'].includes(quote.status)) {
-            return quote.items;
-        }
-
-        return [];
-    }, [requisition, user]);
-    
-    const isAwarded = useMemo(() => {
-        if (!requisition || !user?.vendorId) return false;
-
-        // Check for overall quote status (single-vendor award)
-        const vendorQuote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
-        if (vendorQuote && (vendorQuote.status === 'Awarded' || vendorQuote.status === 'Partially_Awarded')) {
-            return true;
-        }
-
-        // Check for per-item award status
-        return requisition.items.some(item =>
-            (item.perItemAwardDetails || []).some(detail => detail.vendorId === user.vendorId && detail.status === 'Awarded')
+        return requisition.items.flatMap(item => 
+            (item.perItemAwardDetails || []).filter(detail => 
+                detail.vendorId === user.vendorId && (detail.status === 'Awarded' || detail.status === 'Accepted' || detail.status === 'Declined')
+            )
         );
     }, [requisition, user]);
+    
+    const isPartiallyAwarded = useMemo(() => {
+        if ((requisition?.rfqSettings as any)?.awardStrategy !== 'item') return false;
+        return awardedItems.length > 0;
+    }, [requisition, awardedItems]);
+
+    const isFullyAwarded = useMemo(() => {
+        const vendorQuote = requisition?.quotations?.find(q => q.vendorId === user?.vendorId);
+        return vendorQuote?.status === 'Awarded';
+    }, [requisition, user]);
+
+    const hasPendingResponseItems = useMemo(() => {
+        return awardedItems.some(item => item.status === 'Awarded');
+    }, [awardedItems]);
+
 
     const isAccepted = useMemo(() => {
         if (!requisition || !user?.vendorId) return false;
-        // Check single-vendor award status
-        const vendorQuote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
-        if (vendorQuote?.status === 'Accepted') {
-            return true;
+
+        if (isPartiallyAwarded) {
+             return awardedItems.some(item => item.status === 'Accepted');
         }
-        // Check per-item award status
-        return requisition.items.some(item =>
-            (item.perItemAwardDetails || []).some(detail => detail.vendorId === user.vendorId && detail.status === 'Accepted')
-        );
-    }, [requisition, user]);
+        
+        const vendorQuote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
+        return vendorQuote?.status === 'Accepted';
+
+    }, [requisition, user, isPartiallyAwarded, awardedItems]);
 
 
     const fetchRequisitionData = async () => {
@@ -670,21 +645,20 @@ export default function VendorRequisitionPage() {
         setLoading(true);
         setError(null);
         try {
-             const response = await fetch(`/api/requisitions?id=${id}`);
+             const response = await fetch(`/api/requisitions/${id}`);
              if (!response.ok) {
                 throw new Error('Failed to fetch requisition data.');
              }
-             const allReqs: PurchaseRequisition[] = await response.json();
-             const foundReq = allReqs.find(r => r.id === id);
-             
+             const foundReq: PurchaseRequisition = await response.json();
+                          
              if (!foundReq) {
                  throw new Error('Requisition not found or not available for quoting.');
              }
              
-             setRequisition(foundReq);
-
              const quoResponse = await fetch(`/api/quotations?requisitionId=${id}`);
              const allQuotes: Quotation[] = await quoResponse.json();
+             foundReq.quotations = allQuotes;
+             setRequisition(foundReq);
 
              const vendorSubmittedQuote = allQuotes.find(q => q.vendorId === user.vendorId);
              
@@ -715,14 +689,14 @@ export default function VendorRequisitionPage() {
         fetchRequisitionData();
     }
     
-    const handleAwardResponse = async (action: 'accept' | 'reject') => {
+    const handleAwardResponse = async (action: 'accept' | 'reject', quoteItemId?: string) => {
         if (!submittedQuote || !user) return;
         setIsResponding(true);
         try {
             const response = await fetch(`/api/quotations/${submittedQuote.id}/respond`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, action })
+                body: JSON.stringify({ userId: user.id, action, quoteItemId })
             });
 
             const result = await response.json();
@@ -750,10 +724,10 @@ export default function VendorRequisitionPage() {
     const hasResponded = submittedQuote?.status === 'Accepted' || submittedQuote?.status === 'Declined';
     const hasSubmittedInvoice = submittedQuote?.status === 'Invoice_Submitted';
     const isResponseDeadlineExpired = requisition.awardResponseDeadline ? isPast(new Date(requisition.awardResponseDeadline)) : false;
-    const isStandby = submittedQuote?.status === 'Standby';
+    const isStandby = isPartiallyAwarded ? awardedItems.some(i => i.status === 'Standby') : submittedQuote?.status === 'Standby';
 
 
-    const QuoteDisplayCard = ({ quote, itemsToShow }: { quote: Quotation, itemsToShow: QuoteItem[] }) => {
+    const QuoteDisplayCard = ({ quote, itemsToShow, showActions }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean }) => {
          const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
          return (
          <Card>
@@ -818,7 +792,7 @@ export default function VendorRequisitionPage() {
                 )}
                  <Separator />
                  <div className="text-right font-bold text-2xl">
-                    Total Awarded Price: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
+                    Total Quoted Price: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
                  </div>
                  {isAccepted && purchaseOrders.length > 0 && (
                     <CardFooter className="p-0 pt-4">
@@ -828,31 +802,21 @@ export default function VendorRequisitionPage() {
                                     {hasSubmittedInvoice ? (
                                         <><CircleCheck className="mr-2"/> Invoice Submitted</>
                                     ) : (
-                                        <><FileUp className="mr-2"/> Submit Invoice for PO {purchaseOrders[0].id}</>
+                                        <><FileUp className="mr-2"/> Submit Invoice for PO {purchaseOrders.find(po => po.items.some(poi => itemsToShow.map(i => i.name).includes(poi.name)))?.id}</>
                                     )}
                                 </Button>
                             </DialogTrigger>
-                            <InvoiceSubmissionForm po={purchaseOrders[0]} onInvoiceSubmitted={() => { setInvoiceFormOpen(false); fetchRequisitionData(); }} />
+                            <InvoiceSubmissionForm po={purchaseOrders.find(po => po.items.some(poi => itemsToShow.map(i => i.name).includes(poi.name)))!} onInvoiceSubmitted={() => { setInvoiceFormOpen(false); fetchRequisitionData(); }} />
                         </Dialog>
                     </CardFooter>
                  )}
-                 {!isAwarded && !hasResponded && (
+                 {!showActions && (
                      <CardFooter className="p-0 pt-4">
                         <Alert variant="default" className="border-blue-500/50">
                             <Info className="h-4 w-4 text-blue-500" />
                             <AlertTitle>{ isStandby ? "You are on Standby" : "Quote Under Review" }</AlertTitle>
                             <AlertDescription>
                                 { isStandby ? "Your quote is a backup option. You will be notified if the primary vendor declines." : (canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.')}
-                            </AlertDescription>
-                        </Alert>
-                     </CardFooter>
-                 )}
-                 {hasResponded && (
-                     <CardFooter className="p-0 pt-4">
-                        <Alert variant={quote.status === 'Accepted' ? 'default' : 'destructive'}>
-                            <AlertTitle>Response Recorded</AlertTitle>
-                            <AlertDescription>
-                                You have {quote.status.toLowerCase()} this award.
                             </AlertDescription>
                         </Alert>
                      </CardFooter>
@@ -869,12 +833,12 @@ export default function VendorRequisitionPage() {
                 Back to Dashboard
             </Button>
             
-            {isAwarded && (
+            {hasPendingResponseItems && (
                  <Card>
                     <CardHeader>
-                        <CardTitle className="text-green-600">Congratulations! You've Been Awarded!</CardTitle>
+                        <CardTitle className="text-green-600">Congratulations! You've Been Awarded Item(s)!</CardTitle>
                         <CardDescription>
-                            Please review and respond to this award.
+                            Please review and respond to each awarded item below.
                              {requisition.awardResponseDeadline && (
                                 <p className={cn("text-sm font-semibold mt-2 flex items-center gap-2", isResponseDeadlineExpired ? "text-destructive" : "text-amber-600")}>
                                     <Timer className="h-4 w-4" />
@@ -883,57 +847,29 @@ export default function VendorRequisitionPage() {
                              )}
                         </CardDescription>
                     </CardHeader>
-                    {awardedItems.length > 0 && awardedItems.length < (submittedQuote?.items?.length || 0) && (
-                        <CardContent>
-                            <Alert>
-                                <Info className="h-4 w-4" />
-                                <AlertTitle>Partial Award</AlertTitle>
-                                <AlertDescription>
-                                    You have been awarded the following item(s): {awardedItems.map(i => i.name).join(', ')}.
-                                </AlertDescription>
-                            </Alert>
-                        </CardContent>
-                    )}
-                    <CardFooter className="gap-4">
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button className="flex-1" disabled={isResponding || isResponseDeadlineExpired}>
-                                    {isResponding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4"/>} Accept Award
-                                </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                <AlertDialogTitle>Confirm Acceptance</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    By accepting, you commit to fulfilling this order as per your quote. A formal Purchase Order will be generated.
-                                </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleAwardResponse('accept')}>Confirm</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button className="flex-1" variant="destructive" disabled={isResponding || isResponseDeadlineExpired}>
-                                    {isResponding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsDown className="mr-2 h-4 w-4"/>} Decline Award
-                                </Button>
-                            </AlertDialogTrigger>
-                             <AlertDialogContent>
-                                <AlertDialogHeader>
-                                <AlertDialogTitle>Confirm Rejection</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                   Are you sure you want to decline this award? This action cannot be undone and the award will be offered to the next vendor.
-                                </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleAwardResponse('reject')} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Decline</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    </CardFooter>
+                     <CardContent className="space-y-4">
+                        {awardedItems.filter(i => i.status === 'Awarded').map(itemAward => {
+                            const quoteItem = submittedQuote?.items.find(i => i.id === itemAward.quoteItemId);
+                            return(
+                                <Card key={itemAward.quoteItemId} className="p-4">
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <p className="font-semibold">{quoteItem?.name}</p>
+                                            <p className="text-sm text-muted-foreground">Unit Price: {quoteItem?.unitPrice.toLocaleString()} ETB</p>
+                                        </div>
+                                         <div className="flex gap-2">
+                                            <Button size="sm" onClick={() => handleAwardResponse('accept', quoteItem?.id)} disabled={isResponding || isResponseDeadlineExpired}>
+                                                <ThumbsUp className="mr-2 h-4 w-4" /> Accept
+                                            </Button>
+                                            <Button size="sm" variant="destructive" onClick={() => handleAwardResponse('reject', quoteItem?.id)} disabled={isResponding || isResponseDeadlineExpired}>
+                                                <ThumbsDown className="mr-2 h-4 w-4" /> Decline
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </Card>
+                            )
+                        })}
+                    </CardContent>
                  </Card>
             )}
 
@@ -942,7 +878,7 @@ export default function VendorRequisitionPage() {
                     <CheckCircle className="h-5 w-5 !text-green-600" />
                     <AlertTitle className="font-bold text-lg">Award Accepted!</AlertTitle>
                     <AlertDescription>
-                        Thank you for your confirmation. A Purchase Order has been issued. You may now submit an invoice.
+                        Thank you for your confirmation. A Purchase Order has been issued for the accepted items. You may now submit an invoice.
                     </AlertDescription>
                 </Alert>
             )}
@@ -1015,7 +951,7 @@ export default function VendorRequisitionPage() {
                 </Card>
 
                 {submittedQuote && !isEditingQuote ? (
-                    <QuoteDisplayCard quote={submittedQuote} itemsToShow={awardedItems.length > 0 ? awardedItems : submittedQuote.items} />
+                    <QuoteDisplayCard quote={submittedQuote} itemsToShow={submittedQuote.items} showActions={!isAccepted && hasPendingResponseItems} />
                 ) : (
                     <QuoteSubmissionForm 
                         requisition={requisition} 

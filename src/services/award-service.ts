@@ -152,6 +152,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
  * @param requisition - The associated requisition.
  * @param actor - The user performing the action.
  * @param declinedItemIds - The specific requisition item IDs that were declined (for per-item awards).
+ * @param rejectedQuoteItemId - The specific quote item that was rejected (for per-item awards).
  * @returns A message indicating the result of the operation.
  */
 export async function handleAwardRejection(
@@ -159,21 +160,21 @@ export async function handleAwardRejection(
     quote: any, 
     requisition: any,
     actor: any,
-    declinedItemIds: string[] = []
+    declinedItemIds: string[] = [],
+    rejectedQuoteItemId?: string
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
     
     if (awardStrategy === 'item') {
         let itemsUpdated = 0;
-        for (const itemId of declinedItemIds) {
-            const reqItem = await tx.requisitionItem.findUnique({ where: { id: itemId }});
-            if (!reqItem || !reqItem.perItemAwardDetails) continue;
+        for (const reqItem of requisition.items) {
+            if (!declinedItemIds.includes(reqItem.id)) continue;
 
-            const awardDetails = reqItem.perItemAwardDetails as PerItemAwardDetail[];
+            const awardDetails = (reqItem.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             let hasBeenUpdated = false;
             
             const updatedDetails = awardDetails.map(d => {
-                if (d.vendorId === quote.vendorId && d.status === 'Awarded') {
+                if (d.vendorId === quote.vendorId && d.status === 'Awarded' && (!rejectedQuoteItemId || d.quoteItemId === rejectedQuoteItemId)) {
                     hasBeenUpdated = true;
                     return { ...d, status: 'Declined' as const };
                 }

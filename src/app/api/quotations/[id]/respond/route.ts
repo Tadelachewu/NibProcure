@@ -14,7 +14,7 @@ export async function POST(
   const quoteId = params.id;
   try {
     const body = await request.json();
-    const { userId, action } = body as { userId: string; action: 'accept' | 'reject' };
+    const { userId, action, quoteItemId } = body as { userId: string; action: 'accept' | 'reject'; quoteItemId?: string };
 
     const user = await prisma.user.findUnique({
         where: {id: userId},
@@ -53,17 +53,28 @@ export async function POST(
             let awardedQuoteItems: any[] = [];
             
             if (isPerItemAward) {
+                // If a specific quoteItemId is provided, only accept that one.
+                // Otherwise, accept all items currently in 'Awarded' state for this vendor.
                 const awardedItemDetails = requisition.items.flatMap(i => (i.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId && d.status === 'Awarded'));
                 
-                const awardedQuoteItemIds = new Set(awardedItemDetails.map(d => d.quoteItemId));
+                let itemsToAccept = awardedItemDetails;
+                if (quoteItemId) {
+                    itemsToAccept = awardedItemDetails.filter(d => d.quoteItemId === quoteItemId);
+                }
+
+                if (itemsToAccept.length === 0) {
+                    throw new Error("No items in 'Awarded' status found for you to accept.");
+                }
+                
+                const awardedQuoteItemIds = new Set(itemsToAccept.map(d => d.quoteItemId));
                 awardedQuoteItems = quote.items.filter(item => awardedQuoteItemIds.has(item.id));
                 
-                // Update the status in the JSONB field
+                // Update the status in the JSONB field for each accepted item
                 for (const item of requisition.items) {
                     const originalDetails = item.perItemAwardDetails as PerItemAwardDetail[] | null;
                     if (originalDetails) {
                         const newDetails = originalDetails.map(d => 
-                            (d.vendorId === user.vendorId && d.status === 'Awarded') ? { ...d, status: 'Accepted' as const } : d
+                            awardedQuoteItemIds.has(d.quoteItemId) ? { ...d, status: 'Accepted' as const } : d
                         );
                         await tx.requisitionItem.update({
                             where: { id: item.id },
@@ -116,22 +127,17 @@ export async function POST(
 
             // Check if ALL possible awards for this requisition have been actioned (accepted or declined).
             let allAwardsActioned = false;
+            const updatedRequisition = await tx.purchaseRequisition.findUnique({
+                where: { id: requisition.id },
+                include: { items: true, quotations: true }
+            });
+
             if (isPerItemAward) {
-                 const updatedRequisition = await tx.purchaseRequisition.findUnique({
-                    where: { id: requisition.id },
-                    include: { items: true }
-                });
                  allAwardsActioned = !updatedRequisition?.items.some(item =>
                     (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Awarded')
                 );
             } else {
-                 const otherPendingAwards = await tx.quotation.count({
-                    where: {
-                        requisitionId: requisition.id,
-                        status: 'Awarded'
-                    }
-                });
-                allAwardsActioned = otherPendingAwards === 0;
+                 allAwardsActioned = !updatedRequisition?.quotations.some(q => q.status === 'Awarded');
             }
 
             if (allAwardsActioned) {
@@ -156,13 +162,13 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            const declinedItemIds = isPerItemAward 
-                ? requisition.items
+            const declinedItemIds = quoteItemId
+                ? [quote.items.find(i => i.id === quoteItemId)?.requisitionItemId].filter(Boolean) as string[]
+                : requisition.items
                     .filter(item => (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user.vendorId && d.status === 'Awarded'))
-                    .map(item => item.id)
-                : quote.items.map(item => item.requisitionItemId);
+                    .map(item => item.id);
                 
-            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds);
+            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds, quoteItemId);
         }
         
         throw new Error('Invalid action.');
