@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -69,14 +69,14 @@ export function AwardReviewsTable() {
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
 
-  const fetchRequisitions = async () => {
+  const fetchRequisitions = useCallback(async () => {
     if (!user || !token) {
       setLoading(false);
       return;
     }
     try {
       setLoading(true);
-      const response = await fetch(`/api/requisitions?forAwardReview=true`, {
+      const response = await fetch(`/api/reviews`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for award review');
@@ -88,11 +88,11 @@ export function AwardReviewsTable() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, token]);
 
   useEffect(() => {
     fetchRequisitions();
-  }, [user, token]);
+  }, [fetchRequisitions]);
 
   const handleAction = (req: PurchaseRequisition, type: 'approve' | 'reject') => {
     setSelectedRequisition(req);
@@ -137,22 +137,18 @@ export function AwardReviewsTable() {
             minute,
         }),
       });
-      const updatedReq = await response.json();
-      if (!response.ok) throw new Error(updatedReq.error || `Failed to ${actionType} requisition award`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to ${actionType} requisition award`);
+      }
       
       toast({
         title: "Success",
         description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
       
-      // Instead of re-fetching, update the local state to show the change immediately
-      setRequisitions(prev => 
-        prev.map(req => 
-          req.id === selectedRequisition.id 
-          ? { ...req, status: updatedReq.status, currentApproverId: updatedReq.currentApproverId } 
-          : req
-        )
-      );
+      // Re-fetch the data to get the updated list which now includes the recently-actioned item.
+      await fetchRequisitions();
 
     } catch (error) {
       toast({

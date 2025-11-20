@@ -11,9 +11,6 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const includeActionedFor = searchParams.get('includeActionedFor');
-    
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.split(' ')[1];
     if (!token) {
@@ -34,21 +31,20 @@ export async function GET(request: Request) {
     userRoles.forEach(roleName => {
         orConditions.push({ status: `Pending_${roleName}` });
     });
-
-    // If includeActionedFor is passed, also find items this user recently acted on.
-    if (includeActionedFor === userId) {
-        orConditions.push({
-            reviews: {
-                some: {
-                    reviewerId: userId,
-                    // Look for reviews in the last 5 minutes to keep the view clean
-                    createdAt: { gte: addMinutes(new Date(), -5) }
-                }
-            }
-        });
-    }
     
-    // For high-level users, we also show them everything that is pending *any* kind of review
+    // New Condition: Also include items this user has reviewed in the last 5 minutes.
+    // This makes the UI feel persistent after an action.
+    orConditions.push({
+        reviews: {
+            some: {
+                reviewerId: userId,
+                // Look for reviews in the last 5 minutes to keep the view clean
+                createdAt: { gte: addMinutes(new Date(), -5) }
+            }
+        }
+    });
+    
+    // For high-level users, we also show them everything that is pending *any* kind of review for oversight
     if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
         const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
         const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
