@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 import { format } from 'date-fns';
 
 export async function POST(
@@ -15,7 +15,7 @@ export async function POST(
     const body = await request.json();
     const { userId, newDeadline } = body;
 
-    const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -23,13 +23,19 @@ export async function POST(
     // Authorization check
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    if (user.role === 'Admin') {
+    const userRoles = user.roles.map(r => r.name as UserRole);
+
+    if (userRoles.includes('Admin')) {
         isAuthorized = true;
-    } else if (rfqSenderSetting?.value?.type === 'all' && user.role === 'Procurement_Officer') {
-        isAuthorized = true;
-    } else if (rfqSenderSetting?.value?.type === 'specific' && rfqSenderSetting.value.userId === userId) {
-        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userId?: string };
+        if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
+            isAuthorized = true;
+        } else if (setting.type === 'specific' && setting.userId === userId) {
+            isAuthorized = true;
+        }
     }
+
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized: You do not have permission to extend deadlines.' }, { status: 403 });
