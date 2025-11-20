@@ -59,7 +59,14 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
     }
     
     // Find where we are in the current sequence
-    const currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getStatusFromRole(step.role.name));
+    let currentStepIndex = relevantTier.steps.findIndex(step => requisition.status === getStatusFromRole(step.role.name));
+
+    // If the current step isn't found by status (e.g. an Admin is acting), find it by role
+    if (currentStepIndex === -1 && actor.roles) {
+      const actorRoles = (actor.roles as any[]).map(r => r.name);
+      currentStepIndex = relevantTier.steps.findIndex(step => actorRoles.includes(step.role.name));
+    }
+
 
     if (currentStepIndex === -1) {
         // This is the first time we are routing this, so we start from step 0.
@@ -357,7 +364,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         }
 
         // 3. Get the next approval step and route the requisition
-        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, updatedRequisition, actor);
+        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...updatedRequisition, totalPrice: newTotalValue }, actor);
 
         await tx.purchaseRequisition.update({
             where: { id: requisitionId },
