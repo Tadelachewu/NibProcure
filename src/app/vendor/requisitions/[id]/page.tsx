@@ -587,7 +587,6 @@ export default function VendorRequisitionPage() {
     const [isResponding, setIsResponding] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [submittedQuote, setSubmittedQuote] = useState<Quotation | null>(null);
-    const [isInvoiceFormOpen, setInvoiceFormOpen] = useState(false);
     const [isEditingQuote, setIsEditingQuote] = useState(false);
 
     const params = useParams();
@@ -628,15 +627,19 @@ export default function VendorRequisitionPage() {
 
     const isAccepted = useMemo(() => {
         if (!requisition || !user?.vendorId) return false;
-
+    
+        // For per-item awards, check if at least one item has been accepted by the vendor.
         if (isPartiallyAwarded) {
-             return awardedItems.some(item => item.status === 'Accepted');
+             const hasAcceptedItem = requisition.items.some(item =>
+                (item.perItemAwardDetails || []).some(d => d.vendorId === user.vendorId && d.status === 'Accepted')
+            );
+            return hasAcceptedItem;
         }
         
+        // For single-vendor awards, check the main quote status.
         const vendorQuote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
         return vendorQuote?.status === 'Accepted';
-
-    }, [requisition, user, isPartiallyAwarded, awardedItems]);
+    }, [requisition, user, isPartiallyAwarded]);
 
 
     const fetchRequisitionData = async () => {
@@ -721,14 +724,15 @@ export default function VendorRequisitionPage() {
     if (error) return <div className="text-destructive text-center p-8">{error}</div>;
     if (!requisition) return <div className="text-center p-8">Requisition not found.</div>;
 
-    const hasResponded = submittedQuote?.status === 'Accepted' || submittedQuote?.status === 'Declined';
-    const hasSubmittedInvoice = submittedQuote?.status === 'Invoice_Submitted';
     const isResponseDeadlineExpired = requisition.awardResponseDeadline ? isPast(new Date(requisition.awardResponseDeadline)) : false;
     const isStandby = isPartiallyAwarded ? awardedItems.some(i => i.status === 'Standby') : submittedQuote?.status === 'Standby';
 
 
     const QuoteDisplayCard = ({ quote, itemsToShow, showActions }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean }) => {
          const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+         const poForItem = purchaseOrders.find(po => po.items.some(poi => itemsToShow.some(i => i.id === poi.requisitionItemId || i.name === poi.name)));
+         const hasSubmittedInvoice = poForItem && (poForItem.invoices?.length || 0) > 0;
+
          return (
          <Card>
             <CardHeader className="flex flex-row items-start justify-between">
@@ -794,19 +798,19 @@ export default function VendorRequisitionPage() {
                  <div className="text-right font-bold text-2xl">
                     Total Quoted Price: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
                  </div>
-                 {isAccepted && purchaseOrders.length > 0 && (
+                 {isAccepted && poForItem && (
                     <CardFooter className="p-0 pt-4">
-                         <Dialog open={isInvoiceFormOpen} onOpenChange={setInvoiceFormOpen}>
+                        <Dialog>
                             <DialogTrigger asChild>
-                                <Button className="w-full" disabled={hasSubmittedInvoice}>
+                                 <Button className="w-full" disabled={hasSubmittedInvoice}>
                                     {hasSubmittedInvoice ? (
-                                        <><CircleCheck className="mr-2"/> Invoice Submitted</>
+                                        <><CircleCheck className="mr-2"/> Invoice Submitted for PO {poForItem.id}</>
                                     ) : (
-                                        <><FileUp className="mr-2"/> Submit Invoice for PO {purchaseOrders.find(po => po.items.some(poi => itemsToShow.map(i => i.name).includes(poi.name)))?.id}</>
+                                        <><FileUp className="mr-2"/> Submit Invoice for PO {poForItem.id}</>
                                     )}
                                 </Button>
                             </DialogTrigger>
-                            <InvoiceSubmissionForm po={purchaseOrders.find(po => po.items.some(poi => itemsToShow.map(i => i.name).includes(poi.name)))!} onInvoiceSubmitted={() => { setInvoiceFormOpen(false); fetchRequisitionData(); }} />
+                            <InvoiceSubmissionForm po={poForItem} onInvoiceSubmitted={() => { fetchRequisitionData(); }} />
                         </Dialog>
                     </CardFooter>
                  )}
