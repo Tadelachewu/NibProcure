@@ -58,9 +58,11 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         };
     }
     
+    // **REVISED LOGIC START**
     // Correctly find the current step index based on the REQUISITION's status, not the actor's role.
     const currentStepIndex = relevantTier.steps.findIndex(step => {
       try {
+        // The requisition status is the source of truth for its current step.
         return requisition.status === getStatusFromRole(step.role.name);
       } catch {
         return false;
@@ -68,11 +70,12 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
     });
 
     if (currentStepIndex === -1) {
-        // This is the first time we are routing this, so we start from step 0.
+        // This is the first time we are routing this award for this tier.
         const firstStep = relevantTier.steps[0];
         const nextStatus = getStatusFromRole(firstStep.role.name);
         
         let nextApproverId: string | null = null;
+        // Do not assign an approver if the next step is a committee review.
         if (!firstStep.role.name.includes('Committee')) {
              const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: firstStep.role.name } } }});
              if (!approverUser) throw new Error(`Could not find a user for the role: ${firstStep.role.name.replace(/_/g, ' ')}`);
@@ -85,6 +88,7 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
             auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier. Routing to ${firstStep.role.name.replace(/_/g, ' ')} for approval.`
         };
     }
+    // **REVISED LOGIC END**
 
     // We are in an existing sequence, find the next step.
     if (currentStepIndex < relevantTier.steps.length - 1) {
@@ -101,17 +105,19 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
              }
         }
         
+        const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
         return {
             nextStatus,
             nextApproverId,
-            auditDetails: `Award approved by ${(actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ')}. Advanced to ${nextStep.role.name.replace(/_/g, ' ')}.`
+            auditDetails: `Award approved by ${actorRoles}. Advanced to ${nextStep.role.name.replace(/_/g, ' ')}.`
         };
     } else {
         // This was the final step in the chain.
+        const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
         return {
             nextStatus: 'PostApproved',
             nextApproverId: null,
-            auditDetails: `Final award approval for requisition ${requisition.id} granted by ${(actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ')}. Ready for vendor notification.`
+            auditDetails: `Final award approval for requisition ${requisition.id} granted by ${actorRoles}. Ready for vendor notification.`
         };
     }
 }
