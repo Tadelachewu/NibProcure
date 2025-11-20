@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { decodeJwt } from '@/lib/auth';
@@ -56,8 +58,15 @@ export async function GET(request: Request) {
       where: whereClause,
       include: {
         requester: { select: { name: true } },
-        items: true, // Make sure items are included for the dialog
-        quotations: { // Include quotations and their relevant nested data
+        items: {
+          select: {
+            id: true,
+            name: true,
+            quantity: true,
+            perItemAwardDetails: true,
+          }
+        },
+        quotations: {
             include: {
                 items: true,
                 scores: {
@@ -86,10 +95,10 @@ export async function GET(request: Request) {
             }
         },
         minutes: {
-            include: {
-                author: true,
-                attendees: true
-            }
+          include: {
+            author: true,
+            attendees: true
+          }
         }
       },
       orderBy: {
