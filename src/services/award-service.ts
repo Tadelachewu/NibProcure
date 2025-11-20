@@ -4,19 +4,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { User, UserRole, PerItemAwardDetail, QuoteItem } from '@/lib/types';
 
-const roleToStatusMap: Record<string, string> = {
-    'Committee_B_Member': 'Pending_Committee_B_Review',
-    'Committee_A_Member': 'Pending_Committee_A_Recommendation',
-    'Manager_Procurement_Division': 'Pending_Managerial_Approval',
-    'Director_Supply_Chain_and_Property_Management': 'Pending_Director_Approval',
-    'VP_Resources_and_Facilities': 'Pending_VP_Approval',
-    'President': 'Pending_President_Approval'
-};
-
-function getStatusFromRole(roleName: string): string | null {
-    return roleToStatusMap[roleName] || null;
-}
-
 /**
  * Finds the correct next approval step for a given requisition based on its current status and value.
  * @param tx - Prisma transaction client.
@@ -53,41 +40,43 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         };
     }
     
-    let currentStepIndex = relevantTier.steps.findIndex(step => {
-        const status = getStatusFromRole(step.role.name);
-        return status === requisition.status;
+    const currentStepIndex = relevantTier.steps.findIndex(step => {
+        // Find the step that corresponds to the requisition's CURRENT status.
+        return `Pending_${step.role.name}` === requisition.status;
     });
 
-    // If the current status is not in the chain (e.g. it's the first routing for this tier), start at the beginning.
-    if (currentStepIndex === -1) {
-       currentStepIndex = -1; // This will effectively start the loop from index 0
-    }
-    
     let nextStepIndex = currentStepIndex + 1;
-    while(nextStepIndex < relevantTier.steps.length) {
-        const nextStep = relevantTier.steps[nextStepIndex];
-        const nextStatus = getStatusFromRole(nextStep.role.name);
-        
-        if(nextStatus) { // Found a valid next step
-            let nextApproverId: string | null = null;
-            if (!nextStep.role.name.includes('Committee')) {
-                const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: nextStep.role.name } } }});
-                if (!approverUser) throw new Error(`Could not find a user for the role: ${nextStep.role.name.replace(/_/g, ' ')}`);
-                nextApproverId = approverUser.id;
-            }
-            const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
-             return {
-                nextStatus,
-                nextApproverId,
-                auditDetails: `Award approved by ${actorRoles}. Advanced to ${nextStep.role.name.replace(/_/g, ' ')}.`
-            };
-        }
-        
-        // If the role is invalid (e.g. Admin), skip it and check the next one
-        nextStepIndex++;
+    
+    // If the requisition isn't in a pending state found in the matrix, it means this is the first approval for this tier.
+    if (currentStepIndex === -1) {
+        nextStepIndex = 0;
     }
 
-    // If we've gone through all the steps, it's the final approval.
+
+    while(nextStepIndex < relevantTier.steps.length) {
+        const nextStep = relevantTier.steps[nextStepIndex];
+        const nextRoleName = nextStep.role.name;
+        
+        // Dynamically create the pending status. This is the core fix.
+        const nextStatus = `Pending_${nextRoleName}`;
+        
+        // Find a user for the next step. Committee roles don't get a specific approver ID.
+        let nextApproverId: string | null = null;
+        if (!nextRoleName.includes('Committee')) {
+            const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: nextRoleName } } }});
+            if (!approverUser) throw new Error(`Could not find a user for the role: ${nextRoleName.replace(/_/g, ' ')}`);
+            nextApproverId = approverUser.id;
+        }
+
+        const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
+        return {
+            nextStatus,
+            nextApproverId,
+            auditDetails: `Award approved by ${actorRoles}. Advanced to ${nextRoleName.replace(/_/g, ' ')}.`
+        };
+    }
+
+    // If we've gone through all the steps, it's the final approval for this tier.
     const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
     return {
         nextStatus: 'PostApproved',

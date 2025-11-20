@@ -284,14 +284,19 @@ export async function PATCH(
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
     
+    // This is a high-level award approval (e.g., by a committee or manager)
     if (requisition.status.startsWith('Pending_') && newStatus === 'Approved') {
         const userRoles = (user.roles as any[]).map(r => r.name);
         
         let isAuthorizedToApprove = false;
-        const requiredRoleForStatus = requisition.status.replace('Pending_', '');
-        if (userRoles.includes(requiredRoleForStatus)) isAuthorizedToApprove = true;
-        else if (requisition.currentApproverId === userId) isAuthorizedToApprove = true;
-        else if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) isAuthorizedToApprove = true;
+        if (requisition.currentApproverId === userId) {
+            isAuthorizedToApprove = true;
+        } else if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+            isAuthorizedToApprove = true;
+        } else {
+             const requiredRoleForStatus = requisition.status.replace('Pending_', '');
+             if (userRoles.includes(requiredRoleForStatus)) isAuthorizedToApprove = true;
+        }
 
         if (!isAuthorizedToApprove) {
             return NextResponse.json({ error: 'You are not authorized to approve this item at its current step.' }, { status: 403 });
@@ -316,7 +321,7 @@ export async function PATCH(
                         requisition: { connect: { id: id } },
                         author: { connect: { id: userId } },
                         decision: 'APPROVED',
-                        decisionBody: (user.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' '),
+                        decisionBody: requisition.status.replace(/_/g, ' '),
                         justification: minute.justification,
                         attendees: {
                             connect: minute.attendeeIds.map((id: string) => ({ id }))
@@ -352,6 +357,7 @@ export async function PATCH(
 
         return NextResponse.json(transactionResult);
 
+    // This is the initial departmental approval
     } else if (requisition.status === 'Pending_Approval') {
         if (requisition.currentApproverId !== userId) {
             return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
@@ -378,7 +384,7 @@ export async function PATCH(
             }
         });
 
-
+    // This handles a requester submitting a draft
     } else if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
         const isRequester = requisition.requesterId === userId;
         if (!isRequester) return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
