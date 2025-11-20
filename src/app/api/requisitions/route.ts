@@ -104,6 +104,7 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
+        const allPossiblePendingStatuses = (await prisma.role.findMany({ select: { name: true }})).map(r => `Pending_${r.name}`);
         if (userPayload?.roles.some(r => r.name === 'Committee_Member')) {
             whereClause.OR = [
                 { financialCommitteeMembers: { some: { id: userPayload.id } } },
@@ -122,13 +123,13 @@ export async function GET(request: Request) {
                             'PostApproved',
                             'PO_Created',
                             'Closed',
-                            'Fulfilled'
+                            'Fulfilled',
+                            ...allPossiblePendingStatuses
                         ],
                     },
                 },
             ];
         } else {
-             const allPossiblePendingStatuses = (await prisma.role.findMany({ select: { name: true }})).map(r => `Pending_${r.name}`);
              whereClause.status = {
                 in: [
                     'PreApproved',
@@ -270,7 +271,12 @@ export async function PATCH(
 
     const requisition = await prisma.purchaseRequisition.findUnique({ 
         where: { id },
-        include: { department: true, requester: true, items: true, quotations: { include: { items: true, scores: { include: { itemScores: true } } } } }
+        include: { 
+            department: true, 
+            requester: true, 
+            items: true, 
+            quotations: { include: { items: true, scores: { include: { itemScores: true } } } } 
+        }
     });
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
@@ -327,8 +333,19 @@ export async function PATCH(
                 auditDetails += ` Minute recorded.`;
             }
 
-            await tx.review.create({
-                data: {
+            // Use upsert to avoid unique constraint errors
+            await tx.review.upsert({
+                where: {
+                    requisitionId_reviewerId: {
+                        requisitionId: id,
+                        reviewerId: userId,
+                    }
+                },
+                update: {
+                    decision: 'APPROVED',
+                    comment: comment,
+                },
+                create: {
                     requisition: { connect: { id: id } },
                     reviewer: { connect: { id: userId } },
                     decision: 'APPROVED',
@@ -423,6 +440,9 @@ export async function PATCH(
     if (error instanceof Error) {
         if ((error as any).code === 'P2003') {
             return NextResponse.json({ error: 'A foreign key constraint was violated. This may be due to attempting to delete a record that is still referenced elsewhere.', details: (error as any).meta }, { status: 409 });
+        }
+        if ((error as any).code === 'P2002') {
+             return NextResponse.json({ error: 'A unique constraint was violated. This usually means a user cannot review the same item twice.', details: (error as any).meta }, { status: 409 });
         }
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
