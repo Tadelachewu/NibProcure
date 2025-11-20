@@ -1,6 +1,4 @@
 
-'use server';
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { decodeJwt } from '@/lib/auth';
@@ -16,13 +14,13 @@ export async function GET(request: Request) {
     if (!token) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const userPayload = decodeJwt(token) as any;
+    const userPayload = decodeJwt<User & { roles: UserRole[] }>(token);
     if (!userPayload) {
         return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
     
     // Correctly get roles from the decoded token payload
-    const userRoles = (userPayload.roles as string[]) || [];
+    const userRoles = userPayload.roles || [];
     const userId = userPayload.id;
 
     // This is the core logic change. We now fetch requisitions that are either:
@@ -111,7 +109,7 @@ export async function GET(request: Request) {
         if (!acc[log.transactionId]) {
           acc[log.transactionId] = [];
         }
-        const userRoles = log.user?.roles.map((r: any) => r.name).join(', ') || 'System';
+        const userRoles = (log.user?.roles as any[])?.map(r => r.name).join(', ') || 'System';
         acc[log.transactionId].push({
           ...log,
           user: log.user?.name || 'System',
