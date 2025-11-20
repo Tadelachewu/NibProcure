@@ -2376,10 +2376,10 @@ export default function QuotationDetailsPage() {
   
   const isReviewer = useMemo(() => {
     if (!user || !role || !requisition) return false;
-    const isHierarchicalReviewer = requisition.currentApproverId === user.id;
-    const isCommitteeReviewer = (role === 'Committee_A_Member' && requisition.status === 'Pending_Committee_A_Recommendation') || (role === 'Committee_B_Member' && requisition.status === 'Pending_Committee_B_Review');
-    return isHierarchicalReviewer || isCommitteeReviewer;
-  }, [user, role, requisition]);
+    // A user is a reviewer if they have permission to access the award reviews page.
+    const allowedPaths = rolePermissions['Combined'] || [];
+    return allowedPaths.includes('/award-reviews');
+  }, [user, role, requisition, rolePermissions]);
   
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
     if (!requisition || !requisition.status) return 'rfq';
