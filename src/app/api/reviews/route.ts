@@ -1,6 +1,4 @@
 
-'use server';
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { decodeJwt } from '@/lib/auth';
@@ -117,9 +115,12 @@ export async function GET(request: Request) {
         if (!acc[log.transactionId]) {
           acc[log.transactionId] = [];
         }
+        const userRoles = log.user?.roles.map((r: any) => r.name).join(', ') || 'System';
         acc[log.transactionId].push({
           ...log,
-          user: { name: log.user?.name || 'System' }
+          user: log.user?.name || 'System',
+          role: userRoles.replace(/_/g, ' '),
+          approverComment: log.details, // Use details for comment
         });
       }
       return acc;
@@ -127,7 +128,7 @@ export async function GET(request: Request) {
 
     const requisitionsWithAudit = requisitions.map(req => ({
       ...req,
-      auditTrail: logsByTransaction[req.transactionId] || []
+      auditTrail: logsByTransaction[req.transactionId!] || []
     }));
 
     return NextResponse.json(requisitionsWithAudit);
