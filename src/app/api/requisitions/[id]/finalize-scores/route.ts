@@ -52,7 +52,7 @@ export async function POST(
 
             const allQuotes = await tx.quotation.findMany({ 
                 where: { requisitionId: requisitionId },
-                include: { items: true, scores: { include: { itemScores: true } } },
+                include: { items: true, scores: { include: { itemScores: {include: {scores: true}} } } },
             });
 
             if (allQuotes.length === 0) {

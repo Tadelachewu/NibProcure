@@ -72,10 +72,10 @@ function calculateItemScores(
         const itemScore = scoreSet.itemScores.find((is: any) => is.quoteItemId === quoteItem.id);
         if (itemScore) {
             itemScore.scores.forEach((s: any) => {
-                if (s.type === 'FINANCIAL') {
+                if (s.type === 'FINANCIAL' && s.financialCriterionId) {
                     if (!allFinancialScores[s.financialCriterionId]) allFinancialScores[s.financialCriterionId] = [];
                     allFinancialScores[s.financialCriterionId].push(s.score);
-                } else if (s.type === 'TECHNICAL') {
+                } else if (s.type === 'TECHNICAL' && s.technicalCriterionId) {
                     if (!allTechnicalScores[s.technicalCriterionId]) allTechnicalScores[s.technicalCriterionId] = [];
                     allTechnicalScores[s.technicalCriterionId].push(s.score);
                 }
@@ -121,19 +121,32 @@ function useAwardCalculations(requisition: PurchaseRequisition, quotations: Quot
             return { singleVendorResults: [], bestItemResults: [] };
         }
 
+        const evaluationCriteria = requisition.evaluationCriteria;
+
         // --- Single Vendor Calculation ---
         const calculatedQuotes: CalculatedQuote[] = quotations.map(quote => {
-            const calculatedItems = quote.items.map(item =>
-                calculateItemScores(item, requisition.evaluationCriteria!, quote.scores || [])
-            );
-            const finalVendorScore = calculatedItems.length > 0
-                ? calculatedItems.reduce((acc, item) => acc + item.finalItemScore, 0) / calculatedItems.length
+            const championBids: CalculatedItem[] = [];
+
+            for (const reqItem of requisition.items) {
+                const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
+                if (proposalsForItem.length === 0) continue;
+
+                const calculatedProposals = proposalsForItem.map(proposal => 
+                    calculateItemScores(proposal, evaluationCriteria, quote.scores || [])
+                );
+
+                const championBid = calculatedProposals.sort((a, b) => b.finalItemScore - a.finalItemScore)[0];
+                championBids.push(championBid);
+            }
+
+            const finalVendorScore = championBids.length > 0
+                ? championBids.reduce((acc, item) => acc + item.finalItemScore, 0) / championBids.length
                 : 0;
 
             return {
                 vendorId: quote.vendorId,
                 vendorName: quote.vendorName,
-                items: calculatedItems,
+                items: championBids,
                 finalVendorScore,
             };
         });
@@ -145,13 +158,14 @@ function useAwardCalculations(requisition: PurchaseRequisition, quotations: Quot
 
         // --- Best Item Calculation ---
         const bestItemResults = requisition.items.map(reqItem => {
-            const bidsForItem = calculatedQuotes.flatMap(vendor => 
-                vendor.items
-                    .filter(item => item.quoteItemId.startsWith(reqItem.id)) // Simplified matching
+            const bidsForItem = quotations.flatMap(quote => 
+                quote.items
+                    .filter(item => item.requisitionItemId === reqItem.id)
                     .map(item => ({
-                        vendorName: vendor.vendorName,
-                        itemName: item.itemName,
-                        finalItemScore: item.finalItemScore,
+                        vendorName: quote.vendorName,
+                        quoteItemId: item.id,
+                        itemName: item.name,
+                        finalItemScore: calculateItemScores(item, evaluationCriteria, quote.scores || []).finalItemScore
                     }))
             ).sort((a,b) => b.finalItemScore - a.finalItemScore);
 
@@ -250,7 +264,7 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
             <Card>
                 <CardHeader>
                     <CardTitle>Strategy 1: Award All to Single Vendor</CardTitle>
-                    <CardDescription>Calculates an overall score for each vendor by averaging their item scores. The vendor with the highest total score is the winner.</CardDescription>
+                    <CardDescription>Calculates an overall score for each vendor by averaging their champion bids for each item. The vendor with the highest total score is the winner.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {singleVendorResults.map(vendor => (
@@ -267,7 +281,7 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                             <CardContent className="space-y-4">
                                 {vendor.items.map(item => (
                                     <details key={item.quoteItemId} className="p-4 border rounded-lg bg-muted/30">
-                                        <summary className="font-semibold cursor-pointer">Item: {item.itemName} &rarr; Final Item Score: {item.finalItemScore.toFixed(2)}</summary>
+                                        <summary className="font-semibold cursor-pointer">Champion Bid for "{requisition.items.find(ri => ri.id === item.quoteItemId.split('-')[0])?.name}": {item.itemName} &rarr; Final Score: {item.finalItemScore.toFixed(2)}</summary>
                                         <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
                                             <ScoreTable title="Financial Evaluation" scores={item.financialScores} weight={requisition.evaluationCriteria!.financialWeight} totalScore={item.totalFinancialScore} />
                                             <ScoreTable title="Technical Evaluation" scores={item.technicalScores} weight={requisition.evaluationCriteria!.technicalWeight} totalScore={item.totalTechnicalScore} />
