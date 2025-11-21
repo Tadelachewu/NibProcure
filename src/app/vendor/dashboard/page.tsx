@@ -312,7 +312,7 @@ export default function VendorDashboardPage() {
                                             <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(1)} disabled={openCurrentPage === 1}><ChevronsLeft /></Button>
                                             <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(p => Math.max(1, p - 1))} disabled={openCurrentPage === 1}><ChevronLeft /></Button>
                                             <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(p => Math.min(openTotalPages, p + 1))} disabled={openCurrentPage === openTotalPages}><ChevronRight /></Button>
-                                            <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(totalPages)} disabled={openCurrentPage === openTotalPages}><ChevronsRight /></Button>
+                                            <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(openTotalPages)} disabled={openCurrentPage === openTotalPages}><ChevronsRight /></Button>
                                         </div>
                                     </div>
                                 )}
@@ -352,7 +352,7 @@ export default function VendorDashboardPage() {
                                                         itemsToList = vendorQuote.items;
                                                     }
                                                 }
-                                            } else if (status === 'Standby' && vendorQuote && req.evaluationCriteria) {
+                                            } else if (status === 'Standby' && vendorQuote) {
                                                 const strategy = (req.rfqSettings as any)?.awardStrategy || 'all';
                                                 if(strategy === 'item' && user) {
                                                     const standbyDetails = req.items.flatMap(item => (item.perItemAwardDetails || []).filter(d => d.vendorId === user.vendorId && d.status === 'Standby'));
