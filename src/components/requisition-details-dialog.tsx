@@ -51,13 +51,19 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
   if (!requisition) return null;
 
   const getTimelineStatus = (step: number) => {
-      const stepOrder = ['Draft', 'Pending_Approval', 'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 'Pending_Committee', 'PostApproved', 'Awarded', 'PO_Created', 'Fulfilled', 'Closed'];
-      
-      const currentStatusIndex = stepOrder.findIndex(s => requisition.status.startsWith(s));
-      
-      if (currentStatusIndex > step) return 'complete';
-      if (currentStatusIndex === step) return 'active';
-      return 'pending';
+    const stepOrder = ['Draft', 'Pending_Approval', 'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 'Pending_Review', 'PostApproved', 'Awarded', 'PO_Created', 'Fulfilled', 'Closed'];
+    
+    // Normalize current status to match stepOrder. Any "Pending_Committee..." becomes "Pending_Review"
+    let normalizedStatus = requisition.status;
+    if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
+        normalizedStatus = 'Pending_Review';
+    }
+
+    const currentStatusIndex = stepOrder.findIndex(s => normalizedStatus.startsWith(s));
+    
+    if (currentStatusIndex > step) return 'complete';
+    if (currentStatusIndex === step) return 'active';
+    return 'pending';
   }
 
   const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
@@ -193,7 +199,7 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                     <div className="space-y-4">
                          <h4 className="font-medium text-sm">Lifecycle Status</h4>
                          <TimelineStep title="Requisition Submitted" status={getTimelineStatus(0)} />
-                         <TimelineStep title="Departmental Approval" status={getTimelineStatus(1)} />
+                         <TimelineStep title="Departmental Approval" status={getTimelineStatus(2)} />
                          <TimelineStep title="RFQ & Bidding" status={getTimelineStatus(3)} />
                          <TimelineStep title="Committee Scoring" status={getTimelineStatus(4)} />
                          <TimelineStep title="Final Award Review" status={getTimelineStatus(6)} />
