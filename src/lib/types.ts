@@ -175,6 +175,7 @@ export type PurchaseRequisition = {
   };
   negotiationNotes?: string;
   purchaseOrderId?: string;
+  purchaseOrders?: { id: string, vendor: { name: string } }[];
   allowedVendorIds: string[];
   awardedQuoteItemIds: string[];
   customQuestions?: CustomQuestion[];

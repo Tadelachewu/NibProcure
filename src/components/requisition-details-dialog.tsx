@@ -1,7 +1,7 @@
 
 'use client';
 
-import { PurchaseRequisition } from '@/lib/types';
+import { PurchaseRequisition, PurchaseOrder } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -13,9 +13,11 @@ import {
 import { Button } from './ui/button';
 import { Separator } from './ui/separator';
 import { Badge } from './ui/badge';
-import { format } from 'date-fns';
+import { format, isPast } from 'date-fns';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { CheckCircle, Circle, Clock, FileText, Send, UserCheck, Users, Trophy } from 'lucide-react';
+import Link from 'next/link';
 
 interface RequisitionDetailsDialogProps {
   requisition: PurchaseRequisition;
@@ -23,111 +25,144 @@ interface RequisitionDetailsDialogProps {
   onClose: () => void;
 }
 
+const TimelineStep = ({ title, status, isLast = false }: { title: string, status: 'complete' | 'active' | 'pending', isLast?: boolean }) => {
+    const statusClasses = {
+        complete: "bg-green-500 border-green-500 text-white",
+        active: "bg-primary border-primary text-primary-foreground animate-pulse",
+        pending: "bg-muted border-border text-muted-foreground",
+    }
+    return (
+        <div className="flex items-start">
+            <div className="flex flex-col items-center">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 ${statusClasses[status]}`}>
+                    {status === 'complete' ? <CheckCircle className="h-5 w-5"/> : <div className="h-2.5 w-2.5 bg-current rounded-full" />}
+                </div>
+                {!isLast && <div className={`h-12 w-0.5 ${status === 'complete' ? 'bg-green-500' : 'bg-border'}`}></div>}
+            </div>
+            <div className="ml-4 -mt-1">
+                <h4 className="font-semibold text-sm">{title}</h4>
+                <p className="text-xs text-muted-foreground capitalize">{status}</p>
+            </div>
+        </div>
+    )
+}
+
 export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: RequisitionDetailsDialogProps) {
   if (!requisition) return null;
 
+  const getTimelineStatus = (step: number) => {
+      const stepOrder = ['Draft', 'Pending_Approval', 'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 'Pending_Committee', 'PostApproved', 'Awarded', 'PO_Created', 'Fulfilled', 'Closed'];
+      
+      const currentStatusIndex = stepOrder.findIndex(s => requisition.status.startsWith(s));
+      
+      if (currentStatusIndex > step) return 'complete';
+      if (currentStatusIndex === step) return 'active';
+      return 'pending';
+  }
+
+  const isAwarded = ['Awarded', 'Award_Declined', 'PO_Created', 'Fulfilled', 'Closed', 'PostApproved'].includes(requisition.status) || requisition.status.startsWith('Pending_');
+  const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
+  const winningQuote = awardStrategy === 'all' ? requisition.quotations?.find(q => q.status === 'Accepted' || q.status === 'Awarded') : null;
+  
+  const perItemWinners = awardStrategy === 'item' ? requisition.items.map(item => {
+    const awardDetail = (item.perItemAwardDetails || []).find(d => d.status === 'Accepted' || d.status === 'Awarded' || d.status === 'Pending_Award');
+    return {
+        itemName: item.name,
+        winner: awardDetail?.vendorName,
+        price: awardDetail ? awardDetail.unitPrice * item.quantity : 0
+    };
+  }).filter(item => item.winner) : [];
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl">
             <DialogHeader>
             <DialogTitle>Details for Requisition: {requisition.id}</DialogTitle>
             <DialogDescription>
-                A read-only view of the requisition submitted by {requisition.requesterName}.
+                A summary of the lifecycle for the requisition "{requisition.title}".
             </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[70vh] pr-4">
-                <div className="space-y-4 py-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div><p className="font-medium">Title</p><p className="text-muted-foreground">{requisition.title}</p></div>
-                        <div><p className="font-medium">Department</p><p className="text-muted-foreground">{requisition.department}</p></div>
-                        <div><p className="font-medium">Created</p><p className="text-muted-foreground">{requisition.createdAt ? format(new Date(requisition.createdAt), 'PP') : 'N/A'}</p></div>
-                        <div><p className="font-medium">Status</p><div><Badge>{requisition.status.replace(/_/g, ' ')}</Badge></div></div>
-                        <div><p className="font-medium">Urgency</p><div><Badge variant={requisition.urgency === 'High' || requisition.urgency === 'Critical' ? 'destructive' : 'secondary'}>{requisition.urgency}</Badge></div></div>
-                         {requisition.deadline && (
-                            <div className="md:col-span-2"><p className="font-medium">Quotation Deadline</p><p className="text-muted-foreground">{format(new Date(requisition.deadline), 'PPpp')}</p></div>
-                         )}
-                    </div>
-                    <Separator />
-                     <div>
-                        <h4 className="font-medium mb-2">Items Requested</h4>
-                        <div className="border rounded-md">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Item Name</TableHead>
-                                    <TableHead className="text-right">Quantity</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {requisition.items && requisition.items.length > 0 ? (
-                                    requisition.items.map(item => (
-                                     <TableRow key={item.id}>
-                                        <TableCell>
-                                            <p className="font-medium">{item.name}</p>
-                                            {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
-                                        </TableCell>
-                                        <TableCell className="text-right">{item.quantity}</TableCell>
-                                     </TableRow>
-                                    ))
-                                ) : (
-                                    <TableRow>
-                                        <TableCell colSpan={2} className="text-center h-24">No items listed for this requisition.</TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_250px] gap-6 py-4">
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div><p className="font-medium">Requester</p><p className="text-muted-foreground">{requisition.requesterName}</p></div>
+                            <div><p className="font-medium">Department</p><p className="text-muted-foreground">{requisition.department}</p></div>
+                            <div><p className="font-medium">Created</p><p className="text-muted-foreground">{requisition.createdAt ? format(new Date(requisition.createdAt), 'PP') : 'N/A'}</p></div>
+                            <div><p className="font-medium">Urgency</p><div><Badge variant={requisition.urgency === 'High' || requisition.urgency === 'Critical' ? 'destructive' : 'secondary'}>{requisition.urgency}</Badge></div></div>
                         </div>
-                    </div>
-                    <div>
-                        <h4 className="font-medium mb-2">Justification</h4>
-                        <p className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md">{requisition.justification}</p>
-                    </div>
-
-                    {requisition.customQuestions && requisition.customQuestions.length > 0 && (
-                        <>
-                            <Separator />
-                            <div>
-                                <h4 className="font-medium mb-2">Custom Questions for Vendors</h4>
-                                <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground">
-                                    {requisition.customQuestions.map(q => <li key={q.id}>{q.questionText}</li>)}
-                                </ul>
+                        <Separator />
+                        <div>
+                            <h4 className="font-medium mb-2">Items Requested</h4>
+                            <div className="border rounded-md">
+                                <Table>
+                                    <TableHeader><TableRow><TableHead>Item Name</TableHead><TableHead className="text-right">Quantity</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {requisition.items?.map(item => (
+                                            <TableRow key={item.id}><TableCell>{item.name}</TableCell><TableCell className="text-right">{item.quantity}</TableCell></TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
                             </div>
-                        </>
-                    )}
-                    {requisition.evaluationCriteria && (
-                        <>
-                            <Separator />
-                            <div>
-                                <h4 className="font-medium mb-2">Evaluation Criteria</h4>
-                                <div className="text-sm space-y-4">
-                                    <div className="flex justify-around p-2 bg-muted/50 rounded-md">
-                                        <div className="text-center">
-                                            <p className="font-semibold">{requisition.evaluationCriteria.financialWeight}%</p>
-                                            <p className="text-muted-foreground">Financial Weight</p>
-                                        </div>
-                                        <div className="text-center">
-                                            <p className="font-semibold">{requisition.evaluationCriteria.technicalWeight}%</p>
-                                            <p className="text-muted-foreground">Technical Weight</p>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <h5 className="font-semibold mb-1">Financial Criteria</h5>
-                                            <ul className="list-disc pl-5 text-muted-foreground">
-                                                {requisition.evaluationCriteria.financialCriteria.map(c => <li key={c.id}>{c.name} ({c.weight}%)</li>)}
-                                            </ul>
-                                        </div>
-                                        <div>
-                                            <h5 className="font-semibold mb-1">Technical Criteria</h5>
-                                            <ul className="list-disc pl-5 text-muted-foreground">
-                                                {requisition.evaluationCriteria.technicalCriteria.map(c => <li key={c.id}>{c.name} ({c.weight}%)</li>)}
-                                            </ul>
-                                        </div>
+                        </div>
+                        {isAwarded && (
+                            <>
+                                <Separator />
+                                <div>
+                                    <h4 className="font-medium mb-2 flex items-center gap-2"><Trophy className="text-amber-500" /> Award Summary</h4>
+                                    <div className="p-4 bg-muted/50 rounded-lg space-y-4">
+                                        {awardStrategy === 'all' ? (
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground">Winning Vendor (Single Award)</p>
+                                                    <p className="font-semibold">{winningQuote?.vendorName || 'N/A'}</p>
+                                                </div>
+                                                 <div className="text-right">
+                                                     <p className="text-xs text-muted-foreground">Total Award Value</p>
+                                                     <p className="font-semibold text-lg">{requisition.totalPrice.toLocaleString()} ETB</p>
+                                                 </div>
+                                            </div>
+                                        ) : (
+                                            <Table>
+                                                <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Winning Vendor</TableHead><TableHead className="text-right">Price</TableHead></TableRow></TableHeader>
+                                                <TableBody>
+                                                    {perItemWinners.map(item => (
+                                                        <TableRow key={item.itemName}><TableCell>{item.itemName}</TableCell><TableCell>{item.winner}</TableCell><TableCell className="text-right">{item.price.toLocaleString()} ETB</TableCell></TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        )}
                                     </div>
                                 </div>
-                            </div>
-                        </>
-                    )}
+                            </>
+                        )}
+                        {(requisition.purchaseOrders && requisition.purchaseOrders.length > 0) && (
+                            <>
+                                <Separator />
+                                <div>
+                                    <h4 className="font-medium mb-2 flex items-center gap-2"><FileText /> Final Documents</h4>
+                                    <div className="space-y-2">
+                                        {(requisition.purchaseOrders as any[]).map((po: {id: string, vendor: {name: string}}) => (
+                                            <Button key={po.id} variant="outline" asChild className="w-full justify-start">
+                                                <Link href={`/purchase-orders/${po.id}`}>PO: {po.id} ({po.vendor.name})</Link>
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                    </div>
+                    <div className="space-y-4">
+                         <h4 className="font-medium text-sm">Lifecycle Status</h4>
+                         <TimelineStep title="Requisition Submitted" status={getTimelineStatus(0)} />
+                         <TimelineStep title="Departmental Approval" status={getTimelineStatus(1)} />
+                         <TimelineStep title="RFQ & Bidding" status={getTimelineStatus(3)} />
+                         <TimelineStep title="Committee Scoring" status={getTimelineStatus(4)} />
+                         <TimelineStep title="Final Award Review" status={getTimelineStatus(6)} />
+                         <TimelineStep title="Vendor Awarded" status={getTimelineStatus(8)} />
+                         <TimelineStep title="Fulfilled & Closed" status={getTimelineStatus(10)} isLast/>
+                    </div>
                 </div>
             </ScrollArea>
             <DialogFooter>

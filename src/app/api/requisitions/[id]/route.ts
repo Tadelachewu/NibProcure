@@ -26,6 +26,17 @@ export async function GET(
         financialCommitteeMembers: { select: { id: true, name: true, email: true } },
         technicalCommitteeMembers: { select: { id: true, name: true, email: true } },
         requester: true,
+        quotations: { // Include quotations to show award details
+            include: {
+                items: true,
+            }
+        },
+        purchaseOrders: { // Include POs to link to them
+            select: {
+                id: true,
+                vendor: { select: { name: true }}
+            }
+        }
       }
     });
 
