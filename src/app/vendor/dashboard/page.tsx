@@ -334,10 +334,10 @@ export default function VendorDashboardPage() {
                                             const isActionable = status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted' || status === 'Invoice Submitted';
                                             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
                                             
-                                            let itemsToList: (QuoteItem | { id: string, name: string, quantity: number })[] = [];
+                                            let itemsToList: { id: string, name: string, quantity: number }[] = [];
+                                            const strategy = (req.rfqSettings as any)?.awardStrategy || 'all';
 
-                                            if (status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted') {
-                                                const strategy = (req.rfqSettings as any)?.awardStrategy || 'all';
+                                            if (status === 'Accepted' || status === 'Awarded' || status === 'Partially Awarded') {
                                                 if (strategy === 'item' && user) {
                                                     const awardedDetails = req.items.flatMap(item => (item.perItemAwardDetails || []).filter(d => d.vendorId === user.vendorId && (d.status === 'Awarded' || d.status === 'Accepted')));
                                                     itemsToList = awardedDetails.map(detail => {
@@ -353,8 +353,7 @@ export default function VendorDashboardPage() {
                                                     }
                                                 }
                                             } else if (status === 'Standby' && vendorQuote) {
-                                                const strategy = (req.rfqSettings as any)?.awardStrategy || 'all';
-                                                if(strategy === 'item' && user) {
+                                                if (strategy === 'item' && user) {
                                                     const standbyDetails = req.items.flatMap(item => (item.perItemAwardDetails || []).filter(d => d.vendorId === user.vendorId && d.status === 'Standby'));
                                                     itemsToList = standbyDetails.map(detail => {
                                                         const reqItem = req.items.find(i => i.id === detail.requisitionItemId);
@@ -395,6 +394,7 @@ export default function VendorDashboardPage() {
                                                 }
                                             }
 
+
                                             return (
                                                 <Card key={req.id} className={cn("relative flex flex-col", (status === 'Awarded' || status === 'Partially Awarded') && "border-primary ring-2 ring-primary/50 bg-primary/5", isExpired && "opacity-60")}>
                                                     <VendorStatusBadge status={status} />
@@ -416,7 +416,7 @@ export default function VendorDashboardPage() {
                                                         </div>
                                                         {itemsToList.length > 0 && (
                                                             <div className="text-sm space-y-2 pt-2 border-t">
-                                                                <h4 className="font-semibold flex items-center gap-2"><List /> {status.includes('Award') ? 'Awarded Items' : 'Standby Items'}</h4>
+                                                                <h4 className="font-semibold flex items-center gap-2"><List /> {status.includes('Award') || status.includes('Accepted') ? 'Awarded Items' : 'Standby Items'}</h4>
                                                                 <ul className="list-disc pl-5 text-muted-foreground">
                                                                 {itemsToList.map(item => (
                                                                     <li key={item.id}>{item.name} (Qty: {item.quantity})</li>
