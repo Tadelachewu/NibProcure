@@ -2353,7 +2353,7 @@ export default function QuotationDetailsPage() {
   const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
   const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
@@ -3115,7 +3115,7 @@ export default function QuotationDetailsPage() {
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
 
@@ -3132,7 +3132,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
@@ -3148,7 +3148,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
         }
     };
 
@@ -3432,6 +3432,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
