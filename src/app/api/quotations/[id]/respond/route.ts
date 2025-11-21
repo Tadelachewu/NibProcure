@@ -134,19 +134,21 @@ export async function POST(
             });
             console.log(`[RESPOND-AWARD] Created new Purchase Order: ${newPO.id}`);
 
-            // Check if ALL possible awards for this requisition have been actioned (accepted or declined).
+            // **MODIFIED LOGIC**: Check if ALL possible awards for this requisition have been actioned (accepted or declined/failed).
             let allAwardsActioned = false;
-            const updatedRequisition = await tx.purchaseRequisition.findUnique({
+            const updatedRequisitionAfterPO = await tx.purchaseRequisition.findUnique({
                 where: { id: requisition.id },
                 include: { items: true, quotations: true }
             });
+            if (!updatedRequisitionAfterPO) throw new Error("Could not refetch requisition to check completion status.");
+
 
             if (isPerItemAward) {
-                 allAwardsActioned = !updatedRequisition?.items.some(item =>
-                    (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Awarded')
+                 allAwardsActioned = !updatedRequisitionAfterPO.items.some(item =>
+                    (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Awarded' || d.status === 'Standby')
                 );
             } else {
-                 allAwardsActioned = !updatedRequisition?.quotations.some(q => q.status === 'Awarded');
+                 allAwardsActioned = !updatedRequisitionAfterPO.quotations.some(q => q.status === 'Awarded' || q.status === 'Standby');
             }
 
             if (allAwardsActioned) {
@@ -156,7 +158,7 @@ export async function POST(
                     data: { status: 'PO_Created' }
                 });
             } else {
-                console.log(`[RESPOND-AWARD] Not all awards for Req ${requisition.id} have been actioned yet.`);
+                console.log(`[RESPOND-AWARD] Not all awards for Req ${requisition.id} have been actioned yet. Status remains active.`);
             }
             
             await tx.auditLog.create({

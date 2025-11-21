@@ -78,6 +78,18 @@ export function RequisitionsForQuotingTable() {
     const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
     
+    // **MODIFIED LOGIC START**: Check for partial completion in per-item award scenarios.
+    const awardStrategy = (req.rfqSettings as any)?.awardStrategy;
+    if (awardStrategy === 'item') {
+        const hasPendingItems = req.items.some(item => 
+            (item.perItemAwardDetails || []).some(d => ['Awarded', 'Standby', 'Declined'].includes(d.status))
+        );
+        if (req.status === 'PO_Created' && hasPendingItems) {
+            return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
+        }
+    }
+    // **MODIFIED LOGIC END**
+
     // Handle terminal or high-priority statuses first
     if (req.status === 'PO_Created' || req.status === 'Closed' || req.status === 'Fulfilled') {
         return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
