@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert } from 'lucide-react';
+import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert, List } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -140,6 +140,9 @@ export default function VendorDashboardPage() {
         if (vendorItemStatuses.includes('Accepted')) return 'Accepted';
         if (vendorItemStatuses.includes('Declined')) return 'Declined';
         if (vendorItemStatuses.includes('Awarded')) {
+             if ((req.rfqSettings as any)?.awardStrategy === 'all') {
+                return 'Awarded';
+            }
             const allAwarded = req.items.every(item => {
                 const details = (item.perItemAwardDetails as PerItemAwardDetail[] || []);
                 return details.some(d => d.vendorId === user.vendorId && (d.status === 'Awarded' || d.status === 'Accepted'));
@@ -150,6 +153,7 @@ export default function VendorDashboardPage() {
 
         // Check statuses from the main quote again if no item-level status took precedence
         if (vendorQuote) {
+             if (vendorQuote.status === 'Standby') return 'Standby';
             if (vendorQuote.status === 'Submitted') {
                 if (req.status === 'Closed' || req.status === 'Fulfilled') return 'Not Awarded';
                 if (req.quotations?.some(q => q.vendorId !== user.vendorId && ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status))) return 'Not Awarded';
@@ -329,6 +333,20 @@ export default function VendorDashboardPage() {
                                             const status = getRequisitionCardStatus(req);
                                             const isExpired = req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline)) && (status === 'Awarded' || status === 'Partially Awarded');
                                             const isActionable = status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted' || status === 'Invoice Submitted';
+                                            const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
+                                            
+                                            let itemsToList: {name: string, quantity: number}[] = [];
+                                            if (status === 'Awarded' && (req.rfqSettings as any)?.awardStrategy === 'all' && vendorQuote) {
+                                                const awardedItemIds = new Set(req.awardedQuoteItemIds || []);
+                                                if (awardedItemIds.size > 0) {
+                                                    itemsToList = vendorQuote.items.filter(i => awardedItemIds.has(i.id));
+                                                } else {
+                                                     itemsToList = vendorQuote.items;
+                                                }
+                                            } else if (status === 'Standby' && vendorQuote) {
+                                                itemsToList = vendorQuote.items;
+                                            }
+
                                             return (
                                                 <Card key={req.id} className={cn("relative flex flex-col", (status === 'Awarded' || status === 'Partially Awarded') && "border-primary ring-2 ring-primary/50 bg-primary/5", isExpired && "opacity-60")}>
                                                     <VendorStatusBadge status={status} />
@@ -336,7 +354,7 @@ export default function VendorDashboardPage() {
                                                         <CardTitle>{req.title}</CardTitle>
                                                         <CardDescription>From {req.department} Department</CardDescription>
                                                     </CardHeader>
-                                                    <CardContent className="flex-grow">
+                                                    <CardContent className="flex-grow space-y-4">
                                                         <div className="text-sm text-muted-foreground space-y-2">
                                                             <div><span className="font-semibold text-foreground">Requisition ID:</span> {req.id}</div>
                                                             {(status === 'Awarded' || status === 'Partially Awarded') && req.awardResponseDeadline && (
@@ -348,6 +366,16 @@ export default function VendorDashboardPage() {
                                                                 </div>
                                                             )}
                                                         </div>
+                                                        {itemsToList.length > 0 && (
+                                                            <div className="text-sm space-y-2 pt-2 border-t">
+                                                                <h4 className="font-semibold flex items-center gap-2"><List /> {status === 'Awarded' ? 'Awarded Items' : 'Standby Items'}</h4>
+                                                                <ul className="list-disc pl-5 text-muted-foreground">
+                                                                {itemsToList.map(item => (
+                                                                    <li key={item.name}>{item.name} (Qty: {item.quantity})</li>
+                                                                ))}
+                                                                </ul>
+                                                            </div>
+                                                        )}
                                                     </CardContent>
                                                     <CardFooter>
                                                         <Button asChild className="w-full" variant={isActionable ? "default" : "secondary"} disabled={isExpired}>
