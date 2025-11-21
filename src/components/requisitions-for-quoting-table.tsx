@@ -86,13 +86,15 @@ export function RequisitionsForQuotingTable() {
     // --- Award by Best Item Strategy Logic ---
     if (awardStrategy === 'item') {
         const allAwardDetails = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []));
-        const allPossibleAwards = allAwardDetails.filter(d => d.rank === 1);
-        const allAccepted = allPossibleAwards.length > 0 && allPossibleAwards.every(d => d.status === 'Accepted');
+        const allPossibleAwards = req.items.length; // Each item is an award opportunity
+        const acceptedAwards = allAwardDetails.filter(d => d.status === 'Accepted').length;
+        const failedAwards = allAwardDetails.filter(d => d.status === 'Failed_to_Award').length;
 
-        if (allAccepted) {
-            return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
+        // Process is complete if all items are either accepted or have failed to be awarded.
+        if (allPossibleAwards > 0 && (acceptedAwards + failedAwards) === allPossibleAwards) {
+             return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
         }
-        
+
         const hasAcceptedItem = allAwardDetails.some(d => d.status === 'Accepted');
         if (hasAcceptedItem) {
              return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
@@ -101,7 +103,7 @@ export function RequisitionsForQuotingTable() {
     
     // --- Single Vendor Award Strategy Logic ---
     if (awardStrategy === 'all' && req.status === 'PO_Created') {
-        return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
+        return <Badge variant="default">PO Created</Badge>;
     }
 
     // --- Action-Required Statuses ---

@@ -2478,7 +2478,8 @@ export default function QuotationDetailsPage() {
 
   const isAwarded = useMemo(() => {
     if (!requisition || !requisition.status) return false;
-    return requisition.status.startsWith('Pending_') || ['PostApproved', 'Awarded', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled'].includes(requisition.status);
+    const awardProcessStatuses = ['PostApproved', 'Awarded', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled'];
+    return awardProcessStatuses.includes(requisition.status) || requisition.status.startsWith('Pending_');
   }, [requisition]);
 
 
@@ -2498,31 +2499,23 @@ export default function QuotationDetailsPage() {
   
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
     if (!requisition || !requisition.status) return 'rfq';
-    const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
-    
-    if (['PreApproved'].includes(requisition.status)) return 'rfq';
-    if (['Accepting_Quotes'].includes(requisition.status) && !deadlinePassed) return 'rfq';
-    
-    const inScoringProcess = [
-        'Accepting_Quotes', // Post-deadline
-        'Scoring_In_Progress'
-    ].includes(requisition.status);
-    
-    if (inScoringProcess && deadlinePassed) {
-        return 'committee';
-    }
 
-    if (['Scoring_Complete', 'Award_Declined'].includes(requisition.status)) return 'award';
-    
-    const inReviewProcess = requisition.status.startsWith('Pending_') || ['PostApproved', 'Awarded'].includes(requisition.status);
-    if (inReviewProcess) return 'award';
-    
-    if (isAccepted) {
-      return ['PO_Created', 'Closed', 'Fulfilled'].includes(requisition.status) ? 'completed' : 'finalize';
-    }
+    const completeStatuses = ['Fulfilled', 'Closed'];
+    if (completeStatuses.includes(requisition.status)) return 'completed';
 
-    return 'rfq'; // Default fallback
-  }, [requisition, isAccepted]);
+    const finalizeStatuses = ['PO_Created'];
+    if (finalizeStatuses.includes(requisition.status) || isAccepted) return 'finalize';
+
+    const awardStatuses = ['Awarded', 'PostApproved', 'Award_Declined'];
+    if (awardStatuses.includes(requisition.status) || requisition.status.startsWith('Pending_')) return 'award';
+    
+    const committeeStatuses = ['Scoring_In_Progress', 'Scoring_Complete'];
+    if (committeeStatuses.includes(requisition.status)) return 'committee';
+    
+    if (requisition.status === 'Accepting_Quotes' && isDeadlinePassed) return 'committee';
+    
+    return 'rfq';
+  }, [requisition, isAccepted, isDeadlinePassed]);
   
   const { pendingQuotes, scoredQuotes } = useMemo(() => {
     if (!user || role !== 'Committee_Member' ) return { pendingQuotes: quotations, scoredQuotes: [] };
@@ -2933,7 +2926,7 @@ export default function QuotationDetailsPage() {
             isAuthorized={isAuthorized}
         />
 
-        {(readyForCommitteeAssignment && canManageCommittees && !isAwarded) && (
+        {(currentStep !== 'rfq' || readyForCommitteeAssignment) && canManageCommittees && (
             <EvaluationCommitteeManagement
                 requisition={requisition}
                 onCommitteeUpdated={fetchRequisitionAndQuotes}
@@ -2944,19 +2937,8 @@ export default function QuotationDetailsPage() {
         )}
 
 
-        {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
+        {(currentStep !== 'rfq' || readyForCommitteeAssignment) && (
             <>
-                {canManageCommittees && currentStep !== 'committee' && readyForCommitteeAssignment && !isAwarded && (
-                     <div className="hidden">
-                        <EvaluationCommitteeManagement
-                            requisition={requisition}
-                            onCommitteeUpdated={fetchRequisitionAndQuotes}
-                            open={isCommitteeDialogOpen}
-                            onOpenChange={setCommitteeDialogOpen}
-                            isAuthorized={isAuthorized}
-                        />
-                    </div>
-                )}
                 <Card>
                     <CardHeader>
                         <div>
@@ -3533,6 +3515,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
