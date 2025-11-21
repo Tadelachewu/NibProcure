@@ -123,33 +123,32 @@ export default function VendorDashboardPage() {
             if (vendorQuote.status === 'Declined') return 'Declined';
         }
 
-        let vendorItemStatuses: PerItemAwardStatus[] = [];
+        let vendorItemStatuses: PerItemAwardDetail[] = [];
         if (isPerItemAward) {
             vendorItemStatuses = req.items.flatMap(item => 
                 (item.perItemAwardDetails as PerItemAwardDetail[] || [])
                 .filter(d => d.vendorId === user.vendorId)
-                .map(d => d.status)
             );
         } else if (vendorQuote) { // For single-vendor award, derive item statuses from quote status
-            if (vendorQuote.status === 'Awarded') vendorItemStatuses.push('Awarded');
-            if (vendorQuote.status === 'Partially_Awarded') vendorItemStatuses.push('Awarded');
-            if (vendorQuote.status === 'Standby') vendorItemStatuses.push('Standby');
+            if (vendorQuote.status === 'Awarded') vendorItemStatuses.push({ status: 'Awarded' } as PerItemAwardDetail);
+            if (vendorQuote.status === 'Partially_Awarded') vendorItemStatuses.push({ status: 'Awarded' } as PerItemAwardDetail);
+            if (vendorQuote.status === 'Standby') vendorItemStatuses.push({ status: 'Standby' } as PerItemAwardDetail);
         }
 
         // Check for highest priority statuses derived from items
-        if (vendorItemStatuses.includes('Accepted')) return 'Accepted';
-        if (vendorItemStatuses.includes('Declined')) return 'Declined';
-        if (vendorItemStatuses.includes('Awarded')) {
-             if ((req.rfqSettings as any)?.awardStrategy === 'all') {
+        if (vendorItemStatuses.some(d => d.status === 'Accepted')) return 'Accepted';
+        if (vendorItemStatuses.some(d => d.status === 'Declined')) return 'Declined';
+        if (vendorItemStatuses.some(d => d.status === 'Awarded')) {
+             if (!isPerItemAward) {
                 return 'Awarded';
             }
-            const allAwarded = req.items.every(item => {
-                const details = (item.perItemAwardDetails as PerItemAwardDetail[] || []);
-                return details.some(d => d.vendorId === user.vendorId && (d.status === 'Awarded' || d.status === 'Accepted'));
-            });
-            return allAwarded ? 'Awarded' : 'Partially Awarded';
+            // For per-item, check if ALL potential awards were won.
+            const potentialAwards = req.items.flatMap(i => (i.perItemAwardDetails || [])).filter(d => d.vendorId === user.vendorId);
+            const wonAwards = potentialAwards.filter(d => d.status === 'Awarded' || d.status === 'Accepted');
+            
+            return wonAwards.length === potentialAwards.length ? 'Awarded' : 'Partially Awarded';
         }
-        if (vendorItemStatuses.includes('Standby')) return 'Standby';
+        if (vendorItemStatuses.some(d => d.status === 'Standby')) return 'Standby';
 
         // Check statuses from the main quote again if no item-level status took precedence
         if (vendorQuote) {
@@ -313,7 +312,7 @@ export default function VendorDashboardPage() {
                                             <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(1)} disabled={openCurrentPage === 1}><ChevronsLeft /></Button>
                                             <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(p => Math.max(1, p - 1))} disabled={openCurrentPage === 1}><ChevronLeft /></Button>
                                             <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(p => Math.min(openTotalPages, p + 1))} disabled={openCurrentPage === openTotalPages}><ChevronRight /></Button>
-                                            <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(openTotalPages)} disabled={openCurrentPage === openTotalPages}><ChevronsRight /></Button>
+                                            <Button variant="outline" size="icon" onClick={() => setOpenCurrentPage(totalPages)} disabled={openCurrentPage === openTotalPages}><ChevronsRight /></Button>
                                         </div>
                                     </div>
                                 )}
@@ -335,46 +334,65 @@ export default function VendorDashboardPage() {
                                             const isActionable = status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted' || status === 'Invoice Submitted';
                                             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
                                             
-                                            let itemsToList: QuoteItem[] = [];
-                                            if (status === 'Awarded' && (req.rfqSettings as any)?.awardStrategy === 'all' && vendorQuote) {
-                                                const awardedItemIds = new Set(req.awardedQuoteItemIds || []);
-                                                if (awardedItemIds.size > 0) {
-                                                    itemsToList = vendorQuote.items.filter(i => awardedItemIds.has(i.id));
-                                                } else {
-                                                     itemsToList = vendorQuote.items;
-                                                }
-                                            } else if (status === 'Standby' && vendorQuote && req.evaluationCriteria) {
-                                                const championBids: QuoteItem[] = [];
-                                                for (const reqItem of req.items) {
-                                                    const proposalsForItem = vendorQuote.items.filter(i => i.requisitionItemId === reqItem.id);
-                                                    if (proposalsForItem.length === 0) continue;
+                                            let itemsToList: (QuoteItem | { id: string, name: string, quantity: number })[] = [];
 
-                                                    let bestProposalForItem: QuoteItem | null = null;
-                                                    let bestItemScore = -1;
-
-                                                    proposalsForItem.forEach(proposal => {
-                                                        let totalItemScore = 0;
-                                                        let scoreCount = 0;
-                                                        vendorQuote.scores?.forEach(scoreSet => {
-                                                            const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                                                            if (itemScore) {
-                                                                totalItemScore += itemScore.finalScore;
-                                                                scoreCount++;
-                                                            }
-                                                        });
-                                                        const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                                                        
-                                                        if (averageItemScore > bestItemScore) {
-                                                            bestItemScore = averageItemScore;
-                                                            bestProposalForItem = proposal;
-                                                        }
+                                            if (status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted') {
+                                                const strategy = (req.rfqSettings as any)?.awardStrategy || 'all';
+                                                if (strategy === 'item' && user) {
+                                                    const awardedDetails = req.items.flatMap(item => (item.perItemAwardDetails || []).filter(d => d.vendorId === user.vendorId && (d.status === 'Awarded' || d.status === 'Accepted')));
+                                                    itemsToList = awardedDetails.map(detail => {
+                                                        const reqItem = req.items.find(i => i.id === detail.requisitionItemId);
+                                                        return { id: detail.quoteItemId, name: detail.proposedItemName, quantity: reqItem?.quantity || 0 };
                                                     });
-
-                                                    if (bestProposalForItem) {
-                                                        championBids.push(bestProposalForItem);
+                                                } else if (vendorQuote) {
+                                                    const awardedItemIds = new Set(req.awardedQuoteItemIds || []);
+                                                    if (awardedItemIds.size > 0) {
+                                                        itemsToList = vendorQuote.items.filter(i => awardedItemIds.has(i.id));
+                                                    } else {
+                                                        itemsToList = vendorQuote.items;
                                                     }
                                                 }
-                                                itemsToList = championBids;
+                                            } else if (status === 'Standby' && vendorQuote && req.evaluationCriteria) {
+                                                const strategy = (req.rfqSettings as any)?.awardStrategy || 'all';
+                                                if(strategy === 'item' && user) {
+                                                    const standbyDetails = req.items.flatMap(item => (item.perItemAwardDetails || []).filter(d => d.vendorId === user.vendorId && d.status === 'Standby'));
+                                                    itemsToList = standbyDetails.map(detail => {
+                                                        const reqItem = req.items.find(i => i.id === detail.requisitionItemId);
+                                                        return { id: detail.quoteItemId, name: detail.proposedItemName, quantity: reqItem?.quantity || 0 };
+                                                    });
+                                                } else { // Single vendor standby logic
+                                                    const championBids: QuoteItem[] = [];
+                                                    for (const reqItem of req.items) {
+                                                        const proposalsForItem = vendorQuote.items.filter(i => i.requisitionItemId === reqItem.id);
+                                                        if (proposalsForItem.length === 0) continue;
+
+                                                        let bestProposalForItem: QuoteItem | null = null;
+                                                        let bestItemScore = -1;
+
+                                                        proposalsForItem.forEach(proposal => {
+                                                            let totalItemScore = 0;
+                                                            let scoreCount = 0;
+                                                            vendorQuote.scores?.forEach(scoreSet => {
+                                                                const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
+                                                                if (itemScore) {
+                                                                    totalItemScore += itemScore.finalScore;
+                                                                    scoreCount++;
+                                                                }
+                                                            });
+                                                            const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                                                            
+                                                            if (averageItemScore > bestItemScore) {
+                                                                bestItemScore = averageItemScore;
+                                                                bestProposalForItem = proposal;
+                                                            }
+                                                        });
+
+                                                        if (bestProposalForItem) {
+                                                            championBids.push(bestProposalForItem);
+                                                        }
+                                                    }
+                                                    itemsToList = championBids;
+                                                }
                                             }
 
                                             return (
@@ -398,7 +416,7 @@ export default function VendorDashboardPage() {
                                                         </div>
                                                         {itemsToList.length > 0 && (
                                                             <div className="text-sm space-y-2 pt-2 border-t">
-                                                                <h4 className="font-semibold flex items-center gap-2"><List /> {status === 'Awarded' ? 'Awarded Items' : 'Standby Items'}</h4>
+                                                                <h4 className="font-semibold flex items-center gap-2"><List /> {status.includes('Award') ? 'Awarded Items' : 'Standby Items'}</h4>
                                                                 <ul className="list-disc pl-5 text-muted-foreground">
                                                                 {itemsToList.map(item => (
                                                                     <li key={item.id}>{item.name} (Qty: {item.quantity})</li>
