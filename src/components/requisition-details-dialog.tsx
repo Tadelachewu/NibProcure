@@ -1,7 +1,7 @@
 
 'use client';
 
-import { PurchaseRequisition, PurchaseOrder } from '@/lib/types';
+import { PurchaseRequisition, PurchaseOrder, PerItemAwardDetail } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -60,8 +60,9 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
       return 'pending';
   }
 
-  const isAwarded = ['Awarded', 'Award_Declined', 'PO_Created', 'Fulfilled', 'Closed', 'PostApproved'].includes(requisition.status) || requisition.status.startsWith('Pending_');
   const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
+  const isAwarded = ['Awarded', 'Award_Declined', 'PO_Created', 'Fulfilled', 'Closed', 'PostApproved'].includes(requisition.status) || requisition.status.startsWith('Pending_');
+  
   const winningQuote = awardStrategy === 'all' ? requisition.quotations?.find(q => q.status === 'Accepted' || q.status === 'Awarded') : null;
   
   const perItemWinners = awardStrategy === 'item' ? requisition.items.map(item => {
@@ -72,6 +73,32 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
         price: awardDetail ? awardDetail.unitPrice * item.quantity : 0
     };
   }).filter(item => item.winner) : [];
+
+  const getItemStatus = (item: PurchaseRequisition['items'][0]): React.ReactNode => {
+      if (awardStrategy === 'item') {
+          const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+          const winningDetail = details.find(d => d.status === 'Accepted' || d.status === 'Awarded' || d.status === 'Pending_Award');
+          if (winningDetail) {
+              return (
+                <div className="flex flex-col text-xs">
+                    <span className="font-semibold">{winningDetail.status.replace(/_/g, ' ')}</span>
+                    <span className="text-muted-foreground">to {winningDetail.vendorName}</span>
+                </div>
+              )
+          }
+           const standbyDetail = details.find(d => d.status === 'Standby');
+           if (standbyDetail) {
+               return (
+                <div className="flex flex-col text-xs">
+                    <span className="font-semibold">Standby</span>
+                    <span className="text-muted-foreground">{standbyDetail.vendorName} (Rank {standbyDetail.rank})</span>
+                </div>
+               )
+           }
+      }
+      // For single vendor awards or before the award stage, show the overall requisition status
+      return <Badge variant="outline">{requisition.status.replace(/_/g, ' ')}</Badge>;
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -96,10 +123,20 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                             <h4 className="font-medium mb-2">Items Requested</h4>
                             <div className="border rounded-md">
                                 <Table>
-                                    <TableHeader><TableRow><TableHead>Item Name</TableHead><TableHead className="text-right">Quantity</TableHead></TableRow></TableHeader>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Item Name</TableHead>
+                                            <TableHead className="text-right">Quantity</TableHead>
+                                            <TableHead className="text-right">Status</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
                                     <TableBody>
                                         {requisition.items?.map(item => (
-                                            <TableRow key={item.id}><TableCell>{item.name}</TableCell><TableCell className="text-right">{item.quantity}</TableCell></TableRow>
+                                            <TableRow key={item.id}>
+                                                <TableCell>{item.name}</TableCell>
+                                                <TableCell className="text-right">{item.quantity}</TableCell>
+                                                <TableCell className="text-right">{getItemStatus(item)}</TableCell>
+                                            </TableRow>
                                         ))}
                                     </TableBody>
                                 </Table>
