@@ -615,6 +615,16 @@ export default function VendorRequisitionPage() {
         return awardedItems.length > 0;
     }, [requisition, awardedItems]);
 
+    const itemsToDisplayInQuoteCard = useMemo(() => {
+        if (!submittedQuote) return [];
+        if (isPartiallyAwarded) {
+            const awardedQuoteItemIds = new Set(awardedItems.map(item => item.quoteItemId));
+            return submittedQuote.items.filter(item => awardedQuoteItemIds.has(item.id));
+        }
+        // If not partially awarded, show all items from the original quote
+        return submittedQuote.items;
+    }, [submittedQuote, isPartiallyAwarded, awardedItems]);
+
     const isFullyAwarded = useMemo(() => {
         const vendorQuote = requisition?.quotations?.find(q => q.vendorId === user?.vendorId);
         return vendorQuote?.status === 'Awarded';
@@ -955,7 +965,7 @@ export default function VendorRequisitionPage() {
                 </Card>
 
                 {submittedQuote && !isEditingQuote ? (
-                    <QuoteDisplayCard quote={submittedQuote} itemsToShow={submittedQuote.items} showActions={!isAccepted && hasPendingResponseItems} />
+                     <QuoteDisplayCard quote={submittedQuote} itemsToShow={itemsToDisplayInQuoteCard} showActions={!isAccepted && hasPendingResponseItems} />
                 ) : (
                     <QuoteSubmissionForm 
                         requisition={requisition} 
