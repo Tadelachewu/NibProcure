@@ -229,7 +229,7 @@ const getOverallStatusForVendor = (quote: Quotation, itemStatuses: any[], isAwar
 };
 
 
-const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean }) => {
+const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete, isReviewer }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean, isReviewer: boolean }) => {
     
     if (quotes.length === 0) {
         return (
@@ -357,7 +357,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             <Button className="w-full" variant="outline" onClick={() => onViewDetails(quote)}>
                                 <Eye className="mr-2 h-4 w-4" /> View Full Quote
                             </Button>
-                             {role === 'Committee_Member' && isDeadlinePassed && (
+                             {role === 'Committee_Member' && isDeadlinePassed && !isReviewer && (
                                 <Button className="w-full" variant={hasUserScored ? "secondary" : "default"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
                                     {hasUserScored ? 'View Your Score' : 'Score this Quote'}
@@ -1855,7 +1855,10 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     const { toast } = useToast();
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const printRef = useRef<HTMLDivElement>(null);
-    const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy || 'all';
+
+    const getCriterionName = (criterionId: string, criteria?: EvaluationCriterion[]) => {
+        return criteria?.find(c => c.id === criterionId)?.name || 'Unknown Criterion';
+    }
 
     const handleGeneratePdf = async () => {
         const input = printRef.current;
@@ -1873,14 +1876,14 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             const imgWidth = canvas.width;
             const imgHeight = canvas.height;
             const ratio = imgWidth / imgHeight;
-            let width = pdfWidth - 20;
+            let width = pdfWidth - 20; // with margin
             let height = width / ratio;
 
-            if (height > pdfHeight - 20) {
-                height = pdfHeight - 20;
-                width = height * ratio;
+             if (height > pdfHeight - 20) {
+                 height = pdfHeight - 20;
+                 width = height * ratio;
             }
-
+            
             const x = (pdfWidth - width) / 2;
             const y = 10;
             pdf.addImage(imgData, 'PNG', x, y, width, height);
@@ -1894,22 +1897,13 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
         }
     };
     
-    const getRankIcon = (rank?: number) => {
-        switch(rank) {
-          case 1: return <Crown className="h-4 w-4 text-amber-400" />;
-          case 2: return <Trophy className="h-4 w-4 text-slate-400" />;
-          case 3: return <Medal className="h-4 w-4 text-amber-600" />;
-          default: return null;
-        }
-    };
-
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Cumulative Scoring Report: How The Award Was Won</DialogTitle>
                     <DialogDescription>
-                        A detailed breakdown of committee scores for requisition {requisition.id}, explaining the award decision based on the '{awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}' strategy.
+                        A detailed breakdown of committee scores for requisition {requisition.id}, explaining the award decision.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="flex-grow overflow-hidden">
@@ -1923,59 +1917,73 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                 <p className="text-sm text-gray-500">Report Generated: {format(new Date(), 'PPpp')}</p>
                             </div>
                             
-                            {awardStrategy === 'all' ? (
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Overall Vendor Ranking</CardTitle>
+                            {quotations.sort((a, b) => (a.rank || 99) - (b.rank || 99)).map(quote => (
+                                <Card key={quote.id} className="break-inside-avoid print:border-gray-300 print:shadow-none print:rounded-lg">
+                                    <CardHeader className="print:bg-gray-100 print:rounded-t-lg">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <CardTitle className="text-xl">{quote.vendorName}</CardTitle>
+                                                <CardDescription className="print:text-gray-700 pt-1">
+                                                    Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> | 
+                                                    Rank: <span className="font-bold">{quote.rank || 'N/A'}</span> |
+                                                    Total Price: <span className="font-bold">{quote.totalPrice.toLocaleString()} ETB</span>
+                                                </CardDescription>
+                                            </div>
+                                            <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
+                                        </div>
                                     </CardHeader>
-                                    <CardContent>
-                                        <Table>
-                                            <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead className="text-right">Final Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                                            <TableBody>
-                                                {quotations.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)).map(q => (
-                                                    <TableRow key={q.id}>
-                                                        <TableCell className="font-bold flex items-center gap-1">{getRankIcon(q.rank)} {q.rank}</TableCell>
-                                                        <TableCell>{q.vendorName}</TableCell>
-                                                        <TableCell className="text-right font-mono">{q.finalAverageScore?.toFixed(2)}</TableCell>
-                                                        <TableCell><Badge variant="outline">{q.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </CardContent>
-                                </Card>
-                            ) : (
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Award Breakdown by Item</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {requisition.items.map(item => {
-                                            const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
-                                            return (
-                                                <div key={item.id} className="mb-4 p-4 border rounded-md">
-                                                    <h4 className="font-semibold">{item.name}</h4>
-                                                    <Table>
-                                                        <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                                                        <TableBody>
-                                                            {awards.map(award => (
-                                                                <TableRow key={award.quoteItemId}>
-                                                                    <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
-                                                                    <TableCell>{award.vendorName}</TableCell>
-                                                                    <TableCell>{award.proposedItemName}</TableCell>
-                                                                    <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
-                                                                    <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                                                </TableRow>
-                                                            ))}
-                                                        </TableBody>
-                                                    </Table>
-                                                </div>
-                                            )
-                                        })}
-                                    </CardContent>
-                                </Card>
-                            )}
+                                    <CardContent className="p-4 space-y-4">
+                                        {quote.scores && quote.scores.length > 0 ? (
+                                            quote.scores.map(scoreSet => (
+                                                <div key={scoreSet.scorerId} className="p-3 border rounded-md break-inside-avoid print:border-gray-200">
+                                                    <div className="flex items-center justify-between mb-3 pb-2 border-b print:border-gray-200">
+                                                        <div className="flex items-center gap-3">
+                                                            <Avatar className="h-8 w-8">
+                                                                <AvatarImage src={`https://picsum.photos/seed/${scoreSet.scorerId}/32/32`} />
+                                                                <AvatarFallback>{scoreSet.scorer?.name?.charAt(0) || 'U'}</AvatarFallback>
+                                                            </Avatar>
+                                                            <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                        <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
+                                                        <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPp')}</p>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
+                                                        <div>
+                                                            <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
+                                                            {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'FINANCIAL').map(s => (
+                                                                <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
+                                                                    <div className="flex justify-between items-center font-medium">
+                                                                        <p>{getCriterionName(s.financialCriterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                        <p className="font-bold">{s.score}/100</p>
+                                                                    </div>
+                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                </div>
+                                                            )))}
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
+                                                            {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'TECHNICAL').map(s => (
+                                                                <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
+                                                                    <div className="flex justify-between items-center font-medium">
+                                                                        <p>{getCriterionName(s.technicalCriterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
+                                                                        <p className="font-bold">{s.score}/100</p>
+                                                                    </div>
+                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                </div>
+                                                            )))}
+                                                        </div>
+                                                    </div>
 
+                                                    {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
+                                                </div>
+                                            ))
+                                        ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
+                                    </CardContent>
+                                </Card>
+                            ))}
                         </div>
                     </ScrollArea>
                 </div>
@@ -2281,6 +2289,13 @@ export default function QuotationDetailsPage() {
   const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
   const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
+  
+  const isReviewer = useMemo(() => {
+    if (!user || !role || !requisition) return false;
+    // A user is a reviewer if they have permission to access the award reviews page.
+    const allowedPaths = rolePermissions['Combined'] || [];
+    return allowedPaths.includes('/award-reviews');
+  }, [user, role, requisition, rolePermissions]);
 
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
@@ -2335,13 +2350,6 @@ export default function QuotationDetailsPage() {
       }
       return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
   }, [user, role, requisition]);
-  
-  const isReviewer = useMemo(() => {
-    if (!user || !role || !requisition) return false;
-    // A user is a reviewer if they have permission to access the award reviews page.
-    const allowedPaths = rolePermissions['Combined'] || [];
-    return allowedPaths.includes('/award-reviews');
-  }, [user, role, requisition, rolePermissions]);
   
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
     if (!requisition || !requisition.status) return 'rfq';
@@ -2653,6 +2661,48 @@ export default function QuotationDetailsPage() {
   
   const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
   
+  if (isReviewer) {
+    return (
+        <div className="space-y-6">
+            <Button variant="outline" onClick={() => router.back()}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+            </Button>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Reviewing Quotations for {requisition.id}</CardTitle>
+                    <CardDescription>{requisition.title}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <QuoteComparison 
+                        quotes={quotations} 
+                        requisition={requisition}
+                        onViewDetails={handleViewDetailsClick} 
+                        onScore={() => {}} // No-op for reviewers
+                        user={user!} 
+                        role={role} 
+                        isDeadlinePassed={isDeadlinePassed} 
+                        isScoringDeadlinePassed={isScoringDeadlinePassed} 
+                        itemStatuses={itemStatuses} 
+                        isAwarded={isAwarded} 
+                        isScoringComplete={isScoringComplete}
+                        isReviewer={isReviewer}
+                    />
+                </CardContent>
+            </Card>
+             {selectedQuoteForDetails && requisition && (
+                <QuoteDetailsDialog 
+                    quote={selectedQuoteForDetails}
+                    requisition={requisition}
+                    isOpen={!!selectedQuoteForDetails}
+                    onClose={() => setSelectedQuoteForDetails(null)}
+                />
+            )}
+        </div>
+    )
+  }
+
+
   return (
     <div className="space-y-6">
        <div className="flex items-center justify-between">
@@ -2804,10 +2854,10 @@ export default function QuotationDetailsPage() {
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isReviewer={isReviewer}/>
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete}/>
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isReviewer={isReviewer}/>
                                 </TabsContent>
                              </Tabs>
                         )}
@@ -3318,6 +3368,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
