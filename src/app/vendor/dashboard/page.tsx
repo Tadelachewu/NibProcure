@@ -332,69 +332,7 @@ export default function VendorDashboardPage() {
                                             const status = getRequisitionCardStatus(req);
                                             const isExpired = req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline)) && (status === 'Awarded' || status === 'Partially Awarded');
                                             const isActionable = status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted' || status === 'Invoice Submitted';
-                                            const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
                                             
-                                            let itemsToList: { id: string, name: string, quantity: number }[] = [];
-                                            const strategy = (req.rfqSettings as any)?.awardStrategy || 'all';
-
-                                            if (status === 'Accepted' || status === 'Awarded' || status === 'Partially Awarded') {
-                                                if (strategy === 'item' && user) {
-                                                    const awardedDetails = req.items.flatMap(item => (item.perItemAwardDetails || []).filter(d => d.vendorId === user.vendorId && (d.status === 'Awarded' || d.status === 'Accepted')));
-                                                    itemsToList = awardedDetails.map(detail => {
-                                                        const reqItem = req.items.find(i => i.id === detail.requisitionItemId);
-                                                        return { id: detail.quoteItemId, name: detail.proposedItemName, quantity: reqItem?.quantity || 0 };
-                                                    });
-                                                } else if (vendorQuote) {
-                                                    const awardedItemIds = new Set(req.awardedQuoteItemIds || []);
-                                                    if (awardedItemIds.size > 0) {
-                                                        itemsToList = vendorQuote.items.filter(i => awardedItemIds.has(i.id));
-                                                    } else {
-                                                        itemsToList = vendorQuote.items;
-                                                    }
-                                                }
-                                            } else if (status === 'Standby' && vendorQuote) {
-                                                if (strategy === 'item' && user) {
-                                                    const standbyDetails = req.items.flatMap(item => (item.perItemAwardDetails || []).filter(d => d.vendorId === user.vendorId && d.status === 'Standby'));
-                                                    itemsToList = standbyDetails.map(detail => {
-                                                        const reqItem = req.items.find(i => i.id === detail.requisitionItemId);
-                                                        return { id: detail.quoteItemId, name: detail.proposedItemName, quantity: reqItem?.quantity || 0 };
-                                                    });
-                                                } else { // Single vendor standby logic
-                                                    const championBids: QuoteItem[] = [];
-                                                    for (const reqItem of req.items) {
-                                                        const proposalsForItem = vendorQuote.items.filter(i => i.requisitionItemId === reqItem.id);
-                                                        if (proposalsForItem.length === 0) continue;
-
-                                                        let bestProposalForItem: QuoteItem | null = null;
-                                                        let bestItemScore = -1;
-
-                                                        proposalsForItem.forEach(proposal => {
-                                                            let totalItemScore = 0;
-                                                            let scoreCount = 0;
-                                                            vendorQuote.scores?.forEach(scoreSet => {
-                                                                const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                                                                if (itemScore) {
-                                                                    totalItemScore += itemScore.finalScore;
-                                                                    scoreCount++;
-                                                                }
-                                                            });
-                                                            const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                                                            
-                                                            if (averageItemScore > bestItemScore) {
-                                                                bestItemScore = averageItemScore;
-                                                                bestProposalForItem = proposal;
-                                                            }
-                                                        });
-
-                                                        if (bestProposalForItem) {
-                                                            championBids.push(bestProposalForItem);
-                                                        }
-                                                    }
-                                                    itemsToList = championBids;
-                                                }
-                                            }
-
-
                                             return (
                                                 <Card key={req.id} className={cn("relative flex flex-col", (status === 'Awarded' || status === 'Partially Awarded') && "border-primary ring-2 ring-primary/50 bg-primary/5", isExpired && "opacity-60")}>
                                                     <VendorStatusBadge status={status} />
@@ -414,16 +352,6 @@ export default function VendorDashboardPage() {
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        {itemsToList.length > 0 && (
-                                                            <div className="text-sm space-y-2 pt-2 border-t">
-                                                                <h4 className="font-semibold flex items-center gap-2"><List /> {status.includes('Award') || status.includes('Accepted') ? 'Awarded Items' : 'Standby Items'}</h4>
-                                                                <ul className="list-disc pl-5 text-muted-foreground">
-                                                                {itemsToList.map(item => (
-                                                                    <li key={item.id}>{item.name} (Qty: {item.quantity})</li>
-                                                                ))}
-                                                                </ul>
-                                                            </div>
-                                                        )}
                                                     </CardContent>
                                                     <CardFooter>
                                                         <Button asChild className="w-full" variant={isActionable ? "default" : "secondary"} disabled={isExpired}>
