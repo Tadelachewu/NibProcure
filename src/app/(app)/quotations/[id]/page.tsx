@@ -1858,8 +1858,9 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy || 'all';
 
     const getCriterionName = (criterionId: string | null, criteria?: EvaluationCriterion[]) => {
-        if (!criterionId) return 'Unknown Criterion';
-        return criteria?.find(c => c.id === criterionId)?.name || 'Unknown Criterion';
+        if (!criterionId || !criteria) return 'Unknown Criterion';
+        const criterion = criteria.find(c => c.id === criterionId);
+        return criterion?.name || 'Unknown Criterion';
     }
 
     const handleGeneratePdf = async () => {
@@ -2024,34 +2025,41 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                             <div className="space-y-4">
                                                                 {scoreSet.itemScores.map(itemScore => {
                                                                     const scoredQuoteItem = quote.items.find(qi => qi.id === itemScore.quoteItemId);
+                                                                    const hasFinancialScores = itemScore.scores.some(s => s.type === 'FINANCIAL');
+                                                                    const hasTechnicalScores = itemScore.scores.some(s => s.type === 'TECHNICAL');
+                                                                    
                                                                     return (
                                                                         <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
                                                                             <h4 className="font-semibold text-sm mb-2">Item: {scoredQuoteItem?.name || 'Unknown Item'}</h4>
-                                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
-                                                                                <div>
-                                                                                    <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Financial Scores ({requisition.evaluationCriteria?.financialWeight}%)</h5>
-                                                                                    {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
-                                                                                        <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
-                                                                                            <div className="flex justify-between items-center font-medium">
-                                                                                                <p>{getCriterionName(s.financialCriterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
-                                                                                                <p className="font-bold">{s.score}/100</p>
+                                                                            <div className={cn("grid gap-4 print:grid-cols-2", hasFinancialScores && hasTechnicalScores ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
+                                                                                {hasFinancialScores && (
+                                                                                    <div>
+                                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Financial Scores ({requisition.evaluationCriteria?.financialWeight}%)</h5>
+                                                                                        {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
+                                                                                            <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                                <div className="flex justify-between items-center font-medium">
+                                                                                                    <p>{getCriterionName(s.financialCriterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                                                    <p className="font-bold">{s.score}/100</p>
+                                                                                                </div>
+                                                                                                {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
                                                                                             </div>
-                                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                                        </div>
-                                                                                    ))}
-                                                                                </div>
-                                                                                <div>
-                                                                                    <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical Scores ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
-                                                                                    {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
-                                                                                        <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
-                                                                                            <div className="flex justify-between items-center font-medium">
-                                                                                                <p>{getCriterionName(s.technicalCriterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
-                                                                                                <p className="font-bold">{s.score}/100</p>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                                {hasTechnicalScores && (
+                                                                                    <div>
+                                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical Scores ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
+                                                                                        {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
+                                                                                            <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                                <div className="flex justify-between items-center font-medium">
+                                                                                                    <p>{getCriterionName(s.technicalCriterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
+                                                                                                    <p className="font-bold">{s.score}/100</p>
+                                                                                                </div>
+                                                                                                {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
                                                                                             </div>
-                                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                                        </div>
-                                                                                    ))}
-                                                                                </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
                                                                         </div>
                                                                     )
@@ -2364,7 +2372,7 @@ export default function QuotationDetailsPage() {
   const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
   const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isReportOpen, setReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
@@ -2374,7 +2382,7 @@ export default function QuotationDetailsPage() {
 
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
-    if (role === 'Admin') return true;
+    if (role === 'Admin' || role === 'Committee') return true;
     if (rfqSenderSetting.type === 'specific') {
       return user.id === rfqSenderSetting.userId;
     }
@@ -2792,7 +2800,7 @@ export default function QuotationDetailsPage() {
                   </Button>
                 )}
                 {canViewCumulativeReport && (
-                    <Button variant="secondary" onClick={() => setIsReportOpen(true)}>
+                    <Button variant="secondary" onClick={() => setReportOpen(true)}>
                         <FileBarChart2 className="mr-2 h-4 w-4" /> View Scoring Report
                     </Button>
                 )}
@@ -3101,7 +3109,7 @@ export default function QuotationDetailsPage() {
                 requisition={requisition}
                 quotations={quotations}
                 isOpen={isReportOpen}
-                onClose={() => setIsReportOpen(false)}
+                onClose={() => setReportOpen(false)}
             />
         )}
         {selectedQuoteForDetails && requisition && (
@@ -3216,7 +3224,7 @@ const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Qu
             if (!itemScores[itemScore.quoteItemId]) {
                 itemScores[itemScore.quoteItemId] = 0;
             }
-            // This is a simplification. In reality, you'd average the scores if multiple scorers.
+            // This is a simplification. In a real app, you'd average the scores if multiple scorers.
             itemScores[itemScore.quoteItemId] = itemScore.finalScore;
         });
     });
@@ -3470,6 +3478,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
