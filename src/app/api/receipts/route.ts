@@ -6,15 +6,15 @@ import { prisma } from '@/lib/prisma';
 import { users } from '@/lib/data-store';
 
 export async function POST(request: Request) {
-  console.log('POST /api/receipts - Creating new goods receipt in DB.');
+  console.log('[RECEIVE-GOODS] Received new goods receipt request.');
   try {
     const body = await request.json();
-    console.log('Request body:', body);
+    console.log('[RECEIVE-GOODS] Request body:', body);
     const { purchaseOrderId, userId, items } = body;
 
     const user = users.find(u => u.id === userId);
     if (!user) {
-        console.error('User not found for ID:', userId);
+        console.error('[RECEIVE-GOODS] User not found for ID:', userId);
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
         if (!po) {
           throw new Error('Purchase Order not found');
         }
-        console.log('Found PO to receive against:', po);
+        console.log('[RECEIVE-GOODS] Found PO to receive against:', po.id);
 
         const newReceipt = await tx.goodsReceiptNote.create({
           data: {
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
               }
           }
         });
-        console.log('Created new GRN in DB:', newReceipt);
+        console.log('[RECEIVE-GOODS] Created new GRN in DB:', newReceipt.id);
 
         let allItemsDelivered = true;
         for (const poItem of po.items) {
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
             where: { id: purchaseOrderId },
             data: { status: newPOStatus }
         });
-        console.log(`Updated PO ${po.id} status to ${newPOStatus}`);
+        console.log(`[RECEIVE-GOODS] Updated PO ${po.id} status to ${newPOStatus}`);
         
         if (newPOStatus === 'Delivered') {
             await tx.quotation.updateMany({
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
                 },
                 data: { status: 'Rejected' }
             });
-            console.log(`PO ${po.id} fulfilled. Standby quotes for requisition ${po.requisitionId} have been rejected.`);
+            console.log(`[RECEIVE-GOODS] PO ${po.id} fulfilled. Standby quotes for requisition ${po.requisitionId} have been rejected.`);
         }
 
         await prisma.auditLog.create({
@@ -93,15 +93,15 @@ export async function POST(request: Request) {
                 details: `Created Goods Receipt Note ${newReceipt.id}. PO status: ${newPOStatus.replace(/_/g, ' ')}.`,
             }
         });
-        console.log('Added audit log:');
+        console.log('[RECEIVE-GOODS] Added audit log.');
 
         return newReceipt;
     });
 
-
+    console.log('[RECEIVE-GOODS] Transaction complete.');
     return NextResponse.json(txResult, { status: 201 });
   } catch (error) {
-    console.error('Failed to create goods receipt:', error);
+    console.error('[RECEIVE-GOODS] Failed to create goods receipt:', error);
     if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }

@@ -11,9 +11,11 @@ export async function POST(
   { params }: { params: { id:string } }
 ) {
     const requisitionId = params.id;
+    console.log(`[FINALIZE-SCORES] Received request for requisition: ${requisitionId}`);
     try {
         const body = await request.json();
         const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue } = body;
+        console.log(`[FINALIZE-SCORES] Action by User ID: ${userId}, Strategy: ${awardStrategy}, Total Value: ${totalAwardValue}`);
 
         const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
         if (!user) {
@@ -37,9 +39,11 @@ export async function POST(
 
 
         if (!isAuthorized) {
+            console.error(`[FINALIZE-SCORES] User ${userId} is not authorized.`);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
         
+        console.log('[FINALIZE-SCORES] Starting transaction...');
         const result = await prisma.$transaction(async (tx) => {
             
             const requisition = await tx.purchaseRequisition.findUnique({ 
@@ -63,6 +67,7 @@ export async function POST(
             let finalAwardedItemIds: string[] = [];
 
             if (awardStrategy === 'all') {
+                console.log('[FINALIZE-SCORES] Calculating for "Award All to Single Vendor" strategy.');
                 const vendorScores: { [vendorId: string]: { totalScore: number; count: number; championBids: QuoteItem[] } } = {};
 
                 for (const quote of allQuotes) {
@@ -107,36 +112,45 @@ export async function POST(
                         championBids: data.championBids
                     }))
                     .sort((a, b) => b.avgScore - a.avgScore);
+                
+                console.log('[FINALIZE-SCORES] Ranked vendors:', rankedVendors.map(v => ({vendor: v.vendorId, score: v.avgScore})));
 
                 if (rankedVendors.length === 0) throw new Error("Could not determine a winning vendor.");
 
                 const winner = rankedVendors[0];
                 const winningQuote = allQuotes.find(q => q.vendorId === winner.vendorId);
                 if (!winningQuote) throw new Error("Winning quote not found in database.");
+                console.log(`[FINALIZE-SCORES] Winner is ${winningQuote.vendorName} with score ${winner.avgScore.toFixed(2)}`);
 
                 finalAwardValue = winner.championBids.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
                 finalAwardedItemIds = winner.championBids.map(item => item.id);
+                console.log(`[FINALIZE-SCORES] Final award value for winner: ${finalAwardValue}`);
                 
                 await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
+                console.log(`[FINALIZE-SCORES] Updated winning quote ${winningQuote.id} to Pending_Award.`);
                 
                 const otherQuotes = rankedVendors.slice(1);
                 for (let i = 0; i < otherQuotes.length; i++) {
                     const quoteData = otherQuotes[i];
                     const quoteToUpdate = allQuotes.find(q => q.vendorId === quoteData.vendorId);
                     if (quoteToUpdate) {
+                        const rank = i < 2 ? (i + 2) as 2 | 3 : null;
                         await tx.quotation.update({
                             where: { id: quoteToUpdate.id },
                             data: {
                                 status: i < 2 ? 'Standby' : 'Rejected',
-                                rank: i < 2 ? (i + 2) as 2 | 3 : null,
+                                rank: rank,
                             }
                         });
+                        console.log(`[FINALIZE-SCORES] Updated quote ${quoteToUpdate.id} to ${i<2 ? 'Standby' : 'Rejected'} with rank ${rank}.`);
                     }
                 }
 
             } else if (awardStrategy === 'item') {
+                console.log('[FINALIZE-SCORES] Calculating for "Best Offer (Per Item)" strategy.');
                 const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
                 finalAwardValue = totalAwardValue;
+                console.log(`[FINALIZE-SCORES] Received total award value: ${finalAwardValue}`);
 
                 for (const reqItem of reqItems) {
                     let proposals: any[] = [];
@@ -180,6 +194,8 @@ export async function POST(
                         rank: index + 1, 
                         status: (index === 0) ? 'Pending_Award' : 'Standby'
                     }));
+                    
+                    console.log(`[FINALIZE-SCORES] For item ${reqItem.name}, ranked proposals:`, rankedProposals.map(p => ({vendor: p.vendorName, rank: p.rank, status: p.status})));
 
                     await tx.requisitionItem.update({
                         where: { id: reqItem.id },
@@ -190,7 +206,9 @@ export async function POST(
                 }
             }
 
+            console.log('[FINALIZE-SCORES] Getting next approval step...');
             const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: finalAwardValue }, user);
+            console.log(`[FINALIZE-SCORES] Next Step: Status=${nextStatus}, ApproverID=${nextApproverId}`);
 
             const updatedRequisition = await tx.purchaseRequisition.update({
                 where: { id: requisitionId },
@@ -207,6 +225,8 @@ export async function POST(
                 }
             });
 
+            console.log(`[FINALIZE-SCORES] Updated requisition ${requisitionId} status to ${nextStatus}.`);
+
             await tx.auditLog.create({
                 data: {
                     user: { connect: { id: userId } },
@@ -218,6 +238,7 @@ export async function POST(
                     transactionId: requisitionId,
                 }
             });
+            console.log('[FINALIZE-SCORES] Audit log created.');
             
             return updatedRequisition;
         }, {
@@ -225,6 +246,7 @@ export async function POST(
             timeout: 30000,
         });
         
+        console.log('[FINALIZE-SCORES] Transaction complete. Sending response.');
         return NextResponse.json({ message: 'Award process finalized and routed for review.', requisition: result });
 
     } catch (error) {

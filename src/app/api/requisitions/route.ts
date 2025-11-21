@@ -262,7 +262,7 @@ export async function PATCH(
   try {
     const body = await request.json();
     const { id, status, userId, comment, minute } = body;
-    const updateData = body;
+    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${userId}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
 
@@ -283,6 +283,8 @@ export async function PATCH(
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
+    
+    console.log(`[PATCH /api/requisitions] Current req status: ${requisition.status}. Requested new status: ${newStatus}`);
 
     let dataToUpdate: any = {};
     let auditAction = 'UPDATE_REQUISITION';
@@ -291,6 +293,7 @@ export async function PATCH(
     // This is a high-level award approval (e.g., by a committee or manager)
     if (requisition.status.startsWith('Pending_') && newStatus === 'Approved') {
         const userRoles = (user.roles as any[]).map(r => r.name);
+        console.log(`[PATCH /api/requisitions] Handling award approval by user with roles: ${userRoles.join(', ')}`);
         
         let isAuthorizedToApprove = false;
         if (requisition.currentApproverId === userId) {
@@ -303,11 +306,14 @@ export async function PATCH(
         }
 
         if (!isAuthorizedToApprove) {
+            console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
             return NextResponse.json({ error: 'You are not authorized to approve this item at its current step.' }, { status: 403 });
         }
         
+        console.log(`[PATCH /api/requisitions] Award approval transaction started for Req ID: ${id}`);
         const transactionResult = await prisma.$transaction(async (tx) => {
             const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
+            console.log(`[PATCH /api/requisitions] Next step from service: Status=${nextStatus}, Approver=${nextApproverId}`);
             
             dataToUpdate.status = nextStatus;
             dataToUpdate.currentApproverId = nextApproverId;
@@ -333,6 +339,7 @@ export async function PATCH(
                     }
                 });
                 auditDetails += ` Minute recorded.`;
+                console.log(`[PATCH /api/requisitions] Minute recorded for Req ID: ${id}`);
             }
 
             // Use upsert to avoid unique constraint errors
@@ -369,11 +376,12 @@ export async function PATCH(
 
             return updatedRequisition;
         });
-
+        console.log(`[PATCH /api/requisitions] Award approval transaction complete for Req ID: ${id}`);
         return NextResponse.json(transactionResult);
 
     // This is the initial departmental approval
     } else if (requisition.status === 'Pending_Approval') {
+        console.log(`[PATCH /api/requisitions] Handling departmental approval for Req ID: ${id}`);
         if (requisition.currentApproverId !== userId && !user.roles.some(r => r.name === 'Admin')) {
             return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
         }
@@ -401,6 +409,7 @@ export async function PATCH(
 
     // This handles a requester submitting a draft
     } else if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
+        console.log(`[PATCH /api/requisitions] Handling draft submission for Req ID: ${id}`);
         const isRequester = requisition.requesterId === userId;
         if (!isRequester) return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
         const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
@@ -611,5 +620,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
