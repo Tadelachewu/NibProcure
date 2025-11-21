@@ -18,7 +18,7 @@ import {
   CardDescription,
 } from './ui/card';
 import { Button } from './ui/button';
-import { PurchaseRequisition } from '@/lib/types';
+import { PurchaseRequisition, PerItemAwardDetail } from '@/lib/types';
 import { format, isPast } from 'date-fns';
 import { Badge } from './ui/badge';
 import { useRouter } from 'next/navigation';
@@ -78,19 +78,29 @@ export function RequisitionsForQuotingTable() {
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
     const awardStrategy = (req.rfqSettings as any)?.awardStrategy;
 
-    // --- Terminal Statuses First ---
+    // --- Terminal Statuses ---
     if (req.status === 'Closed' || req.status === 'Fulfilled') {
         return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
     }
-    if (req.status === 'PO_Created') {
-         if (awardStrategy === 'item') {
-            const hasPendingItems = req.items.some(item => 
-                (item.perItemAwardDetails || []).some(d => ['Awarded', 'Standby', 'Declined'].includes(d.status))
-            );
-            if (hasPendingItems) {
-                return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
-            }
+    
+    // --- Award by Best Item Strategy Logic ---
+    if (awardStrategy === 'item') {
+        const allAwardDetails = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []));
+        const allPossibleAwards = allAwardDetails.filter(d => d.rank === 1);
+        const allAccepted = allPossibleAwards.length > 0 && allPossibleAwards.every(d => d.status === 'Accepted');
+
+        if (allAccepted) {
+            return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
         }
+        
+        const hasAcceptedItem = allAwardDetails.some(d => d.status === 'Accepted');
+        if (hasAcceptedItem) {
+             return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
+        }
+    }
+    
+    // --- Single Vendor Award Strategy Logic ---
+    if (awardStrategy === 'all' && req.status === 'PO_Created') {
         return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
     }
 
@@ -119,7 +129,6 @@ export function RequisitionsForQuotingTable() {
     
     // --- Post-Bidding Deadline Logic ---
     if (deadlinePassed) {
-        // Handle cases where bidding is effectively over
         if (req.status === 'Accepting_Quotes') {
              if (quoteCount === 0) {
                 return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No Bids Received</Badge>;
@@ -129,7 +138,6 @@ export function RequisitionsForQuotingTable() {
             }
         }
 
-        // Scoring and Awarding Stages
         if (req.status === 'Scoring_Complete') {
             return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
         }
