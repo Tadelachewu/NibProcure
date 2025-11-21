@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -77,67 +76,71 @@ export function RequisitionsForQuotingTable() {
     const quoteCount = req.quotations?.length || 0;
     const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
-    
-    // **MODIFIED LOGIC START**: Check for partial completion in per-item award scenarios.
     const awardStrategy = (req.rfqSettings as any)?.awardStrategy;
-    if (awardStrategy === 'item') {
-        const hasPendingItems = req.items.some(item => 
-            (item.perItemAwardDetails || []).some(d => ['Awarded', 'Standby', 'Declined'].includes(d.status))
-        );
-        if (req.status === 'PO_Created' && hasPendingItems) {
-            return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
-        }
-    }
-    // **MODIFIED LOGIC END**
 
-    // Handle terminal or high-priority statuses first
-    if (req.status === 'PO_Created' || req.status === 'Closed' || req.status === 'Fulfilled') {
+    // --- Terminal Statuses First ---
+    if (req.status === 'Closed' || req.status === 'Fulfilled') {
         return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
     }
-    
+    if (req.status === 'PO_Created') {
+         if (awardStrategy === 'item') {
+            const hasPendingItems = req.items.some(item => 
+                (item.perItemAwardDetails || []).some(d => ['Awarded', 'Standby', 'Declined'].includes(d.status))
+            );
+            if (hasPendingItems) {
+                return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
+            }
+        }
+        return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
+    }
+
+    // --- Action-Required Statuses ---
     if (req.status === 'Award_Declined') {
         return <Badge variant="destructive" className="animate-pulse">Award Declined - Action Required</Badge>;
-    }
-     
-    if (req.status.startsWith('Pending_')) {
-      return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status.replace(/_/g, ' ')}</Badge>;
     }
     if (req.status === 'PostApproved') {
         return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
     }
-    if (req.status === 'Awarded') {
-        return <Badge variant="default" className="bg-green-600">Awarded</Badge>;
+
+    // --- Pending Review Statuses ---
+    if (req.status.startsWith('Pending_')) {
+      return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status.replace(/_/g, ' ')}</Badge>;
     }
 
-    // Handle pre-bidding state
+    // --- Pre-Bidding Status ---
     if (req.status === 'PreApproved') {
         return <Badge variant="default" className="bg-blue-500 text-white">Ready for RFQ</Badge>;
     }
     
-    // Handle active bidding state
+    // --- Active Bidding ---
     if (req.status === 'Accepting_Quotes' && !deadlinePassed) {
         return <Badge variant="outline">Accepting Quotes ({quoteCount} submitted)</Badge>;
     }
-
-    if (req.status === 'Accepting_Quotes' && deadlinePassed && quoteCount === 0) {
-        return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No Bids Received</Badge>;
-    }
-
-    if (req.status === 'Accepting_Quotes' && deadlinePassed && quoteCount > 0 && quoteCount < committeeQuorum) {
-        return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> Quorum Not Met</Badge>;
-    }
-
-    // Handle all post-bidding-deadline states
+    
+    // --- Post-Bidding Deadline Logic ---
     if (deadlinePassed) {
-        const hasCommittee = !!req.committeeName;
-
-        if (!hasCommittee) {
-             return <Badge variant="destructive">Ready for Committee Assignment</Badge>;
+        // Handle cases where bidding is effectively over
+        if (req.status === 'Accepting_Quotes') {
+             if (quoteCount === 0) {
+                return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No Bids Received</Badge>;
+            }
+            if (quoteCount > 0 && quoteCount < committeeQuorum) {
+                return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> Quorum Not Met</Badge>;
+            }
         }
 
-        // IMPORTANT: Prioritize the explicit status from the DB if available
+        // Scoring and Awarding Stages
         if (req.status === 'Scoring_Complete') {
             return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
+        }
+        
+        if (req.status === 'Awarded') {
+            return <Badge variant="default" className="bg-green-600">Awarded</Badge>;
+        }
+        
+        const hasCommittee = !!req.committeeName;
+        if (!hasCommittee) {
+             return <Badge variant="destructive">Ready for Committee Assignment</Badge>;
         }
 
         if (scoringDeadlinePassed) {
