@@ -290,14 +290,14 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                 
                 let itemsToList: QuoteItem[] = [];
                 if (isAwarded && !isPerItemStrategy) {
-                    if (quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded') {
+                    if (mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded') {
                         const awardedItemIds = new Set(requisition.awardedQuoteItemIds || []);
                         if (awardedItemIds.size > 0) {
                             itemsToList = quote.items.filter(i => awardedItemIds.has(i.id));
                         } else {
                             itemsToList = quote.items;
                         }
-                    } else if (quote.status === 'Standby' && requisition.evaluationCriteria) {
+                    } else if (mainStatus === 'Standby' && requisition.evaluationCriteria) {
                          const championBids: QuoteItem[] = [];
                         for (const reqItem of requisition.items) {
                             const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
@@ -391,7 +391,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                             ))}
                                             </ul>
                                         </div>
-                                    )}
+                                     )}
                                 </>
                             ) : (
                                 <div className="text-center py-8">
@@ -2087,7 +2087,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                         <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
                                                                             <h4 className="font-semibold text-sm mb-2">Item: {scoredQuoteItem?.name || 'Unknown Item'}</h4>
                                                                             <div className={cn("grid gap-4 print:grid-cols-2", hasFinancialScores && hasTechnicalScores ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
-                                                                                {hasFinancialScores && (
+                                                                                {hasFinancialScores && itemScore.scores.some(s => s.type === 'FINANCIAL') && (
                                                                                     <div>
                                                                                         <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Financial Scores ({requisition.evaluationCriteria?.financialWeight}%)</h5>
                                                                                         {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
@@ -2101,7 +2101,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                                         ))}
                                                                                     </div>
                                                                                 )}
-                                                                                {hasTechnicalScores && (
+                                                                                {hasTechnicalScores && itemScore.scores.some(s => s.type === 'TECHNICAL') && (
                                                                                     <div>
                                                                                         <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical Scores ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
                                                                                         {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
@@ -2165,7 +2165,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
             return;
         }
 
-        setIsSubmitting(true);
+        setSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/extend-scoring-deadline`, {
                 method: 'POST',
@@ -2185,7 +2185,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
         } catch (error) {
              toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
         } finally {
-            setIsSubmitting(false);
+            setSubmitting(false);
         }
     }
 
@@ -3533,6 +3533,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
