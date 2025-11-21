@@ -112,6 +112,10 @@ export default function VendorDashboardPage() {
         const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
         const isPerItemAward = (req.rfqSettings as any)?.awardStrategy === 'item';
 
+        if (vendorQuote?.status === 'Awarded' && !isPerItemAward) {
+            return 'Awarded';
+        }
+        
         // Highest priority statuses from the vendor's main quote
         if (vendorQuote) {
             if (vendorQuote.status === 'Invoice_Submitted') return 'Invoice Submitted';

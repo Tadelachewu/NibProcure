@@ -615,24 +615,34 @@ export default function VendorRequisitionPage() {
         return awardedItems.length > 0;
     }, [requisition, awardedItems]);
 
-    const itemsToDisplayInQuoteCard = useMemo(() => {
-        if (!submittedQuote) return [];
-        if (isPartiallyAwarded) {
-            const awardedQuoteItemIds = new Set(awardedItems.map(item => item.quoteItemId));
-            return submittedQuote.items.filter(item => awardedQuoteItemIds.has(item.id));
-        }
-        // If not partially awarded, show all items from the original quote
-        return submittedQuote.items;
-    }, [submittedQuote, isPartiallyAwarded, awardedItems]);
-
     const isFullyAwarded = useMemo(() => {
         const vendorQuote = requisition?.quotations?.find(q => q.vendorId === user?.vendorId);
         return vendorQuote?.status === 'Awarded';
     }, [requisition, user]);
 
+    const itemsToDisplayInQuoteCard = useMemo(() => {
+        if (!submittedQuote) return [];
+        
+        // In a single-vendor award, the awarded items are on the main requisition
+        if (isFullyAwarded && requisition.awardedQuoteItemIds.length > 0) {
+            const awardedItemIds = new Set(requisition.awardedQuoteItemIds);
+            return submittedQuote.items.filter(item => awardedItemIds.has(item.id));
+        }
+
+        // In a per-item award, the details are on the requisition items
+        if (isPartiallyAwarded) {
+            const awardedQuoteItemIds = new Set(awardedItems.map(item => item.quoteItemId));
+            return submittedQuote.items.filter(item => awardedQuoteItemIds.has(item.id));
+        }
+        
+        // If not awarded or accepted yet, show all items from the original quote
+        return submittedQuote.items;
+    }, [submittedQuote, isPartiallyAwarded, awardedItems, isFullyAwarded, requisition]);
+
     const hasPendingResponseItems = useMemo(() => {
+        if (isFullyAwarded) return true; // Full award is pending
         return awardedItems.some(item => item.status === 'Awarded');
-    }, [awardedItems]);
+    }, [awardedItems, isFullyAwarded]);
 
 
     const isAccepted = useMemo(() => {
@@ -779,7 +789,7 @@ export default function VendorRequisitionPage() {
                 )}
                 <div className="space-y-2">
                     {itemsToShow && itemsToShow.length > 0 ? itemsToShow.map((item, index) => (
-                        <Card key={`${item.requisitionItemId}-${index}`} className="p-3">
+                        <Card key={`${item.requisitionItemId}-${index}`} className="p-3 bg-green-500/5 border-green-500/20">
                             <div className="flex justify-between">
                                 <div>
                                     <p className="font-semibold">{item.name} x {item.quantity}</p>
@@ -806,7 +816,7 @@ export default function VendorRequisitionPage() {
                 )}
                  <Separator />
                  <div className="text-right font-bold text-2xl">
-                    Total Quoted Price: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
+                    Total Award Value: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
                  </div>
                  {isAccepted && poForItem && (
                     <CardFooter className="p-0 pt-4">
@@ -850,9 +860,9 @@ export default function VendorRequisitionPage() {
             {hasPendingResponseItems && (
                  <Card>
                     <CardHeader>
-                        <CardTitle className="text-green-600">Congratulations! You've Been Awarded Item(s)!</CardTitle>
+                        <CardTitle className="text-green-600">Congratulations! You've Been Awarded!</CardTitle>
                         <CardDescription>
-                            Please review and respond to each awarded item below.
+                            Please review and respond to the award below.
                              {requisition.awardResponseDeadline && (
                                 <p className={cn("text-sm font-semibold mt-2 flex items-center gap-2", isResponseDeadlineExpired ? "text-destructive" : "text-amber-600")}>
                                     <Timer className="h-4 w-4" />
@@ -861,28 +871,41 @@ export default function VendorRequisitionPage() {
                              )}
                         </CardDescription>
                     </CardHeader>
-                     <CardContent className="space-y-4">
-                        {awardedItems.filter(i => i.status === 'Awarded').map(itemAward => {
-                            const quoteItem = submittedQuote?.items.find(i => i.id === itemAward.quoteItemId);
-                            return(
-                                <Card key={itemAward.quoteItemId} className="p-4">
-                                    <div className="flex justify-between items-center">
-                                        <div>
-                                            <p className="font-semibold">{quoteItem?.name}</p>
-                                            <p className="text-sm text-muted-foreground">Unit Price: {quoteItem?.unitPrice.toLocaleString()} ETB</p>
-                                        </div>
-                                         <div className="flex gap-2">
-                                            <Button size="sm" onClick={() => handleAwardResponse('accept', quoteItem?.id)} disabled={isResponding || isResponseDeadlineExpired}>
-                                                <ThumbsUp className="mr-2 h-4 w-4" /> Accept
-                                            </Button>
-                                            <Button size="sm" variant="destructive" onClick={() => handleAwardResponse('reject', quoteItem?.id)} disabled={isResponding || isResponseDeadlineExpired}>
-                                                <ThumbsDown className="mr-2 h-4 w-4" /> Decline
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </Card>
-                            )
-                        })}
+                     <CardContent>
+                          {isPartiallyAwarded ? (
+                             <div className="space-y-4">
+                                {awardedItems.filter(i => i.status === 'Awarded').map(itemAward => {
+                                    const quoteItem = submittedQuote?.items.find(i => i.id === itemAward.quoteItemId);
+                                    return(
+                                        <Card key={itemAward.quoteItemId} className="p-4">
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <p className="font-semibold">{quoteItem?.name}</p>
+                                                    <p className="text-sm text-muted-foreground">Unit Price: {quoteItem?.unitPrice.toLocaleString()} ETB</p>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Button size="sm" onClick={() => handleAwardResponse('accept', quoteItem?.id)} disabled={isResponding || isResponseDeadlineExpired}>
+                                                        <ThumbsUp className="mr-2 h-4 w-4" /> Accept
+                                                    </Button>
+                                                    <Button size="sm" variant="destructive" onClick={() => handleAwardResponse('reject', quoteItem?.id)} disabled={isResponding || isResponseDeadlineExpired}>
+                                                        <ThumbsDown className="mr-2 h-4 w-4" /> Decline
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </Card>
+                                    )
+                                })}
+                            </div>
+                         ) : (
+                            <div className="flex gap-4">
+                                <Button onClick={() => handleAwardResponse('accept')} disabled={isResponding || isResponseDeadlineExpired}>
+                                    <ThumbsUp className="mr-2 h-4 w-4" /> Accept Full Award
+                                </Button>
+                                <Button variant="destructive" onClick={() => handleAwardResponse('reject')} disabled={isResponding || isResponseDeadlineExpired}>
+                                    <ThumbsDown className="mr-2 h-4 w-4" /> Decline Award
+                                </Button>
+                            </div>
+                         )}
                     </CardContent>
                  </Card>
             )}
@@ -965,7 +988,7 @@ export default function VendorRequisitionPage() {
                 </Card>
 
                 {submittedQuote && !isEditingQuote ? (
-                     <QuoteDisplayCard quote={submittedQuote} itemsToShow={itemsToDisplayInQuoteCard} showActions={!isAccepted && hasPendingResponseItems} />
+                     <QuoteDisplayCard quote={submittedQuote} itemsToShow={itemsToDisplayInQuoteCard} showActions={hasPendingResponseItems} />
                 ) : (
                     <QuoteSubmissionForm 
                         requisition={requisition} 
