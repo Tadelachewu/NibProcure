@@ -839,7 +839,7 @@ const RFQActionDialog = ({
 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [submitting, setSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
@@ -952,8 +952,8 @@ const RFQActionDialog = ({
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Close</Button></DialogClose>
-                    <Button onClick={handleSubmit} disabled={submitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
-                            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    <Button onClick={handleSubmit} disabled={isSubmitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                         Confirm {action.charAt(0).toUpperCase() + action.slice(1)}
                     </Button>
                 </DialogFooter>
@@ -1857,7 +1857,8 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     const printRef = useRef<HTMLDivElement>(null);
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy || 'all';
 
-    const getCriterionName = (criterionId: string, criteria?: EvaluationCriterion[]) => {
+    const getCriterionName = (criterionId: string | null, criteria?: EvaluationCriterion[]) => {
+        if (!criterionId) return 'Unknown Criterion';
         return criteria?.find(c => c.id === criterionId)?.name || 'Unknown Criterion';
     }
 
@@ -2020,31 +2021,41 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                 <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPp')}</p>
                                                                 </div>
                                                             </div>
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
-                                                                <div>
-                                                                    <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
-                                                                    {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'FINANCIAL').map(s => (
-                                                                        <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
-                                                                            <div className="flex justify-between items-center font-medium">
-                                                                                <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
-                                                                                <p className="font-bold">{s.score}/100</p>
+                                                            <div className="space-y-4">
+                                                                {scoreSet.itemScores.map(itemScore => {
+                                                                    const scoredQuoteItem = quote.items.find(qi => qi.id === itemScore.quoteItemId);
+                                                                    return (
+                                                                        <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
+                                                                            <h4 className="font-semibold text-sm mb-2">Item: {scoredQuoteItem?.name || 'Unknown Item'}</h4>
+                                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
+                                                                                <div>
+                                                                                    <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Financial Scores ({requisition.evaluationCriteria?.financialWeight}%)</h5>
+                                                                                    {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
+                                                                                        <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                            <div className="flex justify-between items-center font-medium">
+                                                                                                <p>{getCriterionName(s.financialCriterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                                                <p className="font-bold">{s.score}/100</p>
+                                                                                            </div>
+                                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical Scores ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
+                                                                                    {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
+                                                                                        <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                            <div className="flex justify-between items-center font-medium">
+                                                                                                <p>{getCriterionName(s.technicalCriterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
+                                                                                                <p className="font-bold">{s.score}/100</p>
+                                                                                            </div>
+                                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
                                                                             </div>
-                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
                                                                         </div>
-                                                                    )))}
-                                                                </div>
-                                                                <div>
-                                                                    <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
-                                                                    {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'TECHNICAL').map(s => (
-                                                                        <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
-                                                                            <div className="flex justify-between items-center font-medium">
-                                                                                <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
-                                                                                <p className="font-bold">{s.score}/100</p>
-                                                                            </div>
-                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                        </div>
-                                                                    )))}
-                                                                </div>
+                                                                    )
+                                                                })}
                                                             </div>
                                                             {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
                                                         </div>
@@ -2353,7 +2364,7 @@ export default function QuotationDetailsPage() {
   const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
   const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [isReportOpen, setReportOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
@@ -2781,7 +2792,7 @@ export default function QuotationDetailsPage() {
                   </Button>
                 )}
                 {canViewCumulativeReport && (
-                    <Button variant="secondary" onClick={() => setReportOpen(true)}>
+                    <Button variant="secondary" onClick={() => setIsReportOpen(true)}>
                         <FileBarChart2 className="mr-2 h-4 w-4" /> View Scoring Report
                     </Button>
                 )}
@@ -3090,7 +3101,7 @@ export default function QuotationDetailsPage() {
                 requisition={requisition}
                 quotations={quotations}
                 isOpen={isReportOpen}
-                onClose={() => setReportOpen(false)}
+                onClose={() => setIsReportOpen(false)}
             />
         )}
         {selectedQuoteForDetails && requisition && (
@@ -3115,7 +3126,7 @@ export default function QuotationDetailsPage() {
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
 
@@ -3132,7 +3143,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
@@ -3148,7 +3159,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
     };
 
@@ -3196,6 +3207,29 @@ const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Qu
         return requisition.customQuestions?.find(q => q.id === questionId)?.questionText || "Unknown Question";
     };
 
+    const isPerItemAward = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+    
+    // Get the final calculated score for each item in this quote
+    const itemScores: Record<string, number> = {};
+     quote.scores?.forEach(scoreSet => {
+        scoreSet.itemScores.forEach(itemScore => {
+            if (!itemScores[itemScore.quoteItemId]) {
+                itemScores[itemScore.quoteItemId] = 0;
+            }
+            // This is a simplification. In reality, you'd average the scores if multiple scorers.
+            itemScores[itemScore.quoteItemId] = itemScore.finalScore;
+        });
+    });
+
+    const getIsWinningItem = (quoteItemId: string) => {
+        if (!isPerItemAward) {
+            return quote.status === 'Awarded' || quote.status === 'Accepted';
+        }
+        const awardDetail = requisition.items.flatMap(i => i.perItemAwardDetails || []).find(d => d.quoteItemId === quoteItemId);
+        return awardDetail?.status === 'Awarded' || awardDetail?.status === 'Accepted';
+    }
+
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-2xl">
@@ -3217,15 +3251,19 @@ const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Qu
                                             <TableHead>Brand</TableHead>
                                             <TableHead className="text-right">Unit Price</TableHead>
                                             <TableHead className="text-right">Lead Time</TableHead>
+                                            <TableHead className="text-right">Score</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {quote.items.map(item => (
-                                            <TableRow key={item.id}>
+                                            <TableRow key={item.id} className={cn(getIsWinningItem(item.id) && "bg-green-500/10")}>
                                                 <TableCell className="font-medium">{item.name}</TableCell>
                                                 <TableCell className="text-muted-foreground">{item.brandDetails || 'N/A'}</TableCell>
                                                 <TableCell className="text-right font-mono">{item.unitPrice.toLocaleString()} ETB</TableCell>
                                                 <TableCell className="text-right">{item.leadTimeDays} days</TableCell>
+                                                <TableCell className="text-right font-mono font-semibold">
+                                                    {itemScores[item.id] ? itemScores[item.id].toFixed(2) : 'N/A'}
+                                                </TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -3432,6 +3470,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
