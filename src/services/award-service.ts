@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -331,6 +332,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         let newTotalValue = 0;
         for (const item of updatedRequisition.items) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
+             // Now sum up all items that are either newly pending or already accepted from previous rounds
              const winningAward = details.find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
              if (winningAward) {
                  newTotalValue += winningAward.unitPrice * item.quantity;
