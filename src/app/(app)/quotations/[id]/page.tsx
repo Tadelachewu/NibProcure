@@ -1857,6 +1857,10 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     const printRef = useRef<HTMLDivElement>(null);
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy || 'all';
 
+    const getCriterionName = (criterionId: string, criteria?: EvaluationCriterion[]) => {
+        return criteria?.find(c => c.id === criterionId)?.name || 'Unknown Criterion';
+    }
+
     const handleGeneratePdf = async () => {
         const input = printRef.current;
         if (!input) return;
@@ -1907,12 +1911,12 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>Cumulative Scoring Report: How The Award Was Won</DialogTitle>
+                    <DialogTitle>Cumulative Scoring Report</DialogTitle>
                     <DialogDescription>
                         A detailed breakdown of committee scores for requisition {requisition.id}, explaining the award decision based on the '{awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}' strategy.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="flex-grow overflow-hidden">
+                <div className="flex-1 overflow-hidden">
                     <ScrollArea className="h-full">
                         <div ref={printRef} className="p-1 space-y-6 bg-background text-foreground print:bg-white print:text-black">
                             <div className="hidden print:block text-center mb-8 pt-4">
@@ -1976,6 +1980,81 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                 </Card>
                             )}
 
+                             <Separator className="my-6"/>
+
+                             <Card>
+                                 <CardHeader>
+                                     <CardTitle>Evaluation Committee Scoring Report</CardTitle>
+                                     <CardDescription>Detailed scores from each committee member for each vendor.</CardDescription>
+                                 </CardHeader>
+                                 <CardContent className="space-y-6">
+                                     {quotations.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)).map(quote => (
+                                        <Card key={quote.id} className="break-inside-avoid print:border-gray-300 print:shadow-none print:rounded-lg">
+                                            <CardHeader className="print:bg-gray-100 print:rounded-t-lg">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <CardTitle className="text-xl">{quote.vendorName}</CardTitle>
+                                                        <CardDescription className="print:text-gray-700 pt-1">
+                                                            Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> |
+                                                            Rank: <span className="font-bold">{quote.rank || 'N/A'}</span> |
+                                                            Total Price: <span className="font-bold">{quote.totalPrice.toLocaleString()} ETB</span>
+                                                        </CardDescription>
+                                                    </div>
+                                                    <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="p-4 space-y-4">
+                                                {quote.scores && quote.scores.length > 0 ? (
+                                                    quote.scores.map(scoreSet => (
+                                                        <div key={scoreSet.scorerId} className="p-3 border rounded-md break-inside-avoid print:border-gray-200">
+                                                            <div className="flex items-center justify-between mb-3 pb-2 border-b print:border-gray-200">
+                                                                <div className="flex items-center gap-3">
+                                                                    <Avatar className="h-8 w-8">
+                                                                        <AvatarImage src={`https://picsum.photos/seed/${scoreSet.scorerId}/32/32`} />
+                                                                        <AvatarFallback>{scoreSet.scorer?.name?.charAt(0) || 'U'}</AvatarFallback>
+                                                                    </Avatar>
+                                                                    <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
+                                                                <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPp')}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
+                                                                <div>
+                                                                    <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
+                                                                    {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'FINANCIAL').map(s => (
+                                                                        <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
+                                                                            <div className="flex justify-between items-center font-medium">
+                                                                                <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                                <p className="font-bold">{s.score}/100</p>
+                                                                            </div>
+                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                        </div>
+                                                                    )))}
+                                                                </div>
+                                                                <div>
+                                                                    <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
+                                                                    {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'TECHNICAL').map(s => (
+                                                                        <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
+                                                                            <div className="flex justify-between items-center font-medium">
+                                                                                <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
+                                                                                <p className="font-bold">{s.score}/100</p>
+                                                                            </div>
+                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                        </div>
+                                                                    )))}
+                                                                </div>
+                                                            </div>
+                                                            {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
+                                                        </div>
+                                                    ))
+                                                ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
+                                            </CardContent>
+                                        </Card>
+                                     ))}
+                                 </CardContent>
+                             </Card>
                         </div>
                     </ScrollArea>
                 </div>
@@ -3014,7 +3093,7 @@ export default function QuotationDetailsPage() {
                 onClose={() => setReportOpen(false)}
             />
         )}
-         {selectedQuoteForDetails && requisition && (
+        {selectedQuoteForDetails && requisition && (
             <QuoteDetailsDialog 
                 quote={selectedQuoteForDetails}
                 requisition={requisition}
@@ -3353,6 +3432,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
