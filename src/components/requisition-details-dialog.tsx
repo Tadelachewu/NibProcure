@@ -53,11 +53,16 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
   const getTimelineStatus = (step: number) => {
     const stepOrder = ['Draft', 'Pending_Approval', 'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 'Pending_Review', 'PostApproved', 'Awarded', 'PO_Created', 'Fulfilled', 'Closed'];
     
-    // Normalize current status to match stepOrder. Any "Pending_Committee..." becomes "Pending_Review"
+    // Normalize current status to match stepOrder. 
     let normalizedStatus = requisition.status;
     if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
         normalizedStatus = 'Pending_Review';
     }
+    // Treat 'Award_Declined' as part of the 'Final Award Review' (Pending_Review) step.
+    if (requisition.status === 'Award_Declined') {
+        normalizedStatus = 'Pending_Review';
+    }
+
 
     const currentStatusIndex = stepOrder.findIndex(s => normalizedStatus.startsWith(s));
     
@@ -83,7 +88,7 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
   const getItemStatus = (item: PurchaseRequisition['items'][0]): React.ReactNode => {
       if (awardStrategy === 'item') {
           const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-          const winningDetail = details.find(d => d.status === 'Accepted' || d.status === 'Awarded' || d.status === 'Pending_Award');
+          const winningDetail = details.find(d => ['Accepted', 'Awarded', 'Pending_Award'].includes(d.status));
           if (winningDetail) {
               return (
                 <div className="flex flex-col text-xs">
@@ -100,6 +105,9 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                     <span className="text-muted-foreground">{standbyDetail.vendorName} (Rank {standbyDetail.rank})</span>
                 </div>
                )
+           }
+           if (details.some(d => d.status === 'Declined' || d.status === 'Failed_to_Award')) {
+               return <Badge variant="destructive">Award Declined</Badge>
            }
       }
       // For single vendor awards or before the award stage, show the overall requisition status
