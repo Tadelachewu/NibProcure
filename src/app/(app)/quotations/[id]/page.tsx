@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Calculator } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Calculator, List } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -279,7 +279,6 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
                 
-                // Get the main status for the card badge
                 let mainStatus: QuotationStatus | 'Not Awarded' = quote.status;
                 if(isPerItemStrategy && isAwarded) {
                     if (thisVendorItemStatuses.some(s => s.status === 'Accepted')) mainStatus = 'Accepted';
@@ -288,9 +287,54 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                     else if (thisVendorItemStatuses.some(s => s.status === 'Standby')) mainStatus = 'Standby';
                     else mainStatus = 'Not Awarded';
                 }
+                
+                let itemsToList: QuoteItem[] = [];
+                if (isAwarded && !isPerItemStrategy) {
+                    if (quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded') {
+                        const awardedItemIds = new Set(requisition.awardedQuoteItemIds || []);
+                        if (awardedItemIds.size > 0) {
+                            itemsToList = quote.items.filter(i => awardedItemIds.has(i.id));
+                        } else {
+                            itemsToList = quote.items;
+                        }
+                    } else if (quote.status === 'Standby' && requisition.evaluationCriteria) {
+                         const championBids: QuoteItem[] = [];
+                        for (const reqItem of requisition.items) {
+                            const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
+                            if (proposalsForItem.length === 0) continue;
+
+                            let bestProposalForItem: QuoteItem | null = null;
+                            let bestItemScore = -1;
+
+                            proposalsForItem.forEach(proposal => {
+                                let totalItemScore = 0;
+                                let scoreCount = 0;
+                                quote.scores?.forEach(scoreSet => {
+                                    const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
+                                    if (itemScore) {
+                                        totalItemScore += itemScore.finalScore;
+                                        scoreCount++;
+                                    }
+                                });
+                                const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                                
+                                if (averageItemScore > bestItemScore) {
+                                    bestItemScore = averageItemScore;
+                                    bestProposalForItem = proposal;
+                                }
+                            });
+
+                            if (bestProposalForItem) {
+                                championBids.push(bestProposalForItem);
+                            }
+                        }
+                        itemsToList = championBids;
+                    }
+                }
+
 
                 return (
-                    <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Partially_Awarded') && !isPerItemStrategy && 'border-primary ring-2 ring-primary')}>
+                    <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Partially_Awarded' || mainStatus === 'Accepted') && !isPerItemStrategy && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
@@ -337,6 +381,17 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                             ))}
                                         </div>
                                      )}
+                                     
+                                     {itemsToList.length > 0 && (
+                                        <div className="text-sm space-y-2 pt-2 border-t">
+                                            <h4 className="font-semibold flex items-center gap-2"><List /> {mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded' ? 'Awarded Items' : 'Standby Items'}</h4>
+                                            <ul className="list-disc pl-5 text-muted-foreground">
+                                            {itemsToList.map(item => (
+                                                <li key={item.id}>{item.name} (Qty: {item.quantity})</li>
+                                            ))}
+                                            </ul>
+                                        </div>
+                                    )}
                                 </>
                             ) : (
                                 <div className="text-center py-8">
@@ -2025,8 +2080,8 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                             <div className="space-y-4">
                                                                 {scoreSet.itemScores.map(itemScore => {
                                                                     const scoredQuoteItem = quote.items.find(qi => qi.id === itemScore.quoteItemId);
-                                                                    const hasFinancialScores = itemScore.scores.some(s => s.type === 'FINANCIAL');
-                                                                    const hasTechnicalScores = itemScore.scores.some(s => s.type === 'TECHNICAL');
+                                                                    const hasFinancialScores = (requisition.evaluationCriteria?.financialCriteria?.length ?? 0) > 0;
+                                                                    const hasTechnicalScores = (requisition.evaluationCriteria?.technicalCriteria?.length ?? 0) > 0;
                                                                     
                                                                     return (
                                                                         <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
@@ -3478,6 +3533,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
