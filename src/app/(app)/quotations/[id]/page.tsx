@@ -2274,7 +2274,7 @@ export default function QuotationDetailsPage() {
   const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
   const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [isReportOpen, setReportOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
@@ -2465,11 +2465,46 @@ export default function QuotationDetailsPage() {
           ]);
           const currentReq = await reqResponse.json();
           const venData = await venResponse.json();
-          const quoData: Quotation[] = await quoResponse.json();
-
-          setVendors(venData || []);
+          let quoData: Quotation[] = await quoResponse.json();
 
           if (currentReq) {
+              setVendors(venData || []);
+
+              // --- Start of new frontend calculation logic ---
+              if (currentReq.evaluationCriteria && quoData.length > 0) {
+                quoData = quoData.map(quote => {
+                    const itemBids: {requisitionItemId: string; championBidScore: number;}[] = [];
+
+                    for (const reqItem of currentReq.items) {
+                        const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
+                        if (proposalsForItem.length === 0) continue;
+
+                        const calculatedProposals = proposalsForItem.map(proposal => {
+                            let totalItemScore = 0;
+                            let scoreCount = 0;
+                            quote.scores?.forEach(scoreSet => {
+                                const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
+                                if (itemScore) {
+                                    totalItemScore += itemScore.finalScore;
+                                    scoreCount++;
+                                }
+                            });
+                            return scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                        });
+
+                        const championBidScore = Math.max(...calculatedProposals);
+                        itemBids.push({ requisitionItemId: reqItem.id, championBidScore });
+                    }
+                    
+                    const finalVendorScore = itemBids.length > 0
+                        ? itemBids.reduce((acc, bid) => acc + bid.championBidScore, 0) / itemBids.length
+                        : 0;
+
+                    return { ...quote, finalAverageScore: finalVendorScore };
+                });
+              }
+              // --- End of new frontend calculation logic ---
+
               setRequisition({...currentReq, quotations: quoData});
               setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
           } else {
@@ -3256,7 +3291,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
                                     <Calendar mode="single" selected={deadlineDate} onSelect={setDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
                                 </PopoverContent>
                             </Popover>
-                            <Input type="time" className="w-32" value={deadlineTime} onChange={(e) => setDeadlineTime(e.target.value)}/>
+                            <Input type="time" className="w-32" value={deadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
                         </div>
                     </div>
                     <div>
@@ -3318,6 +3353,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
