@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -26,7 +25,7 @@ export async function GET() {
             prisma.goodsReceiptNote.findMany({ include: { receivedBy: true } }),
             prisma.invoice.findMany(),
             prisma.contract.findMany({ include: { requisition: { select: { title: true }}, vendor: { select: { name: true }}}}),
-            prisma.auditLog.findMany({ include: { user: true }, orderBy: { timestamp: 'desc' } }),
+            prisma.auditLog.findMany({ include: { user: { include: { roles: true } } }, orderBy: { timestamp: 'desc' } }),
             prisma.user.findMany(),
             prisma.vendor.findMany(),
         ]);
@@ -123,9 +122,10 @@ export async function GET() {
                 if (!auditLogMap.has(log.transactionId)) {
                     auditLogMap.set(log.transactionId, []);
                 }
+                const userRoles = log.user?.roles?.map(r => r.name.replace(/_/g, ' ')).join(', ') || 'System';
                 auditLogMap.get(log.transactionId)?.push({
                     ...log,
-                    role: log.user?.role.replace(/_/g, ' ') || 'System',
+                    role: userRoles,
                     user: log.user?.name || 'System'
                 });
             }
