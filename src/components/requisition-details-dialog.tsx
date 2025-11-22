@@ -1,7 +1,7 @@
 
 'use client';
 
-import { PurchaseRequisition, PurchaseOrder, PerItemAwardDetail, User } from '@/lib/types';
+import { PurchaseRequisition, PurchaseOrder, PerItemAwardDetail, User, EvaluationCriterion } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import { Badge } from './ui/badge';
 import { format, isPast } from 'date-fns';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { CheckCircle, Circle, Clock, FileText, Send, UserCheck, Users, Trophy, Calendar, UserCog, LandLandmark } from 'lucide-react';
+import { CheckCircle, Circle, Clock, FileText, Send, UserCheck, Users, Trophy, Calendar, UserCog, LandLandmark, Percent, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 
@@ -123,6 +123,30 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
   const financialCommittee = allUsers.filter(u => requisition.financialCommitteeMemberIds?.includes(u.id));
   const technicalCommittee = allUsers.filter(u => requisition.technicalCommitteeMemberIds?.includes(u.id));
 
+  const CriteriaTable = ({ title, weight, criteria }: { title: string, weight: number, criteria: EvaluationCriterion[] }) => (
+    <div>
+        <h5 className="font-semibold mb-1">{title} (Overall Weight: {weight}%)</h5>
+        <div className="border rounded-md">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Criterion</TableHead>
+                        <TableHead className="text-right w-24">Weight</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {criteria.map(c => (
+                        <TableRow key={c.id}>
+                            <TableCell>{c.name}</TableCell>
+                            <TableCell className="text-right font-mono">{c.weight}%</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
+    </div>
+  )
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl">
@@ -168,15 +192,18 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead>Item Name</TableHead>
-                                            <TableHead className="text-right">Quantity</TableHead>
-                                            <TableHead className="text-right">Status</TableHead>
+                                            <TableHead>Item</TableHead>
+                                            <TableHead className="text-right w-24">Quantity</TableHead>
+                                            <TableHead className="text-right w-40">Status</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {requisition.items?.map(item => (
                                             <TableRow key={item.id}>
-                                                <TableCell>{item.name}</TableCell>
+                                                <TableCell>
+                                                    <p className="font-medium">{item.name}</p>
+                                                    {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
+                                                </TableCell>
                                                 <TableCell className="text-right">{item.quantity}</TableCell>
                                                 <TableCell className="text-right">{getItemStatus(item)}</TableCell>
                                             </TableRow>
@@ -185,6 +212,34 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                                 </Table>
                             </div>
                         </div>
+
+                        {requisition.evaluationCriteria && (
+                            <>
+                                <Separator />
+                                <div>
+                                    <h4 className="font-medium mb-2 flex items-center gap-2"><Percent /> Evaluation Criteria</h4>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <CriteriaTable title="Financial" weight={requisition.evaluationCriteria.financialWeight} criteria={requisition.evaluationCriteria.financialCriteria} />
+                                        <CriteriaTable title="Technical" weight={requisition.evaluationCriteria.technicalWeight} criteria={requisition.evaluationCriteria.technicalCriteria} />
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                        
+                        {(requisition.customQuestions && requisition.customQuestions.length > 0) && (
+                            <>
+                                <Separator />
+                                <div>
+                                    <h4 className="font-medium mb-2 flex items-center gap-2"><MessageSquare /> Custom Questions for Vendors</h4>
+                                    <div className="space-y-2 text-sm border rounded-md p-4">
+                                        {requisition.customQuestions.map(q => (
+                                            <p key={q.id} className="text-muted-foreground">&bull; {q.questionText} {q.isRequired && <span className="text-destructive">*</span>}</p>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
 
                         {(requisition.committeeName || financialCommittee.length > 0 || technicalCommittee.length > 0) && (
                             <>
