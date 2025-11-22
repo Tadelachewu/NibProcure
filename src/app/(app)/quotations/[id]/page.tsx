@@ -221,7 +221,7 @@ const getOverallStatusForVendor = (quote: Quotation, itemStatuses: any[], isAwar
     if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
     if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially_Awarded';
     if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
-    return 'Not Awarded'; // If they bid but didn't get any award/standby
+    return 'Rejected'; // If they bid but didn't get any award/standby
   }
 
   // Fallback for single-vendor award strategy
@@ -279,13 +279,13 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
                 
-                let mainStatus: QuotationStatus | 'Not Awarded' = quote.status;
+                let mainStatus: QuotationStatus | 'Rejected' = quote.status;
                 if(isPerItemStrategy && isAwarded) {
                     if (thisVendorItemStatuses.some(s => s.status === 'Accepted')) mainStatus = 'Accepted';
                     else if (thisVendorItemStatuses.some(s => s.status === 'Declined')) mainStatus = 'Declined';
                     else if (thisVendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) mainStatus = 'Partially_Awarded';
                     else if (thisVendorItemStatuses.some(s => s.status === 'Standby')) mainStatus = 'Standby';
-                    else mainStatus = 'Not Awarded';
+                    else mainStatus = 'Rejected';
                 }
                 
                 let itemsToList: QuoteItem[] = [];
@@ -1872,12 +1872,12 @@ const ScoringProgressTracker = ({
                                         </p>
                                     </div>
                                 ) : member.isOverdue ? (
-                                    <>
+                                    <div className="flex items-center gap-2">
                                      <Badge variant="destructive"><AlertTriangle className="mr-1 h-3 w-3" />Overdue</Badge>
                                      <Button size="sm" variant="secondary" onClick={()=>{ setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
                                      <Button size="sm" variant="secondary" onClick={() => onCommitteeUpdate(true)}>Replace</Button>
                                      <Button size="sm" variant="outline" onClick={()=>{ setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
-                                    </>
+                                    </div>
                                 ) : (
                                      <Badge variant="secondary">Pending</Badge>
                                 )}
@@ -2499,20 +2499,21 @@ export default function QuotationDetailsPage() {
   
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
     if (!requisition || !requisition.status) return 'rfq';
-
-    const completeStatuses = ['Fulfilled', 'Closed', 'PO_Created'];
-    if (completeStatuses.includes(requisition.status)) return 'completed';
-
-    const finalizeStatuses: string[] = []; // PO_Created now leads to 'completed'
-    if (finalizeStatuses.includes(requisition.status) || isAccepted) return 'finalize';
-
-    const awardStatuses = ['Awarded', 'PostApproved', 'Award_Declined'];
-    if (awardStatuses.includes(requisition.status) || requisition.status.startsWith('Pending_')) return 'award';
     
-    const committeeStatuses = ['Scoring_In_Progress', 'Scoring_Complete'];
-    if (committeeStatuses.includes(requisition.status)) return 'committee';
+    const status = requisition.status.replace(/_/g, ' ');
+
+    const completeStatuses = ['Fulfilled', 'Closed', 'PO Created'];
+    if (completeStatuses.includes(status)) return 'completed';
+
+    const awardStatuses = ['Awarded', 'PostApproved', 'Award Declined'];
+    if (awardStatuses.includes(status) || status.startsWith('Pending ')) return 'award';
+
+    if (isAccepted) return 'finalize';
     
-    if (requisition.status === 'Accepting_Quotes' && isDeadlinePassed) return 'committee';
+    const committeeStatuses = ['Scoring In Progress', 'Scoring Complete'];
+    if (committeeStatuses.includes(status)) return 'committee';
+    
+    if (status === 'Accepting Quotes' && isDeadlinePassed) return 'committee';
     
     return 'rfq';
   }, [requisition, isAccepted, isDeadlinePassed]);
@@ -2899,7 +2900,7 @@ export default function QuotationDetailsPage() {
             <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
         )}
         
-        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && isAuthorized && (
+        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && (
             <div className="grid md:grid-cols-2 gap-6 items-start">
                 <RFQDistribution
                     requisition={requisition}
@@ -3515,6 +3516,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
