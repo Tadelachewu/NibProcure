@@ -78,9 +78,18 @@ export function RequisitionsForQuotingTable() {
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
     const awardStrategy = (req.rfqSettings as any)?.awardStrategy;
 
-    // --- Terminal Statuses ---
-    if (req.status === 'Closed' || req.status === 'Fulfilled') {
-        return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
+    // --- High Priority Statuses ---
+    if (req.status === 'Scoring_Complete') {
+        return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
+    }
+    if (req.status === 'Award_Declined') {
+        return <Badge variant="destructive" className="animate-pulse">Award Declined - Action Required</Badge>;
+    }
+    if (req.status === 'PostApproved') {
+        return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
+    }
+    if (req.status.startsWith('Pending_')) {
+      return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status.replace(/_/g, ' ')}</Badge>;
     }
     
     // --- Award by Best Item Strategy Logic ---
@@ -88,40 +97,31 @@ export function RequisitionsForQuotingTable() {
         const allAwardDetails = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []));
         const totalItems = req.items.length;
         
-        const acceptedAwards = allAwardDetails.filter(d => d.status === 'Accepted').length;
-        const failedAwards = req.items.filter(item => {
+        const acceptedAwardsCount = req.items.filter(item => {
+             const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+             return details.some(d => d.status === 'Accepted');
+        }).length;
+
+        const failedAwardsCount = req.items.filter(item => {
             const details = (item.perItemAwardDetails as PerItemAwardDetail[] || []);
             return details.length > 0 && details.every(d => d.status === 'Failed_to_Award');
         }).length;
 
-        if (totalItems > 0 && (acceptedAwards + failedAwards) === totalItems) {
+        if (totalItems > 0 && (acceptedAwardsCount + failedAwardsCount) === totalItems) {
             return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
         }
-
+        
         const hasAcceptedItem = allAwardDetails.some(d => d.status === 'Accepted');
         if (hasAcceptedItem) {
              return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
         }
-    }
-    
-    // --- Single Vendor Award Strategy Logic ---
-    if (awardStrategy === 'all' && req.status === 'PO_Created') {
-        // For single vendor, PO created is a significant milestone, but not final.
-        // It becomes "Process Complete" when the req status is Closed/Fulfilled.
-        return <Badge variant="default">PO Created</Badge>;
-    }
-
-    // --- Action-Required Statuses ---
-    if (req.status === 'Award_Declined') {
-        return <Badge variant="destructive" className="animate-pulse">Award Declined - Action Required</Badge>;
-    }
-    if (req.status === 'PostApproved') {
-        return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
-    }
-
-    // --- Pending Review Statuses ---
-    if (req.status.startsWith('Pending_')) {
-      return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status.replace(/_/g, ' ')}</Badge>;
+    } else { // Single Vendor Award Strategy Logic
+        if (req.status === 'Closed' || req.status === 'Fulfilled') {
+            return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
+        }
+        if (req.status === 'PO_Created') {
+            return <Badge variant="default">PO Created</Badge>;
+        }
     }
 
     // --- Pre-Bidding Status ---
@@ -145,10 +145,6 @@ export function RequisitionsForQuotingTable() {
             }
         }
 
-        if (req.status === 'Scoring_Complete') {
-            return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
-        }
-        
         if (req.status === 'Awarded') {
             return <Badge variant="default" className="bg-green-600">Awarded</Badge>;
         }
