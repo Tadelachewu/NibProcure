@@ -340,6 +340,14 @@ export async function promoteStandbyVendor(
         const standbyQuotes = await tx.quotation.findMany({
             where: { requisitionId, status: 'Standby' },
             orderBy: { rank: 'asc' },
+            include: { // *** FIX: Include items and scores in the query ***
+                items: true,
+                scores: {
+                    include: {
+                        itemScores: true
+                    }
+                }
+            }
         });
 
         const nextStandby = standbyQuotes[0];
