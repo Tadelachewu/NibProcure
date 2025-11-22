@@ -1,7 +1,7 @@
 
 'use client';
 
-import { PurchaseRequisition, PurchaseOrder, PerItemAwardDetail } from '@/lib/types';
+import { PurchaseRequisition, PurchaseOrder, PerItemAwardDetail, User } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -16,8 +16,9 @@ import { Badge } from './ui/badge';
 import { format, isPast } from 'date-fns';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { CheckCircle, Circle, Clock, FileText, Send, UserCheck, Users, Trophy } from 'lucide-react';
+import { CheckCircle, Circle, Clock, FileText, Send, UserCheck, Users, Trophy, Calendar, UserCog, LandLandmark } from 'lucide-react';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/auth-context';
 
 interface RequisitionDetailsDialogProps {
   requisition: PurchaseRequisition;
@@ -47,22 +48,28 @@ const TimelineStep = ({ title, status, isLast = false }: { title: string, status
     )
 }
 
+const DetailItem = ({ label, children }: { label: string, children: React.ReactNode }) => (
+    <div>
+        <p className="font-medium text-sm">{label}</p>
+        <div className="text-sm text-muted-foreground">{children}</div>
+    </div>
+);
+
+
 export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: RequisitionDetailsDialogProps) {
+  const { allUsers } = useAuth();
   if (!requisition) return null;
 
   const getTimelineStatus = (step: number) => {
     const stepOrder = ['Draft', 'Pending_Approval', 'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 'Pending_Review', 'PostApproved', 'Awarded', 'PO_Created', 'Fulfilled', 'Closed'];
     
-    // Normalize current status to match stepOrder. 
-    let normalizedStatus = requisition.status;
-    if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
+    let normalizedStatus = requisition.status.replace(/ /g, '_');
+    if (normalizedStatus.startsWith('Pending_') && normalizedStatus !== 'Pending_Approval') {
         normalizedStatus = 'Pending_Review';
     }
-    // Treat 'Award_Declined' as part of the 'Final Award Review' (Pending_Review) step.
-    if (requisition.status === 'Award_Declined') {
+    if (normalizedStatus === 'Award_Declined') {
         normalizedStatus = 'Pending_Review';
     }
-
 
     const currentStatusIndex = stepOrder.findIndex(s => normalizedStatus.startsWith(s));
     
@@ -110,9 +117,11 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                return <Badge variant="destructive">Award Declined</Badge>
            }
       }
-      // For single vendor awards or before the award stage, show the overall requisition status
       return <Badge variant="outline">{requisition.status.replace(/_/g, ' ')}</Badge>;
   }
+  
+  const financialCommittee = allUsers.filter(u => requisition.financialCommitteeMemberIds?.includes(u.id));
+  const technicalCommittee = allUsers.filter(u => requisition.technicalCommitteeMemberIds?.includes(u.id));
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -127,12 +136,32 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_250px] gap-6 py-4">
                     <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            <div><p className="font-medium">Requester</p><p className="text-muted-foreground">{requisition.requesterName}</p></div>
-                            <div><p className="font-medium">Department</p><p className="text-muted-foreground">{requisition.department}</p></div>
-                            <div><p className="font-medium">Created</p><p className="text-muted-foreground">{requisition.createdAt ? format(new Date(requisition.createdAt), 'PP') : 'N/A'}</p></div>
-                            <div><p className="font-medium">Urgency</p><div><Badge variant={requisition.urgency === 'High' || requisition.urgency === 'Critical' ? 'destructive' : 'secondary'}>{requisition.urgency}</Badge></div></div>
+                            <DetailItem label="Requester">{requisition.requesterName}</DetailItem>
+                            <DetailItem label="Department">{requisition.department}</DetailItem>
+                            <DetailItem label="Created">{requisition.createdAt ? format(new Date(requisition.createdAt), 'PP') : 'N/A'}</DetailItem>
+                            <DetailItem label="Urgency"><Badge variant={requisition.urgency === 'High' || requisition.urgency === 'Critical' ? 'destructive' : 'secondary'}>{requisition.urgency}</Badge></DetailItem>
+                            <DetailItem label="Total Value">{requisition.totalPrice.toLocaleString()} ETB</DetailItem>
+                            <DetailItem label="CPO Requirement">{requisition.cpoAmount ? `${requisition.cpoAmount.toLocaleString()} ETB` : 'None'}</DetailItem>
                         </div>
+
+                         <div className="space-y-2">
+                            <h4 className="font-medium text-sm">Business Justification</h4>
+                            <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">{requisition.justification}</p>
+                        </div>
+                        
                         <Separator />
+
+                        <div>
+                            <h4 className="font-medium mb-2">Deadlines</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                <DetailItem label="Quote Submission"><div className="flex items-center gap-1"><Calendar className="h-4 w-4"/>{requisition.deadline ? format(new Date(requisition.deadline), 'PPp') : 'N/A'}</div></DetailItem>
+                                <DetailItem label="Scoring Deadline"><div className="flex items-center gap-1"><Calendar className="h-4 w-4"/>{requisition.scoringDeadline ? format(new Date(requisition.scoringDeadline), 'PPp') : 'N/A'}</div></DetailItem>
+                                <DetailItem label="Vendor Response"><div className="flex items-center gap-1"><Calendar className="h-4 w-4"/>{requisition.awardResponseDeadline ? format(new Date(requisition.awardResponseDeadline), 'PPp') : 'N/A'}</div></DetailItem>
+                            </div>
+                        </div>
+
+                        <Separator />
+
                         <div>
                             <h4 className="font-medium mb-2">Items Requested</h4>
                             <div className="border rounded-md">
@@ -156,6 +185,24 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                                 </Table>
                             </div>
                         </div>
+
+                        {(requisition.committeeName || financialCommittee.length > 0 || technicalCommittee.length > 0) && (
+                            <>
+                                <Separator />
+                                <div>
+                                    <h4 className="font-medium mb-2">Evaluation Committee</h4>
+                                    <div className="p-4 bg-muted/50 rounded-lg space-y-4">
+                                        <DetailItem label="Committee Name">{requisition.committeeName || 'Not Set'}</DetailItem>
+                                        <DetailItem label="Purpose / Mandate">{requisition.committeePurpose || 'Not Set'}</DetailItem>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <DetailItem label="Financial Committee"><div className="flex flex-col gap-1 mt-1">{financialCommittee.map(u => <span key={u.id} className="text-xs flex items-center gap-1.5"><UserCog className="h-3 w-3"/> {u.name}</span>)}</div></DetailItem>
+                                            <DetailItem label="Technical Committee"><div className="flex flex-col gap-1 mt-1">{technicalCommittee.map(u => <span key={u.id} className="text-xs flex items-center gap-1.5"><UserCog className="h-3 w-3"/> {u.name}</span>)}</div></DetailItem>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
                         {isAwarded && (
                             <>
                                 <Separator />
