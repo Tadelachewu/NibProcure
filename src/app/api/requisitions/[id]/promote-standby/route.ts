@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -41,7 +42,31 @@ export async function POST(
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      return await promoteStandbyVendor(tx, requisitionId, user);
+      // The `handleAwardRejection` logic now implicitly handles promotion, so we call that instead.
+      // We find the most recently declined quote to trigger the logic.
+      const lastDeclinedQuote = await tx.quotation.findFirst({
+        where: {
+          requisitionId,
+          status: 'Declined',
+        },
+        orderBy: {
+          updatedAt: 'desc',
+        },
+      });
+
+      if (lastDeclinedQuote) {
+        const requisition = await tx.purchaseRequisition.findUnique({ where: { id: requisitionId }, include: { items: true } });
+        if (!requisition) throw new Error("Requisition not found during promotion.");
+        
+        // Find which items were associated with this declined quote
+        const declinedItemIds = lastDeclinedQuote.items.map(i => i.requisitionItemId);
+
+        // Call the rejection handler, which will now handle the promotion correctly.
+        return await handleAwardRejection(tx, lastDeclinedQuote, requisition, user, declinedItemIds);
+      } else {
+        // As a fallback, if no 'Declined' quote is found (e.g., manual trigger), call promoteStandby directly.
+        return await promoteStandbyVendor(tx, requisitionId, user);
+      }
     }, {
       maxWait: 15000,
       timeout: 30000,
