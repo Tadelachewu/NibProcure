@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -86,13 +86,16 @@ export function RequisitionsForQuotingTable() {
     // --- Award by Best Item Strategy Logic ---
     if (awardStrategy === 'item') {
         const allAwardDetails = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []));
-        const allPossibleAwards = req.items.length; // Each item is an award opportunity
+        const totalItems = req.items.length;
+        
         const acceptedAwards = allAwardDetails.filter(d => d.status === 'Accepted').length;
-        const failedAwards = allAwardDetails.filter(d => d.status === 'Failed_to_Award').length;
+        const failedAwards = req.items.filter(item => {
+            const details = (item.perItemAwardDetails as PerItemAwardDetail[] || []);
+            return details.length > 0 && details.every(d => d.status === 'Failed_to_Award');
+        }).length;
 
-        // Process is complete if all items are either accepted or have failed to be awarded.
-        if (allPossibleAwards > 0 && (acceptedAwards + failedAwards) === allPossibleAwards) {
-             return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
+        if (totalItems > 0 && (acceptedAwards + failedAwards) === totalItems) {
+            return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
         }
 
         const hasAcceptedItem = allAwardDetails.some(d => d.status === 'Accepted');
@@ -103,6 +106,8 @@ export function RequisitionsForQuotingTable() {
     
     // --- Single Vendor Award Strategy Logic ---
     if (awardStrategy === 'all' && req.status === 'PO_Created') {
+        // For single vendor, PO created is a significant milestone, but not final.
+        // It becomes "Process Complete" when the req status is Closed/Fulfilled.
         return <Badge variant="default">PO Created</Badge>;
     }
 
