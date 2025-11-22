@@ -2500,10 +2500,10 @@ export default function QuotationDetailsPage() {
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
     if (!requisition || !requisition.status) return 'rfq';
 
-    const completeStatuses = ['Fulfilled', 'Closed'];
+    const completeStatuses = ['Fulfilled', 'Closed', 'PO_Created'];
     if (completeStatuses.includes(requisition.status)) return 'completed';
 
-    const finalizeStatuses = ['PO_Created'];
+    const finalizeStatuses: string[] = []; // PO_Created now leads to 'completed'
     if (finalizeStatuses.includes(requisition.status) || isAccepted) return 'finalize';
 
     const awardStatuses = ['Awarded', 'PostApproved', 'Award_Declined'];
@@ -3515,6 +3515,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
