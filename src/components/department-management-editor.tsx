@@ -57,25 +57,15 @@ export function DepartmentManagementEditor() {
   const [departmentHeadId, setDepartmentHeadId] = useState<string | null>(null);
   
   const { toast } = useToast();
-  const { user: actor, allUsers, fetchAllUsers } = useAuth();
+  const { user: actor, allUsers, fetchAllUsers, fetchAllDepartments, departments: contextDepartments } = useAuth();
 
-  const fetchDepartments = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/departments');
-      if (!response.ok) throw new Error('Failed to fetch departments');
-      const data = await response.json();
-      setDepartments(data);
-    } catch (error) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not load departments.' });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => {
+    setDepartments(contextDepartments);
+  }, [contextDepartments]);
 
   useEffect(() => {
     fetchAllUsers();
-    fetchDepartments();
+    fetchAllDepartments();
   }, []);
 
   const handleFormSubmit = async () => {
@@ -114,8 +104,9 @@ export function DepartmentManagementEditor() {
         });
         
         setDialogOpen(false);
-        await fetchDepartments();
-        await fetchAllUsers(); // Also refresh users to get updated department links
+        // Correctly refetch users first, THEN departments to link the data
+        await fetchAllUsers(); 
+        await fetchAllDepartments();
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
@@ -141,7 +132,7 @@ export function DepartmentManagementEditor() {
             title: 'Department Deleted',
             description: `The department has been deleted.`,
         });
-        fetchDepartments();
+        await fetchAllDepartments();
     } catch (error) {
          toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
     } finally {
