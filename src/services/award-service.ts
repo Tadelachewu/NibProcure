@@ -247,7 +247,7 @@ export async function promoteStandbyVendor(
 ) {
     const requisition = await tx.purchaseRequisition.findUnique({
         where: { id: requisitionId },
-        include: { items: true, quotations: { include: { items: true } } }
+        include: { items: true, quotations: { include: { items: true, scores: { include: { itemScores: true } } } } }
     });
 
     if (!requisition) {
@@ -360,14 +360,45 @@ export async function promoteStandbyVendor(
             return { message: 'No more standby vendors. Requisition has been reset for a new RFQ process.'};
         }
         
-        // **IMPORTANT FIX**: Use the standby vendor's price for re-approval
-        const newTotalValue = nextStandby.totalPrice;
+        // **IMPORTANT FIX**: Use the champion bids from the standby vendor to calculate the new total value.
+        let newTotalValue = 0;
+        const awardedItemIds: string[] = [];
+        
+        for (const reqItem of requisition.items) {
+            const proposalsForItem = nextStandby.items.filter(i => i.requisitionItemId === reqItem.id);
+            if (proposalsForItem.length === 0) continue;
+            
+            let bestProposal: QuoteItem | null = null;
+            let bestScore = -1;
+            
+            for (const proposal of proposalsForItem) {
+                let totalScore = 0;
+                let scoreCount = 0;
+                nextStandby.scores.forEach(scoreSet => {
+                    const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
+                    if (itemScore) {
+                        totalScore += itemScore.finalScore;
+                        scoreCount++;
+                    }
+                });
+                const avgScore = scoreCount > 0 ? totalScore / scoreCount : 0;
+                if (avgScore > bestScore) {
+                    bestScore = avgScore;
+                    bestProposal = proposal;
+                }
+            }
+            
+            if (bestProposal) {
+                newTotalValue += bestProposal.unitPrice * bestProposal.quantity;
+                awardedItemIds.push(bestProposal.id);
+            }
+        }
         
         const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: newTotalValue }, actor);
         
         await tx.purchaseRequisition.update({
             where: { id: requisitionId },
-            data: { status: nextStatus as any, totalPrice: newTotalValue, currentApproverId: nextApproverId }
+            data: { status: nextStatus as any, totalPrice: newTotalValue, currentApproverId: nextApproverId, awardedQuoteItemIds: awardedItemIds }
         });
         
         await tx.quotation.update({ where: { id: nextStandby.id }, data: { status: 'Pending_Award' } });

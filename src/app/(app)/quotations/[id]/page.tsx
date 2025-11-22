@@ -2498,24 +2498,24 @@ export default function QuotationDetailsPage() {
   }, [user, role, requisition, rolePermissions]);
   
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
-    if (!requisition || !requisition.status) return 'rfq';
-    
-    const status = requisition.status.replace(/_/g, ' ');
+      if (!requisition || !requisition.status) return 'rfq';
+      const status = requisition.status.replace(/_/g, ' ');
+      const completeStatuses = ['PO Created', 'Fulfilled', 'Closed'];
 
-    const completeStatuses = ['Fulfilled', 'Closed', 'PO Created'];
-    if (completeStatuses.includes(status)) return 'completed';
+      if (completeStatuses.includes(status)) return 'completed';
+      if (isAccepted) return 'finalize';
 
-    const awardStatuses = ['Awarded', 'PostApproved', 'Award Declined'];
-    if (awardStatuses.includes(status) || status.startsWith('Pending ')) return 'award';
+      const awardStatuses = ['Awarded', 'PostApproved', 'Award Declined'];
+      if (awardStatuses.includes(status) || status.startsWith('Pending ')) return 'award';
 
-    if (isAccepted) return 'finalize';
-    
-    const committeeStatuses = ['Scoring In Progress', 'Scoring Complete'];
-    if (committeeStatuses.includes(status)) return 'committee';
-    
-    if (status === 'Accepting Quotes' && isDeadlinePassed) return 'committee';
-    
-    return 'rfq';
+      if (requisition.status === 'Scoring_Complete') return 'award';
+
+      const committeeStatuses = ['Scoring In Progress'];
+      if (committeeStatuses.includes(status)) return 'committee';
+
+      if (status === 'Accepting Quotes' && isDeadlinePassed) return 'committee';
+
+      return 'rfq';
   }, [requisition, isAccepted, isDeadlinePassed]);
   
   const { pendingQuotes, scoredQuotes } = useMemo(() => {
@@ -3516,6 +3516,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
