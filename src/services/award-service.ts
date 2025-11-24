@@ -268,7 +268,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
     console.log(`[promoteStandby] Starting promotion for Req ID: ${requisitionId}`);
     const requisition = await tx.purchaseRequisition.findUnique({
         where: { id: requisitionId },
-        include: { items: true, quotations: { include: { scores: { include: { itemScores: true } }, items: true } } }
+        include: { items: true, quotations: { include: { items: true, scores: { include: { itemScores: { include: { scores: true } } } } } } }
     });
 
     if (!requisition) {
@@ -376,6 +376,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         console.log(`[promoteStandby] Handling single vendor promotion.`);
         const standbyQuotes = await tx.quotation.findMany({
             where: { requisitionId, status: 'Standby' },
+            include: { items: true, scores: { include: { itemScores: true } } }, // **FIX:** Include items for calculation
             orderBy: { rank: 'asc' },
         });
 
@@ -385,9 +386,8 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             throw new Error('No standby vendor found to promote.');
         }
 
-        const standbyQuoteDetails = requisition.quotations.find(q => q.id === nextStandby.id);
-        if(!standbyQuoteDetails) throw new Error("Could not find full quote details for standby vendor.");
-
+        const standbyQuoteDetails = nextStandby; // We already have the details
+        
         let newTotalValue = 0;
         const newAwardedItemIds: string[] = [];
 
