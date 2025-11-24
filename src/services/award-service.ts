@@ -3,7 +3,7 @@
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
-import { User, UserRole, PerItemAwardDetail, QuoteItem } from '@/lib/types';
+import { User, UserRole, PerItemAwardDetail, QuoteItem, PurchaseRequisition } from '@/lib/types';
 
 /**
  * Finds the correct next approval step for a given requisition based on its current status and value.
@@ -376,7 +376,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         console.log(`[promoteStandby] Handling single vendor promotion.`);
         const standbyQuotes = await tx.quotation.findMany({
             where: { requisitionId, status: 'Standby' },
-            include: { items: true, scores: { include: { itemScores: true } } }, // **FIX:** Include items for calculation
+            include: { items: true, scores: { include: { itemScores: true } } },
             orderBy: { rank: 'asc' },
         });
 
@@ -386,7 +386,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             throw new Error('No standby vendor found to promote.');
         }
 
-        const standbyQuoteDetails = nextStandby; // We already have the details
+        const standbyQuoteDetails = nextStandby; 
         
         let newTotalValue = 0;
         const newAwardedItemIds: string[] = [];
