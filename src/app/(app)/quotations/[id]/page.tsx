@@ -1434,12 +1434,12 @@ const scoreFormSchema = z.object({
       financialScores: z.array(z.object({
           criterionId: z.string(),
           score: z.coerce.number().min(0).max(100),
-          comment: z.string().optional(),
+          comment: z.string().min(1, "A comment is required for this criterion."),
       })),
       technicalScores: z.array(z.object({
           criterionId: z.string(),
           score: z.coerce.number().min(0).max(100),
-          comment: z.string().optional(),
+          comment: z.string().min(1, "A comment is required for this criterion."),
       })),
   }))
 });
@@ -1524,7 +1524,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormControl>
-                                                <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScore} />
+                                                <Textarea placeholder="A comment for this criterion is required..." {...field} rows={2} disabled={!!existingScore} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -1570,7 +1570,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormControl>
-                                                <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScore} />
+                                                <Textarea placeholder="A comment for this criterion is required..." {...field} rows={2} disabled={!!existingScore} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -3516,6 +3516,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
