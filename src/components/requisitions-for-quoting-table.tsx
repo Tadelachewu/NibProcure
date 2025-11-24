@@ -85,16 +85,19 @@ export function RequisitionsForQuotingTable() {
     
     // --- Award by Best Item Strategy Logic ---
     if (awardStrategy === 'item') {
-        const allAwardDetails = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []));
-        const allPossibleAwards = req.items.length; // Each item is an award opportunity
-        const acceptedAwards = allAwardDetails.filter(d => d.status === 'Accepted').length;
-        const failedAwards = allAwardDetails.filter(d => d.status === 'Failed_to_Award').length;
+        const totalItems = req.items.length;
+        if (totalItems > 0) {
+            const finalStateItems = req.items.filter(item => {
+                const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                return details.some(d => d.status === 'Accepted' || d.status === 'Failed_to_Award');
+            }).length;
 
-        // Process is complete if all items are either accepted or have failed to be awarded.
-        if (allPossibleAwards > 0 && (acceptedAwards + failedAwards) === allPossibleAwards) {
-             return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
+            if (finalStateItems === totalItems) {
+                return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
+            }
         }
-
+        
+        const allAwardDetails = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []));
         const hasAcceptedItem = allAwardDetails.some(d => d.status === 'Accepted');
         if (hasAcceptedItem) {
              return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
@@ -141,7 +144,7 @@ export function RequisitionsForQuotingTable() {
         }
 
         if (req.status === 'Scoring_Complete') {
-            return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
+            return <Badge variant="default" className="bg-green-600 animate-pulse">Ready to Award</Badge>;
         }
         
         if (req.status === 'Awarded') {
