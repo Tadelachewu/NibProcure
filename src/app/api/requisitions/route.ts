@@ -71,13 +71,10 @@ export async function GET(request: Request) {
         
         // Corrected logic for vendors
         whereClause.OR = [
-            // Case 1: Requisitions open for quoting that this vendor hasn't quoted on yet.
+            // Case 1: Requisitions open for quoting.
             // This includes RFQs sent to 'all' (isEmpty: true) or specifically to this vendor.
             {
                 status: 'Accepting_Quotes',
-                quotations: {
-                    none: { vendorId: userPayload.vendorId }
-                },
                 OR: [
                     { allowedVendorIds: { isEmpty: true } },
                     { allowedVendorIds: { has: userPayload.vendorId } }
@@ -90,11 +87,8 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-         const allPossiblePendingStatuses: Prisma.RequisitionStatus[] = [
-            'Pending_Approval', 'Pending_Committee_B_Review', 'Pending_Committee_A_Recommendation',
-            'Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval',
-            'Pending_President_Approval'
-        ];
+        const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
+        const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`) as Prisma.RequisitionStatus[];
         
         if (userPayload?.roles.some(r => r.name === 'Committee_Member')) {
             whereClause.OR = [
@@ -597,3 +591,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    

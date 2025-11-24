@@ -188,8 +188,8 @@ export default function VendorDashboardPage() {
             } 
             // Otherwise, if it's open for quoting, it's an "open" one.
             else if (req.status === 'Accepting_Quotes') {
-                const isForAllWindows = req.allowedVendorIds.length === 0;
-                const isInvited = req.allowedVendorIds.includes(user.vendorId!);
+                const isForAllWindows = !req.allowedVendorIds || req.allowedVendorIds.length === 0;
+                const isInvited = req.allowedVendorIds?.includes(user.vendorId!);
                 if (isForAllWindows || isInvited) {
                     open.push(req);
                 }
@@ -385,3 +385,5 @@ export default function VendorDashboardPage() {
         </div>
     )
 }
+
+    
