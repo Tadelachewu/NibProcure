@@ -3382,11 +3382,12 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
         setIsSubmitting(true);
         try {
-            const response = await fetch(`/api/requisitions/${requisition.id}/restart-item-rfq`, {
+            const response = await fetch(`/api/requisitions/restart-item-rfq`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    userId: user.id,
+                    actorUserId: user.id,
+                    originalRequisitionId: requisition.id,
                     itemIds: selectedItems,
                     vendorIds: selectedVendors,
                     newDeadline: deadline,
@@ -3515,6 +3516,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 

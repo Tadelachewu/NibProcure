@@ -2,7 +2,7 @@
 'use server';
 
 import { NextResponse } from 'next/server';
-import { Prisma, PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format } from 'date-fns';
@@ -10,20 +10,19 @@ import { format } from 'date-fns';
 const prisma = new PrismaClient();
 
 export async function POST(
-  request: Request
+  request: Request,
 ) {
   try {
     const body = await request.json();
     const { originalRequisitionId, itemIds, vendorIds, newDeadline, actorUserId } = body;
 
-    const actor = await prisma.user.findUnique({ where: { id: actorUserId }, include: { roles: true } });
+    const actor: User | null = await prisma.user.findUnique({ where: { id: actorUserId }});
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
     
-    // --- Authorization Check ---
-    const userRoles = actor.roles.map(r => r.name);
-    const isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+    // --- Authorization Check (simplified for brevity) ---
+    const isAuthorized = (actor.roles as any[])?.some(r => r.name === 'Procurement_Officer' || r.name === 'Admin');
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
     }
@@ -65,13 +64,7 @@ export async function POST(
                         unitPrice: item.unitPrice,
                     }))
                 }
-            },
-        });
-        
-        // Update the new requisition to have its own transactionId
-        await tx.purchaseRequisition.update({
-            where: { id: newReq.id },
-            data: { transactionId: newReq.id }
+            }
         });
 
         await tx.auditLog.create({
@@ -87,7 +80,7 @@ export async function POST(
 
         await tx.auditLog.create({
             data: {
-                transactionId: newReq.id, // Use the new transaction ID
+                transactionId: newReq.transactionId,
                 user: { connect: { id: actor.id } },
                 action: 'CREATE_REQUISITION',
                 entity: 'Requisition',
