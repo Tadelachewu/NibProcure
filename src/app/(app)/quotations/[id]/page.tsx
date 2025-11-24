@@ -3351,54 +3351,46 @@ const QuoteDetailsDialog = ({ quote, requisition, isOpen, onClose }: { quote: Qu
     );
 };
 
-const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisition: PurchaseRequisition; vendors: Vendor[]; onRfqRestarted: () => void; }) => {
+const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisition: PurchaseRequisition; vendors: Vendor[], onRfqRestarted: () => void; }) => {
     const { user } = useAuth();
     const { toast } = useToast();
+    const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
-    const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
-    const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
-    const [deadlineTime, setDeadlineTime] = useState('17:00');
-
+    
     const failedItems = useMemo(() => 
         requisition.items.filter(item => 
             (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award')
         ), [requisition.items]);
 
-    const deadline = useMemo(() => {
-        if (!deadlineDate || !deadlineTime) return undefined;
-        const [hours, minutes] = deadlineTime.split(':').map(Number);
-        return setMinutes(setHours(deadlineDate, hours), minutes);
-    }, [deadlineDate, deadlineTime]);
-    
     const canRestart = (requisition.rfqSettings as any)?.awardStrategy === 'item' && failedItems.length > 0;
 
     const handleRestart = async () => {
-        if (!user || !deadline || selectedItems.length === 0 || selectedVendors.length === 0) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Please select items, vendors, and a new deadline.' });
+        if (!user || selectedItems.length === 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please select at least one item to re-tender.' });
             return;
         }
 
         setIsSubmitting(true);
         try {
-            const response = await fetch(`/api/requisitions/${requisition.id}/restart-item-rfq`, {
+            const response = await fetch(`/api/requisitions/restart-from-failed`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     userId: user.id,
+                    originalRequisitionId: requisition.id,
                     itemIds: selectedItems,
-                    vendorIds: selectedVendors,
-                    newDeadline: deadline,
                 }),
             });
+            const result = await response.json();
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to restart RFQ for items.');
+                throw new Error(result.error || 'Failed to create new requisition for failed items.');
             }
-            toast({ title: 'RFQ Restarted', description: 'The RFQ for the selected items has been sent to new vendors.' });
+            toast({ title: 'New Requisition Created', description: `Requisition ${result.requisition.id} has been created for the failed items.` });
             onRfqRestarted();
             setIsOpen(false);
+            router.push(`/quotations/${result.requisition.id}`); // Navigate to the new requisition
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
@@ -3419,12 +3411,12 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Restart RFQ for Failed Items</DialogTitle>
-                    <DialogDescription>Select items and new vendors to send a Request for Quotation for the items that failed to be awarded.</DialogDescription>
+                    <DialogDescription>A new requisition will be created for the selected items that failed to be awarded. This new requisition will go through the standard RFQ process.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div>
                         <Label>Items to Re-tender</Label>
-                        <ScrollArea className="h-32 border rounded-md p-2 mt-2">
+                        <ScrollArea className="h-48 border rounded-md p-2 mt-2">
                             {failedItems.map(item => (
                                 <div key={item.id} className="flex items-center space-x-2 p-1">
                                     <Checkbox 
@@ -3439,46 +3431,12 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
                             ))}
                         </ScrollArea>
                     </div>
-                     <div className="space-y-2">
-                        <Label>New Quotation Submission Deadline</Label>
-                        <div className="flex gap-2">
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal",!deadlineDate && "text-muted-foreground")}>
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {deadlineDate ? format(deadlineDate, "PPP") : <span>Pick a new date</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar mode="single" selected={deadlineDate} onSelect={setDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
-                                </PopoverContent>
-                            </Popover>
-                            <Input type="time" className="w-32" value={deadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
-                        </div>
-                    </div>
-                    <div>
-                        <Label>Select Vendors</Label>
-                        <ScrollArea className="h-48 border rounded-md p-2 mt-2">
-                            {vendors.filter(v => v.kycStatus === 'Verified').map(vendor => (
-                                <div key={vendor.id} className="flex items-center space-x-2 p-1">
-                                    <Checkbox 
-                                        id={`vendor-restart-${vendor.id}`} 
-                                        checked={selectedVendors.includes(vendor.id)}
-                                        onCheckedChange={(checked) => {
-                                            setSelectedVendors(prev => checked ? [...prev, vendor.id] : prev.filter(id => id !== vendor.id));
-                                        }}
-                                    />
-                                    <Label htmlFor={`vendor-restart-${vendor.id}`} className="font-normal">{vendor.name}</Label>
-                                </div>
-                            ))}
-                        </ScrollArea>
-                    </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                    <Button onClick={handleRestart} disabled={isSubmitting || selectedItems.length === 0 || selectedVendors.length === 0 || !deadline}>
+                    <Button onClick={handleRestart} disabled={isSubmitting || selectedItems.length === 0}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2"/>}
-                        Send New RFQ
+                        Create New Requisition
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -3515,6 +3473,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
