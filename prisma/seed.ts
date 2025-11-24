@@ -282,12 +282,6 @@ async function main() {
       },
     });
 
-    // Now, update the user with the vendorId
-    await prisma.user.update({
-        where: { id: createdUser.id },
-        data: { vendorId: createdVendor.id }
-    });
-
     if (kycDocuments) {
         for (const doc of kycDocuments) {
             await prisma.kYC_Document.create({
@@ -545,9 +539,7 @@ async function main() {
       },
     });
   }
-  console.log('Seeded audit logs.');
-
-  console.log(`Seeding finished.`);
+  console.log('Seeding finished.');
 }
 
 main()
@@ -559,3 +551,4 @@ main()
     await prisma.$disconnect();
   });
 
+    
