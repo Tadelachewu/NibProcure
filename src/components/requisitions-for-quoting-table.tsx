@@ -85,17 +85,21 @@ export function RequisitionsForQuotingTable() {
     
     // --- Award by Best Item Strategy Logic ---
     if (awardStrategy === 'item') {
-        const allAwardDetails = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []));
-        const allPossibleAwards = req.items.length; // Each item is an award opportunity
-        const acceptedAwards = allAwardDetails.filter(d => d.status === 'Accepted').length;
-        const failedAwards = allAwardDetails.filter(d => d.status === 'Failed_to_Award').length;
+        const itemsWithAwards = req.items.filter(item => 
+            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.length ?? 0 > 0
+        );
+        const awardedItemCount = itemsWithAwards.length;
+        const acceptedItemCount = itemsWithAwards.filter(item => 
+            (item.perItemAwardDetails as PerItemAwardDetail[]).some(d => d.status === 'Accepted')
+        ).length;
 
-        // Process is complete if all items are either accepted or have failed to be awarded.
-        if (allPossibleAwards > 0 && (acceptedAwards + failedAwards) === allPossibleAwards) {
+        if (awardedItemCount > 0 && awardedItemCount === acceptedItemCount) {
              return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
         }
 
-        const hasAcceptedItem = allAwardDetails.some(d => d.status === 'Accepted');
+        const hasAcceptedItem = itemsWithAwards.some(item => 
+            (item.perItemAwardDetails as PerItemAwardDetail[]).some(d => d.status === 'Accepted')
+        );
         if (hasAcceptedItem) {
              return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
         }
