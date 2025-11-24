@@ -176,24 +176,16 @@ export default function VendorDashboardPage() {
     const { activeRequisitions, openForQuoting } = useMemo(() => {
         const active: PurchaseRequisition[] = [];
         const open: PurchaseRequisition[] = [];
+        if (!user?.vendorId) return { activeRequisitions: [], openForQuoting: [] };
 
         allRequisitions.forEach(req => {
-            const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
+            const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
+            const isRelated = !!vendorQuote;
             
-            // Check if any item in this requisition is specifically re-opened for this vendor
-            const hasReopenedItemForVendor = req.items.some(item => 
-                item.reopenDeadline && isPast(new Date(item.reopenDeadline)) === false &&
-                item.reopenVendorIds?.includes(user?.vendorId || '')
-            );
-
-            // A requisition is active if the vendor submitted a quote for it, OR if they won an award
-            const isRelated = vendorQuote || 
-                              req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
-
             if (isRelated) {
                 active.push(req);
-            } else if (hasReopenedItemForVendor || req.status === 'Accepting_Quotes') {
-                // It's open if it's generally accepting quotes, OR has a specific re-opened item for this vendor
+            } else if (req.status === 'Accepting_Quotes' && (req.allowedVendorIds?.length === 0 || req.allowedVendorIds?.includes(user.vendorId!))) {
+                // If allowedVendorIds is empty, it's open to all.
                 open.push(req);
             }
         });

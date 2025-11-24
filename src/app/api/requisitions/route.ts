@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -68,58 +69,16 @@ export async function GET(request: Request) {
         if (!userPayload || !userPayload.vendorId) {
              return NextResponse.json({ error: 'Unauthorized: No valid vendor found for this user.' }, { status: 403 });
         }
-        
+        // Simplified logic: Fetch all requisitions that are either accepting quotes OR are related to the vendor.
+        // The frontend will handle the separation into "Open for Quoting" and "Active".
         whereClause.OR = [
-            {
-                AND: [
-                    { status: 'Accepting_Quotes' }, 
-                    { deadline: { not: null } },
-                    { deadline: { gt: new Date() } },
-                    {
-                        OR: [
-                        { allowedVendorIds: { isEmpty: true } },
-                        { allowedVendorIds: { has: userPayload.vendorId } },
-                        ],
-                    },
-                    {
-                        NOT: {
-                        quotations: {
-                            some: {
-                            vendorId: userPayload.vendorId,
-                            },
-                        },
-                        },
-                    },
-                ]
-            },
-            {
-                quotations: {
-                    some: {
-                        vendorId: userPayload.vendorId,
-                    }
-                }
-            },
-            {
-                items: {
-                  some: {
-                    perItemAwardDetails: {
-                      array_contains: [{vendorId: userPayload.vendorId}],
-                    },
-                  },
-                },
-            }
+            { status: 'Accepting_Quotes' },
+            { quotations: { some: { vendorId: userPayload.vendorId } } },
+            { items: { some: { perItemAwardDetails: { array_contains: [{vendorId: userPayload.vendorId}],} } } },
         ];
 
     } else if (forQuoting) {
-        const allPossiblePendingStatuses: Prisma.RequisitionStatus[] = [
-          'Pending_Approval',
-          'Pending_Committee_B_Review',
-          'Pending_Committee_A_Recommendation',
-          'Pending_Managerial_Approval',
-          'Pending_Director_Approval',
-          'Pending_VP_Approval',
-          'Pending_President_Approval',
-        ];
+        const allPossiblePendingStatuses: Prisma.RequisitionStatus[] = Object.values(Prisma.RequisitionStatus).filter(s => s.startsWith('Pending_'));
         
         if (userPayload?.roles.some(r => r.name === 'Committee_Member')) {
             whereClause.OR = [
