@@ -208,7 +208,8 @@ export async function handleAwardRejection(
                 } 
             });
             console.log(`[handleAwardRejection] Requisition ${requisition.id} status set to Award_Declined.`);
-            return { message: 'Per-item award has been declined. A standby vendor can now be manually promoted.' };
+            // After declining, immediately try to promote standby vendors.
+            return await promoteStandbyVendor(tx, requisition.id, actor);
         }
         
         throw new Error("No awarded items found for this vendor to decline.");
@@ -227,31 +228,13 @@ export async function handleAwardRejection(
                 transactionId: requisition.transactionId 
             } 
         });
-
-        const hasStandby = await tx.quotation.count({
-            where: { requisitionId: requisition.id, status: 'Standby' }
+        
+        await tx.purchaseRequisition.update({
+            where: { id: requisition.id },
+            data: { status: 'Award_Declined' }
         });
-
-        if (hasStandby > 0) {
-            await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'Award_Declined' }
-            });
-            return { message: 'Award declined. A standby vendor is available for promotion.' };
-        } else {
-             await tx.auditLog.create({ 
-                data: { 
-                    timestamp: new Date(), 
-                    action: 'AUTO_RESET_RFQ', 
-                    entity: 'Requisition', 
-                    entityId: requisition.id, 
-                    details: 'Award was declined and no standby vendors were available. The RFQ process has been automatically reset.', 
-                    transactionId: requisition.transactionId 
-                } 
-            });
-            await deepCleanRequisition(tx, requisition.id);
-            return { message: 'Award declined. No standby vendors available. Requisition has been automatically reset for a new RFQ process.' };
-        }
+        
+        return { message: 'Award declined. You may now manually promote a standby vendor.' };
     }
 }
 
@@ -268,7 +251,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
     console.log(`[promoteStandby] Starting promotion for Req ID: ${requisitionId}`);
     const requisition = await tx.purchaseRequisition.findUnique({
         where: { id: requisitionId },
-        include: { items: true, quotations: { include: { items: true, scores: { include: { itemScores: { include: { scores: true } } } } } } }
+        include: { items: true, quotations: { include: { items: true, scores: { include: { itemScores: true } } } } }
     });
 
     if (!requisition) {
@@ -376,7 +359,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         console.log(`[promoteStandby] Handling single vendor promotion.`);
         const standbyQuotes = await tx.quotation.findMany({
             where: { requisitionId, status: 'Standby' },
-            include: { items: true, scores: { include: { itemScores: true } } },
+            include: { items: true, scores: { include: { itemScores: { include: { scores: true } } } } },
             orderBy: { rank: 'asc' },
         });
 
