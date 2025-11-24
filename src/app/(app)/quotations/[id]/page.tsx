@@ -1428,7 +1428,7 @@ const WorkflowStepper = ({ step }: { step: 'rfq' | 'committee' | 'award' | 'fina
 };
 
 const scoreFormSchema = z.object({
-  committeeComment: z.string().optional(),
+  committeeComment: z.string().min(1, "An overall comment is required."),
   itemScores: z.array(z.object({
       quoteItemId: z.string(),
       financialScores: z.array(z.object({
@@ -3516,6 +3516,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
