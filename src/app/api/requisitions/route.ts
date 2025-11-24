@@ -10,6 +10,7 @@ import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { isPast } from 'date-fns';
 import { getNextApprovalStep } from '@/services/award-service';
+import { Prisma } from '@prisma/client';
 
 
 export async function GET(request: Request) {
@@ -49,8 +50,8 @@ export async function GET(request: Request) {
 
         // Admins and Procurement Officers can see all reviews for better oversight
         if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-             const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
-             const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
+             const allRequisitionStatuses = Object.values(Prisma.RequisitionStatus);
+             const allPossiblePendingStatuses = allRequisitionStatuses.filter(s => s.startsWith('Pending_'));
              orConditions.push({ status: { in: allPossiblePendingStatuses } });
              orConditions.push({ status: 'PostApproved' });
         }
@@ -104,7 +105,9 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        const allPossiblePendingStatuses = (await prisma.role.findMany({ select: { name: true }})).map(r => `Pending_${r.name}`);
+        const allRequisitionStatuses = Object.values(Prisma.RequisitionStatus);
+        const allPossiblePendingStatuses = allRequisitionStatuses.filter(s => s.startsWith('Pending_'));
+        
         if (userPayload?.roles.some(r => r.name === 'Committee_Member')) {
             whereClause.OR = [
                 { financialCommitteeMembers: { some: { id: userPayload.id } } },
