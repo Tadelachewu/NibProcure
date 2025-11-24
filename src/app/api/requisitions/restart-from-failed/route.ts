@@ -102,14 +102,6 @@ export async function POST(request: Request) {
                 details: `Failed items were moved to a new requisition for re-tendering: ${finalReq.id}.`,
             }
         });
-
-        // Mark the old items as handled by setting a special status or clearing award details
-        await tx.requisitionItem.updateMany({
-            where: { id: { in: itemIds } },
-            data: {
-                perItemAwardDetails: Prisma.JsonNull,
-            }
-        });
         
         return finalReq;
     });
