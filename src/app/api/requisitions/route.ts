@@ -205,7 +205,7 @@ export async function GET(request: Request) {
         if (!logsByTransaction.has(log.transactionId)) {
           logsByTransaction.set(log.transactionId, []);
         }
-        const userRoles = log.user?.roles.map(r => (r as any).name).join(', ') || 'System';
+        const userRoles = (log.user?.roles as any[])?.map(r => r.name).join(', ') || 'System';
         logsByTransaction.get(log.transactionId)!.push({
           ...log,
           user: log.user?.name || 'System',
