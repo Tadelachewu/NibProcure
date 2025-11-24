@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -75,14 +76,22 @@ export function RequisitionsForQuotingTable() {
  const getStatusBadge = (req: PurchaseRequisition) => {
     const quoteCount = req.quotations?.length || 0;
     const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
-    const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
     const awardStrategy = (req.rfqSettings as any)?.awardStrategy;
 
-    // --- Terminal Statuses (Highest Priority) ---
+    // --- Final statuses first ---
     if (req.status === 'Closed' || req.status === 'Fulfilled') {
         return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
     }
     if (req.status === 'PO_Created') {
+        if (awardStrategy === 'item') {
+            const allItemsFinalized = req.items.every(item => {
+                const awards = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                return awards.length === 0 || awards.every(d => d.status === 'Accepted' || d.status === 'Failed_to_Award');
+            });
+            if (allItemsFinalized) {
+                return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
+            }
+        }
         return <Badge variant="default">PO Created</Badge>;
     }
 
@@ -97,28 +106,24 @@ export function RequisitionsForQuotingTable() {
         return <Badge variant="default" className="bg-green-600 animate-pulse">Ready to Award</Badge>;
     }
     
-    // --- Check for Accepted Quotes (covers both strategies) ---
+    // --- Intermediate Statuses ---
     const hasAcceptedQuote = req.quotations?.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded');
     if (hasAcceptedQuote) {
         return <Badge variant="default" className="bg-blue-600">Award Accepted</Badge>;
     }
 
-    // --- Pending Review Statuses ---
     if (req.status.startsWith('Pending_')) {
       return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status.replace(/_/g, ' ')}</Badge>;
     }
 
-    // --- Pre-Bidding Status ---
     if (req.status === 'PreApproved') {
         return <Badge variant="default" className="bg-blue-500 text-white">Ready for RFQ</Badge>;
     }
     
-    // --- Active Bidding ---
     if (req.status === 'Accepting_Quotes' && !deadlinePassed) {
         return <Badge variant="outline">Accepting Quotes ({quoteCount} submitted)</Badge>;
     }
     
-    // --- Post-Bidding Deadline Logic ---
     if (deadlinePassed) {
         if (req.status === 'Accepting_Quotes') {
              if (quoteCount === 0) {
@@ -137,20 +142,10 @@ export function RequisitionsForQuotingTable() {
         if (!hasCommittee) {
              return <Badge variant="destructive">Ready for Committee Assignment</Badge>;
         }
-
-        if (scoringDeadlinePassed) {
-             const allHaveScored = (req.financialCommitteeMemberIds || []).length > 0 && 
-                                  [...(req.financialCommitteeMemberIds || []), ...(req.technicalCommitteeMemberIds || [])]
-                                  .every(id => req.committeeAssignments?.some(a => a.userId === id && a.scoresSubmitted));
-            if (!allHaveScored) {
-                 return <Badge variant="destructive" className="animate-pulse">Scoring Overdue</Badge>;
-            }
-        }
         
         return <Badge variant="secondary">Scoring in Progress</Badge>;
     }
     
-    // Default fallback badge
     return <Badge variant="outline">{req.status.replace(/_/g, ' ')}</Badge>;
   }
 

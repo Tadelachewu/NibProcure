@@ -134,28 +134,24 @@ export async function POST(
             });
             console.log(`[RESPOND-AWARD] Created new Purchase Order: ${newPO.id}`);
 
-            // **CORRECTED LOGIC**: Check if ALL possible awards for this requisition have been actioned (accepted or failed).
-            const updatedReqForStatusCheck = await tx.purchaseRequisition.findUnique({
+            // **MODIFIED LOGIC**: Check if ALL possible awards for this requisition have been actioned (accepted or declined/failed).
+            const updatedRequisitionAfterPO = await tx.purchaseRequisition.findUnique({
                 where: { id: requisition.id },
                 include: { items: true, quotations: true }
             });
-            if (!updatedReqForStatusCheck) throw new Error("Could not refetch requisition to check completion status.");
+            if (!updatedRequisitionAfterPO) throw new Error("Could not refetch requisition to check completion status.");
+
 
             let allAwardsFinalized = false;
             if (isPerItemAward) {
-                // Every item must either be accepted OR failed. No other states should exist.
-                allAwardsFinalized = updatedReqForStatusCheck.items.every(item => {
+                allAwardsFinalized = updatedRequisitionAfterPO.items.every(item => {
                     const awards = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-                    if (awards.length === 0) return true; // No awards for this item means it's finalized (in a sense)
-                    // At least one must be Accepted or Failed, and NONE can be Awarded or Standby or Declined
-                    return awards.some(d => d.status === 'Accepted' || d.status === 'Failed_to_Award') &&
-                           !awards.some(d => ['Awarded', 'Standby', 'Declined', 'Pending_Award'].includes(d.status));
+                    // An item is finalized if it has no awards, or if none of its awards are in a pending (Awarded, Standby) state.
+                    return awards.length === 0 || !awards.some(d => ['Awarded', 'Standby'].includes(d.status));
                 });
             } else {
-                // For single vendor, all quotes must be in a final state.
-                allAwardsFinalized = !updatedReqForStatusCheck.quotations.some(q => ['Awarded', 'Standby', 'Pending_Award'].includes(q.status));
+                 allAwardsFinalized = !updatedRequisitionAfterPO.quotations.some(q => ['Awarded', 'Standby', 'Pending_Award'].includes(q.status));
             }
-
 
             if (allAwardsFinalized) {
                  console.log(`[RESPOND-AWARD] All awards for Req ${requisition.id} have been actioned. Updating status to PO_Created.`);
@@ -213,5 +209,3 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    

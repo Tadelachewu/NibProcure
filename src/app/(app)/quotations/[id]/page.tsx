@@ -916,7 +916,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -2835,7 +2835,7 @@ export default function QuotationDetailsPage() {
   
   const canRestart = (requisition.rfqSettings as any)?.awardStrategy === 'item' && 
                    requisition.items.some(item => 
-                        (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award')
+                        (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award' || d.status === 'Declined')
                    );
 
   return (
@@ -3098,11 +3098,13 @@ export default function QuotationDetailsPage() {
                 </Dialog>
               </>
             )}
-             <RestartRfqDialog 
-                requisition={requisition} 
-                vendors={vendors} 
-                onRfqRestarted={fetchRequisitionAndQuotes}
-             />
+             {canRestart && (
+                <RestartRfqDialog 
+                    requisition={requisition} 
+                    vendors={vendors} 
+                    onRfqRestarted={fetchRequisitionAndQuotes}
+                />
+             )}
           </CardFooter>
         </Card>
       )}
@@ -3367,7 +3369,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
     const failedItems = useMemo(() => 
         requisition.items.filter(item => 
-            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award')
+            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award' || d.status === 'Declined')
         ), [requisition.items]);
 
     const deadline = useMemo(() => {
