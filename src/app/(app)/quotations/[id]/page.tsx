@@ -2431,7 +2431,6 @@ export default function QuotationDetailsPage() {
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
-  const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
   const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
 
@@ -3515,6 +3514,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
