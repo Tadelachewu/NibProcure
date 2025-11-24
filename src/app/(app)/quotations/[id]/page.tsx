@@ -937,7 +937,7 @@ const RFQActionDialog = ({
         } catch (error) {
             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
             onClose();
         }
     };
@@ -1934,7 +1934,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             const imgWidth = canvas.width;
             const imgHeight = canvas.height;
             const ratio = imgWidth / imgHeight;
-            let width = pdfWidth - 20;
+            let width = pdfWidth - 20; // with margin
             let height = width / ratio;
 
             if (height > pdfHeight - 20) {
@@ -2833,6 +2833,11 @@ export default function QuotationDetailsPage() {
   
   const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
   
+  const canRestart = (requisition.rfqSettings as any)?.awardStrategy === 'item' && 
+                   requisition.items.some(item => 
+                        (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award')
+                   );
+
   return (
     <div className="space-y-6">
        <div className="flex items-center justify-between">
@@ -3527,3 +3532,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
 
+
+
+    
