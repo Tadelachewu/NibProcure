@@ -204,11 +204,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const combinedPermissions = useMemo(() => {
     if (!user || !user.roles || loading) return {};
 
-    const userRoleNames = user.roles as UserRole[];
+    const userRoleNames = user.roles.map(r => typeof r === 'string' ? r : r.name) as UserRole[];
     const permissionsSet = new Set<string>();
 
     userRoleNames.forEach(roleName => {
-        const permissionsForRole = rolePermissions[roleName as UserRole] || [];
+        const permissionsForRole = rolePermissions[roleName] || [];
         permissionsForRole.forEach(path => permissionsSet.add(path));
     });
     

@@ -67,7 +67,7 @@ export async function POST(request: Request) {
             const finalUser: Omit<User, 'roles'> & { roles: UserRole[] } = {
                 ...userWithoutPassword,
                 department: user.department?.name,
-                roles: roleNames, // Return a simple array of role names
+                roles: roleNames,
             };
 
             const jwtSecret = process.env.JWT_SECRET;

@@ -182,10 +182,17 @@ export default function VendorDashboardPage() {
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
             
+            // If the vendor has already submitted a quote, it's an "active" requisition for them.
             if (vendorQuote) {
                 active.push(req);
-            } else if (req.status === 'Accepting_Quotes') {
-                open.push(req);
+            } 
+            // Otherwise, if it's open for quoting, it's an "open" one.
+            else if (req.status === 'Accepting_Quotes') {
+                const isForAllWindows = req.allowedVendorIds.length === 0;
+                const isInvited = req.allowedVendorIds.includes(user.vendorId!);
+                if (isForAllWindows || isInvited) {
+                    open.push(req);
+                }
             }
         });
         
@@ -378,5 +385,3 @@ export default function VendorDashboardPage() {
         </div>
     )
 }
-
-    

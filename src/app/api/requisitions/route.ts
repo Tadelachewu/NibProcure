@@ -69,23 +69,28 @@ export async function GET(request: Request) {
              return NextResponse.json({ error: 'Unauthorized: No valid vendor found for this user.' }, { status: 403 });
         }
         
+        // Corrected logic for vendors
         whereClause.OR = [
-            // It's open for quoting AND (it's for all vendors OR this vendor is invited)
+            // Case 1: Requisitions open for quoting that this vendor hasn't quoted on yet.
+            // This includes RFQs sent to 'all' (isEmpty: true) or specifically to this vendor.
             {
                 status: 'Accepting_Quotes',
+                quotations: {
+                    none: { vendorId: userPayload.vendorId }
+                },
                 OR: [
                     { allowedVendorIds: { isEmpty: true } },
                     { allowedVendorIds: { has: userPayload.vendorId } }
                 ]
             },
-            // This vendor is already involved in some way
+            // Case 2: Requisitions this vendor is already involved with (has a quote).
             {
                 quotations: { some: { vendorId: userPayload.vendorId } }
             }
         ];
 
     } else if (forQuoting) {
-        const allPossiblePendingStatuses: Prisma.RequisitionStatus[] = [
+         const allPossiblePendingStatuses: Prisma.RequisitionStatus[] = [
             'Pending_Approval', 'Pending_Committee_B_Review', 'Pending_Committee_A_Recommendation',
             'Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval',
             'Pending_President_Approval'
@@ -592,5 +597,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
