@@ -48,6 +48,10 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: cspHeader.replace(/\s{2,}/g, ' ').trim(),
           },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
+          },
         ],
       },
     ];
