@@ -104,7 +104,25 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        const allPossiblePendingStatuses = (await prisma.role.findMany({ select: { name: true }})).map(r => `Pending_${r.name}`);
+        const validStatuses = [
+            'PreApproved',
+            'PostApproved',
+            'Accepting_Quotes',
+            'Scoring_In_Progress',
+            'Scoring_Complete',
+            'Award_Declined',
+            'Awarded',
+            'PO_Created',
+            'Fulfilled',
+            'Closed',
+            'Pending_Committee_B_Review',
+            'Pending_Committee_A_Recommendation',
+            'Pending_Managerial_Approval',
+            'Pending_Director_Approval',
+            'Pending_VP_Approval',
+            'Pending_President_Approval'
+        ];
+
         if (userPayload?.roles.some(r => r.name === 'Committee_Member')) {
             whereClause.OR = [
                 { financialCommitteeMembers: { some: { id: userPayload.id } } },
@@ -114,36 +132,13 @@ export async function GET(request: Request) {
                 ...(whereClause.AND || []),
                 {
                     status: {
-                        in: [
-                            'Accepting_Quotes',
-                            'Scoring_In_Progress',
-                            'Scoring_Complete',
-                            'Award_Declined',
-                            'Awarded',
-                            'PostApproved',
-                            'PO_Created',
-                            'Closed',
-                            'Fulfilled',
-                            ...allPossiblePendingStatuses
-                        ],
+                        in: validStatuses,
                     },
                 },
             ];
         } else {
              whereClause.status = {
-                in: [
-                    'PreApproved',
-                    'PostApproved',
-                    'Accepting_Quotes',
-                    'Scoring_In_Progress',
-                    'Scoring_Complete',
-                    'Award_Declined',
-                    'Awarded',
-                    'PO_Created',
-                    'Fulfilled',
-                    'Closed',
-                    ...allPossiblePendingStatuses,
-                ]
+                in: validStatuses
             };
         }
     } else {
@@ -230,7 +225,7 @@ export async function GET(request: Request) {
         if (!logsByTransaction.has(log.transactionId)) {
           logsByTransaction.set(log.transactionId, []);
         }
-        const userRoles = log.user?.roles.map(r => (r as any).name).join(', ') || 'System';
+        const userRoles = (log.user?.roles as any[])?.map(r => r.name).join(', ') || 'System';
         logsByTransaction.get(log.transactionId)!.push({
           ...log,
           user: log.user?.name || 'System',
