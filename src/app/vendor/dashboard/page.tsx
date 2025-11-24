@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -162,7 +161,7 @@ export default function VendorDashboardPage() {
         }
         
         // If related but no other status fits, it means they can quote
-        const isRelated = vendorQuote || vendorItemStatuses.length > 0;
+        const isRelated = !!vendorQuote || vendorItemStatuses.length > 0;
         if (!isRelated) {
             return 'Action Required';
         }
@@ -175,18 +174,17 @@ export default function VendorDashboardPage() {
 
 
     const { activeRequisitions, openForQuoting } = useMemo(() => {
+        if (!user?.vendorId || allRequisitions.length === 0) return { activeRequisitions: [], openForQuoting: [] };
+
         const active: PurchaseRequisition[] = [];
         const open: PurchaseRequisition[] = [];
-        if (!user?.vendorId) return { activeRequisitions: [], openForQuoting: [] };
-
+        
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
-            const isRelated = !!vendorQuote;
             
-            if (isRelated) {
+            if (vendorQuote) {
                 active.push(req);
             } else if (req.status === 'Accepting_Quotes') {
-                // If it's open for quoting and the vendor hasn't submitted a quote, it's open.
                 open.push(req);
             }
         });
@@ -380,3 +378,5 @@ export default function VendorDashboardPage() {
         </div>
     )
 }
+
+    

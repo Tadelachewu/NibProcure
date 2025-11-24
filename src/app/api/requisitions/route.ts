@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -71,22 +70,18 @@ export async function GET(request: Request) {
         }
         
         whereClause.OR = [
-            // Requisition is open to all verified vendors AND this vendor hasn't quoted yet
-            { 
-                status: 'Accepting_Quotes', 
-                allowedVendorIds: { isEmpty: true },
-                quotations: { none: { vendorId: userPayload.vendorId } }
+            // It's open for quoting AND (it's for all vendors OR this vendor is invited)
+            {
+                status: 'Accepting_Quotes',
+                OR: [
+                    { allowedVendorIds: { isEmpty: true } },
+                    { allowedVendorIds: { has: userPayload.vendorId } }
+                ]
             },
-            // Requisition is specifically for this vendor AND this vendor hasn't quoted yet
-            { 
-                status: 'Accepting_Quotes', 
-                allowedVendorIds: { has: userPayload.vendorId },
-                quotations: { none: { vendorId: userPayload.vendorId } }
-            },
-            // Vendor has already submitted a quote
-            { quotations: { some: { vendorId: userPayload.vendorId } } },
-            // Vendor has been awarded an item (for per-item strategy)
-            { items: { some: { perItemAwardDetails: { array_contains: [{vendorId: userPayload.vendorId}],} } } },
+            // This vendor is already involved in some way
+            {
+                quotations: { some: { vendorId: userPayload.vendorId } }
+            }
         ];
 
     } else if (forQuoting) {
@@ -597,3 +592,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
