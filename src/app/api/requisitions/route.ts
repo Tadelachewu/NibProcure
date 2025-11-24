@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -50,8 +49,15 @@ export async function GET(request: Request) {
 
         // Admins and Procurement Officers can see all reviews for better oversight
         if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-             const allRequisitionStatuses = Object.values(Prisma.RequisitionStatus);
-             const allPossiblePendingStatuses = allRequisitionStatuses.filter(s => s.startsWith('Pending_'));
+             const allPossiblePendingStatuses: Prisma.RequisitionStatus[] = [
+                'Pending_Approval',
+                'Pending_Committee_B_Review',
+                'Pending_Committee_A_Recommendation',
+                'Pending_Managerial_Approval',
+                'Pending_Director_Approval',
+                'Pending_VP_Approval',
+                'Pending_President_Approval'
+             ];
              orConditions.push({ status: { in: allPossiblePendingStatuses } });
              orConditions.push({ status: 'PostApproved' });
         }
@@ -105,8 +111,15 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        const allRequisitionStatuses = Object.values(Prisma.RequisitionStatus);
-        const allPossiblePendingStatuses = allRequisitionStatuses.filter(s => s.startsWith('Pending_'));
+        const allPossiblePendingStatuses: Prisma.RequisitionStatus[] = [
+          'Pending_Approval',
+          'Pending_Committee_B_Review',
+          'Pending_Committee_A_Recommendation',
+          'Pending_Managerial_Approval',
+          'Pending_Director_Approval',
+          'Pending_VP_Approval',
+          'Pending_President_Approval',
+        ];
         
         if (userPayload?.roles.some(r => r.name === 'Committee_Member')) {
             whereClause.OR = [
