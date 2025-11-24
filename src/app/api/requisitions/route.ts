@@ -47,7 +47,7 @@ export async function GET(request: Request) {
         userRoles.forEach(roleName => {
             orConditions.push({ status: `Pending_${roleName}` });
         });
-
+        
         // Admins and Procurement Officers can see all reviews for better oversight
         if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
              const allPossiblePendingStatuses: Prisma.RequisitionStatus[] = [
@@ -69,16 +69,28 @@ export async function GET(request: Request) {
         if (!userPayload || !userPayload.vendorId) {
              return NextResponse.json({ error: 'Unauthorized: No valid vendor found for this user.' }, { status: 403 });
         }
-        // Simplified logic: Fetch all requisitions that are either accepting quotes OR are related to the vendor.
-        // The frontend will handle the separation into "Open for Quoting" and "Active".
+        
         whereClause.OR = [
-            { status: 'Accepting_Quotes' },
+            // Requisition is open to all verified vendors
+            { status: 'Accepting_Quotes', allowedVendorIds: { isEmpty: true } },
+            // Requisition is specifically for this vendor
+            { status: 'Accepting_Quotes', allowedVendorIds: { has: userPayload.vendorId } },
+            // Vendor has already submitted a quote
             { quotations: { some: { vendorId: userPayload.vendorId } } },
+            // Vendor has been awarded an item (for per-item strategy)
             { items: { some: { perItemAwardDetails: { array_contains: [{vendorId: userPayload.vendorId}],} } } },
         ];
 
     } else if (forQuoting) {
-        const allPossiblePendingStatuses: Prisma.RequisitionStatus[] = Object.values(Prisma.RequisitionStatus).filter(s => s.startsWith('Pending_'));
+        const allPossiblePendingStatuses: Prisma.RequisitionStatus[] = [
+            'Pending_Approval',
+            'Pending_Committee_B_Review',
+            'Pending_Committee_A_Recommendation',
+            'Pending_Managerial_Approval',
+            'Pending_Director_Approval',
+            'Pending_VP_Approval',
+            'Pending_President_Approval'
+        ];
         
         if (userPayload?.roles.some(r => r.name === 'Committee_Member')) {
             whereClause.OR = [
