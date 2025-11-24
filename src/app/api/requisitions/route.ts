@@ -71,10 +71,18 @@ export async function GET(request: Request) {
         }
         
         whereClause.OR = [
-            // Requisition is open to all verified vendors
-            { status: 'Accepting_Quotes', allowedVendorIds: { isEmpty: true } },
-            // Requisition is specifically for this vendor
-            { status: 'Accepting_Quotes', allowedVendorIds: { has: userPayload.vendorId } },
+            // Requisition is open to all verified vendors AND this vendor hasn't quoted yet
+            { 
+                status: 'Accepting_Quotes', 
+                allowedVendorIds: { isEmpty: true },
+                quotations: { none: { vendorId: userPayload.vendorId } }
+            },
+            // Requisition is specifically for this vendor AND this vendor hasn't quoted yet
+            { 
+                status: 'Accepting_Quotes', 
+                allowedVendorIds: { has: userPayload.vendorId },
+                quotations: { none: { vendorId: userPayload.vendorId } }
+            },
             // Vendor has already submitted a quote
             { quotations: { some: { vendorId: userPayload.vendorId } } },
             // Vendor has been awarded an item (for per-item strategy)
@@ -83,12 +91,8 @@ export async function GET(request: Request) {
 
     } else if (forQuoting) {
         const allPossiblePendingStatuses: Prisma.RequisitionStatus[] = [
-            'Pending_Approval',
-            'Pending_Committee_B_Review',
-            'Pending_Committee_A_Recommendation',
-            'Pending_Managerial_Approval',
-            'Pending_Director_Approval',
-            'Pending_VP_Approval',
+            'Pending_Approval', 'Pending_Committee_B_Review', 'Pending_Committee_A_Recommendation',
+            'Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval',
             'Pending_President_Approval'
         ];
         
@@ -102,16 +106,9 @@ export async function GET(request: Request) {
                 {
                     status: {
                         in: [
-                            'Accepting_Quotes',
-                            'Scoring_In_Progress',
-                            'Scoring_Complete',
-                            'Award_Declined',
-                            'Awarded',
-                            'PostApproved',
-                            'PO_Created',
-                            'Closed',
-                            'Fulfilled',
-                            ...allPossiblePendingStatuses
+                            'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete',
+                            'Award_Declined', 'Awarded', 'PostApproved', 'PO_Created',
+                            'Closed', 'Fulfilled', ...allPossiblePendingStatuses
                         ],
                     },
                 },
@@ -119,17 +116,9 @@ export async function GET(request: Request) {
         } else {
              whereClause.status = {
                 in: [
-                    'PreApproved',
-                    'PostApproved',
-                    'Accepting_Quotes',
-                    'Scoring_In_Progress',
-                    'Scoring_Complete',
-                    'Award_Declined',
-                    'Awarded',
-                    'PO_Created',
-                    'Fulfilled',
-                    'Closed',
-                    ...allPossiblePendingStatuses,
+                    'PreApproved', 'PostApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
+                    'Scoring_Complete', 'Award_Declined', 'Awarded', 'PO_Created', 'Fulfilled', 
+                    'Closed', ...allPossiblePendingStatuses
                 ]
             };
         }

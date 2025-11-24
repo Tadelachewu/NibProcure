@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -184,8 +185,8 @@ export default function VendorDashboardPage() {
             
             if (isRelated) {
                 active.push(req);
-            } else if (req.status === 'Accepting_Quotes' && (req.allowedVendorIds?.length === 0 || req.allowedVendorIds?.includes(user.vendorId!))) {
-                // If allowedVendorIds is empty, it's open to all.
+            } else if (req.status === 'Accepting_Quotes') {
+                // If it's open for quoting and the vendor hasn't submitted a quote, it's open.
                 open.push(req);
             }
         });
