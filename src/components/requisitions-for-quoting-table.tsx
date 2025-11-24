@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -78,34 +78,11 @@ export function RequisitionsForQuotingTable() {
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
     const awardStrategy = (req.rfqSettings as any)?.awardStrategy;
 
-    // --- Terminal Statuses ---
+    // --- Terminal Statuses (Highest Priority) ---
     if (req.status === 'Closed' || req.status === 'Fulfilled') {
         return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
     }
-    
-    // --- Award by Best Item Strategy Logic ---
-    if (awardStrategy === 'item') {
-        const totalItems = req.items.length;
-        if (totalItems > 0) {
-            const finalStateItems = req.items.filter(item => {
-                const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-                return details.some(d => d.status === 'Accepted' || d.status === 'Failed_to_Award');
-            }).length;
-
-            if (finalStateItems === totalItems) {
-                return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
-            }
-        }
-        
-        const allAwardDetails = req.items.flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []));
-        const hasAcceptedItem = allAwardDetails.some(d => d.status === 'Accepted');
-        if (hasAcceptedItem) {
-             return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
-        }
-    }
-    
-    // --- Single Vendor Award Strategy Logic ---
-    if (awardStrategy === 'all' && req.status === 'PO_Created') {
+    if (req.status === 'PO_Created') {
         return <Badge variant="default">PO Created</Badge>;
     }
 
@@ -115,6 +92,15 @@ export function RequisitionsForQuotingTable() {
     }
     if (req.status === 'PostApproved') {
         return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
+    }
+    if (req.status === 'Scoring_Complete') {
+        return <Badge variant="default" className="bg-green-600 animate-pulse">Ready to Award</Badge>;
+    }
+    
+    // --- Check for Accepted Quotes (covers both strategies) ---
+    const hasAcceptedQuote = req.quotations?.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded');
+    if (hasAcceptedQuote) {
+        return <Badge variant="default" className="bg-blue-600">Award Accepted</Badge>;
     }
 
     // --- Pending Review Statuses ---
@@ -141,10 +127,6 @@ export function RequisitionsForQuotingTable() {
             if (quoteCount > 0 && quoteCount < committeeQuorum) {
                 return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> Quorum Not Met</Badge>;
             }
-        }
-
-        if (req.status === 'Scoring_Complete') {
-            return <Badge variant="default" className="bg-green-600 animate-pulse">Ready to Award</Badge>;
         }
         
         if (req.status === 'Awarded') {
