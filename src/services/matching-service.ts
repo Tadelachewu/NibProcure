@@ -1,8 +1,6 @@
-
 import { PurchaseOrder, MatchingResult, MatchingStatus } from '@/lib/types';
 import { POItem, GoodsReceiptNote, Invoice, ReceiptItem, InvoiceItem } from '@prisma/client';
 
-// Extend the Prisma types to match the expected structure if needed, or adjust function signature
 type EnrichedPO = PurchaseOrder & {
     items: POItem[];
     receipts: (GoodsReceiptNote & { items: ReceiptItem[] })[];
@@ -43,14 +41,12 @@ export function performThreeWayMatch(po: EnrichedPO): MatchingResult {
   const aggregatedInvoiceItems: { [key: string]: { quantity: number; unitPrice: number } } = {};
   invoices.forEach(inv => {
     inv.items.forEach(item => {
-        // Assuming invoice items can be matched to PO items by name for simplicity
         const poItem = po.items.find(p => p.name === item.name);
         if (poItem) {
             if (!aggregatedInvoiceItems[poItem.id]) {
                 aggregatedInvoiceItems[poItem.id] = { quantity: 0, unitPrice: 0 };
             }
             aggregatedInvoiceItems[poItem.id].quantity += item.quantity;
-            // Use the latest invoice's price for comparison
             aggregatedInvoiceItems[poItem.id].unitPrice = item.unitPrice;
         }
     });
@@ -84,7 +80,6 @@ export function performThreeWayMatch(po: EnrichedPO): MatchingResult {
   const invoiceTotal = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
 
   let status: MatchingStatus = 'Mismatched';
-  // If the PO has been manually matched, override the status
   if (po.status === 'Matched') {
     status = 'Matched';
   } else if (overallQuantityMatch && overallPriceMatch) {

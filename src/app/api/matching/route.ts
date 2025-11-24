@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import { performThreeWayMatch } from '@/services/matching-service';
 import { users } from '@/lib/auth-store';
@@ -36,13 +35,11 @@ export async function GET(request: Request) {
           status: 'Pending' as const,
           quantityMatch: false,
           priceMatch: false,
-          details: { /* empty details */ }
+          details: { }
       };
       return NextResponse.json(pendingResult);
     }
     
-    // The type from prisma include should be compatible with what performThreeWayMatch expects.
-    // A type assertion might be necessary if the inferred type isn't precise enough.
     const result = performThreeWayMatch(po as any);
     return NextResponse.json(result);
 
@@ -56,15 +53,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-    console.log('POST /api/matching - Manually resolving mismatch.');
     try {
         const body = await request.json();
-        console.log('Request body:', body);
         const { poId, userId } = body;
 
         const user = users.find(u => u.id === userId);
         if (!user) {
-            console.error('User not found for ID:', userId);
             return NextResponse.json({ error: 'User not found' }, { status: 404 });
         }
 
@@ -79,11 +73,8 @@ export async function POST(request: Request) {
         });
 
         if (!po) {
-            console.error('Purchase Order not found for ID:', poId);
             return NextResponse.json({ error: 'Purchase Order not found' }, { status: 404 });
         }
-
-        console.log(`PO ${poId} status updated to Matched.`);
         
         await prisma.auditLog.create({
             data: {
@@ -95,7 +86,6 @@ export async function POST(request: Request) {
                 details: `Manually resolved and marked PO as Matched.`,
             }
         });
-        console.log('Added audit log:');
 
         const result = performThreeWayMatch(po as any);
         return NextResponse.json(result);

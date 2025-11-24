@@ -1,4 +1,3 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -9,31 +8,25 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  console.log(`PATCH /api/invoices/${params.id}/status`);
   try {
     const invoiceId = params.id;
     const body = await request.json();
-    console.log('Request body:', body);
     const { status, userId } = body;
 
     const validStatuses = ['Approved for Payment', 'Disputed'];
     if (!validStatuses.includes(status)) {
-      console.error('Invalid status provided:', status);
       return NextResponse.json({ error: 'Invalid status provided.' }, { status: 400 });
     }
     
     const user = users.find(u => u.id === userId);
     if (!user) {
-        console.error('User not found for ID:', userId);
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
     const invoiceToUpdate = await prisma.invoice.findUnique({ where: { id: invoiceId } });
     if (!invoiceToUpdate) {
-        console.error('Invoice not found for ID:', invoiceId);
         return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
-    console.log('Found invoice to update:', invoiceToUpdate);
 
     const oldStatus = invoiceToUpdate.status;
     const updatedInvoice = await prisma.invoice.update({
@@ -52,7 +45,6 @@ export async function PATCH(
         }
     });
 
-    console.log('Successfully updated invoice. Sending back:', updatedInvoice);
     return NextResponse.json(updatedInvoice);
   } catch (error) {
     console.error('Failed to update invoice status:', error);

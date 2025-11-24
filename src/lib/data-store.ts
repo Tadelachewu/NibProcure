@@ -1,8 +1,3 @@
-
-// This file is deprecated and will be removed in a future version.
-// All data is now fetched directly from the database.
-// It is kept for reference for the time being.
-
 import type { PurchaseRequisition, AuditLog, Vendor, Quotation, PurchaseOrder, GoodsReceiptNote, Invoice, User, Department } from './types';
 import { getInitialData, AppData } from './seed-data';
 

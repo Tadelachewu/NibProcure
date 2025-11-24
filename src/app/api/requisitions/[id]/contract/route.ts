@@ -1,5 +1,3 @@
-
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -24,11 +22,6 @@ export async function POST(
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-
-    // This endpoint is now deprecated in favor of the new /api/contracts endpoint.
-    // The logic has been moved to POST /api/contracts
-    
-    // auditLogs.unshift({ ... });
 
     return NextResponse.json({ message: "This endpoint is deprecated" }, { status: 410 });
 
