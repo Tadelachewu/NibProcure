@@ -32,7 +32,7 @@ export async function POST(
     let isAuthorized = false;
     const userRoles = user.roles.map(r => r.name as UserRole);
 
-    if (userRoles.includes('Admin')) {
+    if (userRoles.includes('Admin') || userRoles.includes('Committee')) {
         isAuthorized = true;
     } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
@@ -71,7 +71,6 @@ export async function POST(
         }
     }
     
-    // Allow sending from PreApproved or if re-opening a quorum-failed RFQ
     const validInitialStatuses = ['PreApproved', 'Accepting_Quotes'];
     if (!validInitialStatuses.includes(requisition.status)) {
         return NextResponse.json({ error: `Cannot start RFQ for a requisition that is not in a valid state.` }, { status: 400 });
