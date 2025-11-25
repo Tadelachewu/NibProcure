@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -103,7 +104,6 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        // Dynamically fetch all roles to construct all possible "Pending" statuses
         const allRoles = await prisma.role.findMany({ select: { name: true } });
         const allPendingStatuses = allRoles.map(role => `Pending_${role.name}`);
 
@@ -118,7 +118,6 @@ export async function GET(request: Request) {
         const userRoles = userPayload?.roles.map(r => r.name) || [];
 
         if (userRoles.includes('Committee_Member')) {
-            // Committee members see requisitions they are assigned to within the RFQ lifecycle
             whereClause = {
                 status: { in: rfqLifecycleStatuses },
                 OR: [
@@ -127,7 +126,6 @@ export async function GET(request: Request) {
                 ],
             };
         } else {
-            // Other roles (like Admin, Procurement Officer) see all requisitions in the RFQ lifecycle
             whereClause = {
                 status: { in: rfqLifecycleStatuses }
             };
@@ -277,8 +275,69 @@ export async function PATCH(
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
     
+    // This handles editing a draft or rejected requisition and resubmitting
+    if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && body.title) {
+        const totalPrice = body.items.reduce((acc: number, item: any) => {
+            const price = item.unitPrice || 0;
+            const quantity = item.quantity || 0;
+            return acc + (price * quantity);
+        }, 0);
+
+        dataToUpdate = {
+            title: body.title,
+            justification: body.justification,
+            urgency: body.urgency,
+            department: { connect: { name: body.department } },
+            totalPrice: totalPrice,
+            status: status ? status.replace(/ /g, '_') : requisition.status,
+            approver: { disconnect: true },
+            approverComment: null, // *** FIX: Clear the rejection comment on resubmission ***
+            items: {
+                deleteMany: {},
+                create: body.items.map((item: any) => ({
+                    name: item.name,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice || 0,
+                    description: item.description || ''
+                })),
+            },
+            customQuestions: {
+                deleteMany: {},
+                create: body.customQuestions?.map((q: any) => ({
+                    questionText: q.questionText,
+                    questionType: q.questionType.replace(/-/g, '_'),
+                    isRequired: q.isRequired,
+                    options: q.options || [],
+                })),
+            },
+        };
+         const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
+         if (oldCriteria) {
+             await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+             await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+             await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id } });
+         }
+
+         dataToUpdate.evaluationCriteria = {
+            create: {
+                financialWeight: body.evaluationCriteria.financialWeight,
+                technicalWeight: body.evaluationCriteria.technicalWeight,
+                financialCriteria: { create: body.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: c.weight })) },
+                technicalCriteria: { create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: c.weight })) }
+            }
+        };
+        
+        if (status === 'Pending_Approval') {
+            const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
+            if (department?.headId) { dataToUpdate.currentApprover = { connect: { id: department.headId } }; }
+            auditAction = 'SUBMIT_FOR_APPROVAL';
+            auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
+        }
+
+    }
+
     // This is a high-level award approval/rejection
-    if (requisition.status.startsWith('Pending_')) {
+    else if (requisition.status.startsWith('Pending_')) {
         const userRoles = (user.roles as any[]).map(r => r.name);
         console.log(`[PATCH /api/requisitions] Handling award action by user with roles: ${userRoles.join(', ')}`);
         
