@@ -296,8 +296,8 @@ export async function PATCH(
                 deleteMany: {},
                 create: body.items.map((item: any) => ({
                     name: item.name,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice || 0,
+                    quantity: Number(item.quantity) || 0,
+                    unitPrice: Number(item.unitPrice) || 0,
                     description: item.description || ''
                 })),
             },
@@ -311,7 +311,7 @@ export async function PATCH(
                 })),
             },
         };
-        // Safely check for evaluation criteria before attempting to delete/recreate
+         // Safely check for evaluation criteria before attempting to delete/recreate
         if (body.evaluationCriteria) {
              const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
              if (oldCriteria) {
@@ -324,15 +324,22 @@ export async function PATCH(
                 create: {
                     financialWeight: body.evaluationCriteria.financialWeight,
                     technicalWeight: body.evaluationCriteria.technicalWeight,
-                    financialCriteria: { create: body.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: c.weight })) },
-                    technicalCriteria: { create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: c.weight })) }
+                    financialCriteria: { create: body.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) })) },
+                    technicalCriteria: { create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) })) }
                 }
             };
         }
         
-        if (status === 'Pending_Approval') {
+        if (newStatus === 'Pending_Approval') {
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
-            if (department?.headId) { dataToUpdate.currentApprover = { connect: { id: department.headId } }; }
+            if (department?.headId) { 
+                dataToUpdate.currentApprover = { connect: { id: department.headId } };
+                dataToUpdate.status = 'Pending_Approval';
+            } else {
+                // If no department head, auto-approve to next stage
+                dataToUpdate.status = 'PreApproved';
+                dataToUpdate.currentApprover = { disconnect: true };
+            }
             auditAction = 'SUBMIT_FOR_APPROVAL';
             auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
         }
@@ -340,7 +347,7 @@ export async function PATCH(
     }
 
     // This is a high-level award approval/rejection
-    else if (requisition.status.startsWith('Pending_')) {
+    else if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
         const userRoles = (user.roles as any[]).map(r => r.name);
         console.log(`[PATCH /api/requisitions] Handling award action by user with roles: ${userRoles.join(', ')}`);
         
@@ -451,7 +458,7 @@ export async function PATCH(
             auditAction = 'REJECT_REQUISITION';
             auditDetails = `Requisition ${id} was rejected by department head with comment: "${comment}".`;
         } else { // Department head approves
-             dataToUpdate.status = 'PreApproved'; 
+             dataToUpdate.status = 'PreApproved'; // *** FIX: Correct status for departmental approval ***
              dataToUpdate.currentApprover = { disconnect: true };
              dataToUpdate.approverComment = comment;
              auditAction = 'PRE_APPROVE_REQUISITION';
