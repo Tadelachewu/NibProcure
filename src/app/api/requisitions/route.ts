@@ -296,8 +296,8 @@ export async function PATCH(
                 deleteMany: {},
                 create: body.items.map((item: any) => ({
                     name: item.name,
-                    quantity: item.quantity,
-                    unitPrice: item.unitPrice || 0,
+                    quantity: Number(item.quantity) || 0,
+                    unitPrice: Number(item.unitPrice) || 0,
                     description: item.description || ''
                 })),
             },
@@ -329,7 +329,7 @@ export async function PATCH(
             };
         }
         
-        if (status === 'Pending_Approval') {
+        if (newStatus === 'Pending_Approval') {
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
             if (department?.headId) { 
                 dataToUpdate.currentApprover = { connect: { id: department.headId } }; 
@@ -451,13 +451,13 @@ export async function PATCH(
         }
         if (newStatus === 'Rejected') {
             dataToUpdate.status = 'Rejected';
-            dataToUpdate.currentApprover = { disconnect: true };
+            dataToUpdate.currentApproverId = null;
             dataToUpdate.approverComment = comment;
             auditAction = 'REJECT_REQUISITION';
             auditDetails = `Requisition ${id} was rejected by department head with comment: "${comment}".`;
         } else { // Department head approves
              dataToUpdate.status = 'PreApproved'; 
-             dataToUpdate.currentApprover = { disconnect: true };
+             dataToUpdate.currentApproverId = null;
              dataToUpdate.approverComment = comment;
              auditAction = 'PRE_APPROVE_REQUISITION';
              auditDetails = `Requisition ${id} was pre-approved by department head with comment: "${comment}". Ready for RFQ.`;
@@ -485,7 +485,7 @@ export async function PATCH(
         } else {
             // If no department head, auto-approve to next stage
             dataToUpdate.status = 'PreApproved';
-            dataToUpdate.currentApprover = { disconnect: true };
+            dataToUpdate.currentApproverId = null;
         }
          auditDetails = `Requisition ${id} submitted for approval.`;
          auditAction = 'SUBMIT_FOR_APPROVAL';
@@ -701,5 +701,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
