@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -108,7 +107,8 @@ export async function GET(request: Request) {
             'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
             'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
             'PO_Created', 'Fulfilled', 'Closed', 'Pending_Committee_B_Review', 
-            'Pending_Committee_A_Recommendation', 'Pending_Managerial_Approval', 
+            'Pending_Committee_A_Recommendation', 'Pending_Managerial_Approval',
+            'Pending_Manager_Procurement_Division',
             'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval'
         ];
 
