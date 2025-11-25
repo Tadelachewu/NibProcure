@@ -894,7 +894,7 @@ const RFQActionDialog = ({
 }) => {
     const { user } = useAuth();
     const { toast } = useToast();
-    const [isSubmitting, setSubmitting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
@@ -916,7 +916,7 @@ const RFQActionDialog = ({
             return;
         }
 
-        setSubmitting(true);
+        setIsSubmitting(true);
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
@@ -1435,12 +1435,12 @@ const scoreFormSchema = z.object({
           criterionId: z.string(),
           score: z.coerce.number().min(0).max(100),
           comment: z.string().min(1, "A comment is required for this criterion."),
-      })),
+      })).optional(),
       technicalScores: z.array(z.object({
           criterionId: z.string(),
           score: z.coerce.number().min(0).max(100),
           comment: z.string().min(1, "A comment is required for this criterion."),
-      })),
+      })).optional(),
   }))
 });
 type ScoreFormValues = z.infer<typeof scoreFormSchema>;
@@ -1617,6 +1617,8 @@ const ScoringDialog = ({
     const { fields: itemScoreFields } = useFieldArray({ control: form.control, name: "itemScores" });
 
     const existingScore = useMemo(() => quote.scores?.find(s => s.scorerId === user.id), [quote, user.id]);
+    const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id) ?? false;
+    const isTechnicalScorer = requisition.technicalCommitteeMemberIds?.includes(user.id) ?? false;
 
     useEffect(() => {
         if (quote && requisition && user) {
@@ -1624,14 +1626,14 @@ const ScoringDialog = ({
                 const existingItemScore = existingScore?.itemScores.find(i => i.quoteItemId === item.id);
                 return {
                     quoteItemId: item.id,
-                    financialScores: (requisition.evaluationCriteria?.financialCriteria || []).map(c => {
+                    financialScores: isFinancialScorer ? (requisition.evaluationCriteria?.financialCriteria || []).map(c => {
                         const existing = existingItemScore?.scores.find(s => s.financialCriterionId === c.id);
                         return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
-                    }),
-                    technicalScores: (requisition.evaluationCriteria?.technicalCriteria || []).map(c => {
+                    }) : [],
+                    technicalScores: isTechnicalScorer ? (requisition.evaluationCriteria?.technicalCriteria || []).map(c => {
                         const existing = existingItemScore?.scores.find(s => s.technicalCriterionId === c.id);
                         return { criterionId: c.id, score: existing?.score || 0, comment: existing?.comment || "" };
-                    }),
+                    }) : [],
                 };
             });
             form.reset({
@@ -1639,7 +1641,7 @@ const ScoringDialog = ({
                 itemScores: initialItemScores,
             });
         }
-    }, [quote, requisition, user, form, existingScore]);
+    }, [quote, requisition, user, form, existingScore, isFinancialScorer, isTechnicalScorer]);
 
 
     const onSubmit = async (values: ScoreFormValues) => {
@@ -1671,8 +1673,6 @@ const ScoringDialog = ({
 
     if (!requisition.evaluationCriteria) return null;
 
-    const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id) ?? false;
-    const isTechnicalScorer = requisition.technicalCommitteeMemberIds?.includes(user.id) ?? false;
     const findQuestionText = (questionId: string) => requisition.customQuestions?.find(q => q.id === questionId)?.questionText || "Unknown Question";
 
 
@@ -3521,6 +3521,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
