@@ -34,7 +34,16 @@ export async function POST(
 
     const originalRequisition = await prisma.purchaseRequisition.findUnique({
       where: { id: originalRequisitionId },
-      include: { items: { where: { id: { in: itemIds } } } }
+      include: { 
+          items: { where: { id: { in: itemIds } } },
+          evaluationCriteria: {
+              include: {
+                  financialCriteria: true,
+                  technicalCriteria: true,
+              }
+          },
+          customQuestions: true,
+      }
     });
 
     if (!originalRequisition) {
@@ -68,7 +77,27 @@ export async function POST(
                         quantity: item.quantity,
                         unitPrice: item.unitPrice,
                     }))
-                }
+                },
+                customQuestions: {
+                    create: originalRequisition.customQuestions?.map(q => ({
+                        questionText: q.questionText,
+                        questionType: q.questionType,
+                        isRequired: q.isRequired,
+                        options: q.options || [],
+                    }))
+                },
+                evaluationCriteria: originalRequisition.evaluationCriteria ? {
+                    create: {
+                        financialWeight: originalRequisition.evaluationCriteria.financialWeight,
+                        technicalWeight: originalRequisition.evaluationCriteria.technicalWeight,
+                        financialCriteria: {
+                            create: originalRequisition.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: c.weight }))
+                        },
+                        technicalCriteria: {
+                            create: originalRequisition.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: c.weight }))
+                        }
+                    }
+                } : undefined,
             },
         });
         
