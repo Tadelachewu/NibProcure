@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -461,10 +460,24 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     
-    const user = await prisma.user.findFirst({where: {id: body.requesterId}});
-    if (!user) {
+    const actor = await prisma.user.findFirst({where: {id: body.requesterId}, include: { roles: true }});
+    if (!actor) {
         return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
     }
+
+    // --- Start Server-Side Validation ---
+    const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
+    if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
+        const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
+        if (setting.type === 'specific_roles') {
+            const userRoles = actor.roles.map(r => r.name);
+            const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
+            if (!canCreate) {
+                return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
+            }
+        }
+    }
+    // --- End Server-Side Validation ---
 
     const totalPrice = body.items.reduce((acc: number, item: any) => {
         const price = item.unitPrice || 0;
@@ -480,7 +493,7 @@ export async function POST(request: Request) {
     const newRequisition = await prisma.$transaction(async (tx) => {
         const createdReq = await tx.purchaseRequisition.create({
             data: {
-                requester: { connect: { id: user.id } },
+                requester: { connect: { id: actor.id } },
                 department: { connect: { id: department.id } },
                 title: body.title,
                 urgency: body.urgency,
@@ -527,7 +540,7 @@ export async function POST(request: Request) {
         await tx.auditLog.create({
             data: {
                 transactionId: finalReq.id,
-                user: { connect: { id: user.id } },
+                user: { connect: { id: actor.id } },
                 timestamp: new Date(),
                 action: 'CREATE_REQUISITION',
                 entity: 'Requisition',
@@ -616,3 +629,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
