@@ -133,7 +133,8 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                                         <TableHead>Requested Item</TableHead>
                                                         <TableHead>Winning Vendor</TableHead>
                                                         <TableHead>Proposed Item & Price</TableHead>
-                                                        <TableHead className="text-right">Total</TableHead>
+                                                        <TableHead>Total</TableHead>
+                                                        <TableHead>Status</TableHead>
                                                     </TableRow>
                                                 </TableHeader>
                                                 <TableBody>
@@ -151,8 +152,11 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                                                         </>
                                                                     ) : 'N/A'}
                                                                 </TableCell>
-                                                                <TableCell className="text-right font-semibold">
+                                                                <TableCell className="font-semibold">
                                                                     {award ? (award.unitPrice * item.quantity).toLocaleString() : 'N/A'} ETB
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    {award ? <Badge>{award.status.replace(/_/g, ' ')}</Badge> : <Badge variant="outline">N/A</Badge>}
                                                                 </TableCell>
                                                             </TableRow>
                                                         )
