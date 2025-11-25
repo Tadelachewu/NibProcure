@@ -93,6 +93,22 @@ async function main() {
   });
 
   await prisma.setting.upsert({
+    where: { key: 'requisitionCreatorSetting' },
+    update: {
+        value: {
+            type: 'all_users'
+        }
+    },
+    create: {
+      key: 'requisitionCreatorSetting',
+      value: {
+        type: 'all_users' // or 'specific_roles'
+        // allowedRoles: ['Requester', 'Procurement_Officer'] // if type is 'specific_roles'
+      }
+    }
+  });
+
+  await prisma.setting.upsert({
       where: { key: 'committeeConfig' },
       update: {
         value: {
@@ -558,4 +574,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

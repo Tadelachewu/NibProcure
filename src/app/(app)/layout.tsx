@@ -38,7 +38,7 @@ export default function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, logout, loading, role, rolePermissions } = useAuth();
+  const { user, logout, loading, role, rolePermissions, requisitionCreatorSetting } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
@@ -47,8 +47,18 @@ export default function AppLayout({
     if (!role) return [];
     // Use the special 'Combined' key which holds the union of all permissions
     const allowedPaths = rolePermissions['Combined'] || [];
-    return navItems.filter(item => allowedPaths.includes(item.path));
-  }, [role, rolePermissions]);
+    let items = navItems.filter(item => allowedPaths.includes(item.path));
+
+    // Handle "New Requisition" link based on requisitionCreatorSetting
+    if (requisitionCreatorSetting.type === 'specific_roles') {
+        const canCreate = user?.roles.some(r => requisitionCreatorSetting.allowedRoles?.includes(r as any));
+        if (!canCreate) {
+            items = items.filter(item => item.path !== '/new-requisition');
+        }
+    }
+
+    return items;
+  }, [role, rolePermissions, user, requisitionCreatorSetting]);
 
 
   const handleLogout = useCallback(() => {
@@ -112,6 +122,16 @@ export default function AppLayout({
     if (currentPath === '/dashboard') {
         return;
     }
+    
+    // Special check for new-requisition page
+    if (currentPath === '/new-requisition' && requisitionCreatorSetting.type === 'specific_roles') {
+        const canCreate = user?.roles.some(r => requisitionCreatorSetting.allowedRoles?.includes(r as any));
+        if (!canCreate) {
+            router.push(allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0] || '/');
+            return;
+        }
+    }
+
 
     // Check if the current path is allowed, including sub-paths
     const isAllowed = allowedPaths.some(p => {
@@ -133,7 +153,7 @@ export default function AppLayout({
     } else if (!defaultPath && !user.roles?.includes('Admin')) {
         logout();
     }
-  }, [pathname, loading, role, user, router, rolePermissions, logout]);
+  }, [pathname, loading, role, user, router, rolePermissions, logout, requisitionCreatorSetting]);
 
 
   if (loading || !user || !role) {

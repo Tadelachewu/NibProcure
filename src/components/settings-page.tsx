@@ -17,6 +17,7 @@ import { RfqSettings } from './settings/rfq-settings';
 import { CommitteeSettings } from './settings/committee-settings';
 import { ApprovalMatrixEditor } from './settings/approval-matrix-editor';
 import { QuorumSettings } from './settings/quorum-settings';
+import { RequisitionCreatorSettings } from './settings/requisition-creator-settings';
 
 
 export function SettingsPage() {
@@ -34,6 +35,7 @@ export function SettingsPage() {
       <TabsContent value="general">
         <div className="space-y-6">
             <RfqSettings />
+            <RequisitionCreatorSettings />
             <QuorumSettings />
             <ApprovalMatrixEditor />
         </div>

@@ -5,6 +5,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useMe
 import { Department, User, UserRole } from '@/lib/types';
 import { rolePermissions as defaultRolePermissions } from '@/lib/roles';
 import { decodeJwt } from '@/lib/auth';
+import { RequisitionCreatorSetting } from '@/components/settings/requisition-creator-settings';
 
 
 export interface RfqSenderSetting {
@@ -46,6 +47,7 @@ interface AuthContextType {
   departments: Department[];
   rolePermissions: Record<string, string[]>;
   rfqSenderSetting: RfqSenderSetting;
+  requisitionCreatorSetting: RequisitionCreatorSetting;
   approvalThresholds: ApprovalThreshold[];
   committeeConfig: CommitteeConfig;
   settings: Setting[];
@@ -107,6 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>(defaultRolePermissions);
   const [rfqSenderSetting, setRfqSenderSetting] = useState<RfqSenderSetting>({ type: 'all' });
+  const [requisitionCreatorSetting, setRequisitionCreatorSetting] = useState<RequisitionCreatorSetting>({ type: 'all_users' });
   const [approvalThresholds, setApprovalThresholds] = useState<ApprovalThreshold[]>([]);
   const [committeeConfig, setCommitteeConfig] = useState<CommitteeConfig>({});
   const [settings, setSettings] = useState<Setting[]>([]);
@@ -151,6 +154,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const rfqSetting = settingsData.find((s:any) => s.key === 'rfqSenderSetting');
         if (rfqSetting) setRfqSenderSetting(rfqSetting.value);
         
+        const requisitionCreatorSetting = settingsData.find((s: any) => s.key === 'requisitionCreatorSetting');
+        if (requisitionCreatorSetting) setRequisitionCreatorSetting(requisitionCreatorSetting.value);
+
         const committeeConf = settingsData.find((s:any) => s.key === 'committeeConfig');
         if (committeeConf) setCommitteeConfig(committeeConf.value);
         
@@ -331,6 +337,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       departments,
       rolePermissions: combinedPermissions, // Use the combined permissions
       rfqSenderSetting,
+      requisitionCreatorSetting,
       approvalThresholds,
       committeeConfig,
       settings,
@@ -349,7 +356,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetchAllUsers,
       fetchAllSettings,
       fetchAllDepartments
-  }), [user, token, role, loading, allUsers, departments, combinedPermissions, rfqSenderSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
+  }), [user, token, role, loading, allUsers, departments, combinedPermissions, rfqSenderSetting, requisitionCreatorSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
 
 
   return (
