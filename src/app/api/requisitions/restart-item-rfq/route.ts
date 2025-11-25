@@ -56,7 +56,11 @@ export async function POST(
                 totalPrice: totalValue,
                 deadline: new Date(newDeadline),
                 allowedVendorIds: vendorIds,
-                parentId: originalRequisition.id, // Link to the parent
+                parent: { 
+                    connect: {
+                        id: originalRequisition.id 
+                    }
+                },
                 items: {
                     create: originalRequisition.items.map(item => ({
                         name: item.name,
@@ -65,7 +69,7 @@ export async function POST(
                         unitPrice: item.unitPrice,
                     }))
                 }
-            }
+            },
         });
         
         // Update the new requisition to have its own transactionId
