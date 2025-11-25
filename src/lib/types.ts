@@ -240,6 +240,7 @@ export type QuoteItem = {
     unitPrice: number;
     leadTimeDays: number;
     brandDetails?: string;
+    imageUrl?: string;
 };
 
 export type QuoteAnswer = {
@@ -254,7 +255,7 @@ export type Score = {
   financialCriterionId?: string | null;
   technicalCriterionId?: string | null;
   score: number; // 0-100
-  comment?: string;
+  comment: string;
   type: 'FINANCIAL' | 'TECHNICAL';
 }
 
@@ -271,7 +272,7 @@ export type CommitteeScoreSet = {
     scorer: { name?: string };
     itemScores: ItemScore[];
     finalScore: number;
-    committeeComment?: string;
+    committeeComment: string;
     submittedAt: Date;
 }
 

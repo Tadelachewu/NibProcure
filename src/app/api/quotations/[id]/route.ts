@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -114,6 +115,7 @@ export async function PATCH(
                         unitPrice: Number(item.unitPrice),
                         leadTimeDays: Number(item.leadTimeDays),
                         brandDetails: item.brandDetails,
+                        imageUrl: item.imageUrl,
                     }))
                 },
                 answers: {

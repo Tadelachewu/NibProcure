@@ -94,6 +94,7 @@ export async function POST(request: Request) {
                     unitPrice: Number(item.unitPrice),
                     leadTimeDays: Number(item.leadTimeDays),
                     brandDetails: item.brandDetails,
+                    imageUrl: item.imageUrl,
                 }))
             },
             answers: {

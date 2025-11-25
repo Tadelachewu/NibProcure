@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -14,7 +15,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Loader2, Send, ArrowLeft, CheckCircle, FileText, BadgeInfo, FileUp, CircleCheck, Info, Edit, FileEdit, PlusCircle, Trash2, ThumbsDown, ThumbsUp, Timer } from 'lucide-react';
+import { Loader2, Send, ArrowLeft, CheckCircle, FileText, BadgeInfo, FileUp, CircleCheck, Info, Edit, FileEdit, PlusCircle, Trash2, ThumbsDown, ThumbsUp, Timer, Image as ImageIcon } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -26,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import Image from 'next/image';
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -36,6 +38,7 @@ const quoteFormSchema = z.object({
     unitPrice: z.coerce.number().min(0.01, "Price is required."),
     leadTimeDays: z.coerce.number().min(0, "Lead time is required."),
     brandDetails: z.string().optional(),
+    imageUrl: z.string().min(1, "An image is required for each item."),
   })),
   answers: z.array(z.object({
       questionId: z.string(),
@@ -183,6 +186,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                 ...item,
                 requisitionItemId: item.requisitionItemId,
                 brandDetails: item.brandDetails || '',
+                imageUrl: item.imageUrl || '',
             })),
             answers: quote.answers || requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: quote.cpoDocumentUrl || '',
@@ -196,6 +200,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                 unitPrice: 0,
                 leadTimeDays: 0,
                 brandDetails: '',
+                imageUrl: '',
             })),
             answers: requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: '',
@@ -221,6 +226,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             unitPrice: 0,
             leadTimeDays: 0,
             brandDetails: '',
+            imageUrl: '',
         });
     };
 
@@ -441,6 +447,27 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                                 </FormItem>
                                                             )}
                                                         />
+                                                         <FormField
+                                                            control={form.control}
+                                                            name={`items.${overallIndex}.imageUrl`}
+                                                            render={({ field }) => (
+                                                                <FormItem>
+                                                                <FormLabel>Item Image</FormLabel>
+                                                                <FormControl>
+                                                                    <Input type="file" accept="image/*" onChange={async (e) => {
+                                                                        if (e.target.files?.[0]) {
+                                                                            const path = await handleFileUpload(e.target.files[0]);
+                                                                            if (path) field.onChange(path);
+                                                                        }
+                                                                    }} />
+                                                                </FormControl>
+                                                                <FormDescription>
+                                                                    A clear image of the proposed item is required.
+                                                                </FormDescription>
+                                                                <FormMessage />
+                                                                </FormItem>
+                                                            )}
+                                                         />
                                                         <FormField
                                                             control={form.control}
                                                             name={`items.${overallIndex}.unitPrice`}
