@@ -213,10 +213,13 @@ export function AwardReviewsTable() {
                             <div className="flex flex-col">
                                 <span>{req.title}</span>
                                 {req.approverComment && (
-                                    <span className="text-xs text-destructive flex items-center gap-1">
-                                        <AlertTriangle className="h-3 w-3"/>
-                                        Rejected with comment: "{req.approverComment}"
-                                    </span>
+                                    <div className="text-xs text-destructive flex items-start gap-1 mt-1">
+                                        <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                                        <div className="flex flex-col">
+                                            <span>Rejected with comment:</span>
+                                            <span className="whitespace-pre-wrap break-words italic">"{req.approverComment}"</span>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         </TableCell>
