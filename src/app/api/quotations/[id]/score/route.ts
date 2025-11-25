@@ -77,6 +77,7 @@ export async function POST(
             }
         });
 
+        // Clear previous scores for this set to handle resubmission/updates
         await tx.itemScore.deleteMany({ where: { scoreSetId: scoreSet.id }});
 
         let totalWeightedScore = 0;
@@ -102,7 +103,7 @@ export async function POST(
                 return {
                   itemScoreId: createdItemScore.id,
                   score: s.score,
-                  comment: s.comment,
+                  comment: s.comment || '', // Ensure comment is never undefined
                   type: isFinancial ? 'FINANCIAL' : 'TECHNICAL',
                   financialCriterionId: isFinancial ? s.criterionId : null,
                   technicalCriterionId: !isFinancial ? s.criterionId : null,

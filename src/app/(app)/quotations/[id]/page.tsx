@@ -1474,12 +1474,12 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                         <Dialog>
                             <DialogTrigger asChild>
                                 <div className="md:col-span-2 relative aspect-video cursor-pointer hover:opacity-80 transition-opacity">
-                                    <Image src={quoteItem.imageUrl} alt={quoteItem.name} layout="fill" objectFit="contain" className="rounded-md" />
+                                    <Image src={quoteItem.imageUrl} alt={quoteItem.name} fill style={{objectFit:"contain"}} className="rounded-md" />
                                 </div>
                             </DialogTrigger>
                             <DialogContent className="max-w-4xl h-[80vh]">
                                 <div className="relative w-full h-full">
-                                <Image src={quoteItem.imageUrl} alt={quoteItem.name} layout="fill" objectFit="contain" />
+                                <Image src={quoteItem.imageUrl} alt={quoteItem.name} fill style={{objectFit:"contain"}} />
                                 </div>
                             </DialogContent>
                         </Dialog>
@@ -3530,6 +3530,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
