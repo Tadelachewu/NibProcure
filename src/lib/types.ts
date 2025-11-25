@@ -67,7 +67,7 @@ export type RequisitionStatus =
 
 export type Urgency = 'Low' | 'Medium' | 'High' | 'Critical';
 
-export type PerItemAwardStatus = 'Awarded' | 'Standby' | 'Declined' | 'Accepted' | 'Pending_Award' | 'Failed_to_Award';
+export type PerItemAwardStatus = 'Awarded' | 'Standby' | 'Declined' | 'Accepted' | 'Pending_Award' | 'Failed_to_Award' | 'Restarted';
 
 export type PerItemAwardDetail = {
   rank: number;

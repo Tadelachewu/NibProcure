@@ -2,8 +2,8 @@
 'use server';
 
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import { User, UserRole } from '@/lib/types';
+import { Prisma, PrismaClient } from '@prisma/client';
+import { User, UserRole, PerItemAwardDetail } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format } from 'date-fns';
 
@@ -77,6 +77,18 @@ export async function POST(
             where: { id: newReq.id },
             data: { transactionId: newReq.id }
         });
+
+        // Mark items on the original requisition as "Restarted"
+        for (const itemId of itemIds) {
+            const originalItem = await tx.requisitionItem.findUnique({ where: { id: itemId }});
+            if (originalItem && originalItem.perItemAwardDetails) {
+                const updatedDetails = (originalItem.perItemAwardDetails as PerItemAwardDetail[]).map(d => ({ ...d, status: 'Restarted' as const }));
+                await tx.requisitionItem.update({
+                    where: { id: itemId },
+                    data: { perItemAwardDetails: updatedDetails }
+                });
+            }
+        }
 
         await tx.auditLog.create({
             data: {

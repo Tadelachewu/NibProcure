@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -1043,7 +1044,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
         }
         setCpoAmount(requisition.cpoAmount);
         setAllowQuoteEdits(requisition.rfqSettings?.allowQuoteEdits ?? true);
-        setExperienceDocumentRequired(requisition.rfqSettings?.experienceDocumentRequired ?? false);
+        setExperienceDocumentRequired(requisition.rfqSettings?.experienceDocumentRequired ?? true);
     }, [requisition]);
 
     const deadline = useMemo(() => {
@@ -2161,7 +2162,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
 const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess }: { isOpen: boolean, onClose: () => void, member: User, requisition: PurchaseRequisition, onSuccess: () => void }) => {
     const { toast } = useToast();
     const { user } = useAuth();
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [newDeadline, setNewDeadline] = useState<Date|undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
 
@@ -2319,7 +2320,7 @@ const CommitteeActions = ({
         <Card>
             <CardHeader>
                 <CardTitle>Committee Actions</CardTitle>
-                <CardDescription>Finalize your evaluation for this requisition.</CardHeader>
+                <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
             </CardContent>
             <CardContent>
                 <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {quotations.length} quotes.</p>
@@ -3376,7 +3377,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
     const failedItems = useMemo(() => 
         requisition.items.filter(item => 
-            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award' || d.status === 'Declined')
+            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => (d.status === 'Failed_to_Award' || d.status === 'Declined') && d.status !== 'Restarted')
         ), [requisition.items]);
 
     const deadline = useMemo(() => {
