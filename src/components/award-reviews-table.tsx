@@ -35,6 +35,7 @@ import {
   FileText,
   FileBarChart2,
   AlertTriangle,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -213,10 +214,13 @@ export function AwardReviewsTable() {
                             <div className="flex flex-col">
                                 <span>{req.title}</span>
                                 {req.approverComment && (
-                                    <div className="text-xs text-destructive flex items-start gap-1 mt-1">
-                                        <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                                    <div className={`text-xs flex items-start gap-1 mt-1 ${req.status === 'Rejected' ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                        {req.status === 'Rejected' 
+                                            ? <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                                            : <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
+                                        }
                                         <div className="flex flex-col">
-                                            <span>Rejected with comment:</span>
+                                            <span>{req.status === 'Rejected' ? 'Rejected with comment:' : 'Comment:'}</span>
                                             <span className="whitespace-pre-wrap break-words italic">"{req.approverComment}"</span>
                                         </div>
                                     </div>
