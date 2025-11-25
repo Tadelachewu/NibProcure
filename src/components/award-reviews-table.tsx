@@ -204,6 +204,9 @@ export function AwardReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   const isActionable = req.isActionable ?? false;
+
+                  const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
+                  const isRejectionComment = lastCommentLog?.action.includes('REJECT');
                   
                   return (
                     <TableRow key={req.id}>
@@ -213,13 +216,13 @@ export function AwardReviewsTable() {
                             <div className="flex flex-col">
                                 <span>{req.title}</span>
                                 {req.approverComment && (
-                                    <div className={`text-xs flex items-start gap-1 mt-1 ${req.status === 'Rejected' ? 'text-destructive' : 'text-muted-foreground'}`}>
-                                        {req.status === 'Rejected' 
+                                    <div className={`text-xs flex items-start gap-1 mt-1 ${isRejectionComment ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                        {isRejectionComment 
                                             ? <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
                                             : <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
                                         }
                                         <div className="flex flex-col whitespace-pre-wrap break-words">
-                                            <span className="font-semibold">{req.status === 'Rejected' ? 'Rejection Reason:' : 'Approval Comment:'}</span>
+                                            <span className="font-semibold">{isRejectionComment ? 'Rejection Reason:' : 'Approval Comment:'}</span>
                                             <span className="italic">"{req.approverComment}"</span>
                                         </div>
                                     </div>
