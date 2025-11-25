@@ -331,7 +331,13 @@ export async function PATCH(
         
         if (status === 'Pending_Approval') {
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
-            if (department?.headId) { dataToUpdate.currentApprover = { connect: { id: department.headId } }; }
+            if (department?.headId) { 
+                dataToUpdate.currentApprover = { connect: { id: department.headId } }; 
+                dataToUpdate.status = 'Pending_Approval';
+            } else {
+                dataToUpdate.status = 'PreApproved';
+                dataToUpdate.currentApprover = { disconnect: true };
+            }
             auditAction = 'SUBMIT_FOR_APPROVAL';
             auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
         }
