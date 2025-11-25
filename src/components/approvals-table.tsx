@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -90,6 +89,7 @@ export function ApprovalsTable() {
         setLoading(false);
     }
     
+    // Optional: refetch on window focus to get latest data
     window.addEventListener('focus', fetchRequisitions);
     return () => {
         window.removeEventListener('focus', fetchRequisitions);
@@ -190,7 +190,7 @@ export function ApprovalsTable() {
       <CardHeader>
         <CardTitle>Departmental Approvals</CardTitle>
         <CardDescription>
-          Review and act on items from your department.
+          Review and act on items from your department, or view your approval history.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -340,5 +340,3 @@ export function ApprovalsTable() {
     </>
   );
 }
-
-    

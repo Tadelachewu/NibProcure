@@ -135,7 +135,7 @@ export async function GET(request: Request) {
       if (approverId) {
         whereClause.OR = [
             { currentApproverId: approverId },
-            { reviews: { some: { reviewerId: approverId } } }
+            { approverId: approverId },
         ];
       }
       
