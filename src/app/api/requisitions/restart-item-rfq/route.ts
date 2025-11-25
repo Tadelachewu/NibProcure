@@ -10,19 +10,20 @@ import { format } from 'date-fns';
 const prisma = new PrismaClient();
 
 export async function POST(
-  request: Request,
+  request: Request
 ) {
   try {
     const body = await request.json();
     const { originalRequisitionId, itemIds, vendorIds, newDeadline, actorUserId } = body;
 
-    const actor: User | null = await prisma.user.findUnique({ where: { id: actorUserId }});
+    const actor = await prisma.user.findUnique({ where: { id: actorUserId }, include: { roles: true } });
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
     
-    // --- Authorization Check (simplified for brevity) ---
-    const isAuthorized = (actor.roles as any[])?.some(r => r.name === 'Procurement_Officer' || r.name === 'Admin');
+    // --- Authorization Check ---
+    const userRoles = (actor.roles as any[]).map(r => r.name);
+    const isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
     }
@@ -66,6 +67,12 @@ export async function POST(
                 }
             }
         });
+        
+        // Update the new requisition to have its own transactionId
+        const finalNewReq = await tx.purchaseRequisition.update({
+            where: { id: newReq.id },
+            data: { transactionId: newReq.id }
+        });
 
         await tx.auditLog.create({
             data: {
@@ -74,17 +81,17 @@ export async function POST(
                 action: 'RESTART_ITEM_RFQ',
                 entity: 'Requisition',
                 entityId: originalRequisition.id,
-                details: `Restarted RFQ for ${originalRequisition.items.length} failed items. New requisition created: ${newReq.id}.`
+                details: `Restarted RFQ for ${originalRequisition.items.length} failed items. New requisition created: ${finalNewReq.id}.`
             }
         });
 
         await tx.auditLog.create({
             data: {
-                transactionId: newReq.transactionId,
+                transactionId: finalNewReq.id, // Use the new transaction ID
                 user: { connect: { id: actor.id } },
                 action: 'CREATE_REQUISITION',
                 entity: 'Requisition',
-                entityId: newReq.id,
+                entityId: finalNewReq.id,
                 details: `Requisition created from a restart of failed items from ${originalRequisition.id}. Sent to ${vendorIds.length} vendors.`
             }
         });
@@ -93,7 +100,7 @@ export async function POST(
             where: { id: { in: vendorIds } }
         });
         
-        return { newRequisition: newReq, vendorsToNotify };
+        return { newRequisition: finalNewReq, vendorsToNotify };
     });
     // --- End of Transaction ---
 
