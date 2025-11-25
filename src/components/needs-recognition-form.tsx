@@ -193,9 +193,10 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
         const formattedValues = {
             ...values,
             customQuestions: values.customQuestions?.map(q => ({
-            ...q,
-            options: q.options?.map(opt => opt.value)
-            }))
+                ...q,
+                options: q.options?.map(opt => opt.value)
+            })),
+            evaluationCriteria: values.evaluationCriteria, // Ensure this is passed
         };
 
         const status = isDraft ? 'Draft' : 'Pending_Approval';
@@ -683,29 +684,34 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save as Draft
                 </Button>
-                {isEditMode && (
-                    <AlertDialog>
+                {isEditMode ? (
+                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button type="button" disabled={loading}>
                                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                                Submit for Approval
+                                Resubmit for Approval
                             </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                             <AlertDialogHeader>
                                 <AlertDialogTitle>Are you ready to submit?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                    This will submit the requisition to your department head for approval. You will not be able to edit it after submission unless it is rejected.
+                                    This will resubmit the edited requisition to your department head for approval.
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction onClick={handleFormSubmit}>
-                                    Yes, Submit for Approval
+                                    Yes, Resubmit
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>
+                ) : (
+                    <Button type="submit" disabled={loading}>
+                        {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Submit for Approval
+                    </Button>
                 )}
             </div>
           </form>
