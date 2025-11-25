@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -2320,8 +2319,8 @@ const CommitteeActions = ({
         <Card>
             <CardHeader>
                 <CardTitle>Committee Actions</CardTitle>
-                <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
-            </CardHeader>
+                <CardDescription>Finalize your evaluation for this requisition.</CardHeader>
+            </CardContent>
             <CardContent>
                 <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {quotations.length} quotes.</p>
             </CardContent>
@@ -3377,7 +3376,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
     const failedItems = useMemo(() => 
         requisition.items.filter(item => 
-            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award')
+            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Failed_to_Award' || d.status === 'Declined')
         ), [requisition.items]);
 
     const deadline = useMemo(() => {
@@ -3551,3 +3550,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
 
+
+
+    
