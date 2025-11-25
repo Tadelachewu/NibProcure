@@ -1470,6 +1470,11 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
             </CardHeader>
             <CardContent className="space-y-4">
                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    {quoteItem.imageUrl && (
+                        <div className="md:col-span-2 relative aspect-video">
+                            <Image src={quoteItem.imageUrl} alt={quoteItem.name} layout="fill" objectFit="contain" className="rounded-md" />
+                        </div>
+                    )}
                     <div>
                         <p className="font-semibold text-muted-foreground">Brand/Model Details</p>
                         <p>{quoteItem.brandDetails || 'Not Provided'}</p>
@@ -3516,6 +3521,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
