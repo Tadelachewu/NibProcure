@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -33,6 +34,7 @@ import {
   X,
   FileText,
   FileBarChart2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -207,7 +209,17 @@ export function AwardReviewsTable() {
                     <TableRow key={req.id}>
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                         <TableCell className="font-medium text-primary">{req.id}</TableCell>
-                        <TableCell>{req.title}</TableCell>
+                        <TableCell>
+                            <div className="flex flex-col">
+                                <span>{req.title}</span>
+                                {req.approverComment && (
+                                    <span className="text-xs text-destructive flex items-center gap-1">
+                                        <AlertTriangle className="h-3 w-3"/>
+                                        Rejected with comment: "{req.approverComment}"
+                                    </span>
+                                )}
+                            </div>
+                        </TableCell>
                         <TableCell className="font-semibold">{req.totalPrice.toLocaleString()} ETB</TableCell>
                         <TableCell><Badge variant="secondary">{req.status.replace(/_/g, ' ')}</Badge></TableCell>
                         <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>

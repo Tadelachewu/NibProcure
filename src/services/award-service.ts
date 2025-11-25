@@ -93,6 +93,72 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
 
 
 /**
+ * Finds the correct PREVIOUS approval step for a given requisition when it is rejected.
+ * @param tx - Prisma transaction client.
+ * @param requisition - The full requisition object.
+ * @param actor - The user performing the rejection.
+ * @param reason - The reason for rejection.
+ * @returns An object with the previous status, previous approver ID, and a detailed audit message.
+ */
+export async function getPreviousApprovalStep(tx: Prisma.TransactionClient, requisition: any, actor: User, reason: string) {
+    const totalAwardValue = requisition.totalPrice;
+    
+    const approvalMatrix = await tx.approvalThreshold.findMany({
+      include: {
+        steps: {
+          include: { role: { select: { name: true } } },
+          orderBy: { order: 'asc' }
+        }
+      },
+      orderBy: { min: 'asc' }
+    });
+
+    const relevantTier = approvalMatrix.find(tier => 
+        totalAwardValue >= tier.min && (tier.max === null || totalAwardValue <= tier.max)
+    );
+
+    if (!relevantTier || relevantTier.steps.length === 0) {
+        // No defined steps, rejection sends it back to scoring
+        return {
+            previousStatus: 'Scoring_Complete',
+            previousApproverId: null,
+            auditDetails: `Award rejected by ${(actor.roles as any[]).map(r=>r.name).join(', ')}. No approval tier found, returning to scoring.`
+        };
+    }
+    
+    const currentStepIndex = relevantTier.steps.findIndex(step => 
+        `Pending_${step.role.name}` === requisition.status
+    );
+
+    if (currentStepIndex <= 0) {
+        // This is the first step in the chain. Rejection reverts to Scoring_Complete.
+        return {
+            previousStatus: 'Scoring_Complete',
+            previousApproverId: null, // Unassign it
+            auditDetails: `Award rejected at first step by ${(actor.roles as any[]).map(r=>r.name).join(', ')}. Requisition returned to 'Scoring Complete' for re-evaluation. Reason: "${reason}"`
+        };
+    }
+    
+    const previousStep = relevantTier.steps[currentStepIndex - 1];
+    const previousRoleName = previousStep.role.name;
+    const previousStatus = `Pending_${previousRoleName}`;
+    
+    let previousApproverId: string | null = null;
+    if (!previousRoleName.includes('Committee')) {
+        const previousApprover = await tx.user.findFirst({ where: { roles: { some: { name: previousRoleName } } }});
+        previousApproverId = previousApprover?.id || null;
+    }
+
+    const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
+    return {
+        previousStatus,
+        previousApproverId,
+        auditDetails: `Award rejected by ${actorRoles}. Sent back to previous step: ${previousRoleName.replace(/_/g, ' ')}. Reason: "${reason}"`
+    };
+}
+
+
+/**
  * Performs a "deep clean" of a requisition, deleting all quotes, scores,
  * and resetting committee assignments to prepare for a fresh RFQ process.
  * @param tx - Prisma transaction client.

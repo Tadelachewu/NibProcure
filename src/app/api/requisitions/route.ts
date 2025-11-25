@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -8,7 +9,7 @@ import { decodeJwt } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { isPast } from 'date-fns';
-import { getNextApprovalStep } from '@/services/award-service';
+import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-service';
 
 
 export async function GET(request: Request) {
@@ -285,35 +286,44 @@ export async function PATCH(
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
     
-    // This is a high-level award approval (e.g., by a committee or manager)
-    if (requisition.status.startsWith('Pending_') && newStatus === 'Approved') {
+    // This is a high-level award approval/rejection
+    if (requisition.status.startsWith('Pending_')) {
         const userRoles = (user.roles as any[]).map(r => r.name);
-        console.log(`[PATCH /api/requisitions] Handling award approval by user with roles: ${userRoles.join(', ')}`);
+        console.log(`[PATCH /api/requisitions] Handling award action by user with roles: ${userRoles.join(', ')}`);
         
-        let isAuthorizedToApprove = false;
+        let isAuthorizedToAct = false;
         if (requisition.currentApproverId === userId) {
-            isAuthorizedToApprove = true;
+            isAuthorizedToAct = true;
         } else {
              const requiredRoleForStatus = requisition.status.replace('Pending_', '');
              if (userRoles.includes(requiredRoleForStatus) || userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-                isAuthorizedToApprove = true;
+                isAuthorizedToAct = true;
              }
         }
 
-        if (!isAuthorizedToApprove) {
+        if (!isAuthorizedToAct) {
             console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
-            return NextResponse.json({ error: 'You are not authorized to approve this item at its current step.' }, { status: 403 });
+            return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
         }
         
-        console.log(`[PATCH /api/requisitions] Award approval transaction started for Req ID: ${id}`);
+        console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
         const transactionResult = await prisma.$transaction(async (tx) => {
-            const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
-            console.log(`[PATCH /api/requisitions] Next step from service: Status=${nextStatus}, Approver=${nextApproverId}`);
-            
-            dataToUpdate.status = nextStatus;
-            dataToUpdate.currentApproverId = nextApproverId;
-            auditDetails = serviceAuditDetails;
-            auditAction = 'APPROVE_AWARD_STEP';
+
+            if (newStatus === 'Rejected') {
+                const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
+                dataToUpdate.status = previousStatus;
+                dataToUpdate.currentApproverId = previousApproverId;
+                dataToUpdate.approverComment = comment; // Save the rejection reason
+                auditDetails = serviceAuditDetails;
+                auditAction = 'REJECT_AWARD_STEP';
+            } else { // Approved
+                const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
+                dataToUpdate.status = nextStatus;
+                dataToUpdate.currentApproverId = nextApproverId;
+                dataToUpdate.approverComment = comment; // Save approval comment
+                auditDetails = serviceAuditDetails;
+                auditAction = 'APPROVE_AWARD_STEP';
+            }
 
             const updatedRequisition = await tx.purchaseRequisition.update({
                 where: { id },
@@ -325,7 +335,7 @@ export async function PATCH(
                     data: {
                         requisition: { connect: { id: id } },
                         author: { connect: { id: userId } },
-                        decision: 'APPROVED',
+                        decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
                         decisionBody: requisition.status.replace(/_/g, ' '),
                         justification: minute.justification,
                         attendees: {
@@ -346,13 +356,13 @@ export async function PATCH(
                     }
                 },
                 update: {
-                    decision: 'APPROVED',
+                    decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
                     comment: comment,
                 },
                 create: {
                     requisition: { connect: { id: id } },
                     reviewer: { connect: { id: userId } },
-                    decision: 'APPROVED',
+                    decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
                     comment: comment,
                 }
             });
@@ -371,11 +381,12 @@ export async function PATCH(
 
             return updatedRequisition;
         });
-        console.log(`[PATCH /api/requisitions] Award approval transaction complete for Req ID: ${id}`);
+        console.log(`[PATCH /api/requisitions] Award action transaction complete for Req ID: ${id}`);
         return NextResponse.json(transactionResult);
+    }
 
     // This is the initial departmental approval
-    } else if (requisition.status === 'Pending_Approval') {
+    else if (requisition.status === 'Pending_Approval') {
         console.log(`[PATCH /api/requisitions] Handling departmental approval for Req ID: ${id}`);
         if (requisition.currentApproverId !== userId && !user.roles.some(r => r.name === 'Admin')) {
             return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
@@ -383,11 +394,13 @@ export async function PATCH(
         if (newStatus === 'Rejected') {
             dataToUpdate.status = 'Rejected';
             dataToUpdate.currentApprover = { disconnect: true };
+            dataToUpdate.approverComment = comment;
             auditAction = 'REJECT_REQUISITION';
             auditDetails = `Requisition ${id} was rejected by department head with comment: "${comment}".`;
         } else { // Department head approves
              dataToUpdate.status = 'PreApproved'; 
              dataToUpdate.currentApprover = { disconnect: true };
+             dataToUpdate.approverComment = comment;
              auditAction = 'PRE_APPROVE_REQUISITION';
              auditDetails = `Requisition ${id} was pre-approved by department head with comment: "${comment}". Ready for RFQ.`;
         }
@@ -412,6 +425,7 @@ export async function PATCH(
             dataToUpdate.currentApprover = { connect: { id: department.headId } };
             dataToUpdate.status = 'Pending_Approval';
         } else {
+            // If no department head, auto-approve to next stage
             dataToUpdate.status = 'PreApproved';
             dataToUpdate.currentApprover = { disconnect: true };
         }
@@ -629,5 +643,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
