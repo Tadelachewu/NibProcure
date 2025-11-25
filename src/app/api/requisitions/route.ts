@@ -311,21 +311,24 @@ export async function PATCH(
                 })),
             },
         };
-         const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
-         if (oldCriteria) {
-             await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
-             await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
-             await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id } });
-         }
+        // Safely check for evaluation criteria before attempting to delete/recreate
+        if (body.evaluationCriteria) {
+             const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
+             if (oldCriteria) {
+                 await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+                 await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+                 await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id } });
+             }
 
-         dataToUpdate.evaluationCriteria = {
-            create: {
-                financialWeight: body.evaluationCriteria.financialWeight,
-                technicalWeight: body.evaluationCriteria.technicalWeight,
-                financialCriteria: { create: body.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: c.weight })) },
-                technicalCriteria: { create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: c.weight })) }
-            }
-        };
+             dataToUpdate.evaluationCriteria = {
+                create: {
+                    financialWeight: body.evaluationCriteria.financialWeight,
+                    technicalWeight: body.evaluationCriteria.technicalWeight,
+                    financialCriteria: { create: body.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: c.weight })) },
+                    technicalCriteria: { create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: c.weight })) }
+                }
+            };
+        }
         
         if (status === 'Pending_Approval') {
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
