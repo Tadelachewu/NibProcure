@@ -219,7 +219,7 @@ export function AwardReviewsTable() {
                                             : <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
                                         }
                                         <div className="flex flex-col whitespace-pre-wrap break-words">
-                                            <span>{req.status === 'Rejected' ? 'Rejection Reason:' : 'Approval Comment:'}</span>
+                                            <span className="font-semibold">{req.status === 'Rejected' ? 'Rejection Reason:' : 'Approval Comment:'}</span>
                                             <span className="italic">"{req.approverComment}"</span>
                                         </div>
                                     </div>
