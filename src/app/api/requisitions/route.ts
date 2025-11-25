@@ -24,9 +24,9 @@ export async function GET(request: Request) {
   const token = authHeader?.split(' ')[1];
   let userPayload: (User & { roles: { name: UserRole }[] }) | null = null;
   if(token) {
-    const decodedUser = decodeJwt<User & { roles: { name: UserRole }[] }>(token);
+    const decodedUser = decodeJwt<User & { roles: UserRole[] }>(token);
     if(decodedUser) {
-        userPayload = decodedUser;
+        userPayload = decodedUser as any;
     }
   }
 
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
         userRoles.forEach(roleName => {
             orConditions.push({ status: `Pending_${roleName}` });
         });
-
+        
         // Admins and Procurement Officers can see all reviews for better oversight
         if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
              const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
@@ -104,41 +104,29 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        const validStatuses = [
-            'PreApproved',
-            'PostApproved',
-            'Accepting_Quotes',
-            'Scoring_In_Progress',
-            'Scoring_Complete',
-            'Award_Declined',
-            'Awarded',
-            'PO_Created',
-            'Fulfilled',
-            'Closed',
-            'Pending_Committee_B_Review',
-            'Pending_Committee_A_Recommendation',
-            'Pending_Managerial_Approval',
-            'Pending_Director_Approval',
-            'Pending_VP_Approval',
-            'Pending_President_Approval'
+        const rfqLifecycleStatuses = [
+            'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
+            'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
+            'PO_Created', 'Fulfilled', 'Closed', 'Pending_Committee_B_Review', 
+            'Pending_Committee_A_Recommendation', 'Pending_Managerial_Approval', 
+            'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval'
         ];
 
-        if (userPayload?.roles.some(r => r.name === 'Committee_Member')) {
-            whereClause.OR = [
-                { financialCommitteeMembers: { some: { id: userPayload.id } } },
-                { technicalCommitteeMembers: { some: { id: userPayload.id } } },
-            ];
-            whereClause.AND = [
-                ...(whereClause.AND || []),
-                {
-                    status: {
-                        in: validStatuses,
-                    },
-                },
-            ];
+        const userRoles = userPayload?.roles.map(r => r.name) || [];
+
+        if (userRoles.includes('Committee_Member')) {
+            // Committee members see requisitions they are assigned to within the RFQ lifecycle
+            whereClause = {
+                status: { in: rfqLifecycleStatuses },
+                OR: [
+                    { financialCommitteeMembers: { some: { id: userPayload?.id } } },
+                    { technicalCommitteeMembers: { some: { id: userPayload?.id } } },
+                ],
+            };
         } else {
-             whereClause.status = {
-                in: validStatuses
+            // Other roles (like Admin, Procurement Officer) see all requisitions in the RFQ lifecycle
+            whereClause = {
+                status: { in: rfqLifecycleStatuses }
             };
         }
     } else {
