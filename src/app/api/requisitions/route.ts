@@ -103,14 +103,17 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        const rfqLifecycleStatuses = [
+        // Dynamically fetch all roles to construct all possible "Pending" statuses
+        const allRoles = await prisma.role.findMany({ select: { name: true } });
+        const allPendingStatuses = allRoles.map(role => `Pending_${role.name}`);
+
+        const baseRfqLifecycleStatuses = [
             'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
             'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
-            'PO_Created', 'Fulfilled', 'Closed', 'Pending_Committee_B_Review', 
-            'Pending_Committee_A_Recommendation', 'Pending_Managerial_Approval',
-            'Pending_Manager_Procurement_Division',
-            'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval'
+            'PO_Created', 'Fulfilled', 'Closed'
         ];
+        
+        const rfqLifecycleStatuses = [...baseRfqLifecycleStatuses, ...allPendingStatuses];
 
         const userRoles = userPayload?.roles.map(r => r.name) || [];
 
