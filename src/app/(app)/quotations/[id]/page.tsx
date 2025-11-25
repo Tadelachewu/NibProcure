@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -2107,7 +2106,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                                         {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
                                                                                             <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
                                                                                                 <div className="flex justify-between items-center font-medium">
-                                                                                                    <p>{getCriterionName(s.financialCriterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                                                     <p>{getCriterionName(s.financialCriterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
                                                                                                     <p className="font-bold">{s.score}/100</p>
                                                                                                 </div>
                                                                                                 {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
@@ -2271,12 +2270,10 @@ const CommitteeActions = ({
     user,
     requisition,
     quotations,
-    onFinalScoresSubmitted,
 }: {
     user: User,
     requisition: PurchaseRequisition,
     quotations: Quotation[],
-    onFinalScoresSubmitted: () => void,
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
@@ -2304,7 +2301,6 @@ const CommitteeActions = ({
                 throw new Error(errorData.error || 'Failed to submit scores');
             }
             toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
-            onFinalScoresSubmitted();
         } catch (error) {
              toast({
                 variant: 'destructive',
@@ -2321,7 +2317,7 @@ const CommitteeActions = ({
             <CardHeader>
                 <CardTitle>Committee Actions</CardTitle>
                 <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
-            </CardContent>
+            </CardHeader>
             <CardContent>
                 <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {quotations.length} quotes.</p>
             </CardContent>
@@ -3039,7 +3035,6 @@ export default function QuotationDetailsPage() {
                 user={user}
                 requisition={requisition}
                 quotations={quotations}
-                onFinalScoresSubmitted={fetchRequisitionAndQuotes}
              />
         )}
 
@@ -3551,6 +3546,9 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
 
+
+
+    
 
 
     
