@@ -218,9 +218,9 @@ export function AwardReviewsTable() {
                                             ? <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
                                             : <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
                                         }
-                                        <div className="flex flex-col">
-                                            <span>{req.status === 'Rejected' ? 'Rejected with comment:' : 'Comment:'}</span>
-                                            <span className="whitespace-pre-wrap break-words italic">"{req.approverComment}"</span>
+                                        <div className="flex flex-col whitespace-pre-wrap break-words">
+                                            <span>{req.status === 'Rejected' ? 'Rejection Reason:' : 'Approval Comment:'}</span>
+                                            <span className="italic">"{req.approverComment}"</span>
                                         </div>
                                     </div>
                                 )}
