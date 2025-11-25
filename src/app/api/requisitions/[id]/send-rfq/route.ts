@@ -32,12 +32,12 @@ export async function POST(
     let isAuthorized = false;
     const userRoles = user.roles.map(r => r.name as UserRole);
 
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+    if (userRoles.includes('Admin')) {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
 
-        if (userRoles.includes('Admin')) {
-            isAuthorized = true;
-        } else if (setting.type === 'specific') {
+        if (setting.type === 'specific') {
             isAuthorized = setting.userId === userId;
         } else { // 'all' case
             isAuthorized = userRoles.includes('Procurement_Officer');
@@ -70,9 +70,11 @@ export async function POST(
              return NextResponse.json({ error: `Quorum not met. At least ${rfqQuorum} vendors must be selected.` }, { status: 400 });
         }
     }
-
-    if (requisition.status !== 'PreApproved') {
-        return NextResponse.json({ error: `Cannot start RFQ for a requisition that is not in PreApproved state.` }, { status: 400 });
+    
+    // Allow sending from PreApproved or if re-opening a quorum-failed RFQ
+    const validInitialStatuses = ['PreApproved', 'Accepting_Quotes'];
+    if (!validInitialStatuses.includes(requisition.status)) {
+        return NextResponse.json({ error: `Cannot start RFQ for a requisition that is not in a valid state.` }, { status: 400 });
     }
     
     const updatedRequisition = await prisma.purchaseRequisition.update({
