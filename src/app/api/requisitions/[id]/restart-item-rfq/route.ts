@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { User, UserRole } from '@/lib/types';
+import { User, UserRole, PerItemAwardDetail } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format } from 'date-fns';
 
@@ -22,8 +22,19 @@ export async function POST(
     }
     
     // --- Authorization Check ---
-    const userRoles = actor.roles.map(r => r.name);
-    const isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    const userRoles = (actor.roles as any[]).map(r => r.name);
+
+    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userId?: string };
+        if (setting.type === 'specific') {
+            isAuthorized = setting.userId === actorUserId;
+        } else { // 'all' case
+            isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+        }
+    }
+    
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
     }
@@ -34,7 +45,16 @@ export async function POST(
 
     const originalRequisition = await prisma.purchaseRequisition.findUnique({
       where: { id: originalRequisitionId },
-      include: { items: { where: { id: { in: itemIds } } } }
+      include: { 
+          items: { where: { id: { in: itemIds } } },
+          evaluationCriteria: {
+              include: {
+                  financialCriteria: true,
+                  technicalCriteria: true,
+              }
+          },
+          customQuestions: true,
+      }
     });
 
     if (!originalRequisition) {
@@ -56,7 +76,11 @@ export async function POST(
                 totalPrice: totalValue,
                 deadline: new Date(newDeadline),
                 allowedVendorIds: vendorIds,
-                parentId: originalRequisition.id, // Link to the parent
+                parent: { 
+                    connect: {
+                        id: originalRequisition.id 
+                    }
+                },
                 items: {
                     create: originalRequisition.items.map(item => ({
                         name: item.name,
@@ -64,15 +88,47 @@ export async function POST(
                         quantity: item.quantity,
                         unitPrice: item.unitPrice,
                     }))
-                }
+                },
+                customQuestions: {
+                    create: originalRequisition.customQuestions?.map(q => ({
+                        questionText: q.questionText,
+                        questionType: q.questionType,
+                        isRequired: q.isRequired,
+                        options: q.options || [],
+                    }))
+                },
+                evaluationCriteria: originalRequisition.evaluationCriteria ? {
+                    create: {
+                        financialWeight: originalRequisition.evaluationCriteria.financialWeight,
+                        technicalWeight: originalRequisition.evaluationCriteria.technicalWeight,
+                        financialCriteria: {
+                            create: originalRequisition.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: c.weight }))
+                        },
+                        technicalCriteria: {
+                            create: originalRequisition.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: c.weight }))
+                        }
+                    }
+                } : undefined,
             },
         });
         
         // Update the new requisition to have its own transactionId
-        await tx.purchaseRequisition.update({
+        const finalNewReq = await tx.purchaseRequisition.update({
             where: { id: newReq.id },
             data: { transactionId: newReq.id }
         });
+
+        // Mark items on the original requisition as "Restarted"
+        for (const itemId of itemIds) {
+            const originalItem = await tx.requisitionItem.findUnique({ where: { id: itemId }});
+            if (originalItem && originalItem.perItemAwardDetails) {
+                const updatedDetails = (originalItem.perItemAwardDetails as PerItemAwardDetail[]).map(d => ({ ...d, status: 'Restarted' as const }));
+                await tx.requisitionItem.update({
+                    where: { id: itemId },
+                    data: { perItemAwardDetails: updatedDetails }
+                });
+            }
+        }
 
         await tx.auditLog.create({
             data: {
@@ -81,17 +137,17 @@ export async function POST(
                 action: 'RESTART_ITEM_RFQ',
                 entity: 'Requisition',
                 entityId: originalRequisition.id,
-                details: `Restarted RFQ for ${originalRequisition.items.length} failed items. New requisition created: ${newReq.id}.`
+                details: `Restarted RFQ for ${originalRequisition.items.length} failed items. New requisition created: ${finalNewReq.id}.`
             }
         });
 
         await tx.auditLog.create({
             data: {
-                transactionId: newReq.id, // Use the new transaction ID
+                transactionId: finalNewReq.id, // Use the new transaction ID
                 user: { connect: { id: actor.id } },
                 action: 'CREATE_REQUISITION',
                 entity: 'Requisition',
-                entityId: newReq.id,
+                entityId: finalNewReq.id,
                 details: `Requisition created from a restart of failed items from ${originalRequisition.id}. Sent to ${vendorIds.length} vendors.`
             }
         });
@@ -100,7 +156,7 @@ export async function POST(
             where: { id: { in: vendorIds } }
         });
         
-        return { newRequisition: newReq, vendorsToNotify };
+        return { newRequisition: finalNewReq, vendorsToNotify };
     });
     // --- End of Transaction ---
 
