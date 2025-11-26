@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -330,7 +331,6 @@ export async function handleAwardRejection(
  * @returns A message indicating the result of the operation.
  */
 export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
-    console.log(`[promoteStandby] Starting promotion for Req ID: ${requisitionId}`);
     const requisition = await tx.purchaseRequisition.findUnique({
         where: { id: requisitionId },
         include: { items: true, quotations: { include: { scores: { include: { itemScores: true } }, items: true } } }
@@ -341,59 +341,74 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
     }
     
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
-    console.log(`[promoteStandby] Award strategy is: ${awardStrategy}`);
 
     if (awardStrategy === 'item') {
         let promotedCount = 0;
         let auditDetailsMessage = 'Promoted standby vendors: ';
 
-        for (const item of requisition.items) {
+        const itemsWithDeclinedBids = requisition.items.filter(item => 
+            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Declined')
+        );
+
+        if (itemsWithDeclinedBids.length === 0) {
+            return { message: "No items with declined awards found to promote." };
+        }
+
+        for (const item of itemsWithDeclinedBids) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-            const needsPromotion = currentDetails.some(d => d.status === 'Declined');
             
-            if (needsPromotion) {
-                // Create a set of vendors who have already declined or failed for this specific item.
-                const ineligibleVendorIds = new Set(
-                    currentDetails.filter(d => d.status === 'Declined' || d.status === 'Failed_to_Award').map(d => d.vendorId)
-                );
+            const declinedBids = currentDetails.filter(d => d.status === 'Declined');
+            
+            const allBidsForItem = requisition.quotations.flatMap(q => q.items.filter(i => i.requisitionItemId === item.id).map(qi => ({
+                ...qi,
+                vendorId: q.vendorId,
+                vendorName: q.vendorName,
+                finalScore: q.finalAverageScore || 0, // Simplified for this logic
+            })));
+            
+            const allRanksForItem = currentDetails.map(d => d.rank);
+            const highestDeclinedRank = Math.min(...declinedBids.map(d => d.rank));
 
-                // Find the highest-ranked standby bid from a vendor who is NOT in the ineligible set.
-                const eligibleStandbys = currentDetails
-                    .filter(d => d.status === 'Standby' && !ineligibleVendorIds.has(d.vendorId))
-                    .sort((a, b) => a.rank - b.rank);
+            const nextStandby = currentDetails.find(d => d.rank > highestDeclinedRank && d.status === 'Standby');
+
+            if (nextStandby) {
+                promotedCount++;
+                auditDetailsMessage += `${nextStandby.vendorName} for item ${item.name}. `;
                 
-                if (eligibleStandbys.length > 0) {
-                    const standbyToPromote = eligibleStandbys[0];
-                    promotedCount++;
-                    auditDetailsMessage += `${standbyToPromote.vendorName} for item ${item.name}. `;
-                    
-                    const updatedDetails = currentDetails.map(d => {
-                        if (d.quoteItemId === standbyToPromote.quoteItemId) return { ...d, status: 'Pending_Award' as const };
-                        // Mark the bid that triggered this as permanently failed
-                        if (d.status === 'Declined') return { ...d, status: 'Failed_to_Award' as const };
-                        return d;
-                    });
+                const updatedDetails = currentDetails.map(d => {
+                    if (d.quoteItemId === nextStandby.quoteItemId) return { ...d, status: 'Pending_Award' as const };
+                    if (d.status === 'Declined') return { ...d, status: 'Failed_to_Award' as const };
+                    return d;
+                });
 
-                     await tx.requisitionItem.update({
-                        where: { id: item.id },
-                        data: { perItemAwardDetails: updatedDetails as any }
-                    });
-                } else {
-                     // No eligible standbys left, mark the declined bid as failed permanently.
-                     const updatedDetails = currentDetails.map(d => 
-                        d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
-                    );
-                     await tx.requisitionItem.update({
-                        where: { id: item.id },
-                        data: { perItemAwardDetails: updatedDetails as any }
-                    });
-                }
+                await tx.requisitionItem.update({
+                    where: { id: item.id },
+                    data: { perItemAwardDetails: updatedDetails as any }
+                });
+            } else {
+                 const updatedDetails = currentDetails.map(d => 
+                    d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
+                );
+                 await tx.requisitionItem.update({
+                    where: { id: item.id },
+                    data: { perItemAwardDetails: updatedDetails as any }
+                });
             }
         }
         
         if (promotedCount === 0) {
+            const allAwardsSettled = requisition.items.every(item => {
+                const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                return !details.some(d => d.status === 'Declined' || d.status === 'Standby');
+            });
+            
+            if (allAwardsSettled) {
+                await tx.purchaseRequisition.update({ where: { id: requisitionId }, data: { status: 'PO_Created' }});
+                return { message: 'No more standby vendors available. The award process is now complete for this requisition.'};
+            }
+            
             await tx.purchaseRequisition.update({ where: { id: requisitionId }, data: { status: 'Scoring_Complete' }});
-            return { message: 'No more standby vendors available for any declined items. The award process is now complete for this requisition.'};
+            return { message: 'No eligible standby vendors found for promotion. Please review the awards.'};
         }
         
         const updatedRequisition = await tx.purchaseRequisition.findUnique({ where: {id: requisitionId}, include: { items: true }});
