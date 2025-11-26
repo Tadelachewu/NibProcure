@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -368,6 +367,17 @@ export async function PATCH(
             console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
             return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
         }
+        
+        // --- START SAFEGUARD ---
+        // Before proceeding, check if the underlying award has been declined by the vendor.
+        const hasBeenDeclined = requisition.quotations.some(q => q.status === 'Declined');
+        const hasItemBeenDeclined = requisition.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
+
+        if (hasBeenDeclined || hasItemBeenDeclined) {
+            console.error(`[PATCH /api/requisitions] Aborting approval: Award for Req ${id} was declined by the vendor.`);
+            return NextResponse.json({ error: 'Cannot approve. The award was declined by the vendor. Please refresh to see the latest status.'}, { status: 409 }); // 409 Conflict
+        }
+        // --- END SAFEGUARD ---
         
         console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
         const transactionResult = await prisma.$transaction(async (tx) => {
