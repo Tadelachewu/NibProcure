@@ -57,16 +57,20 @@ export async function POST(
                 let isFullyComplete = false;
 
                 if (isPerItem) {
-                    // For per-item, every item must be in a terminal state
+                    // For per-item, every item must be in a terminal state (Accepted, Failed, or Restarted)
                     isFullyComplete = requisition.items.every(item => {
                         const details = item.perItemAwardDetails as PerItemAwardDetail[] | null;
-                        if (!details || details.length === 0) return false; // Not resolved if no awards were ever made
-                        // An item is resolved if its winning bid is Accepted/Paid, or if it failed/was restarted
-                        return details.some(d => d.status === 'Accepted' || d.status === 'Failed_to_Award' || d.status === 'Restarted');
+                        if (!details || details.length === 0) {
+                            // If an item never had an award attempt, it's not complete.
+                            return false; 
+                        }
+                        // An item is considered resolved if there are no more active awards ('Awarded', 'Pending_Award', 'Standby').
+                        return !details.some(d => ['Awarded', 'Pending_Award', 'Standby'].includes(d.status));
                     });
 
                 } else {
-                    // For single-vendor, check if all POs are delivered/closed
+                    // For single-vendor, check if all POs are delivered/closed.
+                    // This logic is simpler as only one vendor wins everything.
                     const allPOsForRequisition = await tx.purchaseOrder.findMany({
                         where: { requisitionId: requisition.id }
                     });

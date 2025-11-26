@@ -62,44 +62,24 @@ export async function GET(request: Request) {
         }
         
         whereClause.OR = [
+            // Requisitions actively accepting quotes that this vendor hasn't quoted on yet
             {
                 AND: [
                     { status: 'Accepting_Quotes' }, 
                     { deadline: { not: null } },
                     { deadline: { gt: new Date() } },
-                    {
-                        OR: [
+                    { OR: [
                         { allowedVendorIds: { isEmpty: true } },
                         { allowedVendorIds: { has: userPayload.vendorId } },
-                        ],
+                      ],
                     },
-                    {
-                        NOT: {
-                        quotations: {
-                            some: {
-                            vendorId: userPayload.vendorId,
-                            },
-                        },
-                        },
-                    },
+                    { NOT: { quotations: { some: { vendorId: userPayload.vendorId } } } },
                 ]
             },
-            {
-                quotations: {
-                    some: {
-                        vendorId: userPayload.vendorId,
-                    }
-                }
-            },
-            {
-                items: {
-                  some: {
-                    perItemAwardDetails: {
-                      array_contains: [{vendorId: userPayload.vendorId}],
-                    },
-                  },
-                },
-            }
+            // Requisitions this vendor has already quoted on
+            { quotations: { some: { vendorId: userPayload.vendorId } } },
+            // Requisitions where this vendor has a per-item award status (even if they didn't quote on everything)
+            { items: { some: { perItemAwardDetails: { path: '$[*].vendorId', array_contains: userPayload.vendorId } } } }
         ];
 
     } else if (forQuoting) {
@@ -358,10 +338,21 @@ export async function PATCH(
             isAuthorizedToAct = true;
         } else {
              const requiredRoleForStatus = requisition.status.replace('Pending_', '');
-             if (userRoles.includes(requiredRoleForStatus) || userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+             if (userRoles.includes(requiredRoleForStatus) || userRoles.includes('Admin')) {
                 isAuthorizedToAct = true;
              }
         }
+        
+        // This is a special check for Procurement Officer who can also act as fallback
+        const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' }});
+        if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+            const setting = rfqSenderSetting.value as { type: string, userId?: string };
+            const isRFQManager = setting.type === 'all' ? userRoles.includes('Procurement_Officer') : setting.userId === userId;
+            if (isRFQManager) {
+                isAuthorizedToAct = true;
+            }
+        }
+
 
         if (!isAuthorizedToAct) {
             console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
@@ -369,7 +360,6 @@ export async function PATCH(
         }
         
         // --- START SAFEGUARD ---
-        // Before proceeding, check if the underlying award has been declined by the vendor.
         const hasBeenDeclined = requisition.quotations.some(q => q.status === 'Declined');
         const hasItemBeenDeclined = requisition.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
 

@@ -12,6 +12,9 @@ export async function GET(
 ) {
   try {
     const { id } = params;
+    if (!id) {
+        return NextResponse.json({ error: 'Requisition ID is required.' }, { status: 400 });
+    }
     const requisition = await prisma.purchaseRequisition.findUnique({
       where: { id },
       include: {
@@ -56,7 +59,7 @@ export async function GET(
   } catch (error) {
      console.error('Failed to fetch requisition:', error);
      if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
@@ -113,7 +116,7 @@ export async function DELETE(
   } catch (error) {
      console.error('Failed to delete requisition:', error);
      if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
