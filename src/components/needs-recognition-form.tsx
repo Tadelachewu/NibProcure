@@ -61,7 +61,7 @@ const evaluationCriteriaSchema = z.object({
       weight: z.coerce.number().min(1, "Weight must be at least 1%.").max(100, "Weight cannot exceed 100%."),
 });
 
-const formSchema = z.object({
+const baseFormSchema = z.object({
   requesterId: z.string(),
   department: z.string().min(1, 'Department is required.'),
   title: z.string().min(5, 'Title must be at least 5 characters.'),
@@ -97,7 +97,9 @@ const formSchema = z.object({
       requisitionItemId: z.string().optional(),
     })
   ).optional(),
-}).refine(data => data.evaluationCriteria.financialWeight + data.evaluationCriteria.technicalWeight === 100, {
+});
+
+const formSchema = baseFormSchema.refine(data => data.evaluationCriteria.financialWeight + data.evaluationCriteria.technicalWeight === 100, {
     message: "Total weight for Financial and Technical criteria must be 100%.",
     path: ["evaluationCriteria.financialWeight"],
 }).refine(data => data.evaluationCriteria.financialCriteria.reduce((acc, c) => acc + c.weight, 0) === 100, {
@@ -108,10 +110,9 @@ const formSchema = z.object({
     path: ["evaluationCriteria.technicalCriteria"],
 });
 
+
 // A more lenient schema for saving drafts
-const draftFormSchema = formSchema.deepPartial().extend({
-    title: z.string().optional(), // Make title optional for drafts
-});
+const draftFormSchema = baseFormSchema.deepPartial();
 
 
 interface NeedsRecognitionFormProps {
