@@ -356,8 +356,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
             if (declinedAward) {
                 // Find all standby bids for the same original requisition item
-                const allBidsForItem = requisitions
-                    .flatMap(r => r.quotations || [])
+                const allBidsForItem = requisition.quotations
                     .flatMap(q => q.items)
                     .filter(quoteItem => quoteItem.requisitionItemId === item.id);
 
