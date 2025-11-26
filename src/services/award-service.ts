@@ -350,11 +350,17 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
         for (const item of requisition.items) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-            const hasDeclinedWinner = currentDetails.some(d => d.status === 'Declined');
+            const declinedAward = currentDetails.find(d => d.status === 'Declined');
             
-            console.log(`[promoteStandby] Checking item "${item.name}". Has declined winner: ${hasDeclinedWinner}`);
+            console.log(`[promoteStandby] Checking item "${item.name}". Has declined winner: ${!!declinedAward}`);
 
-            if (hasDeclinedWinner) {
+            if (declinedAward) {
+                // Find all standby bids for the same original requisition item
+                const allBidsForItem = requisitions
+                    .flatMap(r => r.quotations || [])
+                    .flatMap(q => q.items)
+                    .filter(quoteItem => quoteItem.requisitionItemId === item.id);
+
                 const standbyToPromote = currentDetails
                     .filter(d => d.status === 'Standby')
                     .sort((a, b) => (a.rank || 99) - (b.rank || 99))[0]; // Get highest-ranked standby
@@ -362,13 +368,14 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                 if (standbyToPromote) {
                     console.log(`[promoteStandby] Found standby for item "${item.name}": ${standbyToPromote.vendorName}`);
                     const updatedDetails = currentDetails.map(d => {
-                        if (d.vendorId === standbyToPromote.vendorId && d.rank === standbyToPromote.rank) {
+                        // Promote the correct standby vendor
+                        if (d.quoteItemId === standbyToPromote.quoteItemId) {
                             promotedCount++;
                             auditDetailsMessage += `${d.vendorName} for item ${item.name}. `;
                             return { ...d, status: 'Pending_Award' as const };
                         }
                         // Change 'Declined' to 'Failed_to_Award' to finalize it
-                        if (d.status === 'Declined') {
+                        if (d.quoteItemId === declinedAward.quoteItemId) {
                             return { ...d, status: 'Failed_to_Award' as const };
                         }
                         return d;
