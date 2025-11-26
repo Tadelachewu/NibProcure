@@ -108,6 +108,12 @@ const formSchema = z.object({
     path: ["evaluationCriteria.technicalCriteria"],
 });
 
+// A more lenient schema for saving drafts
+const draftFormSchema = formSchema.deepPartial().extend({
+    title: z.string().optional(), // Make title optional for drafts
+});
+
+
 interface NeedsRecognitionFormProps {
     existingRequisition?: PurchaseRequisition;
     onSuccess?: () => void;
@@ -189,6 +195,23 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
 
   const onFinalSubmit = async (values: z.infer<typeof formSchema>, isDraft: boolean) => {
     setLoading(true);
+
+    const schemaToUse = isDraft ? draftFormSchema : formSchema;
+    const validationResult = schemaToUse.safeParse(values);
+
+    if (!validationResult.success) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Please check the form for errors before submitting.",
+      });
+      console.error(validationResult.error.flatten().fieldErrors);
+      setLoading(false);
+      // Manually trigger form validation to show errors
+      await form.trigger();
+      return;
+    }
+    
     try {
         const formattedValues = {
             ...values,
@@ -237,7 +260,9 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
     onFinalSubmit(form.getValues(), true);
   }
 
-  const handleFormSubmit = form.handleSubmit((data) => onFinalSubmit(data, false));
+  const handleFormSubmit = async () => {
+    await onFinalSubmit(form.getValues(), false);
+  };
 
 
   const financialWeight = form.watch('evaluationCriteria.financialWeight');
@@ -260,7 +285,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
             </Alert>
          )}
         <Form {...form}>
-          <form onSubmit={handleFormSubmit} className="space-y-8">
+          <form onSubmit={(e) => { e.preventDefault(); handleFormSubmit(); }} className="space-y-8">
             <div className="grid md:grid-cols-2 gap-8">
                 <FormItem>
                   <FormLabel>Your Name</FormLabel>
@@ -683,30 +708,29 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save as Draft
                 </Button>
-                {isEditMode && (
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button type="button" disabled={loading}>
-                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                                Submit for Approval
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Are you ready to submit?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This will submit the requisition to your department head for approval. You will not be able to edit it after submission unless it is rejected.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleFormSubmit}>
-                                    Yes, Submit for Approval
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                )}
+                
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button type="button" disabled={loading}>
+                            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                            Submit for Approval
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you ready to submit?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will submit the requisition to your department head for approval. You will not be able to edit it after submission unless it is rejected.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleFormSubmit}>
+                                Yes, Submit for Approval
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
           </form>
         </Form>
