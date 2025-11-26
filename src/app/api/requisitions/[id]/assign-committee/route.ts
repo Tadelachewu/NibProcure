@@ -30,7 +30,7 @@ export async function POST(
 
     const user = await prisma.user.findUnique({where: {id: userId}, include: { roles: true }});
     if (!user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
     
     // Correct Authorization Logic
@@ -47,9 +47,8 @@ export async function POST(
         }
     }
 
-
     if (!isAuthorized) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        return NextResponse.json({ error: 'Unauthorized to assign committees based on system settings.' }, { status: 403 });
     }
     
     // Start a transaction to ensure atomicity
