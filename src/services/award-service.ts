@@ -356,8 +356,8 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
             if (declinedAward) {
                 // Correctly filter to only standby vendors for THIS item who have not previously declined/failed.
-                const standbyToPromote = currentDetails
-                    .filter(d => d.status === 'Standby' && d.vendorId !== declinedAward.vendorId)
+                 const standbyToPromote = currentDetails
+                    .filter(d => d.status === 'Standby')
                     .sort((a, b) => (a.rank || 99) - (b.rank || 99))[0]; // Get highest-ranked standby
 
                 if (standbyToPromote) {
