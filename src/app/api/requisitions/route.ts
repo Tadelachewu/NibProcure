@@ -131,7 +131,10 @@ export async function GET(request: Request) {
             };
         }
     } else {
-      if (statusParam) whereClause.status = { in: statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) };
+      if (statusParam) {
+        const statuses = statusParam.split(',').map(s => s.trim().replace(/ /g, '_'));
+        whereClause.status = { in: statuses };
+      }
       if (approverId) {
         whereClause.OR = [
             { currentApproverId: approverId },
@@ -466,8 +469,18 @@ export async function PATCH(
         }
         dataToUpdate.approver = { connect: { id: userId } };
         
-        await prisma.review.create({
-            data: {
+        await prisma.review.upsert({
+            where: {
+                requisitionId_reviewerId: {
+                    requisitionId: id,
+                    reviewerId: userId,
+                }
+            },
+            update: {
+                decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
+                comment,
+            },
+            create: {
                 requisition: { connect: { id } },
                 reviewer: { connect: { id: userId } },
                 decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
@@ -590,7 +603,7 @@ export async function POST(request: Request) {
                         options: q.options || [],
                     }))
                 },
-                evaluationCriteria: {
+                evaluationCriteria: body.evaluationCriteria ? {
                     create: {
                         financialWeight: body.evaluationCriteria.financialWeight,
                         technicalWeight: body.evaluationCriteria.technicalWeight,
@@ -601,7 +614,7 @@ export async function POST(request: Request) {
                             create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) }))
                         }
                     }
-                },
+                } : undefined,
             },
             include: { items: true, customQuestions: true, evaluationCriteria: true }
         });
@@ -698,7 +711,7 @@ export async function DELETE(
         if(prismaError.code === 'P2025') {
             return NextResponse.json({ error: 'Failed to delete related data. The requisition may have already been deleted.' }, { status: 404 });
         }
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
