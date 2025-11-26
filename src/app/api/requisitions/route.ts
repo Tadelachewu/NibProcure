@@ -79,7 +79,7 @@ export async function GET(request: Request) {
             // Requisitions this vendor has already quoted on
             { quotations: { some: { vendorId: userPayload.vendorId } } },
             // Requisitions where this vendor has a per-item award status (even if they didn't quote on everything)
-            { items: { some: { perItemAwardDetails: { path: '$[*].vendorId', array_contains: userPayload.vendorId } } } }
+            { items: { some: { perItemAwardDetails: { has: userPayload.vendorId } } } }
         ];
 
     } else if (forQuoting) {
