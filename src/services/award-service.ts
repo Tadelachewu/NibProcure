@@ -350,25 +350,17 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
         for (const item of requisition.items) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-            const declinedAward = currentDetails.find(d => d.status === 'Declined');
+            const needsPromotion = currentDetails.some(d => d.status === 'Declined');
             
-            if (declinedAward) {
-                const bidsForItem = requisition.quotations.flatMap(q =>
-                    q.items
-                    .filter(i => i.requisitionItemId === item.id)
-                    .map(quoteItem => {
-                        const detail = currentDetails.find(d => d.quoteItemId === quoteItem.id);
-                        return {
-                            ...detail,
-                            vendorName: q.vendorName
-                        };
-                    })
+            if (needsPromotion) {
+                const alreadyFailedOrDeclinedVendors = new Set(
+                    currentDetails.filter(d => d.status === 'Declined' || d.status === 'Failed_to_Award').map(d => d.vendorId)
                 );
 
-                const eligibleStandbys = bidsForItem
-                    .filter(bid => bid?.status === 'Standby')
-                    .sort((a, b) => (a?.rank || 99) - (b?.rank || 99));
-
+                const eligibleStandbys = currentDetails
+                    .filter(d => d.status === 'Standby' && !alreadyFailedOrDeclinedVendors.has(d.vendorId))
+                    .sort((a,b) => a.rank - b.rank);
+                
                 if (eligibleStandbys.length > 0) {
                     const standbyToPromote = eligibleStandbys[0];
                     promotedCount++;
@@ -376,9 +368,10 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                     
                     const updatedDetails = currentDetails.map(d => {
                         if (d.quoteItemId === standbyToPromote.quoteItemId) return { ...d, status: 'Pending_Award' as const };
-                        if (d.quoteItemId === declinedAward.quoteItemId) return { ...d, status: 'Failed_to_Award' as const };
+                        if (d.status === 'Declined') return { ...d, status: 'Failed_to_Award' as const }; // Mark old one as failed
                         return d;
                     });
+
                      await tx.requisitionItem.update({
                         where: { id: item.id },
                         data: { perItemAwardDetails: updatedDetails as any }
