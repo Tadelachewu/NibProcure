@@ -352,37 +352,38 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             const declinedAward = currentDetails.find(d => d.status === 'Declined');
             
-            console.log(`[promoteStandby] Checking item "${item.name}". Has declined winner: ${!!declinedAward}`);
-
             if (declinedAward) {
-                // Correctly filter to only standby vendors for THIS item who have not previously declined/failed.
-                 const standbyToPromote = currentDetails
-                    .filter(d => d.status === 'Standby')
-                    .sort((a, b) => (a.rank || 99) - (b.rank || 99))[0]; // Get highest-ranked standby
+                const bidsForItem = requisition.quotations.flatMap(q =>
+                    q.items
+                    .filter(i => i.requisitionItemId === item.id)
+                    .map(quoteItem => {
+                        const detail = currentDetails.find(d => d.quoteItemId === quoteItem.id);
+                        return {
+                            ...detail,
+                            vendorName: q.vendorName
+                        };
+                    })
+                );
 
-                if (standbyToPromote) {
-                    console.log(`[promoteStandby] Found standby for item "${item.name}": ${standbyToPromote.vendorName}`);
+                const eligibleStandbys = bidsForItem
+                    .filter(bid => bid?.status === 'Standby')
+                    .sort((a, b) => (a?.rank || 99) - (b?.rank || 99));
+
+                if (eligibleStandbys.length > 0) {
+                    const standbyToPromote = eligibleStandbys[0];
+                    promotedCount++;
+                    auditDetailsMessage += `${standbyToPromote.vendorName} for item ${item.name}. `;
+                    
                     const updatedDetails = currentDetails.map(d => {
-                        // Promote the correct standby vendor
-                        if (d.quoteItemId === standbyToPromote.quoteItemId) {
-                            promotedCount++;
-                            auditDetailsMessage += `${d.vendorName} for item ${item.name}. `;
-                            return { ...d, status: 'Pending_Award' as const };
-                        }
-                        // Change 'Declined' to 'Failed_to_Award' to finalize it
-                        if (d.quoteItemId === declinedAward.quoteItemId) {
-                            return { ...d, status: 'Failed_to_Award' as const };
-                        }
+                        if (d.quoteItemId === standbyToPromote.quoteItemId) return { ...d, status: 'Pending_Award' as const };
+                        if (d.quoteItemId === declinedAward.quoteItemId) return { ...d, status: 'Failed_to_Award' as const };
                         return d;
                     });
-                    
-                    await tx.requisitionItem.update({
+                     await tx.requisitionItem.update({
                         where: { id: item.id },
                         data: { perItemAwardDetails: updatedDetails as any }
                     });
-
                 } else {
-                    console.log(`[promoteStandby] No standby found for item "${item.name}". Marking as Failed to Award.`);
                      const updatedDetails = currentDetails.map(d => 
                         d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
                     );
