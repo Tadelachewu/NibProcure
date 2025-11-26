@@ -1,7 +1,9 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { PerItemAwardDetail } from '@/lib/types';
 
 export async function POST(
   request: Request
@@ -43,23 +45,42 @@ export async function POST(
                 paymentEvidenceUrl: paymentEvidenceUrl,
             }
         });
-
-        if (invoiceToUpdate.po) {
-            const requisitionId = invoiceToUpdate.po.requisitionId;
-
-            const allPOsForRequisition = await tx.purchaseOrder.findMany({
-                where: { requisitionId: requisitionId }
+        
+        if (invoiceToUpdate.po?.requisitionId) {
+            const requisition = await tx.purchaseRequisition.findUnique({
+                where: { id: invoiceToUpdate.po.requisitionId },
+                include: { items: true }
             });
+            
+            if (requisition) {
+                const isPerItem = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+                let isFullyComplete = false;
 
-            const allPOsCompleted = allPOsForRequisition.every(po => 
-                ['Delivered', 'Closed', 'Cancelled'].includes(po.status.replace(/_/g, ' '))
-            );
+                if (isPerItem) {
+                    // For per-item, every item must be in a terminal state
+                    isFullyComplete = requisition.items.every(item => {
+                        const details = item.perItemAwardDetails as PerItemAwardDetail[] | null;
+                        if (!details || details.length === 0) return false; // Not resolved if no awards were ever made
+                        // An item is resolved if its winning bid is Accepted/Paid, or if it failed/was restarted
+                        return details.some(d => d.status === 'Accepted' || d.status === 'Failed_to_Award' || d.status === 'Restarted');
+                    });
 
-            if (allPOsForRequisition.length > 0 && allPOsCompleted) {
-                await tx.purchaseRequisition.update({
-                    where: { id: requisitionId },
-                    data: { status: 'Closed' }
-                });
+                } else {
+                    // For single-vendor, check if all POs are delivered/closed
+                    const allPOsForRequisition = await tx.purchaseOrder.findMany({
+                        where: { requisitionId: requisition.id }
+                    });
+                    isFullyComplete = allPOsForRequisition.length > 0 && allPOsForRequisition.every(po => 
+                        ['Delivered', 'Closed', 'Cancelled'].includes(po.status.replace(/_/g, ' '))
+                    );
+                }
+
+                if (isFullyComplete) {
+                    await tx.purchaseRequisition.update({
+                        where: { id: requisition.id },
+                        data: { status: 'Closed' }
+                    });
+                }
             }
         }
         
