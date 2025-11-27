@@ -342,7 +342,7 @@ async function main() {
               ...reqData,
               status: reqData.status.replace(/ /g, '_') as any,
               urgency: reqData.urgency || 'Low',
-              totalPrice: items.reduce((acc, item) => acc + (item.unitPrice || 0) * item.quantity, 0),
+              totalPrice: reqData.totalPrice,
               requester: { connect: { id: requesterId } },
               approver: approverId ? { connect: { id: approverId } } : undefined,
               currentApprover: currentApproverId ? { connect: { id: currentApproverId } } : undefined,
