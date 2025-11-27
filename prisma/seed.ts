@@ -332,6 +332,7 @@ async function main() {
           technicalCommitteeMemberIds,
           department,
           departmentId,
+          totalPrice, // Capture totalPrice
           ...reqData
       } = requisition;
 
@@ -342,7 +343,7 @@ async function main() {
               ...reqData,
               status: reqData.status.replace(/ /g, '_') as any,
               urgency: reqData.urgency || 'Low',
-              totalPrice: reqData.totalPrice,
+              totalPrice: totalPrice, // Use the captured totalPrice
               requester: { connect: { id: requesterId } },
               approver: approverId ? { connect: { id: approverId } } : undefined,
               currentApprover: currentApproverId ? { connect: { id: currentApproverId } } : undefined,
