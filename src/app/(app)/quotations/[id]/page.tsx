@@ -2850,24 +2850,24 @@ export default function QuotationDetailsPage() {
           (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => (d.status === 'Failed_to_Award' || d.status === 'Declined') && d.status !== 'Restarted')
       ), [requisition.items]);
 
-  const canPromoteStandby = useMemo(() => {
-    if (requisition.status !== 'Award_Declined') {
-        return false;
-    }
-    if (isPerItemStrategy) {
-        return requisition.items.some(item => {
-            const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-            const hasDeclinedWinner = details.some(d => d.status === 'Declined');
-            if (!hasDeclinedWinner) return false;
-            const standbyExists = details.some(d => d.status === 'Standby');
-            return standbyExists;
-        });
-    } else {
-        return quotations.some(q => q.status === 'Standby');
-    }
-  }, [requisition, quotations, isPerItemStrategy]);
+    const canPromoteStandby = useMemo(() => {
+        if (requisition.status !== 'Award_Declined') {
+            return false;
+        }
+        if (isPerItemStrategy) {
+            return requisition.items.some(item => {
+                const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                const hasDeclinedWinner = details.some(d => d.status === 'Declined');
+                if (!hasDeclinedWinner) return false;
+                const standbyExists = details.some(d => d.status === 'Standby');
+                return standbyExists;
+            });
+        } else {
+            return quotations.some(q => q.status === 'Standby');
+        }
+    }, [requisition, quotations, isPerItemStrategy]);
 
-  const canRestart = isPerItemStrategy && failedItems.length > 0 && !canPromoteStandby;
+  const canRestart = isPerItemStrategy && failedItems.length > 0;
 
 
   return (
@@ -3092,13 +3092,15 @@ export default function QuotationDetailsPage() {
             </CardDescription>
           </CardHeader>
           <CardFooter className="gap-4">
-            {canPromoteStandby ? (
+            {canPromoteStandby && (
                 <AwardStandbyButton
                     requisition={requisition}
                     onPromote={handleAwardChange}
                     isChangingAward={isChangingAward}
                 />
-            ) : requisition.status !== 'Award_Declined' ? (
+            )}
+            
+            {requisition.status !== 'Award_Declined' && (
               <>
                 <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
                   <DialogTrigger asChild>
@@ -3127,7 +3129,7 @@ export default function QuotationDetailsPage() {
                   />
                 </Dialog>
               </>
-            ) : null}
+            )}
              
              {canRestart &&
                  <RestartRfqDialog 
