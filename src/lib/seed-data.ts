@@ -90,20 +90,20 @@ const seedData: AppData = {
             updatedAt: new Date('2024-05-20T11:00:00Z'),
             rfqSettings: { awardStrategy: 'item' },
             items: [
-                { 
-                    id: 'ITEM-A1', 
-                    name: 'High-End PC', 
-                    quantity: 100, 
+                {
+                    id: 'ITEM-A1',
+                    name: 'High-End PC',
+                    quantity: 100,
                     unitPrice: 2500,
                     perItemAwardDetails: [
                         { rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', quotationId: 'QUO-A1', quoteItemId: 'QITEM-A1', proposedItemName: 'Mac Studio', unitPrice: 2500, status: 'Accepted' },
                         { rank: 2, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', quotationId: 'QUO-A2', quoteItemId: 'QITEM-A2', proposedItemName: 'Dell XPS Tower', unitPrice: 2400, status: 'Standby' }
                     ] as PerItemAwardDetail[]
                 },
-                { 
-                    id: 'ITEM-A2', 
-                    name: 'Ergonomic Chair', 
-                    quantity: 100, 
+                {
+                    id: 'ITEM-A2',
+                    name: 'Ergonomic Chair',
+                    quantity: 100,
                     unitPrice: 250,
                     perItemAwardDetails: [
                         { rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', quotationId: 'QUO-A2', quoteItemId: 'QITEM-A3', proposedItemName: 'Herman Miller Aeron', unitPrice: 250, status: 'Accepted' },
@@ -114,7 +114,7 @@ const seedData: AppData = {
         } as unknown as PurchaseRequisition,
 
         // --- SCENARIO B: Decline and Standby Promotion ---
-        // GOAL: Test that declining one item allows another item's standby to be promoted.
+        // GOAL: Test that if a winning vendor declines an item, the Procurement Officer can correctly promote the standby vendor for *that specific item* without affecting other awarded items.
         {
             id: 'REQ-SCENARIO-B',
             requesterId: '1',
@@ -129,20 +129,20 @@ const seedData: AppData = {
             updatedAt: new Date('2024-05-21T00:00:00Z'),
             rfqSettings: { awardStrategy: 'item' },
             items: [
-                { 
-                    id: 'ITEM-B1', 
-                    name: '4K Security Camera', 
-                    quantity: 50, 
+                {
+                    id: 'ITEM-B1',
+                    name: '4K Security Camera',
+                    quantity: 50,
                     unitPrice: 800,
                     perItemAwardDetails: [
                         { rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', quotationId: 'QUO-B1', quoteItemId: 'QITEM-B1', proposedItemName: 'Axis 4K Camera', unitPrice: 800, status: 'Awarded' },
                         { rank: 2, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', quotationId: 'QUO-B3', quoteItemId: 'QITEM-B4', proposedItemName: 'HP Security Cam', unitPrice: 750, status: 'Standby' }
                     ] as PerItemAwardDetail[]
                 },
-                { 
-                    id: 'ITEM-B2', 
-                    name: '24-Port Network Switch', 
-                    quantity: 10, 
+                {
+                    id: 'ITEM-B2',
+                    name: '24-Port Network Switch',
+                    quantity: 10,
                     unitPrice: 2000,
                     perItemAwardDetails: [
                         { rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', quotationId: 'QUO-B2', quoteItemId: 'QITEM-B3', proposedItemName: 'Cisco Catalyst', unitPrice: 2000, status: 'Awarded' }
@@ -150,7 +150,7 @@ const seedData: AppData = {
                 },
             ]
         } as unknown as PurchaseRequisition,
-        
+
         // --- SCENARIO C: Full Exhaustion & Restart ---
         // GOAL: Test that if all vendors decline, the item can be put into a restart flow.
         {
@@ -167,10 +167,10 @@ const seedData: AppData = {
             updatedAt: new Date('2024-05-22T00:00:00Z'),
             rfqSettings: { awardStrategy: 'item' },
             items: [
-                { 
-                    id: 'ITEM-C1', 
-                    name: 'Conference Room Projector', 
-                    quantity: 5, 
+                {
+                    id: 'ITEM-C1',
+                    name: 'Conference Room Projector',
+                    quantity: 5,
                     unitPrice: 3000,
                     perItemAwardDetails: [
                         { rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', quotationId: 'QUO-C1', quoteItemId: 'QITEM-C1', proposedItemName: 'Epson Pro', unitPrice: 3000, status: 'Failed_to_Award' },
@@ -197,19 +197,19 @@ const seedData: AppData = {
             updatedAt: new Date('2024-05-23T00:00:00Z'),
             rfqSettings: { awardStrategy: 'item' },
             items: [
-                { 
-                    id: 'ITEM-D1', 
-                    name: 'USB-C Docking Station', 
-                    quantity: 100, 
+                {
+                    id: 'ITEM-D1',
+                    name: 'USB-C Docking Station',
+                    quantity: 100,
                     unitPrice: 400,
                     perItemAwardDetails: [
                         { rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', quotationId: 'QUO-D1', quoteItemId: 'QITEM-D1', proposedItemName: 'CalDigit TS4', unitPrice: 400, status: 'Accepted' }
                     ] as PerItemAwardDetail[]
                 },
-                { 
-                    id: 'ITEM-D2', 
-                    name: '4K Monitor', 
-                    quantity: 100, 
+                {
+                    id: 'ITEM-D2',
+                    name: '4K Monitor',
+                    quantity: 100,
                     unitPrice: 1200,
                     perItemAwardDetails: [
                         { rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', quotationId: 'QUO-D2', quoteItemId: 'QITEM-D2', proposedItemName: 'Dell UltraSharp', unitPrice: 1200, status: 'Awarded' }
@@ -222,33 +222,33 @@ const seedData: AppData = {
     // --- Supporting Data for Scenarios ---
     quotations: [
         // Scenario A
-        { id: 'QUO-A1', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', totalPrice: 250000, createdAt: new Date('2024-05-15T09:00:00Z'), deliveryDate: new Date('2024-05-30T09:00:00Z'), items: [{id: 'QITEM-A1', requisitionItemId: 'ITEM-A1', name: 'Mac Studio', quantity: 100, unitPrice: 2500}] },
-        { id: 'QUO-A2', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', totalPrice: 265000, createdAt: new Date('2024-05-15T10:00:00Z'), deliveryDate: new Date('2024-05-31T10:00:00Z'), items: [{id: 'QITEM-A2', requisitionItemId: 'ITEM-A1', name: 'Dell XPS Tower', quantity: 100, unitPrice: 2400}, {id: 'QITEM-A3', requisitionItemId: 'ITEM-A2', name: 'Herman Miller Aeron', quantity: 100, unitPrice: 250}] },
-        { id: 'QUO-A3', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', totalPrice: 22000, createdAt: new Date('2024-05-15T11:00:00Z'), deliveryDate: new Date('2024-06-01T11:00:00Z'), items: [{id: 'QITEM-A4', requisitionItemId: 'ITEM-A2', name: 'HP Ergonomic Chair', quantity: 100, unitPrice: 220}] },
+        { id: 'QUO-A1', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', totalPrice: 250000, createdAt: new Date('2024-05-15T09:00:00Z'), deliveryDate: new Date('2024-05-30T09:00:00Z'), items: [{id: 'QITEM-A1', requisitionItemId: 'ITEM-A1', name: 'Mac Studio', quantity: 100, unitPrice: 2500, leadTimeDays: 15}] },
+        { id: 'QUO-A2', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', totalPrice: 265000, createdAt: new Date('2024-05-15T10:00:00Z'), deliveryDate: new Date('2024-05-31T10:00:00Z'), items: [{id: 'QITEM-A2', requisitionItemId: 'ITEM-A1', name: 'Dell XPS Tower', quantity: 100, unitPrice: 2400, leadTimeDays: 10}, {id: 'QITEM-A3', requisitionItemId: 'ITEM-A2', name: 'Herman Miller Aeron', quantity: 100, unitPrice: 250, leadTimeDays: 20}] },
+        { id: 'QUO-A3', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', totalPrice: 22000, createdAt: new Date('2024-05-15T11:00:00Z'), deliveryDate: new Date('2024-06-01T11:00:00Z'), items: [{id: 'QITEM-A4', requisitionItemId: 'ITEM-A2', name: 'HP Ergonomic Chair', quantity: 100, unitPrice: 220, leadTimeDays: 12}] },
         // Scenario B
-        { id: 'QUO-B1', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Awarded', totalPrice: 40000, createdAt: new Date('2024-05-16T09:00:00Z'), deliveryDate: new Date('2024-06-02T09:00:00Z'), items: [{id: 'QITEM-B1', requisitionItemId: 'ITEM-B1', name: 'Axis 4K Camera', quantity: 50, unitPrice: 800}] },
-        { id: 'QUO-B2', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', totalPrice: 20000, createdAt: new Date('2024-05-16T10:00:00Z'), deliveryDate: new Date('2024-06-03T10:00:00Z'), items: [{id: 'QITEM-B3', requisitionItemId: 'ITEM-B2', name: 'Cisco Catalyst', quantity: 10, unitPrice: 2000}] },
-        { id: 'QUO-B3', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', totalPrice: 37500, createdAt: new Date('2024-05-16T11:00:00Z'), deliveryDate: new Date('2024-06-04T11:00:00Z'), items: [{id: 'QITEM-B4', requisitionItemId: 'ITEM-B1', name: 'HP Security Cam', quantity: 50, unitPrice: 750}] },
+        { id: 'QUO-B1', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Awarded', totalPrice: 40000, createdAt: new Date('2024-05-16T09:00:00Z'), deliveryDate: new Date('2024-06-02T09:00:00Z'), items: [{id: 'QITEM-B1', requisitionItemId: 'ITEM-B1', name: 'Axis 4K Camera', quantity: 50, unitPrice: 800, leadTimeDays: 14}] },
+        { id: 'QUO-B2', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', totalPrice: 20000, createdAt: new Date('2024-05-16T10:00:00Z'), deliveryDate: new Date('2024-06-03T10:00:00Z'), items: [{id: 'QITEM-B3', requisitionItemId: 'ITEM-B2', name: 'Cisco Catalyst', quantity: 10, unitPrice: 2000, leadTimeDays: 7}] },
+        { id: 'QUO-B3', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', totalPrice: 37500, createdAt: new Date('2024-05-16T11:00:00Z'), deliveryDate: new Date('2024-06-04T11:00:00Z'), items: [{id: 'QITEM-B4', requisitionItemId: 'ITEM-B1', name: 'HP Security Cam', quantity: 50, unitPrice: 750, leadTimeDays: 18}] },
         // Scenario C
-        { id: 'QUO-C1', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Failed_to_Award', totalPrice: 15000, createdAt: new Date('2024-05-17T09:00:00Z'), deliveryDate: new Date('2024-06-05T09:00:00Z'), items: [{id: 'QITEM-C1', requisitionItemId: 'ITEM-C1', name: 'Epson Pro', quantity: 5, unitPrice: 3000}] },
-        { id: 'QUO-C2', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Failed_to_Award', totalPrice: 14000, createdAt: new Date('2024-05-17T10:00:00Z'), deliveryDate: new Date('2024-06-06T10:00:00Z'), items: [{id: 'QITEM-C2', requisitionItemId: 'ITEM-C1', name: 'BenQ Projector', quantity: 5, unitPrice: 2800}] },
-        { id: 'QUO-C3', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Awarded', totalPrice: 15500, createdAt: new Date('2024-05-17T11:00:00Z'), deliveryDate: new Date('2024-06-07T11:00:00Z'), items: [{id: 'QITEM-C3', requisitionItemId: 'ITEM-C1', name: 'ViewSonic 4K', quantity: 5, unitPrice: 3100}] },
+        { id: 'QUO-C1', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Failed_to_Award', totalPrice: 15000, createdAt: new Date('2024-05-17T09:00:00Z'), deliveryDate: new Date('2024-06-05T09:00:00Z'), items: [{id: 'QITEM-C1', requisitionItemId: 'ITEM-C1', name: 'Epson Pro', quantity: 5, unitPrice: 3000, leadTimeDays: 10}] },
+        { id: 'QUO-C2', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Failed_to_Award', totalPrice: 14000, createdAt: new Date('2024-05-17T10:00:00Z'), deliveryDate: new Date('2024-06-06T10:00:0Z'), items: [{id: 'QITEM-C2', requisitionItemId: 'ITEM-C1', name: 'BenQ Projector', quantity: 5, unitPrice: 2800, leadTimeDays: 21}] },
+        { id: 'QUO-C3', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Awarded', totalPrice: 15500, createdAt: new Date('2024-05-17T11:00:00Z'), deliveryDate: new Date('2024-06-07T11:00:00Z'), items: [{id: 'QITEM-C3', requisitionItemId: 'ITEM-C1', name: 'ViewSonic 4K', quantity: 5, unitPrice: 3100, leadTimeDays: 16}] },
         // Scenario D
-        { id: 'QUO-D1', requisitionId: 'REQ-SCENARIO-D', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', totalPrice: 40000, createdAt: new Date('2024-05-18T09:00:00Z'), deliveryDate: new Date('2024-06-08T09:00:00Z'), items: [{id: 'QITEM-D1', requisitionItemId: 'ITEM-D1', name: 'CalDigit TS4', quantity: 100, unitPrice: 400}] },
-        { id: 'QUO-D2', requisitionId: 'REQ-SCENARIO-D', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', totalPrice: 120000, createdAt: new Date('2024-05-18T10:00:00Z'), deliveryDate: new Date('2024-06-09T10:00:00Z'), items: [{id: 'QITEM-D2', requisitionItemId: 'ITEM-D2', name: 'Dell UltraSharp', quantity: 100, unitPrice: 1200}] },
+        { id: 'QUO-D1', requisitionId: 'REQ-SCENARIO-D', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', totalPrice: 40000, createdAt: new Date('2024-05-18T09:00:00Z'), deliveryDate: new Date('2024-06-08T09:00:00Z'), items: [{id: 'QITEM-D1', requisitionItemId: 'ITEM-D1', name: 'CalDigit TS4', quantity: 100, unitPrice: 400, leadTimeDays: 5}] },
+        { id: 'QUO-D2', requisitionId: 'REQ-SCENARIO-D', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', totalPrice: 120000, createdAt: new Date('2024-05-18T10:00:00Z'), deliveryDate: new Date('2024-06-09T10:00:00Z'), items: [{id: 'QITEM-D2', requisitionItemId: 'ITEM-D2', name: 'Dell UltraSharp', quantity: 100, unitPrice: 1200, leadTimeDays: 14}] },
 
     ] as unknown as Quotation[],
-    
+
     purchaseOrders: [
-        { id: 'PO-SCENARIO-A1', requisitionId: 'REQ-SCENARIO-A', vendor: {id: 'VENDOR-001', name: 'Apple Inc.'}, totalAmount: 250000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-A1', name: 'Mac Studio', quantity: 100, unitPrice: 2500, totalPrice: 250000}] },
-        { id: 'PO-SCENARIO-A2', requisitionId: 'REQ-SCENARIO-A', vendor: {id: 'VENDOR-002', name: 'Dell Technologies'}, totalAmount: 25000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-A2', name: 'Herman Miller Aeron', quantity: 100, unitPrice: 250, totalPrice: 25000}] },
-        { id: 'PO-SCENARIO-D1', requisitionId: 'REQ-SCENARIO-D', vendor: {id: 'VENDOR-001', name: 'Apple Inc.'}, totalAmount: 40000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-D1', name: 'CalDigit TS4', quantity: 100, unitPrice: 400, totalPrice: 40000}] },
+        { id: 'PO-SCENARIO-A1', requisitionId: 'REQ-SCENARIO-A', vendor: {id: 'VENDOR-001', name: 'Apple Inc.'}, totalAmount: 250000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-A1', name: 'Mac Studio', quantity: 100, unitPrice: 2500, totalPrice: 250000, requisitionItemId: 'ITEM-A1'}] },
+        { id: 'PO-SCENARIO-A2', requisitionId: 'REQ-SCENARIO-A', vendor: {id: 'VENDOR-002', name: 'Dell Technologies'}, totalAmount: 25000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-A2', name: 'Herman Miller Aeron', quantity: 100, unitPrice: 250, totalPrice: 25000, requisitionItemId: 'ITEM-A2'}] },
+        { id: 'PO-SCENARIO-D1', requisitionId: 'REQ-SCENARIO-D', vendor: {id: 'VENDOR-001', name: 'Apple Inc.'}, totalAmount: 40000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-D1', name: 'CalDigit TS4', quantity: 100, unitPrice: 400, totalPrice: 40000, requisitionItemId: 'ITEM-D1'}] },
     ] as unknown as PurchaseOrder[],
 
     invoices: [
-        { id: 'INV-SCENARIO-A1', purchaseOrderId: 'PO-SCENARIO-A1', vendorId: 'VENDOR-001', invoiceDate: new Date(), totalAmount: 250000, status: 'Paid', paymentDate: new Date() },
-        { id: 'INV-SCENARIO-A2', purchaseOrderId: 'PO-SCENARIO-A2', vendorId: 'VENDOR-002', invoiceDate: new Date(), totalAmount: 25000, status: 'Paid', paymentDate: new Date() },
-        { id: 'INV-SCENARIO-D1', purchaseOrderId: 'PO-SCENARIO-D1', vendorId: 'VENDOR-001', invoiceDate: new Date(), totalAmount: 40000, status: 'Paid', paymentDate: new Date() },
+        { id: 'INV-SCENARIO-A1', purchaseOrderId: 'PO-SCENARIO-A1', vendorId: 'VENDOR-001', invoiceDate: new Date(), totalAmount: 250000, status: 'Paid', paymentDate: new Date(), items: [{id: 'INVITEM-A1', name: 'Mac Studio', quantity: 100, unitPrice: 2500, totalPrice: 250000}] },
+        { id: 'INV-SCENARIO-A2', purchaseOrderId: 'PO-SCENARIO-A2', vendorId: 'VENDOR-002', invoiceDate: new Date(), totalAmount: 25000, status: 'Paid', paymentDate: new Date(), items: [{id: 'INVITEM-A2', name: 'Herman Miller Aeron', quantity: 100, unitPrice: 250, totalPrice: 25000}] },
+        { id: 'INV-SCENARIO-D1', purchaseOrderId: 'PO-SCENARIO-D1', vendorId: 'VENDOR-001', invoiceDate: new Date(), totalAmount: 40000, status: 'Paid', paymentDate: new Date(), items: [{id: 'INVITEM-D1', name: 'CalDigit TS4', quantity: 100, unitPrice: 400, totalPrice: 40000}] },
     ] as unknown as Invoice[],
 
     goodsReceipts: [
