@@ -9,12 +9,11 @@ import { useMemo } from 'react';
 
 interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
-    quotations: Quotation[];
     onPromote: () => void;
     isChangingAward: boolean;
 }
 
-export function AwardStandbyButton({ requisition, quotations, onPromote, isChangingAward }: AwardStandbyButtonProps) {
+export function AwardStandbyButton({ requisition, onPromote, isChangingAward }: AwardStandbyButtonProps) {
     const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
     const canPromote = useMemo(() => {
@@ -34,9 +33,9 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
             });
         } else {
             // For single-vendor strategy, just check if any quote is on standby.
-            return quotations.some(q => q.status === 'Standby');
+            return requisition.quotations?.some(q => q.status === 'Standby') ?? false;
         }
-    }, [requisition, quotations, isPerItemStrategy]);
+    }, [requisition, isPerItemStrategy]);
 
 
     if (!canPromote) {
@@ -66,3 +65,4 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
         </AlertDialog>
     );
 }
+

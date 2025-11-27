@@ -2037,7 +2037,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                     <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
                                                                     <TableCell>{award.vendorName}</TableCell>
                                                                     <TableCell>{award.proposedItemName}</TableCell>
-                                                                    <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
+                                                                    <TableCell className="text-right font-mono">{award.score?.toFixed(2) || 'N/A'}</TableCell>
                                                                     <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
                                                                 </TableRow>
                                                             ))}
@@ -2441,7 +2441,6 @@ export default function QuotationDetailsPage() {
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
-  const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
   const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
 
@@ -2844,6 +2843,33 @@ export default function QuotationDetailsPage() {
   
   const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
   
+  const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+
+  const failedItems = useMemo(() => 
+      requisition.items.filter(item => 
+          (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => (d.status === 'Failed_to_Award' || d.status === 'Declined') && d.status !== 'Restarted')
+      ), [requisition.items]);
+
+  const canPromoteStandby = useMemo(() => {
+    if (requisition.status !== 'Award_Declined') {
+        return false;
+    }
+    if (isPerItemStrategy) {
+        return requisition.items.some(item => {
+            const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+            const hasDeclinedWinner = details.some(d => d.status === 'Declined');
+            if (!hasDeclinedWinner) return false;
+            const standbyExists = details.some(d => d.status === 'Standby');
+            return standbyExists;
+        });
+    } else {
+        return quotations.some(q => q.status === 'Standby');
+    }
+  }, [requisition, quotations, isPerItemStrategy]);
+
+  const canRestart = isPerItemStrategy && failedItems.length > 0 && !canPromoteStandby;
+
+
   return (
     <div className="space-y-6">
        <div className="flex items-center justify-between">
@@ -3061,19 +3087,18 @@ export default function QuotationDetailsPage() {
             <CardTitle>Awarding Center</CardTitle>
             <CardDescription>
               {requisition.status === 'Award_Declined'
-                ? 'An award was declined. You may now promote a standby vendor.'
+                ? 'An award was declined. You may now promote a standby vendor or restart the RFQ process.'
                 : 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
             </CardDescription>
           </CardHeader>
           <CardFooter className="gap-4">
-            {requisition.status === 'Award_Declined' ? (
+            {canPromoteStandby ? (
                 <AwardStandbyButton
                     requisition={requisition}
-                    quotations={quotations}
                     onPromote={handleAwardChange}
                     isChangingAward={isChangingAward}
                 />
-            ) : (
+            ) : requisition.status !== 'Award_Declined' ? (
               <>
                 <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
                   <DialogTrigger asChild>
@@ -3102,12 +3127,15 @@ export default function QuotationDetailsPage() {
                   />
                 </Dialog>
               </>
-            )}
-             <RestartRfqDialog 
-                requisition={requisition} 
-                vendors={vendors} 
-                onRfqRestarted={fetchRequisitionAndQuotes}
-             />
+            ) : null}
+             
+             {canRestart &&
+                 <RestartRfqDialog 
+                    requisition={requisition} 
+                    vendors={vendors} 
+                    onRfqRestarted={fetchRequisitionAndQuotes}
+                 />
+             }
           </CardFooter>
         </Card>
       )}
@@ -3552,3 +3580,4 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
