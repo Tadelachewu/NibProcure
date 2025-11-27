@@ -58,9 +58,11 @@ export type RequisitionStatus =
   | 'PO_Created'
   | 'Fulfilled'
   | 'Closed'
+  | 'Partially_Closed'
   | 'Pending_Committee_B_Review'
   | 'Pending_Committee_A_Recommendation'
   | 'Pending_Managerial_Approval'
+  | 'Pending_Managerial_Review'
   | 'Pending_Director_Approval'
   | 'Pending_VP_Approval'
   | 'Pending_President_Approval';
@@ -78,6 +80,7 @@ export type PerItemAwardDetail = {
   proposedItemName: string;
   unitPrice: number;
   status: PerItemAwardStatus;
+  score: number;
 }
 
 export type RequisitionItem = {
@@ -248,7 +251,7 @@ export type QuoteAnswer = {
   answer: string;
 }
 
-export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'Rejected' | 'Standby' | 'Invoice_Submitted' | 'Failed' | 'Accepted' | 'Declined' | 'Pending_Award';
+export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'Rejected' | 'Standby' | 'Invoice_Submitted' | 'Failed' | 'Accepted' | 'Declined' | 'Pending_Award' | 'Failed_to_Award';
 
 export type Score = {
   id: string;
