@@ -240,9 +240,9 @@ const seedData: AppData = {
     ] as unknown as Quotation[],
 
     purchaseOrders: [
-        { id: 'PO-SCENARIO-A1', requisitionId: 'REQ-SCENARIO-A', vendor: {id: 'VENDOR-001', name: 'Apple Inc.'}, totalAmount: 250000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-A1', name: 'Mac Studio', quantity: 100, unitPrice: 2500, totalPrice: 250000, requisitionItemId: 'ITEM-A1'}] },
-        { id: 'PO-SCENARIO-A2', requisitionId: 'REQ-SCENARIO-A', vendor: {id: 'VENDOR-002', name: 'Dell Technologies'}, totalAmount: 25000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-A2', name: 'Herman Miller Aeron', quantity: 100, unitPrice: 250, totalPrice: 25000, requisitionItemId: 'ITEM-A2'}] },
-        { id: 'PO-SCENARIO-D1', requisitionId: 'REQ-SCENARIO-D', vendor: {id: 'VENDOR-001', name: 'Apple Inc.'}, totalAmount: 40000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-D1', name: 'CalDigit TS4', quantity: 100, unitPrice: 400, totalPrice: 40000, requisitionItemId: 'ITEM-D1'}] },
+        { id: 'PO-SCENARIO-A1', requisitionId: 'REQ-SCENARIO-A', requisitionTitle: 'Scenario A: Multi-Vendor Win', vendor: {id: 'VENDOR-001', name: 'Apple Inc.'}, totalAmount: 250000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-A1', name: 'Mac Studio', quantity: 100, unitPrice: 2500, totalPrice: 250000, requisitionItemId: 'ITEM-A1'}] },
+        { id: 'PO-SCENARIO-A2', requisitionId: 'REQ-SCENARIO-A', requisitionTitle: 'Scenario A: Multi-Vendor Win', vendor: {id: 'VENDOR-002', name: 'Dell Technologies'}, totalAmount: 25000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-A2', name: 'Herman Miller Aeron', quantity: 100, unitPrice: 250, totalPrice: 25000, requisitionItemId: 'ITEM-A2'}] },
+        { id: 'PO-SCENARIO-D1', requisitionId: 'REQ-SCENARIO-D', requisitionTitle: 'Scenario D: Partial Payment Test', vendor: {id: 'VENDOR-001', name: 'Apple Inc.'}, totalAmount: 40000, status: 'Delivered', createdAt: new Date(), items: [{id: 'POITEM-D1', name: 'CalDigit TS4', quantity: 100, unitPrice: 400, totalPrice: 40000, requisitionItemId: 'ITEM-D1'}] },
     ] as unknown as PurchaseOrder[],
 
     invoices: [
