@@ -1947,7 +1947,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             const imgWidth = canvas.width;
             const imgHeight = canvas.height;
             const ratio = imgWidth / imgHeight;
-            let width = pdfWidth - 20;
+            let width = pdfWidth - 20; // with margin
             let height = width / ratio;
 
             if (height > pdfHeight - 20) {
@@ -2037,7 +2037,10 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                     <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
                                                                     <TableCell>{award.vendorName}</TableCell>
                                                                     <TableCell>{award.proposedItemName}</TableCell>
-                                                                    <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
+                                                                    <TableCell className="text-right font-mono">
+                                                                        {/* SAFELY handle missing score */}
+                                                                        {typeof award.score === 'number' ? award.score.toFixed(2) : 'N/A'}
+                                                                    </TableCell>
                                                                     <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
                                                                 </TableRow>
                                                             ))}
