@@ -332,7 +332,7 @@ async function main() {
           technicalCommitteeMemberIds,
           department,
           departmentId,
-          totalPrice, // Capture totalPrice
+          totalPrice,
           ...reqData
       } = requisition;
 
@@ -343,7 +343,7 @@ async function main() {
               ...reqData,
               status: reqData.status.replace(/ /g, '_') as any,
               urgency: reqData.urgency || 'Low',
-              totalPrice: totalPrice, // Use the captured totalPrice
+              totalPrice: totalPrice,
               requester: { connect: { id: requesterId } },
               approver: approverId ? { connect: { id: approverId } } : undefined,
               currentApprover: currentApproverId ? { connect: { id: currentApproverId } } : undefined,
@@ -457,7 +457,7 @@ async function main() {
 
    // Seed Purchase Orders
     for (const po of seedData.purchaseOrders) {
-        const { items, receipts, invoices, vendor, ...poData } = po;
+        const { items, receipts, invoices, vendorId, ...poData } = po;
 
         const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: po.requisitionId }});
         if (!requisition) {
@@ -472,7 +472,7 @@ async function main() {
                 ...poData,
                 status: poData.status.replace(/ /g, '_') as any,
                 createdAt: new Date(poData.createdAt),
-                vendorId: vendor.id,
+                vendorId: vendorId,
                 requisitionId: po.requisitionId,
                 items: {
                     create: items.map(item => ({
