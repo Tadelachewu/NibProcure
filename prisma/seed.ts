@@ -457,7 +457,7 @@ async function main() {
 
    // Seed Purchase Orders
     for (const po of seedData.purchaseOrders) {
-        const { items, receipts, invoices, vendorId, ...poData } = po;
+        const { items, receipts, invoices, vendorId, requisitionTitle, ...poData } = po;
 
         const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: po.requisitionId }});
         if (!requisition) {
@@ -470,6 +470,7 @@ async function main() {
             update: {},
             create: {
                 ...poData,
+                requisitionTitle,
                 status: poData.status.replace(/ /g, '_') as any,
                 createdAt: new Date(poData.createdAt),
                 vendorId: vendorId,
@@ -506,11 +507,17 @@ async function main() {
 
         if (items) {
             for (const item of items) {
+                // Correctly handle the destructuring and creation of invoice items
+                const { id, name, quantity, unitPrice, totalPrice } = item;
                 await prisma.invoiceItem.upsert({
-                    where: { id: item.id },
+                    where: { id: id },
                     update: {},
                     create: {
-                        ...item,
+                        id,
+                        name,
+                        quantity,
+                        unitPrice,
+                        totalPrice,
                         invoiceId: createdInvoice.id,
                     }
                 })

@@ -52,128 +52,125 @@ const seedData: AppData = {
     
     // --- START OF EXPANDED SEED DATA ---
     requisitions: [
-        // === SCENARIO A: HAPPY PATH (MULTI-VENDOR WIN) ===
+        // === HAPPY PATH (HP) SCENARIOS ===
         // Goal: Test a clean run where two different vendors win items on the same req.
-        { id: 'REQ-A1', status: 'PO_Created', totalPrice: 270000, title: 'A1: New Hire Workstations', departmentId: 'DEPT-1', items: [
-            { id: 'ITEM-A1', name: 'High-End PC', quantity: 100, unitPrice: 2500, perItemAwardDetails: [{ score: 95, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', quoteItemId: 'QITEM-A1', proposedItemName: 'Mac Studio', unitPrice: 2500 }] },
-            { id: 'ITEM-A2', name: 'Ergonomic Chair', quantity: 100, unitPrice: 200, perItemAwardDetails: [{ score: 98, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', quoteItemId: 'QITEM-A2', proposedItemName: 'Herman Miller Aeron', unitPrice: 200 }] }
-        ]},
-        // Add 4 more for this scenario...
-        { id: 'REQ-A2', status: 'PO_Created', totalPrice: 5500, title: 'A2: Marketing Event Kit', departmentId: 'DEPT-1', items: [
-            { id: 'ITEM-A3', name: 'Portable Banner', quantity: 5, unitPrice: 300, perItemAwardDetails: [{ score: 92, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Accepted', quoteItemId: 'QITEM-A3', proposedItemName: 'Retractable Banner', unitPrice: 300 }] },
-            { id: 'ITEM-A4', name: 'HD Projector', quantity: 1, unitPrice: 4000, perItemAwardDetails: [{ score: 94, rank: 1, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Accepted', quoteItemId: 'QITEM-A4', proposedItemName: 'Samsung Freestyle', unitPrice: 4000 }] }
-        ]},
-        { id: 'REQ-A3', status: 'PO_Created', totalPrice: 3200, title: 'A3: Podcasting Studio Setup', departmentId: 'DEPT-1', items: [
-            { id: 'ITEM-A5', name: 'USB Microphones', quantity: 4, unitPrice: 400, perItemAwardDetails: [{ score: 96, rank: 1, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Accepted', quoteItemId: 'QITEM-A5', proposedItemName: 'Blue Yeti X', unitPrice: 400 }] },
-            { id: 'ITEM-A6', name: 'Acoustic Panels', quantity: 20, unitPrice: 80, perItemAwardDetails: [{ score: 91, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', quoteItemId: 'QITEM-A6', proposedItemName: 'Auralex Panels', unitPrice: 80 }] }
-        ]},
-        { id: 'REQ-A4', status: 'PO_Created', totalPrice: 15500, title: 'A4: Network Infrastructure Upgrade', departmentId: 'DEPT-3', items: [
-            { id: 'ITEM-A7', name: '48-Port PoE Switch', quantity: 1, unitPrice: 7500, perItemAwardDetails: [{ score: 93, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', quoteItemId: 'QITEM-A7', proposedItemName: 'Dell PowerSwitch', unitPrice: 7500 }] },
-            { id: 'ITEM-A8', name: 'Wi-Fi 6 Access Points', quantity: 5, unitPrice: 1600, perItemAwardDetails: [{ score: 95, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Accepted', quoteItemId: 'QITEM-A8', proposedItemName: 'Aruba AP-535', unitPrice: 1600 }] }
-        ]},
-        { id: 'REQ-A5', status: 'PO_Created', totalPrice: 3000, title: 'A5: Office Kitchen Supplies', departmentId: 'DEPT-2', items: [
-            { id: 'ITEM-A9', name: 'Espresso Machine', quantity: 1, unitPrice: 2000, perItemAwardDetails: [{ score: 97, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', quoteItemId: 'QITEM-A9', proposedItemName: 'Breville Barista', unitPrice: 2000 }] },
-            { id: 'ITEM-A10', name: 'Water Cooler', quantity: 1, unitPrice: 1000, perItemAwardDetails: [{ score: 90, rank: 1, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Accepted', quoteItemId: 'QITEM-A10', proposedItemName: 'Avalon Water Cooler', unitPrice: 1000 }] }
-        ]},
-
-        // === SCENARIO B: DECLINE & PROMOTE ===
-        // Goal: Test the workflow where a winning vendor declines, and the PO promotes a standby.
-        { id: 'REQ-B1', status: 'Awarded', totalPrice: 22800, title: 'B1: Security System Overhaul', departmentId: 'DEPT-2', items: [
-            { id: 'ITEM-B1', name: 'IP Security Cameras', quantity: 20, unitPrice: 150, perItemAwardDetails: [
-                { score: 91, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Awarded', quoteItemId: 'QITEM-B1-1', proposedItemName: 'Generic Cam', unitPrice: 150 },
-                { score: 90, rank: 2, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Standby', quoteItemId: 'QITEM-B1-2', proposedItemName: 'Samsung Cam', unitPrice: 140 }
+        ...[
+            { id: 'REQ-HP-1', status: 'Closed', totalPrice: 270000, title: 'HP-1: Office Upgrade', departmentId: 'DEPT-2', items: [
+                { id: 'ITEM-HP-1A', name: 'High-End PC', quantity: 100, unitPrice: 2500, perItemAwardDetails: [{ score: 95, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', quoteItemId: 'QITEM-HP-1A', proposedItemName: 'Mac Studio', unitPrice: 2500 }] },
+                { id: 'ITEM-HP-1B', name: 'Ergonomic Chair', quantity: 100, unitPrice: 200, perItemAwardDetails: [{ score: 98, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', quoteItemId: 'QITEM-HP-1B', proposedItemName: 'Herman Miller Aeron', unitPrice: 200 }] }
             ]},
-            { id: 'ITEM-B2', name: 'Network Video Recorder', quantity: 1, unitPrice: 2000, perItemAwardDetails: [{ score: 94, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', quoteItemId: 'QITEM-B2', proposedItemName: 'Dell NVR', unitPrice: 2000 }] }
-        ]},
-        // Add 4 more for this scenario...
-        { id: 'REQ-B2', status: 'Awarded', totalPrice: 1800, title: 'B2: Graphics Tablets for Design', departmentId: 'DEPT-1', items: [
-            { id: 'ITEM-B3', name: 'Wacom Intuos Pro', quantity: 3, unitPrice: 600, perItemAwardDetails: [
-                { score: 96, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Awarded', quoteItemId: 'QITEM-B3-1', proposedItemName: 'Wacom Intuos Pro', unitPrice: 600 },
-                { score: 92, rank: 2, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Standby', quoteItemId: 'QITEM-B3-2', proposedItemName: 'Logi Pen Tablet', unitPrice: 580 }
-            ]}
-        ]},
-        { id: 'REQ-B3', status: 'Awarded', totalPrice: 5000, title: 'B3: Large Format Printer', departmentId: 'DEPT-1', items: [
-            { id: 'ITEM-B4', name: '44-inch Plotter', quantity: 1, unitPrice: 5000, perItemAwardDetails: [
-                { score: 93, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Awarded', quoteItemId: 'QITEM-B4-1', proposedItemName: 'HP DesignJet Z9+', unitPrice: 5000 },
-                { score: 91, rank: 2, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Standby', quoteItemId: 'QITEM-B4-2', proposedItemName: 'Canon imagePROGRAF', unitPrice: 4900 }
-            ]}
-        ]},
-        { id: 'REQ-B4', status: 'Awarded', totalPrice: 7500, title: 'B4: Video Production Lights', departmentId: 'DEPT-1', items: [
-            { id: 'ITEM-B5', name: 'LED Panel Lights', quantity: 3, unitPrice: 2500, perItemAwardDetails: [
-                { score: 95, rank: 1, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Awarded', quoteItemId: 'QITEM-B5-1', proposedItemName: 'Aputure Amaran 300c', unitPrice: 2500 },
-                { score: 90, rank: 2, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Standby', quoteItemId: 'QITEM-B5-2', proposedItemName: 'Neewer LED Panel Kit', unitPrice: 2400 }
-            ]}
-        ]},
-        { id: 'REQ-B5', status: 'Awarded', totalPrice: 22000, title: 'B5: Color-Accurate Monitors', departmentId: 'DEPT-1', items: [
-            { id: 'ITEM-B6', name: '32-inch 4K Monitor', quantity: 4, unitPrice: 5500, perItemAwardDetails: [
-                { score: 97, rank: 1, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Awarded', quoteItemId: 'QITEM-B6-1', proposedItemName: 'BenQ PD3220U', unitPrice: 5500 },
-                { score: 96, rank: 2, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Standby', quoteItemId: 'QITEM-B6-2', proposedItemName: 'Dell UltraSharp U3223QE', unitPrice: 5400 }
-            ]}
-        ]},
-        
-        // === SCENARIO C: STANDBY EXHAUSTION ===
+            { id: 'REQ-HP-2', status: 'Closed', totalPrice: 5500, title: 'HP-2: Marketing Event Kit', departmentId: 'DEPT-1', items: [
+                { id: 'ITEM-HP-2A', name: 'Portable Banner', quantity: 5, unitPrice: 300, perItemAwardDetails: [{ score: 92, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Accepted', quoteItemId: 'QITEM-HP-2A', proposedItemName: 'Retractable Banner', unitPrice: 300 }] },
+                { id: 'ITEM-HP-2B', name: 'HD Projector', quantity: 1, unitPrice: 4000, perItemAwardDetails: [{ score: 94, rank: 1, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Accepted', quoteItemId: 'QITEM-HP-2B', proposedItemName: 'Samsung Freestyle', unitPrice: 4000 }] }
+            ]},
+            { id: 'REQ-HP-3', status: 'Closed', totalPrice: 3200, title: 'HP-3: Podcasting Studio Setup', departmentId: 'DEPT-3', items: [
+                { id: 'ITEM-HP-3A', name: 'USB Microphones', quantity: 4, unitPrice: 400, perItemAwardDetails: [{ score: 96, rank: 1, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Accepted', quoteItemId: 'QITEM-HP-3A', proposedItemName: 'Blue Yeti X', unitPrice: 400 }] },
+                { id: 'ITEM-HP-3B', name: 'Acoustic Panels', quantity: 20, unitPrice: 80, perItemAwardDetails: [{ score: 91, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', quoteItemId: 'QITEM-HP-3B', proposedItemName: 'Auralex Panels', unitPrice: 80 }] }
+            ]},
+            { id: 'REQ-HP-4', status: 'Closed', totalPrice: 15500, title: 'HP-4: Network Infrastructure Upgrade', departmentId: 'DEPT-3', items: [
+                { id: 'ITEM-HP-4A', name: '48-Port PoE Switch', quantity: 1, unitPrice: 7500, perItemAwardDetails: [{ score: 93, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', quoteItemId: 'QITEM-HP-4A', proposedItemName: 'Dell PowerSwitch', unitPrice: 7500 }] },
+                { id: 'ITEM-HP-4B', name: 'Wi-Fi 6 Access Points', quantity: 5, unitPrice: 1600, perItemAwardDetails: [{ score: 95, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Accepted', quoteItemId: 'QITEM-HP-4B', proposedItemName: 'Aruba AP-535', unitPrice: 1600 }] }
+            ]},
+        ],
+        // === DECLINE & PROMOTE (DP) SCENARIOS ===
+        // Goal: Test the workflow where a winning vendor declines, and the PO promotes a standby.
+        ...[
+            { id: 'REQ-DP-1', status: 'Awarded', totalPrice: 22800, title: 'DP-1: Security System Overhaul', departmentId: 'DEPT-2', items: [
+                { id: 'ITEM-DP-1A', name: 'IP Security Cameras', quantity: 20, unitPrice: 150, perItemAwardDetails: [
+                    { score: 91, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Awarded', quoteItemId: 'QITEM-DP-1A', proposedItemName: 'Generic Cam', unitPrice: 150 },
+                    { score: 90, rank: 2, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Standby', quoteItemId: 'QITEM-DP-1B', proposedItemName: 'Samsung Cam', unitPrice: 140 }
+                ]},
+                { id: 'ITEM-DP-1B', name: 'Network Video Recorder', quantity: 1, unitPrice: 2000, perItemAwardDetails: [{ score: 94, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', quoteItemId: 'QITEM-DP-1C', proposedItemName: 'Dell NVR', unitPrice: 2000 }] }
+            ]},
+            { id: 'REQ-DP-2', status: 'Awarded', totalPrice: 1800, title: 'DP-2: Graphics Tablets for Design', departmentId: 'DEPT-1', items: [
+                { id: 'ITEM-DP-2A', name: 'Wacom Intuos Pro', quantity: 3, unitPrice: 600, perItemAwardDetails: [
+                    { score: 96, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Awarded', quoteItemId: 'QITEM-DP-2A', proposedItemName: 'Wacom Intuos Pro', unitPrice: 600 },
+                    { score: 92, rank: 2, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Standby', quoteItemId: 'QITEM-DP-2B', proposedItemName: 'Logi Pen Tablet', unitPrice: 580 }
+                ]}
+            ]},
+            { id: 'REQ-DP-3', status: 'Awarded', totalPrice: 5000, title: 'DP-3: Large Format Printer', departmentId: 'DEPT-1', items: [
+                { id: 'ITEM-DP-3A', name: '44-inch Plotter', quantity: 1, unitPrice: 5000, perItemAwardDetails: [
+                    { score: 93, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Awarded', quoteItemId: 'QITEM-DP-3A', proposedItemName: 'HP DesignJet Z9+', unitPrice: 5000 },
+                    { score: 91, rank: 2, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Standby', quoteItemId: 'QITEM-DP-3B', proposedItemName: 'Canon imagePROGRAF', unitPrice: 4900 }
+                ]}
+            ]},
+            { id: 'REQ-DP-4', status: 'Awarded', totalPrice: 22000, title: 'DP-4: Color-Accurate Monitors', departmentId: 'DEPT-1', items: [
+                { id: 'ITEM-DP-4A', name: '32-inch 4K Monitor', quantity: 4, unitPrice: 5500, perItemAwardDetails: [
+                    { score: 97, rank: 1, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Awarded', quoteItemId: 'QITEM-DP-4A', proposedItemName: 'BenQ PD3220U', unitPrice: 5500 },
+                    { score: 96, rank: 2, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Standby', quoteItemId: 'QITEM-DP-4B', proposedItemName: 'Dell UltraSharp U3223QE', unitPrice: 5400 }
+                ]}
+            ]},
+        ],
+        // === STANDBY EXHAUSTION (SE) SCENARIOS ===
         // Goal: Test the flow where all vendors decline, and the item fails to be awarded.
-        { id: 'REQ-C1', status: 'Award_Declined', totalPrice: 10000, title: 'C1: Specialized LIDAR Sensor', departmentId: 'DEPT-3', items: [
-            { id: 'ITEM-C1', name: 'Industrial LIDAR Unit', quantity: 1, unitPrice: 10000, perItemAwardDetails: [
-                { score: 85, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Failed_to_Award', quoteItemId: 'QITEM-C1-1', proposedItemName: 'Apple LIDAR', unitPrice: 10000 },
-                { score: 82, rank: 2, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Declined', quoteItemId: 'QITEM-C1-2', proposedItemName: 'Dell LIDAR', unitPrice: 9800 },
-                { score: 80, rank: 3, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', quoteItemId: 'QITEM-C1-3', proposedItemName: 'HP LIDAR', unitPrice: 9700 }
-            ]}
-        ]},
-        // Add 4 more for this scenario...
-        { id: 'REQ-C2', status: 'Award_Declined', totalPrice: 25000, title: 'C2: VR Headsets', departmentId: 'DEPT-1', items: [
-            { id: 'ITEM-C2', name: 'High-End VR Headset', quantity: 5, unitPrice: 5000, perItemAwardDetails: [
-                { score: 90, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Failed_to_Award', quoteItemId: 'QITEM-C2-1', proposedItemName: 'HP Reverb G2', unitPrice: 5000 },
-                { score: 88, rank: 2, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Declined', quoteItemId: 'QITEM-C2-2', proposedItemName: 'Samsung Odyssey+', unitPrice: 4800 },
-                { score: 87, rank: 3, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Standby', quoteItemId: 'QITEM-C2-3', proposedItemName: 'Dell Visor', unitPrice: 4750 }
-            ]}
-        ]},
-        { id: 'REQ-C3', status: 'Award_Declined', totalPrice: 3000, title: 'C3: Ergonomic Keyboards', departmentId: 'DEPT-2', items: [
-            { id: 'ITEM-C3', name: 'Split Ergonomic Keyboard', quantity: 10, unitPrice: 300, perItemAwardDetails: [
-                { score: 95, rank: 1, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Failed_to_Award', quoteItemId: 'QITEM-C3-1', proposedItemName: 'Kinesis Freestyle2', unitPrice: 300 },
-                { score: 94, rank: 2, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Declined', quoteItemId: 'QITEM-C3-2', proposedItemName: 'Dell Ergonomic Keyboard', unitPrice: 290 },
-                { score: 93, rank: 3, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', quoteItemId: 'QITEM-C3-3', proposedItemName: 'HP Ergonomic Keyboard', unitPrice: 280 }
-            ]}
-        ]},
-        { id: 'REQ-C4', status: 'Award_Declined', totalPrice: 12000, title: 'C4: High-Speed NAS Storage', departmentId: 'DEPT-3', items: [
-            { id: 'ITEM-C4', name: '8-Bay NAS Enclosure', quantity: 1, unitPrice: 12000, perItemAwardDetails: [
-                { score: 89, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Failed_to_Award', quoteItemId: 'QITEM-C4-1', proposedItemName: 'Synology DS1821+', unitPrice: 12000 },
-                { score: 87, rank: 2, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Declined', quoteItemId: 'QITEM-C4-2', proposedItemName: 'QNAP TVS-872XT', unitPrice: 11500 },
-                { score: 85, rank: 3, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Standby', quoteItemId: 'QITEM-C4-3', proposedItemName: 'Asustor Lockerstor 8', unitPrice: 11000 }
-            ]}
-        ]},
-        { id: 'REQ-C5', status: 'Award_Declined', totalPrice: 8000, title: 'C5: Professional Drones', departmentId: 'DEPT-1', items: [
-            { id: 'ITEM-C5', name: '4K Camera Drone', quantity: 2, unitPrice: 4000, perItemAwardDetails: [
-                { score: 92, rank: 1, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Failed_to_Award', quoteItemId: 'QITEM-C5-1', proposedItemName: 'DJI Mavic 3', unitPrice: 4000 },
-                { score: 90, rank: 2, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Declined', quoteItemId: 'QITEM-C5-2', proposedItemName: 'Autel Evo Lite+', unitPrice: 3800 },
-                { score: 88, rank: 3, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Standby', quoteItemId: 'QITEM-C5-3', proposedItemName: 'Skydio 2+', unitPrice: 3700 }
-            ]}
-        ]},
-
-        // === SCENARIO D: PARTIAL PAYMENT ===
+        ...[
+             { id: 'REQ-SE-1', status: 'Award_Declined', totalPrice: 9700, title: 'SE-1: Specialized LIDAR Sensor', departmentId: 'DEPT-3', items: [
+                { id: 'ITEM-SE-1A', name: 'Industrial LIDAR Unit', quantity: 1, unitPrice: 10000, perItemAwardDetails: [
+                    { score: 85, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Failed_to_Award', quoteItemId: 'QITEM-SE-1A', proposedItemName: 'Apple LIDAR', unitPrice: 10000 },
+                    { score: 82, rank: 2, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Declined', quoteItemId: 'QITEM-SE-1B', proposedItemName: 'Dell LIDAR', unitPrice: 9800 },
+                    { score: 80, rank: 3, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', quoteItemId: 'QITEM-SE-1C', proposedItemName: 'HP LIDAR', unitPrice: 9700 }
+                ]}
+            ]},
+            { id: 'REQ-SE-2', status: 'Award_Declined', totalPrice: 23750, title: 'SE-2: VR Headsets', departmentId: 'DEPT-1', items: [
+                { id: 'ITEM-SE-2A', name: 'High-End VR Headset', quantity: 5, unitPrice: 5000, perItemAwardDetails: [
+                    { score: 90, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Failed_to_Award', quoteItemId: 'QITEM-SE-2A', proposedItemName: 'HP Reverb G2', unitPrice: 5000 },
+                    { score: 88, rank: 2, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Declined', quoteItemId: 'QITEM-SE-2B', proposedItemName: 'Samsung Odyssey+', unitPrice: 4800 },
+                    { score: 87, rank: 3, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Standby', quoteItemId: 'QITEM-SE-2C', proposedItemName: 'Dell Visor', unitPrice: 4750 }
+                ]}
+            ]},
+            { id: 'REQ-SE-3', status: 'Award_Declined', totalPrice: 2800, title: 'SE-3: Ergonomic Keyboards', departmentId: 'DEPT-2', items: [
+                { id: 'ITEM-SE-3A', name: 'Split Ergonomic Keyboard', quantity: 10, unitPrice: 300, perItemAwardDetails: [
+                    { score: 95, rank: 1, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Failed_to_Award', quoteItemId: 'QITEM-SE-3A', proposedItemName: 'Kinesis Freestyle2', unitPrice: 300 },
+                    { score: 94, rank: 2, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Declined', quoteItemId: 'QITEM-SE-3B', proposedItemName: 'Dell Ergonomic Keyboard', unitPrice: 290 },
+                    { score: 93, rank: 3, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', quoteItemId: 'QITEM-SE-3C', proposedItemName: 'HP Ergonomic Keyboard', unitPrice: 280 }
+                ]}
+            ]},
+             { id: 'REQ-SE-4', status: 'Award_Declined', totalPrice: 11000, title: 'SE-4: High-Speed NAS Storage', departmentId: 'DEPT-3', items: [
+                { id: 'ITEM-SE-4A', name: '8-Bay NAS Enclosure', quantity: 1, unitPrice: 12000, perItemAwardDetails: [
+                    { score: 89, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Failed_to_Award', quoteItemId: 'QITEM-SE-4A', proposedItemName: 'Synology DS1821+', unitPrice: 12000 },
+                    { score: 87, rank: 2, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Declined', quoteItemId: 'QITEM-SE-4B', proposedItemName: 'QNAP TVS-872XT', unitPrice: 11500 },
+                    { score: 85, rank: 3, vendorId: 'VENDOR-005', vendorName: 'Samsung Electronics', status: 'Standby', quoteItemId: 'QITEM-SE-4C', proposedItemName: 'Asustor Lockerstor 8', unitPrice: 11000 }
+                ]}
+            ]},
+        ],
+        // === PARTIAL PAYMENT (PP) SCENARIOS ===
         // Goal: Ensure paying for one item's PO does not close the whole requisition.
-        { id: 'REQ-D1', status: 'PO_Created', totalPrice: 13000, title: 'D1: Remote Work Kits', departmentId: 'DEPT-2', items: [
-            { id: 'ITEM-D1', name: 'Noise-Cancelling Headphones', quantity: 10, unitPrice: 500, perItemAwardDetails: [{ score: 93, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', quoteItemId: 'QITEM-D1', proposedItemName: 'Bose QC45', unitPrice: 500 }] },
-            { id: 'ITEM-D2', name: 'External SSD', quantity: 10, unitPrice: 800, perItemAwardDetails: [{ score: 95, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', quoteItemId: 'QITEM-D2', proposedItemName: 'Samsung T7 Shield', unitPrice: 800 }] }
-        ]},
-        // Add 4 more for this scenario...
-        { id: 'REQ-D2', status: 'PO_Created', totalPrice: 30000, title: 'D2: IT Laptops & Docks', departmentId: 'DEPT-3', items: [
-            { id: 'ITEM-D3', name: '15-inch Dell Laptop', quantity: 10, unitPrice: 2000, perItemAwardDetails: [{ score: 98, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', quoteItemId: 'QITEM-D3', proposedItemName: 'Dell Latitude 5530', unitPrice: 2000 }] },
-            { id: 'ITEM-D4', name: 'Thunderbolt Dock', quantity: 10, unitPrice: 1000, perItemAwardDetails: [{ score: 96, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Awarded', quoteItemId: 'QITEM-D4', proposedItemName: 'HP Thunderbolt Dock G4', unitPrice: 1000 }] }
-        ]},
-        { id: 'REQ-D3', status: 'PO_Created', totalPrice: 2500, title: 'D3: Lobby Digital Signage', departmentId: 'DEPT-2', items: [
-            { id: 'ITEM-D5', name: 'Signage Display Tablet', quantity: 1, unitPrice: 1000, perItemAwardDetails: [{ score: 90, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', quoteItemId: 'QITEM-D5', proposedItemName: 'iPad 10.9', unitPrice: 1000 }] },
-            { id: 'ITEM-D6', name: 'Wall Mount', quantity: 1, unitPrice: 1500, perItemAwardDetails: [{ score: 89, rank: 1, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Awarded', quoteItemId: 'QITEM-D6', proposedItemName: 'VESA Wall Mount', unitPrice: 1500 }] }
-        ]},
-        { id: 'REQ-D4', status: 'PO_Created', totalPrice: 11000, title: 'D4: Adobe Creative Cloud Licenses', departmentId: 'DEPT-1', items: [
-            { id: 'ITEM-D7', name: 'Adobe CC All Apps', quantity: 20, unitPrice: 550, perItemAwardDetails: [{ score: 99, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Accepted', quoteItemId: 'QITEM-D7', proposedItemName: 'Adobe CC License', unitPrice: 550 }] },
-            { id: 'ITEM-D8', name: 'Adobe Stock Subscription', quantity: 1, unitPrice: 0, perItemAwardDetails: [{ score: 97, rank: 1, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Awarded', quoteItemId: 'QITEM-D8', proposedItemName: 'Adobe Stock', unitPrice: 0 }] }
-        ]},
-        { id: 'REQ-D5', status: 'PO_Created', totalPrice: 6000, title: 'D5: Bulk Printer Supplies', departmentId: 'DEPT-2', items: [
-            { id: 'ITEM-D9', name: 'Laser Toner Cartridges', quantity: 20, unitPrice: 300, perItemAwardDetails: [{ score: 91, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Accepted', quoteItemId: 'QITEM-D9', proposedItemName: 'HP 58A Toner', unitPrice: 300 }] },
-            { id: 'ITEM-D10', name: 'Paper Reams (Case)', quantity: 5, unitPrice: 0, perItemAwardDetails: [{ score: 88, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', quoteItemId: 'QITEM-D10', proposedItemName: 'Hammermill Paper', unitPrice: 0 }] }
-        ]},
-
+        ...[
+            { id: 'REQ-PP-1', status: 'PO_Created', totalPrice: 13000, title: 'PP-1: Remote Work Kits', departmentId: 'DEPT-2', items: [
+                { id: 'ITEM-PP-1A', name: 'Noise-Cancelling Headphones', quantity: 10, unitPrice: 500, perItemAwardDetails: [{ score: 93, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', quoteItemId: 'QITEM-PP-1A', proposedItemName: 'Bose QC45', unitPrice: 500 }] },
+                { id: 'ITEM-PP-1B', name: 'External SSD', quantity: 10, unitPrice: 800, perItemAwardDetails: [{ score: 95, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', quoteItemId: 'QITEM-PP-1B', proposedItemName: 'Samsung T7 Shield', unitPrice: 800 }] }
+            ]},
+            { id: 'REQ-PP-2', status: 'PO_Created', totalPrice: 30000, title: 'PP-2: IT Laptops & Docks', departmentId: 'DEPT-3', items: [
+                { id: 'ITEM-PP-2A', name: '15-inch Dell Laptop', quantity: 10, unitPrice: 2000, perItemAwardDetails: [{ score: 98, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', quoteItemId: 'QITEM-PP-2A', proposedItemName: 'Dell Latitude 5530', unitPrice: 2000 }] },
+                { id: 'ITEM-PP-2B', name: 'Thunderbolt Dock', quantity: 10, unitPrice: 1000, perItemAwardDetails: [{ score: 96, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Awarded', quoteItemId: 'QITEM-PP-2B', proposedItemName: 'HP Thunderbolt Dock G4', unitPrice: 1000 }] }
+            ]},
+            { id: 'REQ-PP-3', status: 'PO_Created', totalPrice: 2500, title: 'PP-3: Lobby Digital Signage', departmentId: 'DEPT-2', items: [
+                { id: 'ITEM-PP-3A', name: 'Signage Display Tablet', quantity: 1, unitPrice: 1000, perItemAwardDetails: [{ score: 90, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', quoteItemId: 'QITEM-PP-3A', proposedItemName: 'iPad 10.9', unitPrice: 1000 }] },
+                { id: 'ITEM-PP-3B', name: 'Wall Mount', quantity: 1, unitPrice: 1500, perItemAwardDetails: [{ score: 89, rank: 1, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Awarded', quoteItemId: 'QITEM-PP-3B', proposedItemName: 'VESA Wall Mount', unitPrice: 1500 }] }
+            ]},
+            { id: 'REQ-PP-4', status: 'PO_Created', totalPrice: 6000, title: 'PP-4: Bulk Printer Supplies', departmentId: 'DEPT-2', items: [
+                { id: 'ITEM-PP-4A', name: 'Laser Toner Cartridges', quantity: 20, unitPrice: 300, perItemAwardDetails: [{ score: 91, rank: 1, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Accepted', quoteItemId: 'QITEM-PP-4A', proposedItemName: 'HP 58A Toner', unitPrice: 300 }] },
+                { id: 'ITEM-PP-4B', name: 'Paper Reams (Case)', quantity: 5, unitPrice: 0, perItemAwardDetails: [{ score: 88, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', quoteItemId: 'QITEM-PP-4B', proposedItemName: 'Hammermill Paper', unitPrice: 0 }] }
+            ]},
+        ],
+        // === MIXED STATE (MS) SCENARIOS ===
+        // Goal: Test UI and logic with a complex mix of item statuses on a single requisition.
+        ...[
+            { id: 'REQ-MS-1', status: 'PO_Created', totalPrice: 15000, title: 'MS-1: Full Office Refresh', departmentId: 'DEPT-1', items: [
+                { id: 'ITEM-MS-1A', name: 'Desk Chairs', quantity: 10, unitPrice: 500, perItemAwardDetails: [{ score: 95, rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', quoteItemId: 'QITEM-MS-1A', proposedItemName: 'Dell Chair', unitPrice: 500 }] },
+                { id: 'ITEM-MS-1B', name: '4K Webcams', quantity: 10, unitPrice: 200, perItemAwardDetails: [{ score: 98, rank: 1, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Awarded', quoteItemId: 'QITEM-MS-1B', proposedItemName: 'Logi Brio', unitPrice: 200 }] },
+                { id: 'ITEM-MS-1C', name: 'Standing Desks', quantity: 5, unitPrice: 1600, perItemAwardDetails: [
+                    { score: 92, rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Declined', quoteItemId: 'QITEM-MS-1C', proposedItemName: 'iDesk', unitPrice: 1600 },
+                    { score: 91, rank: 2, vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', quoteItemId: 'QITEM-MS-1D', proposedItemName: 'HP Desk', unitPrice: 1550 },
+                ]}
+            ]},
+            { id: 'REQ-MS-2', status: 'Award_Declined', totalPrice: 1000, title: 'MS-2: Podcast Mic Failure', departmentId: 'DEPT-1', items: [
+                { id: 'ITEM-MS-2A', name: 'XLR Microphone', quantity: 1, unitPrice: 1000, perItemAwardDetails: [
+                     { score: 95, rank: 1, vendorId: 'VENDOR-004', vendorName: 'Logitech', status: 'Failed_to_Award', quoteItemId: 'QITEM-MS-2A', proposedItemName: 'Shure SM7B', unitPrice: 1000 },
+                     { score: 94, rank: 2, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Declined', quoteItemId: 'QITEM-MS-2B', proposedItemName: 'Apogee Mic', unitPrice: 950 },
+                ]}
+            ]},
+        ]
     ].map(r => ({ ...r, requesterId: '1', justification: r.title, urgency: 'Medium', createdAt: new Date(), updatedAt: new Date(), rfqSettings: { awardStrategy: 'item' } })) as unknown as PurchaseRequisition[],
 
   quotations: [],
@@ -222,7 +219,7 @@ seedData.requisitions.forEach(req => {
     else if (allStatuses.some(s => s === 'Failed_to_Award')) finalStatus = 'Failed';
 
     seedData.quotations.push({
-      id: `QUO-${req.id}-${vendorId}`,
+      id: `QUO-${req.id.replace('REQ-','')}-${vendorId.replace('VENDOR-','')}`,
       transactionId: req.id,
       requisitionId: req.id,
       vendorId: vendorId,
@@ -230,13 +227,13 @@ seedData.requisitions.forEach(req => {
       items: bid.items,
       totalPrice: bid.totalPrice,
       status: finalStatus,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      deliveryDate: new Date(),
+      createdAt: now,
+      updatedAt: now,
+      deliveryDate: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000), // 14 days from now
     });
 
     if (finalStatus === 'Accepted') {
-        const poId = `PO-${req.id}-${vendorId}`;
+        const poId = `PO-${req.id.replace('REQ-','')}-${vendorId.replace('VENDOR-','')}`;
         seedData.purchaseOrders.push({
             id: poId,
             transactionId: req.id,
@@ -245,32 +242,31 @@ seedData.requisitions.forEach(req => {
             vendorId: vendor.id,
             totalAmount: bid.totalPrice,
             status: 'Delivered',
-            createdAt: new Date(),
-            items: bid.items.map(i => ({...i, id: `PO${i.id}`, totalPrice: i.quantity * i.unitPrice, receivedQuantity: i.quantity })),
+            createdAt: now,
+            items: bid.items.map(i => ({...i, id: `POITEM-${i.id}`, totalPrice: i.quantity * i.unitPrice, receivedQuantity: i.quantity })),
         });
         
-        // Specific logic for partial payment scenario
-        if (req.id.startsWith('REQ-D')) {
+        // Handle partial payment scenarios
+        if (req.id.startsWith('REQ-PP')) {
            const invId = `INV-${poId}`;
-           const isItemPaid = (item: any) => {
-               return (req.id === 'REQ-D1' && item.requisitionItemId === 'ITEM-D1') ||
-                      (req.id === 'REQ-D2' && item.requisitionItemId === 'ITEM-D3') ||
-                      (req.id === 'REQ-D3' && item.requisitionItemId === 'ITEM-D5') ||
-                      (req.id === 'REQ-D4' && item.requisitionItemId === 'ITEM-D7') ||
-                      (req.id === 'REQ-D5' && item.requisitionItemId === 'ITEM-D9');
-           };
-           const hasPaidItem = bid.items.some(isItemPaid);
+           // Determine if this specific PO contains an item that should be marked as "Paid"
+           const hasPaidItemInPO = bid.items.some((item: any) => {
+               return (req.id === 'REQ-PP-1' && item.requisitionItemId === 'ITEM-PP-1A') ||
+                      (req.id === 'REQ-PP-2' && item.requisitionItemId === 'ITEM-PP-2A') ||
+                      (req.id === 'REQ-PP-3' && item.requisitionItemId === 'ITEM-PP-3A') ||
+                      (req.id === 'REQ-PP-4' && item.requisitionItemId === 'ITEM-PP-4A');
+           });
 
            seedData.invoices.push({
                 id: invId,
                 transactionId: req.id,
                 purchaseOrderId: poId,
                 vendorId: vendor.id,
-                invoiceDate: new Date(),
+                invoiceDate: now,
                 totalAmount: bid.totalPrice,
-                status: hasPaidItem ? 'Paid' : 'Approved_for_Payment',
-                paymentReference: hasPaidItem ? `PAY-${invId}` : undefined,
-                items: bid.items.map(i => ({ ...i, id: `INV${i.id}`, totalPrice: i.quantity * i.unitPrice })),
+                status: hasPaidItemInPO ? 'Paid' : 'Approved_for_Payment',
+                paymentReference: hasPaidItemInPO ? `PAY-${invId}` : undefined,
+                items: bid.items.map(i => ({ id: `INVITEM-${i.id}`, name: i.name, quantity: i.quantity, unitPrice: i.unitPrice, totalPrice: i.quantity * i.unitPrice })),
            });
 
            seedData.goodsReceipts.push({
@@ -278,8 +274,8 @@ seedData.requisitions.forEach(req => {
                 transactionId: req.id,
                 purchaseOrderId: poId,
                 receivedById: '4', // David (Receiving)
-                receivedDate: new Date(),
-                items: bid.items.map(i => ({ poItemId: `PO${i.id}`, quantityReceived: i.quantity, condition: 'Good' }))
+                receivedDate: now,
+                items: bid.items.map(i => ({ poItemId: `POITEM-${i.id}`, quantityReceived: i.quantity, condition: 'Good' }))
            });
         }
     }
