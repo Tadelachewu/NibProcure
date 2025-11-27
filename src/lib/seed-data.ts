@@ -222,20 +222,20 @@ const seedData: AppData = {
     // --- Supporting Data for Scenarios ---
     quotations: [
         // Scenario A
-        { id: 'QUO-A1', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', totalPrice: 250000, items: [{id: 'QITEM-A1', requisitionItemId: 'ITEM-A1', name: 'Mac Studio', quantity: 100, unitPrice: 2500}] },
-        { id: 'QUO-A2', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', totalPrice: 265000, items: [{id: 'QITEM-A2', requisitionItemId: 'ITEM-A1', name: 'Dell XPS Tower', quantity: 100, unitPrice: 2400}, {id: 'QITEM-A3', requisitionItemId: 'ITEM-A2', name: 'Herman Miller Aeron', quantity: 100, unitPrice: 250}] },
-        { id: 'QUO-A3', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', totalPrice: 22000, items: [{id: 'QITEM-A4', requisitionItemId: 'ITEM-A2', name: 'HP Ergonomic Chair', quantity: 100, unitPrice: 220}] },
+        { id: 'QUO-A1', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', totalPrice: 250000, createdAt: new Date('2024-05-15T09:00:00Z'), deliveryDate: new Date('2024-05-30T09:00:00Z'), items: [{id: 'QITEM-A1', requisitionItemId: 'ITEM-A1', name: 'Mac Studio', quantity: 100, unitPrice: 2500}] },
+        { id: 'QUO-A2', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Accepted', totalPrice: 265000, createdAt: new Date('2024-05-15T10:00:00Z'), deliveryDate: new Date('2024-05-31T10:00:00Z'), items: [{id: 'QITEM-A2', requisitionItemId: 'ITEM-A1', name: 'Dell XPS Tower', quantity: 100, unitPrice: 2400}, {id: 'QITEM-A3', requisitionItemId: 'ITEM-A2', name: 'Herman Miller Aeron', quantity: 100, unitPrice: 250}] },
+        { id: 'QUO-A3', requisitionId: 'REQ-SCENARIO-A', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', totalPrice: 22000, createdAt: new Date('2024-05-15T11:00:00Z'), deliveryDate: new Date('2024-06-01T11:00:00Z'), items: [{id: 'QITEM-A4', requisitionItemId: 'ITEM-A2', name: 'HP Ergonomic Chair', quantity: 100, unitPrice: 220}] },
         // Scenario B
-        { id: 'QUO-B1', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Awarded', totalPrice: 40000, items: [{id: 'QITEM-B1', requisitionItemId: 'ITEM-B1', name: 'Axis 4K Camera', quantity: 50, unitPrice: 800}] },
-        { id: 'QUO-B2', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', totalPrice: 20000, items: [{id: 'QITEM-B3', requisitionItemId: 'ITEM-B2', name: 'Cisco Catalyst', quantity: 10, unitPrice: 2000}] },
-        { id: 'QUO-B3', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', totalPrice: 37500, items: [{id: 'QITEM-B4', requisitionItemId: 'ITEM-B1', name: 'HP Security Cam', quantity: 50, unitPrice: 750}] },
+        { id: 'QUO-B1', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Awarded', totalPrice: 40000, createdAt: new Date('2024-05-16T09:00:00Z'), deliveryDate: new Date('2024-06-02T09:00:00Z'), items: [{id: 'QITEM-B1', requisitionItemId: 'ITEM-B1', name: 'Axis 4K Camera', quantity: 50, unitPrice: 800}] },
+        { id: 'QUO-B2', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', totalPrice: 20000, createdAt: new Date('2024-05-16T10:00:00Z'), deliveryDate: new Date('2024-06-03T10:00:00Z'), items: [{id: 'QITEM-B3', requisitionItemId: 'ITEM-B2', name: 'Cisco Catalyst', quantity: 10, unitPrice: 2000}] },
+        { id: 'QUO-B3', requisitionId: 'REQ-SCENARIO-B', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Standby', totalPrice: 37500, createdAt: new Date('2024-05-16T11:00:00Z'), deliveryDate: new Date('2024-06-04T11:00:00Z'), items: [{id: 'QITEM-B4', requisitionItemId: 'ITEM-B1', name: 'HP Security Cam', quantity: 50, unitPrice: 750}] },
         // Scenario C
-        { id: 'QUO-C1', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Failed_to_Award', totalPrice: 15000, items: [{id: 'QITEM-C1', requisitionItemId: 'ITEM-C1', name: 'Epson Pro', quantity: 5, unitPrice: 3000}] },
-        { id: 'QUO-C2', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Failed_to_Award', totalPrice: 14000, items: [{id: 'QITEM-C2', requisitionItemId: 'ITEM-C1', name: 'BenQ Projector', quantity: 5, unitPrice: 2800}] },
-        { id: 'QUO-C3', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Awarded', totalPrice: 15500, items: [{id: 'QITEM-C3', requisitionItemId: 'ITEM-C1', name: 'ViewSonic 4K', quantity: 5, unitPrice: 3100}] },
+        { id: 'QUO-C1', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Failed_to_Award', totalPrice: 15000, createdAt: new Date('2024-05-17T09:00:00Z'), deliveryDate: new Date('2024-06-05T09:00:00Z'), items: [{id: 'QITEM-C1', requisitionItemId: 'ITEM-C1', name: 'Epson Pro', quantity: 5, unitPrice: 3000}] },
+        { id: 'QUO-C2', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Failed_to_Award', totalPrice: 14000, createdAt: new Date('2024-05-17T10:00:00Z'), deliveryDate: new Date('2024-06-06T10:00:00Z'), items: [{id: 'QITEM-C2', requisitionItemId: 'ITEM-C1', name: 'BenQ Projector', quantity: 5, unitPrice: 2800}] },
+        { id: 'QUO-C3', requisitionId: 'REQ-SCENARIO-C', vendorId: 'VENDOR-003', vendorName: 'HP Inc.', status: 'Awarded', totalPrice: 15500, createdAt: new Date('2024-05-17T11:00:00Z'), deliveryDate: new Date('2024-06-07T11:00:00Z'), items: [{id: 'QITEM-C3', requisitionItemId: 'ITEM-C1', name: 'ViewSonic 4K', quantity: 5, unitPrice: 3100}] },
         // Scenario D
-        { id: 'QUO-D1', requisitionId: 'REQ-SCENARIO-D', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', totalPrice: 40000, items: [{id: 'QITEM-D1', requisitionItemId: 'ITEM-D1', name: 'CalDigit TS4', quantity: 100, unitPrice: 400}] },
-        { id: 'QUO-D2', requisitionId: 'REQ-SCENARIO-D', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', totalPrice: 120000, items: [{id: 'QITEM-D2', requisitionItemId: 'ITEM-D2', name: 'Dell UltraSharp', quantity: 100, unitPrice: 1200}] },
+        { id: 'QUO-D1', requisitionId: 'REQ-SCENARIO-D', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', status: 'Accepted', totalPrice: 40000, createdAt: new Date('2024-05-18T09:00:00Z'), deliveryDate: new Date('2024-06-08T09:00:00Z'), items: [{id: 'QITEM-D1', requisitionItemId: 'ITEM-D1', name: 'CalDigit TS4', quantity: 100, unitPrice: 400}] },
+        { id: 'QUO-D2', requisitionId: 'REQ-SCENARIO-D', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', status: 'Awarded', totalPrice: 120000, createdAt: new Date('2024-05-18T10:00:00Z'), deliveryDate: new Date('2024-06-09T10:00:00Z'), items: [{id: 'QITEM-D2', requisitionItemId: 'ITEM-D2', name: 'Dell UltraSharp', quantity: 100, unitPrice: 1200}] },
 
     ] as unknown as Quotation[],
     
@@ -259,5 +259,3 @@ const seedData: AppData = {
 
     auditLogs: [],
 };
-
-    
