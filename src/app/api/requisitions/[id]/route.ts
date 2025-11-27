@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -12,6 +13,9 @@ export async function GET(
 ) {
   try {
     const { id } = params;
+    if (!id) {
+        return NextResponse.json({ error: 'Requisition ID is required.' }, { status: 400 });
+    }
     const requisition = await prisma.purchaseRequisition.findUnique({
       where: { id },
       include: {
@@ -118,4 +122,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
 

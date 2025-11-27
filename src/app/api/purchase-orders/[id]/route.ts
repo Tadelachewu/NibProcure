@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -27,7 +28,10 @@ export async function GET(
         return NextResponse.json(po);
     } catch (error) {
         console.error('Failed to fetch PO:', error);
-        return NextResponse.json({ error: 'Failed to fetch purchase order' }, { status: 500 });
+        if (error instanceof Error) {
+            return NextResponse.json({ error: 'Failed to fetch purchase order', details: error.message }, { status: 500 });
+        }
+        return NextResponse.json({ error: 'An unknown error occurred while fetching the purchase order' }, { status: 500 });
     }
 }
 
@@ -83,4 +87,5 @@ export async function PATCH(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
 

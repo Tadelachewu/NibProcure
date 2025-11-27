@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -49,7 +50,12 @@ export async function POST(
         if (invoiceToUpdate.po?.requisitionId) {
             const requisition = await tx.purchaseRequisition.findUnique({
                 where: { id: invoiceToUpdate.po.requisitionId },
-                include: { items: true }
+                include: { 
+                    items: true,
+                    purchaseOrders: {
+                        include: { invoices: true }
+                    }
+                }
             });
             
             if (requisition) {
@@ -57,22 +63,30 @@ export async function POST(
                 let isFullyComplete = false;
 
                 if (isPerItem) {
-                    // For per-item, every item must be in a terminal state
+                    // For per-item, every item must be in a terminal state (Accepted/Paid, Failed, or Restarted)
                     isFullyComplete = requisition.items.every(item => {
                         const details = item.perItemAwardDetails as PerItemAwardDetail[] | null;
-                        if (!details || details.length === 0) return false; // Not resolved if no awards were ever made
-                        // An item is resolved if its winning bid is Accepted/Paid, or if it failed/was restarted
+                        if (!details || details.length === 0) {
+                            // If an item has no award details, it was never part of an award process, so it's not 'complete'.
+                            // A truly complete requisition would have had some resolution for every item.
+                            return false;
+                        }
+                        // An item is considered resolved if its winning bid has been actioned to a final state.
                         return details.some(d => d.status === 'Accepted' || d.status === 'Failed_to_Award' || d.status === 'Restarted');
                     });
 
                 } else {
-                    // For single-vendor, check if all POs are delivered/closed
+                    // For single-vendor, check if all POs are delivered/closed/paid
                     const allPOsForRequisition = await tx.purchaseOrder.findMany({
-                        where: { requisitionId: requisition.id }
+                        where: { requisitionId: requisition.id },
+                        include: { invoices: true }
                     });
-                    isFullyComplete = allPOsForRequisition.length > 0 && allPOsForRequisition.every(po => 
-                        ['Delivered', 'Closed', 'Cancelled'].includes(po.status.replace(/_/g, ' '))
-                    );
+                    
+                    isFullyComplete = allPOsForRequisition.length > 0 && allPOsForRequisition.every(po => {
+                        const isDelivered = ['Delivered', 'Closed', 'Cancelled'].includes(po.status.replace(/_/g, ' '));
+                        const isPaid = po.invoices.every(inv => inv.status === 'Paid');
+                        return isDelivered || isPaid;
+                    });
                 }
 
                 if (isFullyComplete) {
@@ -108,3 +122,4 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
