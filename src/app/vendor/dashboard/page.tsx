@@ -115,44 +115,43 @@ export default function VendorDashboardPage() {
         if (vendorQuote?.status === 'Awarded' && !isPerItemAward) {
             return 'Awarded';
         }
-        
-        // Highest priority statuses from the vendor's main quote
+
         if (vendorQuote) {
             if (vendorQuote.status === 'Invoice_Submitted') return 'Invoice Submitted';
-            if (vendorQuote.status === 'Accepted') return 'Accepted';
             if (vendorQuote.status === 'Declined') return 'Declined';
         }
 
         let vendorItemStatuses: PerItemAwardDetail[] = [];
         if (isPerItemAward) {
-            vendorItemStatuses = req.items.flatMap(item => 
+            vendorItemStatuses = req.items.flatMap(item =>
                 (item.perItemAwardDetails as PerItemAwardDetail[] || [])
                 .filter(d => d.vendorId === user.vendorId)
             );
-        } else if (vendorQuote) { // For single-vendor award, derive item statuses from quote status
-            if (vendorQuote.status === 'Awarded') vendorItemStatuses.push({ status: 'Awarded' } as PerItemAwardDetail);
-            if (vendorQuote.status === 'Partially_Awarded') vendorItemStatuses.push({ status: 'Awarded' } as PerItemAwardDetail);
-            if (vendorQuote.status === 'Standby') vendorItemStatuses.push({ status: 'Standby' } as PerItemAwardDetail);
         }
 
-        // Check for highest priority statuses derived from items
-        if (vendorItemStatuses.some(d => d.status === 'Accepted')) return 'Accepted';
-        if (vendorItemStatuses.some(d => d.status === 'Declined')) return 'Declined';
-        if (vendorItemStatuses.some(d => d.status === 'Awarded')) {
-             if (!isPerItemAward) {
-                return 'Awarded';
-            }
-            // For per-item, check if ALL potential awards were won.
-            const potentialAwards = req.items.flatMap(i => (i.perItemAwardDetails || [])).filter(d => d.vendorId === user.vendorId);
-            const wonAwards = potentialAwards.filter(d => d.status === 'Awarded' || d.status === 'Accepted');
-            
-            return wonAwards.length === potentialAwards.length ? 'Awarded' : 'Partially Awarded';
-        }
-        if (vendorItemStatuses.some(d => d.status === 'Standby')) return 'Standby';
+        const hasAccepted = vendorItemStatuses.some(d => d.status === 'Accepted');
+        const hasAwarded = vendorItemStatuses.some(d => d.status === 'Awarded');
+        const hasDeclined = vendorItemStatuses.some(d => d.status === 'Declined');
+        const hasStandby = vendorItemStatuses.some(d => d.status === 'Standby');
 
-        // Check statuses from the main quote again if no item-level status took precedence
+        if (hasDeclined) return 'Declined';
+        
+        if (hasAccepted && hasAwarded) {
+            return 'Partially Awarded'; // Some accepted, some still pending action
+        }
+        if (hasAccepted && !hasAwarded) {
+            return 'Accepted'; // All actioned items are accepted
+        }
+        if (hasAwarded) {
+            return 'Awarded'; // Only awarded items, none yet accepted
+        }
+        if (hasStandby) {
+            return 'Standby';
+        }
+
         if (vendorQuote) {
-             if (vendorQuote.status === 'Standby') return 'Standby';
+            if (vendorQuote.status === 'Accepted') return 'Accepted'; // For single-vendor case
+            if (vendorQuote.status === 'Standby') return 'Standby';
             if (vendorQuote.status === 'Submitted') {
                 if (req.status === 'Closed' || req.status === 'Fulfilled') return 'Not Awarded';
                 if (req.quotations?.some(q => q.vendorId !== user.vendorId && ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status))) return 'Not Awarded';
@@ -160,16 +159,14 @@ export default function VendorDashboardPage() {
             }
         }
         
-        // If related but no other status fits, it means they can quote
         const isRelated = vendorQuote || vendorItemStatuses.length > 0;
         if (!isRelated) {
             return 'Action Required';
         }
 
-        // Final fallbacks
         if (req.status === 'Closed' || req.status === 'Fulfilled') return 'Closed';
         
-        return 'Processing'; // Default for other intermediate states
+        return 'Processing';
     }, [user]);
 
 
@@ -180,20 +177,17 @@ export default function VendorDashboardPage() {
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
             
-            // Check if any item in this requisition is specifically re-opened for this vendor
             const hasReopenedItemForVendor = req.items.some(item => 
                 item.reopenDeadline && isPast(new Date(item.reopenDeadline)) === false &&
                 item.reopenVendorIds?.includes(user?.vendorId || '')
             );
 
-            // A requisition is active if the vendor submitted a quote for it, OR if they won an award
             const isRelated = vendorQuote || 
                               req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
 
             if (isRelated) {
                 active.push(req);
             } else if (hasReopenedItemForVendor || req.status === 'Accepting_Quotes') {
-                // It's open if it's generally accepting quotes, OR has a specific re-opened item for this vendor
                 open.push(req);
             }
         });
