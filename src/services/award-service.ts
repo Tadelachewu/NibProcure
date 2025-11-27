@@ -397,6 +397,14 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         }
         
         if (promotedCount === 0) {
+            // Check if there are any remaining 'Declined' items. If not, the process might be complete.
+            const stillDeclinedCount = (await tx.requisitionItem.findMany({ where: { requisitionId } }))
+                .flatMap(i => i.perItemAwardDetails as PerItemAwardDetail[] || [])
+                .filter(d => d.status === 'Declined').length;
+            
+            if (stillDeclinedCount === 0) {
+                return { message: 'All declined items have been addressed or have no more standbys. Please review the awards.' };
+            }
             return { message: 'No eligible standby vendors found for promotion. Please review the awards.' };
         }
         
