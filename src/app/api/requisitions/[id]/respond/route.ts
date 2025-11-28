@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User, UserRole } from '@/lib/types';
+import { PerItemAwardDetail, User, UserRole } from '@/lib/types';
 import { handleAwardRejection } from '@/services/award-service';
 
 
@@ -12,9 +12,11 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const quoteId = params.id;
+  console.log(`[RESPOND-AWARD] Received request for Quote ID: ${quoteId}`);
   try {
     const body = await request.json();
-    const { userId, action } = body as { userId: string; action: 'accept' | 'reject' };
+    const { userId, action, quoteItemId } = body as { userId: string; action: 'accept' | 'reject'; quoteItemId?: string };
+    console.log(`[RESPOND-AWARD] Action: ${action} by User ID: ${userId}. Item-specific: ${!!quoteItemId}`);
 
     const user = await prisma.user.findUnique({
         where: {id: userId},
@@ -22,13 +24,15 @@ export async function POST(
     });
     
     if (!user || !user.roles.some(r => r.name === 'Vendor')) {
+      console.error(`[RESPOND-AWARD] Unauthorized attempt by User ID: ${userId}`);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
+    console.log(`[RESPOND-AWARD] Starting transaction for Quote ID: ${quoteId}`);
     const transactionResult = await prisma.$transaction(async (tx) => {
         const quote = await tx.quotation.findUnique({ 
             where: { id: quoteId },
-            include: { items: true, requisition: true }
+            include: { items: true, requisition: { include: { items: true } } }
         });
 
         if (!quote || quote.vendorId !== user.vendorId) {
@@ -39,31 +43,74 @@ export async function POST(
         if (!requisition) {
            throw new Error('Associated requisition not found');
         }
+        console.log(`[RESPOND-AWARD] Found Requisition ID: ${requisition.id} with status ${requisition.status}`);
 
         // **SAFEGUARD START**
         // Prevent creating a PO for a requisition that is already closed.
         if (requisition.status === 'Closed' || requisition.status === 'Fulfilled') {
+            console.error(`[RESPOND-AWARD] Aborting: Requisition ${requisition.id} is already in a final state (${requisition.status}).`);
             throw new Error(`Cannot accept award because the parent requisition '${requisition.id}' is already closed.`);
         }
         // **SAFEGUARD END**
-
-        if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded' && quote.status !== 'Pending_Award') {
-            throw new Error('This quote is not currently in an awarded state.');
-        }
+        
+        const isPerItemAward = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+        console.log(`[RESPOND-AWARD] Award strategy is: ${isPerItemAward ? 'Per-Item' : 'Single Vendor'}`);
 
         if (action === 'accept') {
-            const updatedQuote = await tx.quotation.update({
-                where: { id: quoteId },
-                data: { status: 'Accepted' }
-            });
+            let awardedQuoteItems: any[] = [];
             
-            const awardedQuoteItems = quote.items.filter(item => 
-                (requisition.awardedQuoteItemIds || []).includes(item.id)
-            );
+            if (isPerItemAward) {
+                console.log('[RESPOND-AWARD] Handling per-item award acceptance.');
+                const awardedItemDetails = requisition.items.flatMap(i => (i.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId && d.status === 'Awarded'));
+                
+                let itemsToAccept = awardedItemDetails;
+                if (quoteItemId) {
+                    itemsToAccept = awardedItemDetails.filter(d => d.quoteItemId === quoteItemId);
+                }
 
-            const thisVendorAwardedItems = awardedQuoteItems.length > 0 ? awardedQuoteItems : quote.items;
+                if (itemsToAccept.length === 0) {
+                    throw new Error("No items in 'Awarded' status found for you to accept.");
+                }
+                console.log(`[RESPOND-AWARD] Found ${itemsToAccept.length} item(s) to accept.`);
+                
+                const awardedQuoteItemIds = new Set(itemsToAccept.map(d => d.quoteItemId));
+                awardedQuoteItems = quote.items.filter(item => awardedQuoteItemIds.has(item.id));
+                
+                for (const item of requisition.items) {
+                    const originalDetails = item.perItemAwardDetails as PerItemAwardDetail[] | null;
+                    if (originalDetails) {
+                        const newDetails = originalDetails.map(d => 
+                            awardedQuoteItemIds.has(d.quoteItemId) ? { ...d, status: 'Accepted' as const } : d
+                        );
+                        await tx.requisitionItem.update({
+                            where: { id: item.id },
+                            data: { perItemAwardDetails: newDetails }
+                        });
+                    }
+                }
+                console.log(`[RESPOND-AWARD] Updated perItemAwardDetails on requisition items.`);
 
-            const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
+            } else { // Single vendor award
+                console.log('[RESPOND-AWARD] Handling single-vendor award acceptance.');
+                 await tx.quotation.update({
+                    where: { id: quoteId },
+                    data: { status: 'Accepted' }
+                });
+                
+                const awardedIds = new Set(requisition.awardedQuoteItemIds || []);
+                if (awardedIds.size > 0) {
+                  awardedQuoteItems = quote.items.filter(item => awardedIds.has(item.id));
+                } else {
+                  awardedQuoteItems = quote.items;
+                }
+            }
+
+            if (awardedQuoteItems.length === 0) {
+              throw new Error("No awarded items found for this vendor to accept.");
+            }
+
+            const totalPriceForThisPO = awardedQuoteItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
+            console.log(`[RESPOND-AWARD] Total price for new PO: ${totalPriceForThisPO}`);
 
             const newPO = await tx.purchaseOrder.create({
                 data: {
@@ -72,7 +119,7 @@ export async function POST(
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
                     items: {
-                        create: thisVendorAwardedItems.map((item: any) => ({
+                        create: awardedQuoteItems.map((item: any) => ({
                             requisitionItemId: item.requisitionItemId,
                             name: item.name,
                             quantity: item.quantity,
@@ -85,22 +132,33 @@ export async function POST(
                     status: 'Issued',
                 }
             });
+            console.log(`[RESPOND-AWARD] Created new Purchase Order: ${newPO.id}`);
 
-            // After accepting, check if any other awards are still pending.
-            const otherPendingAwards = await tx.quotation.count({
-                where: {
-                    requisitionId: requisition.id,
-                    id: { not: quote.id },
-                    status: { in: ['Awarded', 'Partially_Awarded', 'Pending_Award'] }
-                }
+            // **MODIFIED LOGIC**: Check if ALL possible awards for this requisition have been actioned (accepted or declined/failed).
+            let allAwardsActioned = false;
+            const updatedRequisitionAfterPO = await tx.purchaseRequisition.findUnique({
+                where: { id: requisition.id },
+                include: { items: true, quotations: true }
             });
+            if (!updatedRequisitionAfterPO) throw new Error("Could not refetch requisition to check completion status.");
 
-            // If there are no more pending awards, the PO process is complete for the whole req.
-            if (otherPendingAwards === 0) {
+
+            if (isPerItemAward) {
+                 allAwardsActioned = !updatedRequisitionAfterPO.items.some(item =>
+                    (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Awarded' || d.status === 'Standby')
+                );
+            } else {
+                 allAwardsActioned = !updatedRequisitionAfterPO.quotations.some(q => q.status === 'Awarded' || q.status === 'Standby');
+            }
+
+            if (allAwardsActioned) {
+                 console.log(`[RESPOND-AWARD] All awards for Req ${requisition.id} have been actioned. Updating status to PO_Created.`);
                  await tx.purchaseRequisition.update({
                     where: { id: requisition.id },
                     data: { status: 'PO_Created' }
                 });
+            } else {
+                console.log(`[RESPOND-AWARD] Not all awards for Req ${requisition.id} have been actioned yet. Status remains active.`);
             }
             
             await tx.auditLog.create({
@@ -110,19 +168,16 @@ export async function POST(
                     action: 'ACCEPT_AWARD',
                     entity: 'Quotation',
                     entityId: quoteId,
-                    details: `Vendor accepted award. PO ${newPO.id} auto-generated.`,
+                    details: `Vendor accepted award. PO ${newPO.id} auto-generated for ${awardedQuoteItems.length} item(s).`,
                     transactionId: requisition.transactionId,
                 }
             });
             
-            return { message: 'Award accepted. PO has been generated.', quote: updatedQuote };
+            return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            const declinedItemIds = quote.items
-                .filter((item: any) => (requisition.awardedQuoteItemIds || []).includes(item.id))
-                .map((item: any) => item.requisitionItemId);
-                
-            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds);
+            console.log(`[RESPOND-AWARD] Handling award rejection. Rejected quote item ID: ${quoteItemId}`);
+            return await handleAwardRejection(tx, quote, requisition, user, [], quoteItemId);
         }
         
         throw new Error('Invalid action.');
@@ -131,6 +186,7 @@ export async function POST(
       timeout: 30000,
     });
     
+    console.log(`[RESPOND-AWARD] Transaction complete for Quote ID: ${quoteId}`);
     return NextResponse.json(transactionResult);
 
   } catch (error) {
