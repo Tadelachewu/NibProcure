@@ -346,14 +346,10 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         let promotedCount = 0;
         let auditDetailsMessage = 'Promoted standby vendors: ';
 
-        // Find all items that have a 'Declined' bid. These are the ones that need a promotion.
         const itemsToProcess = await tx.requisitionItem.findMany({
             where: {
                 requisitionId: requisitionId,
-                perItemAwardDetails: {
-                    path: ['status'],
-                    array_contains: 'Declined'
-                }
+                perItemAwardDetails: { path: ['status'], array_contains: 'Declined' }
             }
         });
 
@@ -378,6 +374,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                     if (d.quoteItemId === bidToPromote.quoteItemId) {
                         return { ...d, status: 'Pending_Award' as const };
                     }
+                    // Mark the one that was declined as failed so we don't try to promote it again
                     if (d.status === 'Declined') {
                         return { ...d, status: 'Failed_to_Award' as const };
                     }
@@ -389,6 +386,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                     data: { perItemAwardDetails: updatedDetails as any }
                 });
             } else {
+                // No standbys left, mark all declined as failed
                 const updatedDetails = currentDetails.map(d => 
                     d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
                 );
@@ -512,3 +510,5 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
+
+    
