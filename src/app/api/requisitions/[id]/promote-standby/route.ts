@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { handleAwardRejection } from '@/services/award-service';
-import { UserRole } from '@/lib/types';
+import { UserRole, PerItemAwardDetail } from '@/lib/types';
 
 export async function POST(
   request: Request,
@@ -42,21 +42,50 @@ export async function POST(
     const result = await prisma.$transaction(async (tx) => {
       const requisition = await tx.purchaseRequisition.findUnique({
           where: { id: requisitionId },
-          include: { quotations: { where: { status: 'Declined' } } }
+          include: { 
+              items: true,
+              quotations: true // Include all quotes to find the one associated with the declined item
+          }
       });
 
       if (!requisition) {
           throw new Error('Requisition not found or not in a state to promote standby.');
       }
       
-      const lastDeclinedQuote = requisition.quotations.sort((a,b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+      const isPerItem = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
-      if (!lastDeclinedQuote) {
-          throw new Error("Could not find a declined quote to trigger a promotion. The requisition may be in an inconsistent state.");
+      if (isPerItem) {
+        // Find the specific item that has a declined award, which is the trigger for this action
+        const itemWithDeclinedAward = requisition.items.find(item => 
+          (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Declined')
+        );
+        
+        if (!itemWithDeclinedAward) {
+           throw new Error("Could not find an item with a declined award to trigger a promotion. The requisition may be in an inconsistent state.");
+        }
+
+        const declinedDetail = (itemWithDeclinedAward.perItemAwardDetails as PerItemAwardDetail[]).find(d => d.status === 'Declined');
+        if (!declinedDetail) {
+             throw new Error("Inconsistent state: Item has declined status but no declined detail found.");
+        }
+        
+        // Find the full quote object that contains the declined item
+        const quoteOfDeclinedItem = requisition.quotations.find(q => q.id === declinedDetail.quotationId);
+        if (!quoteOfDeclinedItem) {
+             throw new Error("Could not find the parent quotation for the declined item.");
+        }
+
+        // Now call the rejection handler with the correct context
+        return await handleAwardRejection(tx, quoteOfDeclinedItem, requisition, user, declinedDetail.quoteItemId);
+      } else {
+        // Fallback for single-vendor award promotion
+        const lastDeclinedQuote = requisition.quotations.sort((a,b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+        if (!lastDeclinedQuote || lastDeclinedQuote.status !== 'Declined') {
+            throw new Error("Could not find a declined quote to trigger a promotion. The requisition may be in an inconsistent state.");
+        }
+        return await handleAwardRejection(tx, lastDeclinedQuote, requisition, user);
       }
 
-      // The logic for promotion is now part of the rejection handler
-      return await handleAwardRejection(tx, lastDeclinedQuote, requisition, user);
     }, {
       maxWait: 15000,
       timeout: 30000,
