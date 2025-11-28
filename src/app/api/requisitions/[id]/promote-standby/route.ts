@@ -41,6 +41,8 @@ export async function POST(
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // The `promoteStandbyVendor` function now takes an optional array of specific items to process.
+      // By leaving it empty, it will automatically find all items that need promotion.
       return await promoteStandbyVendor(tx, requisitionId, user);
     }, {
       maxWait: 15000,

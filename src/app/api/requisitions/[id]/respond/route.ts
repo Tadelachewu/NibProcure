@@ -177,7 +177,7 @@ export async function POST(
 
         } else if (action === 'reject') {
             console.log(`[RESPOND-AWARD] Handling award rejection. Rejected quote item ID: ${quoteItemId}`);
-            return await handleAwardRejection(tx, quote, requisition, user, [], quoteItemId);
+            return await handleAwardRejection(tx, quote, requisition, user, quoteItemId);
         }
         
         throw new Error('Invalid action.');
