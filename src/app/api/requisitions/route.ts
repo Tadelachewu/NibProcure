@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -277,7 +278,6 @@ export async function PATCH(
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
     
-    // This handles editing a draft or rejected requisition and resubmitting
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && body.title) {
         const totalPrice = body.items.reduce((acc: number, item: any) => {
             const price = item.unitPrice || 0;
@@ -313,7 +313,6 @@ export async function PATCH(
                 })),
             },
         };
-         // Safely check for evaluation criteria before attempting to delete/recreate
         if (body.evaluationCriteria) {
              const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
              if (oldCriteria) {
@@ -338,7 +337,6 @@ export async function PATCH(
                 dataToUpdate.currentApprover = { connect: { id: department.headId } };
                 dataToUpdate.status = 'Pending_Approval';
             } else {
-                // If no department head, auto-approve to next stage
                 dataToUpdate.status = 'PreApproved';
                 dataToUpdate.currentApprover = { disconnect: true };
             }
@@ -348,7 +346,6 @@ export async function PATCH(
 
     }
 
-    // This is a high-level award approval/rejection
     else if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
         const userRoles = (user.roles as any[]).map(r => r.name);
         console.log(`[PATCH /api/requisitions] Handling award action by user with roles: ${userRoles.join(', ')}`);
@@ -375,14 +372,14 @@ export async function PATCH(
                 const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
                 dataToUpdate.status = previousStatus;
                 dataToUpdate.currentApproverId = previousApproverId;
-                dataToUpdate.approverComment = comment; // Save the rejection reason
+                dataToUpdate.approverComment = comment; 
                 auditDetails = serviceAuditDetails;
                 auditAction = 'REJECT_AWARD_STEP';
-            } else { // Approved
+            } else {
                 const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
                 dataToUpdate.status = nextStatus;
                 dataToUpdate.currentApproverId = nextApproverId;
-                dataToUpdate.approverComment = comment; // Save approval comment
+                dataToUpdate.approverComment = comment;
                 auditDetails = serviceAuditDetails;
                 auditAction = 'APPROVE_AWARD_STEP';
             }
@@ -409,7 +406,6 @@ export async function PATCH(
                 console.log(`[PATCH /api/requisitions] Minute recorded for Req ID: ${id}`);
             }
 
-            // Use upsert to avoid unique constraint errors
             await tx.review.upsert({
                 where: {
                     requisitionId_reviewerId: {
@@ -447,7 +443,6 @@ export async function PATCH(
         return NextResponse.json(transactionResult);
     }
 
-    // This is the initial departmental approval
     else if (requisition.status === 'Pending_Approval') {
         console.log(`[PATCH /api/requisitions] Handling departmental approval for Req ID: ${id}`);
         if (requisition.currentApproverId !== userId && !user.roles.some(r => r.name === 'Admin')) {
@@ -459,8 +454,8 @@ export async function PATCH(
             dataToUpdate.approverComment = comment;
             auditAction = 'REJECT_REQUISITION';
             auditDetails = `Requisition ${id} was rejected by department head with comment: "${comment}".`;
-        } else { // Department head approves
-             dataToUpdate.status = 'PreApproved'; // *** FIX: Correct status for departmental approval ***
+        } else {
+             dataToUpdate.status = 'PreApproved';
              dataToUpdate.currentApprover = { disconnect: true };
              dataToUpdate.approverComment = comment;
              auditAction = 'PRE_APPROVE_REQUISITION';
@@ -487,7 +482,6 @@ export async function PATCH(
             }
         });
 
-    // This handles a requester submitting a draft
     } else if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
         console.log(`[PATCH /api/requisitions] Handling draft submission for Req ID: ${id}`);
         const isRequester = requisition.requesterId === userId;
@@ -497,7 +491,6 @@ export async function PATCH(
             dataToUpdate.currentApprover = { connect: { id: department.headId } };
             dataToUpdate.status = 'Pending_Approval';
         } else {
-            // If no department head, auto-approve to next stage
             dataToUpdate.status = 'PreApproved';
             dataToUpdate.currentApprover = { disconnect: true };
         }
@@ -551,7 +544,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
     }
 
-    // --- Start Server-Side Validation ---
     const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
     if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
         const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
@@ -563,7 +555,6 @@ export async function POST(request: Request) {
             }
         }
     }
-    // --- End Server-Side Validation ---
 
     const totalPrice = body.items.reduce((acc: number, item: any) => {
         const price = item.unitPrice || 0;
@@ -715,3 +706,6 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+
+  

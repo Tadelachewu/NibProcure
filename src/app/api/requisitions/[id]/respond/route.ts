@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -45,13 +46,10 @@ export async function POST(
         }
         console.log(`[RESPOND-AWARD] Found Requisition ID: ${requisition.id} with status ${requisition.status}`);
 
-        // **SAFEGUARD START**
-        // Prevent creating a PO for a requisition that is already closed.
         if (requisition.status === 'Closed' || requisition.status === 'Fulfilled') {
             console.error(`[RESPOND-AWARD] Aborting: Requisition ${requisition.id} is already in a final state (${requisition.status}).`);
             throw new Error(`Cannot accept award because the parent requisition '${requisition.id}' is already closed.`);
         }
-        // **SAFEGUARD END**
         
         const isPerItemAward = (requisition.rfqSettings as any)?.awardStrategy === 'item';
         console.log(`[RESPOND-AWARD] Award strategy is: ${isPerItemAward ? 'Per-Item' : 'Single Vendor'}`);
@@ -134,7 +132,6 @@ export async function POST(
             });
             console.log(`[RESPOND-AWARD] Created new Purchase Order: ${newPO.id}`);
 
-            // **MODIFIED LOGIC**: Check if ALL possible awards for this requisition have been actioned (accepted or declined/failed).
             let allAwardsActioned = false;
             const updatedRequisitionAfterPO = await tx.purchaseRequisition.findUnique({
                 where: { id: requisition.id },
@@ -176,8 +173,19 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            console.log(`[RESPOND-AWARD] Handling award rejection. Rejected quote item ID: ${quoteItemId}`);
-            return await handleAwardRejection(tx, quote, requisition, user, quoteItemId);
+            console.log(`[RESPOND-AWARD] Handling award rejection.`);
+            
+            if (isPerItemAward) {
+                console.log(`[RESPOND-AWARD] Per-item rejection. Rejected quote item ID: ${quoteItemId}`);
+                if (!quoteItemId) {
+                  throw new Error('A quoteItemId is required to reject a specific per-item award.');
+                }
+                return await handleAwardRejection(tx, quote, requisition, user, quoteItemId);
+
+            } else { // Single Vendor Award Rejection
+                console.log('[RESPOND-AWARD] Single-vendor rejection.');
+                return await handleAwardRejection(tx, quote, requisition, user);
+            }
         }
         
         throw new Error('Invalid action.');
@@ -193,7 +201,6 @@ export async function POST(
     console.error('Failed to respond to award:', error);
     if (error instanceof Error) {
       if ((error as any).code === 'P2014') {
-        // More specific error for foreign key violation
         return NextResponse.json({ error: 'Failed to process award acceptance due to a data conflict. The Purchase Order could not be linked to the Requisition.', details: (error as any).meta?.relation_name || 'Unknown relation' }, { status: 500 });
       }
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
@@ -201,3 +208,5 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+  
