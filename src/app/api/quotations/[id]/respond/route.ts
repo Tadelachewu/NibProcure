@@ -177,12 +177,9 @@ export async function POST(
 
         } else if (action === 'reject') {
             console.log(`[RESPOND-AWARD] Handling award rejection. Rejected quote item ID: ${quoteItemId}`);
-            // Find the original requisitionItemId from the quoteItemId
-            const rejectedQuoteItem = quote.items.find(i => i.id === quoteItemId);
-            if (!rejectedQuoteItem) {
-                throw new Error(`Could not find the specific quote item with ID ${quoteItemId} in this quote.`);
-            }
-            const requisitionItemId = rejectedQuoteItem.requisitionItemId;
+            const rejectedQuoteItem = quote.items.find((i:any) => i.id === quoteItemId);
+            const requisitionItemId = rejectedQuoteItem?.requisitionItemId;
+
             return await handleAwardRejection(tx, quote, requisition, user, requisitionItemId, quoteItemId);
         }
         

@@ -226,12 +226,12 @@ export async function handleAwardRejection(
     quote: any, 
     requisition: any,
     actor: any,
-    requisitionItemId: string,
+    requisitionItemId?: string,
     quoteItemId?: string
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
     
-    if (awardStrategy === 'item') {
+    if (awardStrategy === 'item' && requisitionItemId && quoteItemId) {
         const itemToUpdate = requisition.items.find((i: any) => i.id === requisitionItemId);
         if (!itemToUpdate) {
             throw new Error(`Could not find a requisition item with ID: ${requisitionItemId}`);
@@ -239,7 +239,7 @@ export async function handleAwardRejection(
         
         // Mark the declined bid as Failed_to_Award
         const updatedDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[]).map(d => 
-            d.quoteItemId === quoteItemId ? { ...d, status: 'Failed_to_Award' as const } : d
+            d.quoteItemId === quoteItemId ? { ...d, status: 'Declined' as const } : d
         );
         
         await tx.requisitionItem.update({
@@ -254,16 +254,21 @@ export async function handleAwardRejection(
                 action: 'DECLINE_AWARD', 
                 entity: 'Requisition', 
                 entityId: requisition.id, 
-                details: `Vendor ${quote.vendorName} declined the award for item ${itemToUpdate.name}.`, 
+                details: `Vendor ${quote.vendorName} declined the award for item ${itemToUpdate.name}. Manual promotion of standby is now required.`, 
                 transactionId: requisition.transactionId 
             } 
         });
 
-        const promotionResult = await promoteStandbyVendor(tx, requisition.id, actor, [itemToUpdate.id]);
-        return { message: `Award for item ${itemToUpdate.name} declined. ${promotionResult.message}` };
+        // Set main requisition status to show action is needed
+        await tx.purchaseRequisition.update({
+            where: { id: requisition.id },
+            data: { status: 'Award_Declined' }
+        });
+
+        return { message: `Award for item ${itemToUpdate.name} declined. The Procurement Officer must now manually promote a standby vendor.` };
 
     } else { // Single Vendor Strategy
-        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Failed' } });
+        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
         
         await tx.auditLog.create({ 
             data: { 
@@ -272,13 +277,17 @@ export async function handleAwardRejection(
                 action: 'DECLINE_AWARD', 
                 entity: 'Quotation', 
                 entityId: quote.id, 
-                details: `Vendor declined award.`, 
+                details: `Vendor declined award. Manual promotion of standby is now required.`, 
                 transactionId: requisition.transactionId 
             } 
         });
+        
+        await tx.purchaseRequisition.update({
+            where: { id: requisition.id },
+            data: { status: 'Award_Declined' }
+        });
 
-        const promotionResult = await promoteStandbyVendor(tx, requisition.id, actor);
-        return { message: `Award declined. ${promotionResult.message}` };
+        return { message: 'Award declined. The Procurement Officer must now manually promote a standby vendor.' };
     }
 }
 
@@ -313,10 +322,11 @@ export async function promoteStandbyVendor(
         let promotedCount = 0;
         let auditDetailsMessage = 'Promoted standby vendors: ';
 
+        // Find items that have a 'Declined' award and need a promotion.
         const itemsToLookAt = itemIdsToProcess.length > 0 
             ? requisition.items.filter(i => itemIdsToProcess.includes(i.id))
             : requisition.items.filter(item => 
-                (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.status === 'Failed_to_Award')
+                (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.status === 'Declined')
             );
         
         if (itemsToLookAt.length === 0) {
@@ -325,7 +335,8 @@ export async function promoteStandbyVendor(
 
         for (const item of itemsToLookAt) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-
+            
+            // Find the highest-ranked standby for this item
             const bidToPromote = currentDetails
                 .filter(d => d.status === 'Standby')
                 .sort((a, b) => a.rank - b.rank)[0];
@@ -338,10 +349,23 @@ export async function promoteStandbyVendor(
                     if (d.quoteItemId === bidToPromote.quoteItemId) {
                         return { ...d, status: 'Pending_Award' as const };
                     }
+                    // Mark the declined one as failed
+                    if (d.status === 'Declined') {
+                        return { ...d, status: 'Failed_to_Award' as const };
+                    }
                     return d;
                 });
 
                 await tx.requisitionItem.update({
+                    where: { id: item.id },
+                    data: { perItemAwardDetails: updatedDetails as any }
+                });
+            } else {
+                 // No standby available, so just mark the declined as failed
+                 const updatedDetails = currentDetails.map(d => 
+                    d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
+                 );
+                  await tx.requisitionItem.update({
                     where: { id: item.id },
                     data: { perItemAwardDetails: updatedDetails as any }
                 });
@@ -410,8 +434,9 @@ export async function promoteStandbyVendor(
             return { message: 'No more standby vendors available. Requisition has returned to Scoring Complete status.'};
         }
         
+        // Mark the old declined quote as Failed
         await tx.quotation.updateMany({
-            where: { requisitionId: requisitionId, status: { in: ['Declined', 'Failed_to_Award'] } },
+            where: { requisitionId: requisitionId, status: 'Declined' },
             data: { status: 'Failed' }
         });
         
