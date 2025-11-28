@@ -217,7 +217,8 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
  * @param quote - The quote that was rejected.
  * @param requisition - The associated requisition.
  * @param actor - The user performing the action.
- * @param quoteItemId - The specific quote item that was rejected (for per-item awards).
+ * @param requisitionItemId - The specific requisition item ID that was rejected (for per-item awards).
+ * @param quoteItemId - The specific quote item ID that was rejected.
  * @returns A message indicating the result of the operation.
  */
 export async function handleAwardRejection(
@@ -225,19 +226,18 @@ export async function handleAwardRejection(
     quote: any, 
     requisition: any,
     actor: any,
+    requisitionItemId: string,
     quoteItemId?: string
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
     
     if (awardStrategy === 'item') {
-        const itemToUpdate = requisition.items.find((i: any) => 
-            (i.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.quoteItemId === quoteItemId)
-        );
+        const itemToUpdate = requisition.items.find((i: any) => i.id === requisitionItemId);
         if (!itemToUpdate) {
-            throw new Error(`Could not find a requisition item associated with the rejected quote item ID: ${quoteItemId}`);
+            throw new Error(`Could not find a requisition item with ID: ${requisitionItemId}`);
         }
         
-        // **FIX**: Mark the declined bid as Failed_to_Award
+        // Mark the declined bid as Failed_to_Award
         const updatedDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[]).map(d => 
             d.quoteItemId === quoteItemId ? { ...d, status: 'Failed_to_Award' as const } : d
         );
@@ -313,11 +313,10 @@ export async function promoteStandbyVendor(
         let promotedCount = 0;
         let auditDetailsMessage = 'Promoted standby vendors: ';
 
-        // If no specific items are passed, find all items that have a failed/declined award.
         const itemsToLookAt = itemIdsToProcess.length > 0 
             ? requisition.items.filter(i => itemIdsToProcess.includes(i.id))
             : requisition.items.filter(item => 
-                (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.status === 'Failed_to_Award' || d.status === 'Declined')
+                (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.status === 'Failed_to_Award')
             );
         
         if (itemsToLookAt.length === 0) {
