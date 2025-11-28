@@ -42,6 +42,7 @@ export async function POST(
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      // The service now handles both single and per-item scenarios.
       return await promoteStandbyVendor(tx, requisitionId, user);
     }, {
       maxWait: 15000,
@@ -61,5 +62,3 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    

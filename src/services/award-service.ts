@@ -2,7 +2,7 @@
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
-import { User, UserRole, PerItemAwardDetail, QuoteItem } from '@/lib/types';
+import { User, UserRole, PerItemAwardDetail, QuoteItem, PurchaseRequisition } from '@/lib/types';
 
 /**
  * Finds the correct next approval step for a given requisition based on its current status and value.
@@ -171,15 +171,20 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
 
     const scoreSetIds = quotationsToDelete.flatMap(q => q.scores.map(s => s.id));
     const itemScoreIds = quotationsToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
-
+    const quoteItemIds = quotationsToDelete.flatMap(q => q.items.map(i => i.id));
+    
+    // Delete in order of dependency
     if (itemScoreIds.length > 0) {
-        await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
+      await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
     }
     if (scoreSetIds.length > 0) {
-        await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
+      await tx.itemScore.deleteMany({ where: { scoreSetId: { in: scoreSetIds } } });
     }
     if (scoreSetIds.length > 0) {
-        await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
+      await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
+    }
+    if (quoteItemIds.length > 0) {
+        await tx.quoteItem.deleteMany({ where: { id: { in: quoteItemIds } } });
     }
     await tx.quotation.deleteMany({ where: { requisitionId } });
     
@@ -209,7 +214,6 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     });
 }
 
-
 /**
  * Handles the logic when a vendor rejects an award. It updates the quote and requisition status,
  * setting the stage for a manual promotion of a standby vendor.
@@ -221,32 +225,26 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
  * @returns A message indicating the result of the operation.
  */
 export async function handleAwardRejection(
-    tx: Prisma.TransactionClient, 
-    quote: any, 
+    tx: Prisma.TransactionClient,
+    quote: any,
     requisition: any,
     actor: any,
-    rejectedQuoteItemId: string | undefined
+    declinedItemIds: string[]
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
     
     if (awardStrategy === 'item') {
-        if (!rejectedQuoteItemId) {
-            throw new Error("A quoteItemId is required to reject a specific per-item award.");
-        }
-
-        // Correctly find the requisition item whose perItemAwardDetails contains the rejected quote item
-        const itemToUpdate = requisition.items.find((i: any) =>
-            (i.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.quoteItemId === rejectedQuoteItemId && d.status === 'Awarded')
-        );
+        const itemToUpdate = requisition.items.find((i: any) => declinedItemIds.includes(i.id));
 
         if (!itemToUpdate) {
-            throw new Error(`Could not find an awarded requisition item associated with the rejected quote item ID: ${rejectedQuoteItemId}`);
+            throw new Error(`Could not find a requisition item associated with the rejected item ID(s): ${declinedItemIds.join(', ')}`);
         }
         
         const currentDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[] || []);
         
         const updatedDetails = currentDetails.map(d => {
-            if (d.quoteItemId === rejectedQuoteItemId) {
+            const quoteItemForThisDetail = quote.items.find((qi: QuoteItem) => qi.id === d.quoteItemId);
+            if (quoteItemForThisDetail && declinedItemIds.includes(quoteItemForThisDetail.requisitionItemId)) {
                 return { ...d, status: 'Declined' as const };
             }
             return d;
@@ -341,13 +339,11 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
 
     if (awardStrategy === 'item') {
         let promotedCount = 0;
-
+        
         const itemsNeedingPromotion = await tx.requisitionItem.findMany({
             where: {
                 requisitionId: requisitionId,
-                perItemAwardDetails: {
-                  array_contains: { status: 'Declined' }
-                }
+                perItemAwardDetails: { array_contains: { status: 'Declined' } }
             }
         });
 
@@ -494,5 +490,3 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
-
-    
