@@ -2748,7 +2748,7 @@ export default function QuotationDetailsPage() {
                 throw new Error(errorData.error);
             }
             toast({ title: `Action Successful`, description: `The award status has been updated.` });
-            fetchRequisitionAndQuotes();
+            await fetchRequisitionAndQuotes(); // Ensure data is re-fetched
         } catch (error) {
             toast({
                 variant: 'destructive',

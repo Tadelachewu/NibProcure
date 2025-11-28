@@ -229,11 +229,11 @@ export async function handleAwardRejection(
     quote: any,
     requisition: any,
     actor: any,
-    declinedItemIds: string[]
+    declinedItemIds?: string[]
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
     
-    if (awardStrategy === 'item') {
+    if (awardStrategy === 'item' && declinedItemIds && declinedItemIds.length > 0) {
         const itemToUpdate = requisition.items.find((i: any) => declinedItemIds.includes(i.id));
 
         if (!itemToUpdate) {
@@ -343,7 +343,10 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         const itemsNeedingPromotion = await tx.requisitionItem.findMany({
             where: {
                 requisitionId: requisitionId,
-                perItemAwardDetails: { array_contains: { status: 'Declined' } }
+                perItemAwardDetails: {
+                    path: ['status'],
+                    array_contains: 'Declined'
+                }
             }
         });
 
