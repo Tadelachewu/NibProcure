@@ -1,4 +1,5 @@
 
+
 import type { PurchaseRequisition, AuditLog, Vendor, Quotation, PurchaseOrder, GoodsReceiptNote, Invoice, User, Department } from './types';
 
 export interface AppData {
@@ -105,6 +106,38 @@ const seedData: AppData = {
             financialCommitteeMemberIds: ['9'],
             technicalCommitteeMemberIds: ['10'],
         },
+        {
+            id: 'REQ-BEST-ITEM-DEMO',
+            transactionId: 'REQ-BEST-ITEM-DEMO',
+            requesterId: '1',
+            title: 'Best Item Award Demo',
+            department: 'Design',
+            departmentId: 'DEPT-1',
+            items: [
+                { id: 'ITEM-LAPTOP', name: 'High-Performance Laptop', quantity: 10, unitPrice: 2000, description: '' },
+                { id: 'ITEM-MONITOR', name: 'Standard Office Monitor', quantity: 20, unitPrice: 300, description: '' }
+            ],
+            totalPrice: 26000,
+            justification: 'A requisition to demonstrate the per-item award functionality.',
+            status: 'Scoring_Complete',
+            urgency: 'Medium',
+            createdAt: new Date('2024-05-01T10:00:00Z'),
+            updatedAt: new Date('2024-05-10T11:30:00Z'),
+            deadline: new Date('2024-05-08T23:59:00Z'),
+            scoringDeadline: new Date('2024-05-15T23:59:00Z'),
+            rfqSettings: {
+                awardStrategy: 'item'
+            },
+            evaluationCriteria: {
+                financialWeight: 50,
+                technicalWeight: 50,
+                financialCriteria: [{ id: 'fc1', name: 'Price', weight: 100 }],
+                technicalCriteria: [{ id: 'tc1', name: 'Quality', weight: 100 }]
+            },
+            quotations: [],
+            financialCommitteeMemberIds: ['9'],
+            technicalCommitteeMemberIds: ['10'],
+        }
     ],
 
     auditLogs: [
@@ -112,7 +145,69 @@ const seedData: AppData = {
     ],
 
     quotations: [
-        // Empty as the linked requisitions were removed
+        {
+            id: 'QUOTE-DEMO-DELL',
+            requisitionId: 'REQ-BEST-ITEM-DEMO',
+            vendorId: 'VENDOR-002',
+            vendorName: 'Dell Technologies',
+            items: [
+                { id: 'DELL-LAPTOP', requisitionItemId: 'ITEM-LAPTOP', name: 'Dell XPS 15', quantity: 10, unitPrice: 1900 },
+                { id: 'DELL-MONITOR', requisitionItemId: 'ITEM-MONITOR', name: 'Dell UltraSharp 27', quantity: 20, unitPrice: 320 }
+            ],
+            totalPrice: 25400,
+            status: 'Submitted',
+            scores: [
+                {
+                    scorerId: '9', finalScore: 95, committeeComment: 'Dell Laptop is best',
+                    itemScores: [
+                        { quoteItemId: 'DELL-LAPTOP', finalScore: 100, scores: [{ score: 100, type: 'FINANCIAL' }, { score: 100, type: 'TECHNICAL' }] },
+                        { quoteItemId: 'DELL-MONITOR', finalScore: 90, scores: [{ score: 90, type: 'FINANCIAL' }, { score: 90, type: 'TECHNICAL' }] }
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'QUOTE-DEMO-APPLE',
+            requisitionId: 'REQ-BEST-ITEM-DEMO',
+            vendorId: 'VENDOR-001',
+            vendorName: 'Apple Inc.',
+            items: [
+                { id: 'APPLE-LAPTOP', requisitionItemId: 'ITEM-LAPTOP', name: 'MacBook Pro 16', quantity: 10, unitPrice: 2100 },
+                { id: 'APPLE-MONITOR', requisitionItemId: 'ITEM-MONITOR', name: 'Studio Display', quantity: 20, unitPrice: 350 }
+            ],
+            totalPrice: 28000,
+            status: 'Submitted',
+            scores: [
+                {
+                    scorerId: '9', finalScore: 85, committeeComment: 'Apple is good but pricey',
+                    itemScores: [
+                        { quoteItemId: 'APPLE-LAPTOP', finalScore: 90, scores: [{ score: 80, type: 'FINANCIAL' }, { score: 100, type: 'TECHNICAL' }] },
+                        { quoteItemId: 'APPLE-MONITOR', finalScore: 80, scores: [{ score: 80, type: 'FINANCIAL' }, { score: 80, type: 'TECHNICAL' }] }
+                    ]
+                }
+            ]
+        },
+        {
+            id: 'QUOTE-DEMO-HP',
+            requisitionId: 'REQ-BEST-ITEM-DEMO',
+            vendorId: 'VENDOR-004',
+            vendorName: 'HP Inc.',
+            items: [
+                { id: 'HP-LAPTOP', requisitionItemId: 'ITEM-LAPTOP', name: 'HP Spectre x360', quantity: 10, unitPrice: 1950 },
+                { id: 'HP-MONITOR', requisitionItemId: 'ITEM-MONITOR', name: 'HP Z27', quantity: 20, unitPrice: 290 }
+            ],
+            totalPrice: 25300,
+            status: 'Submitted',
+            scores: [
+                {
+                    scorerId: '9', finalScore: 92.5, committeeComment: 'HP Monitor is best value',
+                    itemScores: [
+                        { quoteItemId: 'HP-LAPTOP', finalScore: 85, scores: [{ score: 90, type: 'FINANCIAL' }, { score: 80, type: 'TECHNICAL' }] },
+                        { quoteItemId: 'HP-MONITOR', finalScore: 100, scores: [{ score: 100, type: 'FINANCIAL' }, { score: 100, type: 'TECHNICAL' }] }
+                    ]
+                }
+            ]
+        }
     ],
     purchaseOrders: [],
     goodsReceipts: [],
