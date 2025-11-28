@@ -351,7 +351,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             where: {
                 requisitionId: requisitionId,
                 perItemAwardDetails: {
-                    path: '$[*].status',
+                    path: ['status'],
                     array_contains: 'Declined'
                 }
             }
