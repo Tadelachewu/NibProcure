@@ -176,14 +176,8 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            const declinedItemIds = quoteItemId
-                ? [quote.items.find(i => i.id === quoteItemId)?.requisitionItemId].filter(Boolean) as string[]
-                : requisition.items
-                    .filter(item => (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user.vendorId && d.status === 'Awarded'))
-                    .map(item => item.id);
-            
-            console.log(`[RESPOND-AWARD] Handling award rejection. Declined item IDs: ${declinedItemIds.join(', ')}`);
-            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds, quoteItemId);
+            console.log(`[RESPOND-AWARD] Handling award rejection. Rejected quote item ID: ${quoteItemId}`);
+            return await handleAwardRejection(tx, quote, requisition, user, quoteItemId);
         }
         
         throw new Error('Invalid action.');

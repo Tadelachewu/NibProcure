@@ -229,7 +229,11 @@ export async function handleAwardRejection(
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
     
-    if (awardStrategy === 'item' && rejectedQuoteItemId) {
+    if (awardStrategy === 'item') {
+        if (!rejectedQuoteItemId) {
+            throw new Error("A quoteItemId is required to reject a specific per-item award.");
+        }
+        
         // Find the specific requisition item that contains the rejected quote item in its award details
         const itemToUpdate = requisition.items.find((i: any) => 
             (i.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.quoteItemId === rejectedQuoteItemId)
@@ -276,7 +280,7 @@ export async function handleAwardRejection(
              throw new Error("No awarded item found for this vendor to decline.");
         }
 
-    } else if (awardStrategy !== 'item') { // Single Vendor Strategy
+    } else { // Single Vendor Strategy
         await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
         
         await tx.auditLog.create({ 
@@ -315,8 +319,6 @@ export async function handleAwardRejection(
             await deepCleanRequisition(tx, requisition.id);
             return { message: 'Award declined. No standby vendors available. Requisition has been automatically reset for a new RFQ process.' };
         }
-    } else {
-        throw new Error('A quoteItemId is required to reject a specific per-item award.');
     }
 }
 
@@ -329,7 +331,7 @@ export async function handleAwardRejection(
  * @param actor - The user performing the action.
  * @returns A message indicating the result of the operation.
  */
-export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
+export async function promoteStandbyVendor(tx: Prisma.Client, requisitionId: string, actor: any) {
     let auditDetailsMessage = 'Promoted standby vendors: ';
     const requisition = await tx.purchaseRequisition.findUnique({
         where: { id: requisitionId },
@@ -348,10 +350,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         const itemsNeedingPromotion = await tx.requisitionItem.findMany({
             where: {
                 requisitionId: requisitionId,
-                perItemAwardDetails: {
-                    path: ['status'],
-                    array_contains: 'Declined'
-                }
+                perItemAwardDetails: { path: ['status'], array_contains: 'Declined' }
             }
         });
 
