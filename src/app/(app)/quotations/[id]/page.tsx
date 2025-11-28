@@ -2456,8 +2456,11 @@ export default function QuotationDetailsPage() {
     return false;
   }, [user, role, rfqSenderSetting]);
   
-  const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
-
+  const isAccepted = useMemo(() => {
+    if (!quotations || quotations.length === 0) return false;
+    return quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded');
+  }, [quotations]);
+  
   const isDeadlinePassed = useMemo(() => {
     if (!requisition) return false;
     return requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
@@ -2830,28 +2833,18 @@ export default function QuotationDetailsPage() {
 
       return `${financialPart}\n\n${technicalPart}`;
   };
-
-  if (loading || !user || !requisition) {
-     return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  }
-
-  const canManageCommittees = isAuthorized;
-  const isReadyForNotification = requisition?.status === 'PostApproved';
-  const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
-  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
-  const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
   
-  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
-  
-  const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+    const isPerItemStrategy = (requisition?.rfqSettings as any)?.awardStrategy === 'item';
 
-  const failedItems = useMemo(() => 
-      requisition.items.filter(item => 
-          (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => (d.status === 'Failed_to_Award' || d.status === 'Declined') && d.status !== 'Restarted')
-      ), [requisition.items]);
+    const failedItems = useMemo(() => {
+      if (!requisition || !isPerItemStrategy) return [];
+      return requisition.items.filter(item =>
+        (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => (d.status === 'Failed_to_Award' || d.status === 'Declined') && d.status !== 'Restarted')
+      );
+    }, [requisition, isPerItemStrategy]);
 
     const canPromoteStandby = useMemo(() => {
-        if (requisition.status !== 'Award_Declined') {
+        if (!requisition || requisition.status !== 'Award_Declined') {
             return false;
         }
         if (isPerItemStrategy) {
@@ -2866,7 +2859,19 @@ export default function QuotationDetailsPage() {
             return quotations.some(q => q.status === 'Standby');
         }
     }, [requisition, quotations, isPerItemStrategy]);
+    
+  if (loading || !user || !requisition) {
+     return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
 
+  const canManageCommittees = isAuthorized;
+  const isReadyForNotification = requisition?.status === 'PostApproved';
+  const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
+  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
+  const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
+  
+  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
+  
   const canRestart = isPerItemStrategy && failedItems.length > 0;
 
 
@@ -3582,4 +3587,5 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
 
