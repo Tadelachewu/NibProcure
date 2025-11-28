@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -63,27 +62,28 @@ export async function POST(
                 let isFullyComplete = false;
 
                 if (isPerItem) {
-                    const allItemDetails = requisition.items.flatMap(i => i.perItemAwardDetails as PerItemAwardDetail[] || []);
-                    const allInvoices = requisition.purchaseOrders.flatMap(po => po.invoices);
-                    
-                    // An item is 'resolved' if its award has been accepted and its corresponding invoice has been paid,
-                    // OR if its award track failed or was restarted.
+                    const allPOs = await tx.purchaseOrder.findMany({
+                        where: { requisitionId: requisition.id },
+                        include: { invoices: true }
+                    });
+                    const allInvoices = allPOs.flatMap(po => po.invoices);
+
                     const areAllItemsResolved = requisition.items.every(item => {
                         const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                         const winningBid = details.find(d => d.status === 'Accepted');
                         
                         if (winningBid) {
-                            // Find the invoice related to this specific winning bid's PO
-                            const po = requisition.purchaseOrders.find(p => p.vendorId === winningBid.vendorId && p.items.some(pi => pi.requisitionItemId === item.id));
+                            const po = allPOs.find(p => p.vendorId === winningBid.vendorId && p.items.some(pi => pi.requisitionItemId === item.id));
                             const invoice = allInvoices.find(inv => inv.purchaseOrderId === po?.id);
                             return invoice?.status === 'Paid';
                         }
                         
-                        // If no winning bid, check if the award process for this item failed
                         const hasFailed = details.some(d => d.status === 'Failed_to_Award' || d.status === 'Restarted');
-                        // If no awards were ever made for this item, it's not resolved.
-                        if (details.length === 0) return false;
-
+                        const wasEverAwarded = details.length > 0;
+                        
+                        if (!wasEverAwarded) {
+                            return true; // If an item was never part of the award process, it doesn't block completion.
+                        }
                         return hasFailed;
                     });
                     
@@ -107,7 +107,6 @@ export async function POST(
                 if (isFullyComplete) {
                     newStatus = 'Closed';
                 } else if (isPerItem) {
-                    // If not fully complete, but at least one invoice is paid, it's partially closed
                     newStatus = 'Partially_Closed';
                 }
 
