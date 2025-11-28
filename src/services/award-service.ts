@@ -214,79 +214,87 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     });
 }
 
-/**
- * Handles the logic when a vendor rejects an award. It updates the quote and requisition status,
- * setting the stage for a manual promotion of a standby vendor.
- * @param tx - Prisma transaction client.
- * @param quote - The quote that was rejected.
- * @param requisition - The associated requisition.
- * @param actor - The user performing the action.
- * @param rejectedQuoteItemId - The specific quote item that was rejected (for per-item awards).
- * @returns A message indicating the result of the operation.
- */
 export async function handleAwardRejection(
     tx: Prisma.TransactionClient,
     quote: any,
     requisition: any,
     actor: any,
-    declinedItemIds?: string[]
+    declinedQuoteItemId?: string
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
-    
-    if (awardStrategy === 'item' && declinedItemIds && declinedItemIds.length > 0) {
-        const itemToUpdate = requisition.items.find((i: any) => declinedItemIds.includes(i.id));
+
+    if (awardStrategy === 'item' && declinedQuoteItemId) {
+        // --- Per-Item Rejection Logic ---
+        const itemToUpdate = requisition.items.find((i: any) => 
+            (i.perItemAwardDetails as PerItemAwardDetail[])?.some(d => d.quoteItemId === declinedQuoteItemId)
+        );
 
         if (!itemToUpdate) {
-            throw new Error(`Could not find a requisition item associated with the rejected item ID(s): ${declinedItemIds.join(', ')}`);
+            throw new Error(`Could not find a requisition item associated with the rejected quote item ID: ${declinedQuoteItemId}`);
         }
         
-        const currentDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[] || []);
+        let currentDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[] || []);
         
-        const updatedDetails = currentDetails.map(d => {
-            const quoteItemForThisDetail = quote.items.find((qi: QuoteItem) => qi.id === d.quoteItemId);
-            if (quoteItemForThisDetail && declinedItemIds.includes(quoteItemForThisDetail.requisitionItemId)) {
-                return { ...d, status: 'Declined' as const };
+        // 1. Mark the declined item as Failed_to_Award
+        currentDetails = currentDetails.map(d => 
+            d.quoteItemId === declinedQuoteItemId ? { ...d, status: 'Failed_to_Award' as const } : d
+        );
+
+        // 2. Find the next standby vendor for THIS item
+        const ineligibleVendorIds = new Set(currentDetails.filter(d => d.status === 'Failed_to_Award').map(d => d.vendorId));
+        const bidToPromote = currentDetails
+            .filter(d => d.status === 'Standby' && !ineligibleVendorIds.has(d.vendorId))
+            .sort((a, b) => a.rank - b.rank)[0];
+
+        if (bidToPromote) {
+            // 3. Promote the standby bid
+            currentDetails = currentDetails.map(d => 
+                d.quoteItemId === bidToPromote.quoteItemId ? { ...d, status: 'Pending_Award' as const } : d
+            );
+            
+            await tx.requisitionItem.update({
+                where: { id: itemToUpdate.id },
+                data: { perItemAwardDetails: currentDetails as any }
+            });
+            
+            // Re-calculate total award value and re-route for approval
+            const updatedRequisition = await tx.purchaseRequisition.findUnique({ where: { id: requisition.id }, include: { items: true } });
+            if (!updatedRequisition) throw new Error("Could not refetch requisition.");
+
+            let newTotalValue = 0;
+            for (const item of updatedRequisition.items) {
+                const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
+                const winningAward = details.find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
+                if (winningAward) {
+                    newTotalValue += winningAward.unitPrice * item.quantity;
+                }
             }
-            return d;
-        });
+            
+            const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...updatedRequisition, totalPrice: newTotalValue }, actor);
 
-        await tx.requisitionItem.update({
-            where: { id: itemToUpdate.id },
-            data: { perItemAwardDetails: updatedDetails as any }
-        });
+            await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: { status: nextStatus as any, currentApproverId: nextApproverId, totalPrice: newTotalValue }
+            });
 
-        await tx.purchaseRequisition.update({
-            where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
-        });
+            await tx.auditLog.create({ data: { timestamp: new Date(), user: { connect: { id: actor.id } }, action: 'PROMOTE_STANDBY', entity: 'Requisition', entityId: requisition.id, details: `Promoted ${bidToPromote.vendorName} for item '${itemToUpdate.name}'. ${auditDetails}`, transactionId: requisition.transactionId } });
+            return { message: `Award for '${itemToUpdate.name}' declined. Promoted standby vendor ${bidToPromote.vendorName} and re-routed for approval.` };
 
-        await tx.auditLog.create({ 
-            data: { 
-                timestamp: new Date(), 
-                user: { connect: { id: actor.id } }, 
-                action: 'DECLINE_AWARD', 
-                entity: 'Requisition', 
-                entityId: requisition.id, 
-                details: `Vendor ${quote.vendorName} declined the award for item "${itemToUpdate.name}". Manual promotion of standby is now possible.`, 
-                transactionId: requisition.transactionId 
-            } 
-        });
-
-        return { message: 'Per-item award has been declined. A standby vendor can now be manually promoted.' };
-    } else { // Single Vendor Strategy
+        } else {
+            // No standby vendor, just mark as failed
+            await tx.requisitionItem.update({
+                where: { id: itemToUpdate.id },
+                data: { perItemAwardDetails: currentDetails as any }
+            });
+             await tx.auditLog.create({ data: { timestamp: new Date(), user: { connect: { id: actor.id } }, action: 'AWARD_FAILURE', entity: 'Requisition', entityId: requisition.id, details: `Vendor ${quote.vendorName} declined award for item '${itemToUpdate.name}'. No standby vendors were available.`, transactionId: requisition.transactionId } });
+            return { message: `Award for '${itemToUpdate.name}' declined. No standby vendors available.` };
+        }
+        
+    } else { 
+        // --- Single Vendor Rejection Logic ---
         await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
         
-        await tx.auditLog.create({ 
-            data: { 
-                timestamp: new Date(), 
-                user: { connect: { id: actor.id } }, 
-                action: 'DECLINE_AWARD', 
-                entity: 'Quotation', 
-                entityId: quote.id, 
-                details: `Vendor declined award for requisition ${requisition.id}.`, 
-                transactionId: requisition.transactionId 
-            } 
-        });
+        await tx.auditLog.create({ data: { timestamp: new Date(), user: { connect: { id: actor.id } }, action: 'DECLINE_AWARD', entity: 'Quotation', entityId: quote.id, details: `Vendor declined award for requisition ${requisition.id}.`, transactionId: requisition.transactionId } });
 
         const hasStandby = await tx.quotation.count({
             where: { requisitionId: requisition.id, status: 'Standby' }
@@ -297,199 +305,11 @@ export async function handleAwardRejection(
                 where: { id: requisition.id },
                 data: { status: 'Award_Declined' }
             });
-            return { message: 'Award declined. A standby vendor is available for promotion.' };
+            return { message: 'Award declined. A standby vendor is available for manual promotion.' };
         } else {
-             await tx.auditLog.create({ 
-                data: { 
-                    timestamp: new Date(), 
-                    action: 'AUTO_RESET_RFQ', 
-                    entity: 'Requisition', 
-                    entityId: requisition.id, 
-                    details: 'Award was declined and no standby vendors were available. The RFQ process has been automatically reset.', 
-                    transactionId: requisition.transactionId 
-                } 
-            });
             await deepCleanRequisition(tx, requisition.id);
+            await tx.auditLog.create({ data: { timestamp: new Date(), action: 'AUTO_RESET_RFQ', entity: 'Requisition', entityId: requisition.id, details: 'Award was declined and no standby vendors were available. The RFQ process has been automatically reset.', transactionId: requisition.transactionId } });
             return { message: 'Award declined. No standby vendors available. Requisition has been automatically reset for a new RFQ process.' };
         }
-    }
-}
-
-
-/**
- * Promotes the next standby vendor(s) and starts their approval workflow.
- * This function handles both single-vendor and per-item award strategies.
- * @param tx - Prisma transaction client.
- * @param requisitionId - The ID of the requisition.
- * @param actor - The user performing the action.
- * @returns A message indicating the result of the operation.
- */
-export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
-    let auditDetailsMessage = 'Promoted standby vendors: ';
-    const requisition = await tx.purchaseRequisition.findUnique({
-        where: { id: requisitionId },
-        include: { items: true, quotations: { include: { scores: true, items: true } } }
-    });
-
-    if (!requisition) {
-        throw new Error('Associated requisition not found.');
-    }
-    
-    const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
-
-    if (awardStrategy === 'item') {
-        let promotedCount = 0;
-        
-        const itemsNeedingPromotion = await tx.requisitionItem.findMany({
-            where: {
-                requisitionId: requisitionId,
-                perItemAwardDetails: {
-                    path: ['status'],
-                    array_contains: 'Declined'
-                }
-            }
-        });
-
-        for (const item of itemsNeedingPromotion) {
-            const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-            
-            const ineligibleVendorIds = new Set(
-                currentDetails
-                    .filter(d => d.status === 'Declined' || d.status === 'Failed_to_Award')
-                    .map(d => d.vendorId)
-            );
-
-            const bidToPromote = currentDetails
-                .filter(d => d.status === 'Standby' && !ineligibleVendorIds.has(d.vendorId))
-                .sort((a, b) => a.rank - b.rank)[0];
-            
-            if (bidToPromote) {
-                promotedCount++;
-                auditDetailsMessage += `${bidToPromote.vendorName} for item ${item.name}. `;
-                
-                const updatedDetails = currentDetails.map(d => {
-                    if (d.quoteItemId === bidToPromote.quoteItemId) {
-                        return { ...d, status: 'Pending_Award' as const };
-                    }
-                    if (d.status === 'Declined') {
-                        return { ...d, status: 'Failed_to_Award' as const };
-                    }
-                    return d;
-                });
-
-                await tx.requisitionItem.update({
-                    where: { id: item.id },
-                    data: { perItemAwardDetails: updatedDetails as any }
-                });
-            } else {
-                 const updatedDetails = currentDetails.map(d => 
-                    d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
-                );
-                 await tx.requisitionItem.update({
-                    where: { id: item.id },
-                    data: { perItemAwardDetails: updatedDetails as any }
-                });
-            }
-        }
-        
-        if (promotedCount === 0) {
-            return { message: 'No eligible standby vendors found for promotion. Please review the awards.' };
-        }
-        
-        const updatedRequisition = await tx.purchaseRequisition.findUnique({ where: {id: requisitionId}, include: { items: true }});
-        if (!updatedRequisition) throw new Error("Could not refetch requisition for value calculation.");
-
-        let newTotalValue = 0;
-        for (const item of updatedRequisition.items) {
-             const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-             const winningAward = details.find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
-             if (winningAward) {
-                 newTotalValue += winningAward.unitPrice * item.quantity;
-             }
-        }
-        
-        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...updatedRequisition, totalPrice: newTotalValue }, actor);
-
-        await tx.purchaseRequisition.update({
-            where: { id: requisitionId },
-            data: {
-                status: nextStatus as any,
-                currentApproverId: nextApproverId,
-                totalPrice: newTotalValue,
-            }
-        });
-        
-        await tx.auditLog.create({
-            data: {
-                user: { connect: { id: actor.id } },
-                action: 'PROMOTE_STANDBY',
-                entity: 'Requisition',
-                entityId: requisition.id,
-                details: `${auditDetailsMessage} ${auditDetails}`,
-                transactionId: requisition.transactionId
-            }
-        });
-
-        return { message: `Promoted ${promotedCount} standby award(s). Re-routing for approval.` };
-
-    } else { // Single Vendor Strategy
-        await tx.quotation.updateMany({
-            where: { requisitionId: requisitionId, status: 'Declined' },
-            data: { status: 'Failed' }
-        });
-
-        const nextStandby = await tx.quotation.findFirst({
-            where: { requisitionId, status: 'Standby' },
-            orderBy: { rank: 'asc' },
-            include: { items: true }
-        });
-
-        if (!nextStandby) {
-            await tx.purchaseRequisition.update({ where: { id: requisitionId }, data: { status: 'Scoring_Complete' }});
-            await tx.auditLog.create({
-                data: {
-                    user: { connect: { id: actor.id } },
-                    action: 'AWARD_FAILURE',
-                    entity: 'Requisition',
-                    entityId: requisition.id,
-                    details: `All standby vendors were exhausted. Requisition returned to Scoring Complete status for re-evaluation.`,
-                    transactionId: requisition.transactionId
-                }
-            });
-            return { message: 'No more standby vendors available. Requisition has returned to Scoring Complete status.'};
-        }
-        
-        const newTotalValue = nextStandby.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
-        
-        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: newTotalValue }, actor);
-        
-        await tx.purchaseRequisition.update({
-            where: { id: requisitionId },
-            data: {
-                status: nextStatus as any,
-                totalPrice: newTotalValue,
-                currentApproverId: nextApproverId,
-                awardedQuoteItemIds: nextStandby.items.map(i => i.id),
-            }
-        });
-        
-        await tx.quotation.update({
-            where: { id: nextStandby.id },
-            data: { status: 'Pending_Award' }
-        });
-        
-        await tx.auditLog.create({
-            data: {
-                timestamp: new Date(),
-                user: { connect: { id: actor.id } },
-                action: 'PROMOTE_STANDBY_AWARD',
-                entity: 'Requisition',
-                entityId: requisitionId,
-                details: `Promoted standby vendor ${nextStandby.vendorName}. ${auditDetails}`,
-                transactionId: requisitionId,
-            }
-        });
-
-        return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }

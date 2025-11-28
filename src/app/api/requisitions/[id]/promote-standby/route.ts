@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { promoteStandbyVendor } from '@/services/award-service';
+import { handleAwardRejection } from '@/services/award-service';
 import { UserRole } from '@/lib/types';
 
 export async function POST(
@@ -13,14 +13,13 @@ export async function POST(
   const requisitionId = params.id;
   try {
     const body = await request.json();
-    const { userId } = body;
+    const { userId } = body as { userId: string };
 
     const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Correct Authorization Logic
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
     const userRoles = (user.roles as any[]).map(r => r.name);
@@ -31,19 +30,33 @@ export async function POST(
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
         if (setting.type === 'specific') {
             isAuthorized = setting.userId === userId;
-        } else { // 'all' case
+        } else {
             isAuthorized = userRoles.includes('Procurement_Officer');
         }
     }
-
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // The service now handles both single and per-item scenarios.
-      return await promoteStandbyVendor(tx, requisitionId, user);
+      const requisition = await tx.purchaseRequisition.findUnique({
+          where: { id: requisitionId },
+          include: { quotations: { where: { status: 'Declined' } } }
+      });
+
+      if (!requisition) {
+          throw new Error('Requisition not found or not in a state to promote standby.');
+      }
+      
+      const lastDeclinedQuote = requisition.quotations.sort((a,b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+
+      if (!lastDeclinedQuote) {
+          throw new Error("Could not find a declined quote to trigger a promotion. The requisition may be in an inconsistent state.");
+      }
+
+      // The logic for promotion is now part of the rejection handler
+      return await handleAwardRejection(tx, lastDeclinedQuote, requisition, user);
     }, {
       maxWait: 15000,
       timeout: 30000,

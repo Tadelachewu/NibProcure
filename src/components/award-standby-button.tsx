@@ -6,15 +6,19 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Loader2, TrophyIcon } from 'lucide-react';
 import { PerItemAwardDetail, PurchaseRequisition, Quotation } from '@/lib/types';
 import { useMemo } from 'react';
+import { useAuth } from '@/contexts/auth-context';
+import { useToast } from '@/hooks/use-toast';
 
 interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
-    quotations: Quotation[];
-    onPromote: () => void;
-    isChangingAward: boolean;
+    onSuccess: () => void;
 }
 
-export function AwardStandbyButton({ requisition, quotations, onPromote, isChangingAward }: AwardStandbyButtonProps) {
+export function AwardStandbyButton({ requisition, onSuccess }: AwardStandbyButtonProps) {
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
     const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
     const canPromote = useMemo(() => {
@@ -23,7 +27,6 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
         }
 
         if (isPerItemStrategy) {
-            // Check if there is at least one item that has a declined winner AND a standby vendor.
             return requisition.items.some(item => {
                 const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                 const hasDeclinedWinner = details.some(d => d.status === 'Declined');
@@ -33,10 +36,37 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
                 return standbyExists;
             });
         } else {
-            // For single-vendor strategy, just check if any quote is on standby.
-            return quotations.some(q => q.status === 'Standby');
+            return requisition.quotations?.some(q => q.status === 'Standby');
         }
-    }, [requisition, quotations, isPerItemStrategy]);
+    }, [requisition, isPerItemStrategy]);
+
+    const handlePromote = async () => {
+        if (!user) return;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`/api/requisitions/${requisition.id}/promote-standby`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Failed to promote standby vendor.");
+            }
+            const result = await response.json();
+            toast({ title: "Promotion Successful", description: result.message });
+            onSuccess();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Promotion Failed',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
 
     if (!canPromote) {
@@ -46,8 +76,8 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
     return (
         <AlertDialog>
             <AlertDialogTrigger asChild>
-                <Button disabled={isChangingAward}>
-                    {isChangingAward ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrophyIcon className="mr-2 h-4 w-4" />}
+                <Button disabled={isSubmitting}>
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrophyIcon className="mr-2 h-4 w-4" />}
                     Promote Standby Vendor
                 </Button>
             </AlertDialogTrigger>
@@ -60,7 +90,7 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={onPromote}>Confirm &amp; Promote</AlertDialogAction>
+                    <AlertDialogAction onClick={handlePromote}>Confirm &amp; Promote</AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
