@@ -177,10 +177,10 @@ export async function POST(
 
         } else if (action === 'reject') {
             console.log(`[RESPOND-AWARD] Handling award rejection. Rejected quote item ID: ${quoteItemId}`);
-            const rejectedQuoteItem = quote.items.find((i:any) => i.id === quoteItemId);
-            const requisitionItemId = rejectedQuoteItem?.requisitionItemId;
-
-            return await handleAwardRejection(tx, quote, requisition, user, requisitionItemId, quoteItemId);
+            if (!quoteItemId) {
+              throw new Error('A quoteItemId is required to reject a specific per-item award.');
+            }
+            return await handleAwardRejection(tx, quote, requisition, user, quoteItemId);
         }
         
         throw new Error('Invalid action.');
