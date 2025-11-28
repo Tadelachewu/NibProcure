@@ -225,7 +225,7 @@ export async function handleAwardRejection(
     quote: any, 
     requisition: any,
     actor: any,
-    rejectedQuoteItemId?: string
+    rejectedQuoteItemId: string | undefined
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
     
@@ -233,53 +233,48 @@ export async function handleAwardRejection(
         if (!rejectedQuoteItemId) {
             throw new Error("A quoteItemId is required to reject a specific per-item award.");
         }
-        
-        // Find the specific requisition item that contains the rejected quote item in its award details
-        const itemToUpdate = requisition.items.find((i: any) => 
-            (i.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.quoteItemId === rejectedQuoteItemId)
+
+        // Correctly find the requisition item whose perItemAwardDetails contains the rejected quote item
+        const itemToUpdate = requisition.items.find((i: any) =>
+            (i.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.quoteItemId === rejectedQuoteItemId && d.status === 'Awarded')
         );
 
         if (!itemToUpdate) {
-            throw new Error(`Could not find a requisition item associated with the rejected quote item ID: ${rejectedQuoteItemId}`);
+            throw new Error(`Could not find an awarded requisition item associated with the rejected quote item ID: ${rejectedQuoteItemId}`);
         }
         
         const currentDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[] || []);
-        let hasBeenUpdated = false;
-
+        
         const updatedDetails = currentDetails.map(d => {
-            if (d.quoteItemId === rejectedQuoteItemId && d.status === 'Awarded') {
-                hasBeenUpdated = true;
+            if (d.quoteItemId === rejectedQuoteItemId) {
                 return { ...d, status: 'Declined' as const };
             }
             return d;
         });
 
-        if (hasBeenUpdated) {
-            await tx.requisitionItem.update({
-                where: { id: itemToUpdate.id },
-                data: { perItemAwardDetails: updatedDetails as any }
-            });
+        await tx.requisitionItem.update({
+            where: { id: itemToUpdate.id },
+            data: { perItemAwardDetails: updatedDetails as any }
+        });
 
-            await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'Award_Declined' }
-            });
-            await tx.auditLog.create({ 
-                data: { 
-                    timestamp: new Date(), 
-                    user: { connect: { id: actor.id } }, 
-                    action: 'DECLINE_AWARD', 
-                    entity: 'Requisition', 
-                    entityId: requisition.id, 
-                    details: `Vendor ${quote.vendorName} declined the award for item "${itemToUpdate.name}". Manual promotion of standby is now possible.`, 
-                    transactionId: requisition.transactionId 
-                } 
-            });
-            return { message: 'Per-item award has been declined. A standby vendor can now be manually promoted.' };
-        } else {
-             throw new Error("No awarded item found for this vendor to decline.");
-        }
+        await tx.purchaseRequisition.update({
+            where: { id: requisition.id },
+            data: { status: 'Award_Declined' }
+        });
 
+        await tx.auditLog.create({ 
+            data: { 
+                timestamp: new Date(), 
+                user: { connect: { id: actor.id } }, 
+                action: 'DECLINE_AWARD', 
+                entity: 'Requisition', 
+                entityId: requisition.id, 
+                details: `Vendor ${quote.vendorName} declined the award for item "${itemToUpdate.name}". Manual promotion of standby is now possible.`, 
+                transactionId: requisition.transactionId 
+            } 
+        });
+
+        return { message: 'Per-item award has been declined. A standby vendor can now be manually promoted.' };
     } else { // Single Vendor Strategy
         await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
         
@@ -290,7 +285,7 @@ export async function handleAwardRejection(
                 action: 'DECLINE_AWARD', 
                 entity: 'Quotation', 
                 entityId: quote.id, 
-                details: `Vendor declined award.`, 
+                details: `Vendor declined award for requisition ${requisition.id}.`, 
                 transactionId: requisition.transactionId 
             } 
         });
@@ -331,7 +326,7 @@ export async function handleAwardRejection(
  * @param actor - The user performing the action.
  * @returns A message indicating the result of the operation.
  */
-export async function promoteStandbyVendor(tx: Prisma.Client, requisitionId: string, actor: any) {
+export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
     let auditDetailsMessage = 'Promoted standby vendors: ';
     const requisition = await tx.purchaseRequisition.findUnique({
         where: { id: requisitionId },
@@ -350,7 +345,9 @@ export async function promoteStandbyVendor(tx: Prisma.Client, requisitionId: str
         const itemsNeedingPromotion = await tx.requisitionItem.findMany({
             where: {
                 requisitionId: requisitionId,
-                perItemAwardDetails: { path: ['status'], array_contains: 'Declined' }
+                perItemAwardDetails: {
+                  array_contains: { status: 'Declined' }
+                }
             }
         });
 
@@ -386,7 +383,7 @@ export async function promoteStandbyVendor(tx: Prisma.Client, requisitionId: str
                     data: { perItemAwardDetails: updatedDetails as any }
                 });
             } else {
-                const updatedDetails = currentDetails.map(d => 
+                 const updatedDetails = currentDetails.map(d => 
                     d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
                 );
                  await tx.requisitionItem.update({
@@ -397,16 +394,6 @@ export async function promoteStandbyVendor(tx: Prisma.Client, requisitionId: str
         }
         
         if (promotedCount === 0) {
-             const stillDeclinedCount = (await tx.requisitionItem.findMany({
-                where: {
-                    requisitionId: requisitionId,
-                    perItemAwardDetails: { path: ['status'], array_contains: 'Declined' }
-                }
-            })).length;
-            
-            if (stillDeclinedCount === 0) {
-                return { message: 'All declined items have been addressed or have no more standbys. Please review the awards.' };
-            }
             return { message: 'No eligible standby vendors found for promotion. Please review the awards.' };
         }
         
@@ -507,3 +494,5 @@ export async function promoteStandbyVendor(tx: Prisma.Client, requisitionId: str
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
+
+    

@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -27,12 +26,14 @@ export async function POST(
         let isAuthorized = false;
         const userRoles = (user.roles as any[]).map(r => r.name) as UserRole[];
 
-        if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        if (userRoles.includes('Admin')) {
+            isAuthorized = true;
+        } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
             const setting = rfqSenderSetting.value as { type: string, userId?: string };
             if (setting.type === 'specific') {
                 isAuthorized = setting.userId === userId;
             } else { // 'all' case
-                isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+                isAuthorized = userRoles.includes('Procurement_Officer');
             }
         }
 
@@ -128,30 +129,34 @@ export async function POST(
                 await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
                 console.log(`[FINALIZE-SCORES] Updated winning quote ${winningQuote.id} to Pending_Award.`);
                 
-                const otherQuotes = rankedVendors.slice(1);
-                for (let i = 0; i < otherQuotes.length; i++) {
-                    const quoteData = otherQuotes[i];
+                const standbyQuotes = rankedVendors.slice(1, 3);
+                for (let i = 0; i < standbyQuotes.length; i++) {
+                    const quoteData = standbyQuotes[i];
                     const quoteToUpdate = allQuotes.find(q => q.vendorId === quoteData.vendorId);
                     if (quoteToUpdate) {
-                        const rank = i < 2 ? (i + 2) as 2 | 3 : null;
                         await tx.quotation.update({
                             where: { id: quoteToUpdate.id },
-                            data: {
-                                status: i < 2 ? 'Standby' : 'Rejected',
-                                rank: rank,
-                            }
+                            data: { status: 'Standby', rank: (i + 2) as 2 | 3 }
                         });
-                        console.log(`[FINALIZE-SCORES] Updated quote ${quoteToUpdate.id} to ${i<2 ? 'Standby' : 'Rejected'} with rank ${rank}.`);
+                        console.log(`[FINALIZE-SCORES] Updated quote ${quoteToUpdate.id} to Standby with rank ${i+2}.`);
                     }
                 }
 
+                const rejectedQuotes = rankedVendors.slice(3);
+                 for (const quoteData of rejectedQuotes) {
+                    const quoteToUpdate = allQuotes.find(q => q.vendorId === quoteData.vendorId);
+                    if (quoteToUpdate) {
+                         await tx.quotation.update({ where: { id: quoteToUpdate.id }, data: { status: 'Rejected', rank: null }});
+                    }
+                }
+
+
             } else if (awardStrategy === 'item') {
                 console.log('[FINALIZE-SCORES] Calculating for "Best Offer (Per Item)" strategy.');
-                const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
                 finalAwardValue = totalAwardValue;
                 console.log(`[FINALIZE-SCORES] Received total award value: ${finalAwardValue}`);
 
-                for (const reqItem of reqItems) {
+                for (const reqItem of requisition.items) {
                     let proposals: any[] = [];
                     for (const quote of allQuotes) {
                          const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
@@ -182,7 +187,7 @@ export async function POST(
 
                     proposals.sort((a,b) => b.score - a.score);
                     
-                    const rankedProposals = proposals.slice(0, 3).map((p, index) => ({
+                    const perItemAwardDetails: PerItemAwardDetail[] = proposals.map((p, index) => ({
                         vendorId: p.vendorId,
                         vendorName: p.vendorName,
                         quotationId: p.quotationId,
@@ -190,16 +195,16 @@ export async function POST(
                         proposedItemName: p.proposedItemName,
                         unitPrice: p.unitPrice,
                         score: p.score,
-                        rank: index + 1, 
-                        status: (index === 0) ? 'Pending_Award' : 'Standby'
+                        rank: index + 1,
+                        status: (index === 0) ? 'Pending_Award' : (index <= 2 ? 'Standby' : 'Rejected')
                     }));
                     
-                    console.log(`[FINALIZE-SCORES] For item ${reqItem.name}, ranked proposals:`, rankedProposals.map(p => ({vendor: p.vendorName, rank: p.rank, status: p.status})));
+                    console.log(`[FINALIZE-SCORES] For item ${reqItem.name}, ranked proposals:`, perItemAwardDetails.map(p => ({vendor: p.vendorName, rank: p.rank, status: p.status})));
 
                     await tx.requisitionItem.update({
                         where: { id: reqItem.id },
                         data: {
-                            perItemAwardDetails: rankedProposals as any
+                            perItemAwardDetails: perItemAwardDetails as any
                         }
                     });
                 }
@@ -256,3 +261,5 @@ export async function POST(
         return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
 }
+
+    

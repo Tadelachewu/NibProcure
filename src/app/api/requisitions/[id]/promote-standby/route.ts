@@ -53,8 +53,13 @@ export async function POST(
   } catch (error) {
     console.error(`Failed to promote standby for requisition ${requisitionId}:`, error);
     if (error instanceof Error) {
+      if ((error as any).code === 'P2025') {
+        return NextResponse.json({ error: 'Record to update not found. The requisition state may have changed.', details: (error as any).meta }, { status: 404 });
+      }
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
