@@ -233,31 +233,29 @@ export async function handleAwardRejection(
     
     if (awardStrategy === 'item') {
         let itemsUpdated = 0;
-        for (const reqItem of requisition.items) {
-            // This item is not one of the declined ones, so skip it
-            if (!declinedItemIds.includes(reqItem.id)) continue;
+        
+        // Find the specific requisition item that was declined
+        const itemToUpdate = requisition.items.find((item: any) => 
+            (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.quoteItemId === rejectedQuoteItemId)
+        );
 
-            const awardDetails = (reqItem.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-            let hasBeenUpdated = false;
-            
-            const updatedDetails = awardDetails.map(d => {
-                // Find the specific award that was just rejected by the vendor
-                if (d.vendorId === quote.vendorId && d.status === 'Awarded' && (!rejectedQuoteItemId || d.quoteItemId === rejectedQuoteItemId)) {
-                    hasBeenUpdated = true;
-                    console.log(`[handleAwardRejection] Vendor ${quote.vendorName} rejected item ${reqItem.name}. Setting status to Declined.`);
-                    return { ...d, status: 'Declined' as const };
-                }
-                return d;
-            });
-            
-            if (hasBeenUpdated) {
-                await tx.requisitionItem.update({
-                    where: { id: reqItem.id },
-                    data: { perItemAwardDetails: updatedDetails as any }
-                });
-                itemsUpdated++;
-            }
+        if (!itemToUpdate) {
+            throw new Error(`Could not find a requisition item associated with the rejected quote item ID: ${rejectedQuoteItemId}`);
         }
+        
+        const awardDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
+        const updatedDetails = awardDetails.map(d => {
+            if (d.quoteItemId === rejectedQuoteItemId) {
+                itemsUpdated++;
+                return { ...d, status: 'Declined' as const };
+            }
+            return d;
+        });
+
+        await tx.requisitionItem.update({
+            where: { id: itemToUpdate.id },
+            data: { perItemAwardDetails: updatedDetails as any }
+        });
         
         if (itemsUpdated > 0) {
             await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
@@ -268,11 +266,10 @@ export async function handleAwardRejection(
                     action: 'DECLINE_AWARD', 
                     entity: 'Requisition', 
                     entityId: requisition.id, 
-                    details: `Vendor ${quote.vendorName} declined the award for ${itemsUpdated} item(s). Manual promotion of standby is now possible.`, 
+                    details: `Vendor ${quote.vendorName} declined the award for item "${itemToUpdate.name}". Manual promotion of standby is now possible.`, 
                     transactionId: requisition.transactionId 
                 } 
             });
-            console.log(`[handleAwardRejection] Requisition ${requisition.id} status set to Award_Declined.`);
             return { message: 'Per-item award has been declined. A standby vendor can now be manually promoted.' };
         }
         
@@ -345,22 +342,21 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         let promotedCount = 0;
         let auditDetailsMessage = 'Promoted standby vendors: ';
 
-        // Find all items that have a 'Declined' bid. These are the ones that need a promotion.
         const itemsNeedingPromotion = requisition.items.filter(item => 
             (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Declined')
         );
 
+        if (itemsNeedingPromotion.length === 0) {
+            throw new Error("Could not find any items with a 'Declined' status to trigger a promotion.");
+        }
+
         for (const item of itemsNeedingPromotion) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             
-            // Get a list of vendors who have already failed or declined for THIS item
             const ineligibleVendorIds = new Set(
-                currentDetails
-                    .filter(d => d.status === 'Declined' || d.status === 'Failed_to_Award')
-                    .map(d => d.vendorId)
+                currentDetails.filter(d => d.status === 'Failed_to_Award' || d.status === 'Declined').map(d => d.vendorId)
             );
 
-            // Find the highest-ranked standby bid from an eligible vendor
             const bidToPromote = currentDetails
                 .filter(d => d.status === 'Standby' && !ineligibleVendorIds.has(d.vendorId))
                 .sort((a, b) => a.rank - b.rank)[0];
@@ -369,7 +365,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                 promotedCount++;
                 auditDetailsMessage += `${bidToPromote.vendorName} for item ${item.name}. `;
                 
-                // Update the details array: set the declined bid to failed, and the standby to pending.
                 const updatedDetails = currentDetails.map(d => {
                     if (d.quoteItemId === bidToPromote.quoteItemId) {
                         return { ...d, status: 'Pending_Award' as const };
@@ -385,7 +380,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                     data: { perItemAwardDetails: updatedDetails as any }
                 });
             } else {
-                // No more standbys, mark all declined as failed permanently
                 const updatedDetails = currentDetails.map(d => 
                     d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
                 );
@@ -400,11 +394,9 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             return { message: 'No eligible standby vendors found for promotion. Please review the awards.' };
         }
         
-        // After all promotions, refetch the requisition to get the final state of all items
         const updatedRequisition = await tx.purchaseRequisition.findUnique({ where: {id: requisitionId}, include: { items: true }});
         if (!updatedRequisition) throw new Error("Could not refetch requisition for value calculation.");
 
-        // Recalculate total value based on all current winners (accepted or pending)
         let newTotalValue = 0;
         for (const item of updatedRequisition.items) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
@@ -439,13 +431,19 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${promotedCount} standby award(s). Re-routing for approval.` };
 
     } else { // Single Vendor Strategy
-        // Mark the currently declined quote as failed permanently.
-        await tx.quotation.updateMany({
-            where: { requisitionId: requisitionId, status: 'Declined' },
+        const declinedQuote = await tx.quotation.findFirst({
+             where: { requisitionId: requisitionId, status: 'Declined' }
+        });
+        
+        if (!declinedQuote) {
+             throw new Error("Could not find a declined quote to trigger a promotion. The requisition may be in an inconsistent state.");
+        }
+
+        await tx.quotation.update({
+            where: { id: declinedQuote.id },
             data: { status: 'Failed' }
         });
 
-        // Find the next available standby vendor, sorted by rank.
         const nextStandby = await tx.quotation.findFirst({
             where: { requisitionId, status: 'Standby' },
             orderBy: { rank: 'asc' },
@@ -467,10 +465,8 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             return { message: 'No more standby vendors available. Requisition has returned to Scoring Complete status.'};
         }
         
-        // Recalculate total value for the newly promoted vendor.
         const newTotalValue = nextStandby.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
         
-        // Get the next approval step based on the new value.
         const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: newTotalValue }, actor);
         
         await tx.purchaseRequisition.update({
@@ -483,7 +479,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             }
         });
         
-        // Update the standby quote to be the new pending winner.
         await tx.quotation.update({
             where: { id: nextStandby.id },
             data: { status: 'Pending_Award' }
