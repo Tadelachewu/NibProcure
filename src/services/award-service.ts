@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -219,9 +218,10 @@ export async function handleAwardRejection(
             throw new Error(`Could not find the specific quote item (${quoteItemId}) within the provided quotation.`);
         }
         
+        // Correctly find the requisition item
         const itemToUpdate = requisition.items.find((i: any) => i.id === declinedQuoteItem.requisitionItemId);
         if (!itemToUpdate) {
-            throw new Error(`Could not find a requisition item associated with the rejected quote item ID: ${quoteItemId}`);
+            throw new Error(`Could not find a requisition item associated with the rejected quote item.`);
         }
         
         const updatedDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[]).map(d => 
@@ -261,8 +261,6 @@ export async function handleAwardRejection(
         });
     }
 
-    // This is the crucial change: always set the main status to Award_Declined
-    // to signal that a manual action is required from the procurement officer.
     await tx.purchaseRequisition.update({
         where: { id: requisition.id },
         data: { status: 'Award_Declined' }
@@ -291,9 +289,16 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         const itemsWithDeclinedAwards = await tx.requisitionItem.findMany({
             where: {
                 requisitionId: requisitionId,
-                perItemAwardDetails: { path: ['status'], array_contains: 'Declined' }
+                perItemAwardDetails: {
+                    path: ['status'],
+                    array_contains: 'Declined'
+                }
             }
         });
+        
+        if (itemsWithDeclinedAwards.length === 0) {
+            throw new Error("No items found in a 'Declined' state to trigger a promotion.");
+        }
 
         for (const item of itemsWithDeclinedAwards) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
@@ -327,7 +332,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         }
         
         if (promotedCount === 0) {
-            // Check if there are any other items still in a pending state before resetting.
             const remainingPendingItems = await tx.requisitionItem.count({
                 where: {
                     requisitionId: requisitionId,
@@ -341,7 +345,11 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         }
 
     } else { // Single Vendor Award Strategy
-        await tx.quotation.updateMany({ where: { requisitionId, status: 'Declined' }, data: { status: 'Failed_to_Award' } });
+        const declinedQuote = await tx.quotation.findFirst({ where: { requisitionId, status: 'Declined' } });
+        if(declinedQuote) {
+            await tx.quotation.update({ where: { id: declinedQuote.id }, data: { status: 'Failed_to_Award' } });
+        }
+
         const nextStandby = await tx.quotation.findFirst({
             where: { requisitionId, status: 'Standby' },
             orderBy: { rank: 'asc' },
@@ -355,13 +363,13 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         auditDetailsMessage += `${nextStandby.vendorName}. `;
     }
     
-    // Recalculate total value and reroute for approval
     const updatedRequisition = await tx.purchaseRequisition.findUnique({ where: { id: requisitionId }, include: { items: true, quotations: {include: {items: true}} } });
     if (!updatedRequisition) throw new Error("Could not refetch requisition.");
 
     let newTotalValue = 0;
      if (awardStrategy === 'item') {
-        for (const item of updatedRequisition.items) {
+        const itemsForValueCalc = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId } });
+        for (const item of itemsForValueCalc) {
             const winningAward = (item.perItemAwardDetails as PerItemAwardDetail[] || []).find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
             if (winningAward) {
                 newTotalValue += winningAward.unitPrice * item.quantity;
