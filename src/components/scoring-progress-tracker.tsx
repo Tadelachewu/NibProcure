@@ -191,7 +191,6 @@ const ScoringProgressTracker = ({
                     <ExtendDeadlineDialog
                         isOpen={isExtendDialogOpen}
                         onClose={() => { setExtendDialogOpen(false); setSelectedMember(null); }}
-                        member={selectedMember}
                         requisition={requisition}
                         onSuccess={() => onCommitteeUpdate(false)}
                     />
