@@ -27,12 +27,14 @@ export async function POST(
         let isAuthorized = false;
         const userRoles = (user.roles as any[]).map(r => r.name) as UserRole[];
 
-        if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        if (userRoles.includes('Admin')) {
+            isAuthorized = true;
+        } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
             const setting = rfqSenderSetting.value as { type: string, userId?: string };
             if (setting.type === 'specific') {
                 isAuthorized = setting.userId === userId;
             } else { // 'all' case
-                isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+                isAuthorized = userRoles.includes('Procurement_Officer');
             }
         }
 
@@ -147,11 +149,10 @@ export async function POST(
 
             } else if (awardStrategy === 'item') {
                 console.log('[FINALIZE-SCORES] Calculating for "Best Offer (Per Item)" strategy.');
-                const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId }});
                 finalAwardValue = totalAwardValue;
                 console.log(`[FINALIZE-SCORES] Received total award value: ${finalAwardValue}`);
 
-                for (const reqItem of reqItems) {
+                for (const reqItem of requisition.items) {
                     let proposals: any[] = [];
                     for (const quote of allQuotes) {
                          const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
@@ -182,7 +183,7 @@ export async function POST(
 
                     proposals.sort((a,b) => b.score - a.score);
                     
-                    const rankedProposals = proposals.slice(0, 3).map((p, index) => ({
+                    const rankedProposals = proposals.map((p, index) => ({
                         vendorId: p.vendorId,
                         vendorName: p.vendorName,
                         quotationId: p.quotationId,
@@ -191,7 +192,7 @@ export async function POST(
                         unitPrice: p.unitPrice,
                         score: p.score,
                         rank: index + 1, 
-                        status: (index === 0) ? 'Pending_Award' : 'Standby'
+                        status: (index === 0) ? 'Pending_Award' : (index < 3 ? 'Standby' : 'Rejected')
                     }));
                     
                     console.log(`[FINALIZE-SCORES] For item ${reqItem.name}, ranked proposals:`, rankedProposals.map(p => ({vendor: p.vendorName, rank: p.rank, status: p.status})));

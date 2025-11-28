@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -20,7 +21,6 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    // Correct Authorization Logic
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
     const userRoles = (user.roles as any[]).map(r => r.name);
@@ -41,8 +41,6 @@ export async function POST(
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // The `promoteStandbyVendor` function now takes an optional array of specific items to process.
-      // By leaving it empty, it will automatically find all items that need promotion.
       return await promoteStandbyVendor(tx, requisitionId, user);
     }, {
       maxWait: 15000,

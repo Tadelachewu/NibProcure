@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -41,13 +42,11 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
     }
     
     const currentStepIndex = relevantTier.steps.findIndex(step => {
-        // Find the step that corresponds to the requisition's CURRENT status.
         return `Pending_${step.role.name}` === requisition.status;
     });
 
     let nextStepIndex = currentStepIndex + 1;
     
-    // If the requisition isn't in a pending state found in the matrix, it means this is the first approval for this tier.
     if (currentStepIndex === -1) {
         nextStepIndex = 0;
     }
@@ -57,16 +56,12 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         const nextStep = relevantTier.steps[nextStepIndex];
         const nextRoleName = nextStep.role.name;
         
-        // Dynamically create the pending status. This is the core fix.
         const nextStatus = `Pending_${nextRoleName}`;
         
-        // Find a user for the next step. Committee roles don't get a specific approver ID.
         let nextApproverId: string | null = null;
         if (!nextRoleName.includes('Committee')) {
             const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: nextRoleName } } }});
             if (!approverUser) {
-                // If a specific approver role is not found (e.g. "President"), we should not throw an error, but rather log a warning.
-                // In a real system, there should be robust error handling or fallback mechanisms.
                 console.warn(`Could not find a user for the role: ${nextRoleName.replace(/_/g, ' ')}. The approval will be unassigned.`);
             } else {
                  nextApproverId = approverUser.id;
@@ -81,7 +76,6 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         };
     }
 
-    // If we've gone through all the steps, it's the final approval for this tier.
     const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
     return {
         nextStatus: 'PostApproved',
@@ -117,7 +111,6 @@ export async function getPreviousApprovalStep(tx: Prisma.TransactionClient, requ
     );
 
     if (!relevantTier || relevantTier.steps.length === 0) {
-        // No defined steps, rejection sends it back to scoring
         return {
             previousStatus: 'Scoring_Complete',
             previousApproverId: null,
@@ -130,7 +123,6 @@ export async function getPreviousApprovalStep(tx: Prisma.TransactionClient, requ
     );
 
     if (currentStepIndex <= 0) {
-        // This is the first step in the chain. Rejection reverts to Scoring_Complete.
         return {
             previousStatus: 'Scoring_Complete',
             previousApproverId: null, // Unassign it
@@ -186,7 +178,6 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     await tx.committeeAssignment.deleteMany({ where: { requisitionId }});
     await tx.standbyAssignment.deleteMany({ where: { requisitionId } });
     
-    // Also clear per-item award details from items
     await tx.requisitionItem.updateMany({
         where: { requisitionId: requisitionId },
         data: { perItemAwardDetails: Prisma.JsonNull }
@@ -227,15 +218,14 @@ export async function handleAwardRejection(
         if (!declinedQuoteItem) {
             throw new Error(`Could not find the specific quote item (${quoteItemId}) within the provided quotation.`);
         }
-
-        const itemToUpdate = requisition.items.find((i: any) => i.id === declinedQuoteItem.requisitionItemId);
         
+        const itemToUpdate = requisition.items.find((i: any) => i.id === declinedQuoteItem.requisitionItemId);
         if (!itemToUpdate) {
             throw new Error(`Could not find a requisition item associated with the rejected quote item ID: ${quoteItemId}`);
         }
         
         const updatedDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[]).map(d => 
-            d.quoteItemId === quoteItemId ? { ...d, status: 'Failed_to_Award' as const } : d
+            d.quoteItemId === quoteItemId ? { ...d, status: 'Declined' as const } : d
         );
         
         await tx.requisitionItem.update({
@@ -255,13 +245,6 @@ export async function handleAwardRejection(
             } 
         });
 
-        await tx.purchaseRequisition.update({
-            where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
-        });
-
-        return { message: `Award for item ${itemToUpdate.name} declined. The Procurement Officer must now manually promote a standby vendor.` };
-
     } else {
         await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
         
@@ -276,17 +259,21 @@ export async function handleAwardRejection(
                 transactionId: requisition.transactionId 
             } 
         });
-        
-        await tx.purchaseRequisition.update({
-            where: { id: requisition.id },
-            data: { status: 'Award_Declined' }
-        });
-
-        return { message: 'Award declined. The Procurement Officer must now manually promote a standby vendor.' };
     }
+
+    // This is the crucial change: always set the main status to Award_Declined
+    // to signal that a manual action is required from the procurement officer.
+    await tx.purchaseRequisition.update({
+        where: { id: requisition.id },
+        data: { status: 'Award_Declined' }
+    });
+
+    return { message: 'Award declined. The Procurement Officer must now manually promote a standby vendor.' };
 }
 
 export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
+    let auditDetailsMessage = 'Promoted standby vendors: ';
+
     const requisition = await tx.purchaseRequisition.findUnique({
         where: { id: requisitionId },
         include: { items: true, quotations: { include: { items: true } } }
@@ -297,7 +284,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
     }
 
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
-    let auditDetailsMessage = 'Promoted standby vendors: ';
     
     if (awardStrategy === 'item') {
         let promotedCount = 0;
@@ -305,13 +291,9 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         const itemsWithDeclinedAwards = await tx.requisitionItem.findMany({
             where: {
                 requisitionId: requisitionId,
-                perItemAwardDetails: {
-                    path: ['status'],
-                    array_contains: 'Declined',
-                }
+                perItemAwardDetails: { path: ['status'], array_contains: 'Declined' }
             }
         });
-        
 
         for (const item of itemsWithDeclinedAwards) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
@@ -345,13 +327,11 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         }
         
         if (promotedCount === 0) {
+            // Check if there are any other items still in a pending state before resetting.
             const remainingPendingItems = await tx.requisitionItem.count({
                 where: {
                     requisitionId: requisitionId,
-                    perItemAwardDetails: {
-                        path: ['status'],
-                        array_contains: 'Pending_Award',
-                    }
+                    perItemAwardDetails: { path: ['status'], array_contains: 'Pending_Award' }
                 }
             });
             if (remainingPendingItems === 0) {
@@ -360,7 +340,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             }
         }
 
-    } else {
+    } else { // Single Vendor Award Strategy
         await tx.quotation.updateMany({ where: { requisitionId, status: 'Declined' }, data: { status: 'Failed_to_Award' } });
         const nextStandby = await tx.quotation.findFirst({
             where: { requisitionId, status: 'Standby' },
@@ -375,6 +355,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         auditDetailsMessage += `${nextStandby.vendorName}. `;
     }
     
+    // Recalculate total value and reroute for approval
     const updatedRequisition = await tx.purchaseRequisition.findUnique({ where: { id: requisitionId }, include: { items: true, quotations: {include: {items: true}} } });
     if (!updatedRequisition) throw new Error("Could not refetch requisition.");
 
