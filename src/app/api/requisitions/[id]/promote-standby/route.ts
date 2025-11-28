@@ -25,14 +25,17 @@ export async function POST(
     let isAuthorized = false;
     const userRoles = (user.roles as any[]).map(r => r.name);
 
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+    if (userRoles.includes('Admin')) {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
         if (setting.type === 'specific') {
             isAuthorized = setting.userId === userId;
         } else { // 'all' case
-            isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+            isAuthorized = userRoles.includes('Procurement_Officer');
         }
     }
+
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
