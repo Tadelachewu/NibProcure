@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -346,21 +347,25 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         let auditDetailsMessage = 'Promoted standby vendors: ';
 
         // Find all items that have a 'Declined' bid. These are the ones that need a promotion.
-        const itemsNeedingPromotion = requisition.items.filter(item => 
-            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Declined')
-        );
+        const itemsToProcess = await tx.requisitionItem.findMany({
+            where: {
+                requisitionId: requisitionId,
+                perItemAwardDetails: {
+                    path: '$[*].status',
+                    array_contains: 'Declined'
+                }
+            }
+        });
 
-        for (const item of itemsNeedingPromotion) {
+        for (const item of itemsToProcess) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             
-            // Get a list of vendors who have already failed or declined for THIS item
             const ineligibleVendorIds = new Set(
                 currentDetails
                     .filter(d => d.status === 'Declined' || d.status === 'Failed_to_Award')
                     .map(d => d.vendorId)
             );
 
-            // Find the highest-ranked standby bid from an eligible vendor
             const bidToPromote = currentDetails
                 .filter(d => d.status === 'Standby' && !ineligibleVendorIds.has(d.vendorId))
                 .sort((a, b) => a.rank - b.rank)[0];
@@ -369,7 +374,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                 promotedCount++;
                 auditDetailsMessage += `${bidToPromote.vendorName} for item ${item.name}. `;
                 
-                // Update the details array: set the declined bid to failed, and the standby to pending.
                 const updatedDetails = currentDetails.map(d => {
                     if (d.quoteItemId === bidToPromote.quoteItemId) {
                         return { ...d, status: 'Pending_Award' as const };
@@ -385,7 +389,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                     data: { perItemAwardDetails: updatedDetails as any }
                 });
             } else {
-                // No more standbys, mark all declined as failed permanently
                 const updatedDetails = currentDetails.map(d => 
                     d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
                 );
@@ -397,10 +400,9 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         }
         
         if (promotedCount === 0) {
-            // Check if there are any remaining 'Declined' items. If not, the process might be complete.
             const stillDeclinedCount = (await tx.requisitionItem.findMany({ where: { requisitionId } }))
-                .flatMap(i => i.perItemAwardDetails as PerItemAwardDetail[] || [])
-                .filter(d => d.status === 'Declined').length;
+                .flatMap(i => (i.perItemAwardDetails as PerItemAwardDetail[] || [])
+                .filter(d => d.status === 'Declined')).length;
             
             if (stillDeclinedCount === 0) {
                 return { message: 'All declined items have been addressed or have no more standbys. Please review the awards.' };
@@ -408,11 +410,9 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             return { message: 'No eligible standby vendors found for promotion. Please review the awards.' };
         }
         
-        // After all promotions, refetch the requisition to get the final state of all items
         const updatedRequisition = await tx.purchaseRequisition.findUnique({ where: {id: requisitionId}, include: { items: true }});
         if (!updatedRequisition) throw new Error("Could not refetch requisition for value calculation.");
 
-        // Recalculate total value based on all current winners (accepted or pending)
         let newTotalValue = 0;
         for (const item of updatedRequisition.items) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
