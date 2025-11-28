@@ -11,10 +11,17 @@ import { useToast } from '@/hooks/use-toast';
 
 interface AwardStandbyButtonProps {
     requisition: PurchaseRequisition;
+    quotations: Quotation[];
     onSuccess: () => void;
+    isChangingAward: boolean;
 }
 
-export function AwardStandbyButton({ requisition, onSuccess }: AwardStandbyButtonProps) {
+export function AwardStandbyButton({
+    requisition,
+    quotations,
+    onSuccess,
+    isChangingAward,
+}: AwardStandbyButtonProps) {
     const { user } = useAuth();
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,9 +43,9 @@ export function AwardStandbyButton({ requisition, onSuccess }: AwardStandbyButto
                 return standbyExists;
             });
         } else {
-            return requisition.quotations?.some(q => q.status === 'Standby');
+            return quotations.some(q => q.status === 'Standby');
         }
-    }, [requisition, isPerItemStrategy]);
+    }, [requisition, isPerItemStrategy, quotations]);
 
     const handlePromote = async () => {
         if (!user) return;
@@ -56,7 +63,7 @@ export function AwardStandbyButton({ requisition, onSuccess }: AwardStandbyButto
             }
             const result = await response.json();
             toast({ title: "Promotion Successful", description: result.message });
-            onSuccess();
+            onSuccess(); // Correctly call the onSuccess function to refresh the parent page
         } catch (error) {
             toast({
                 variant: 'destructive',
@@ -76,8 +83,8 @@ export function AwardStandbyButton({ requisition, onSuccess }: AwardStandbyButto
     return (
         <AlertDialog>
             <AlertDialogTrigger asChild>
-                <Button disabled={isSubmitting}>
-                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrophyIcon className="mr-2 h-4 w-4" />}
+                <Button disabled={isSubmitting || isChangingAward}>
+                    {(isSubmitting || isChangingAward) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TrophyIcon className="mr-2 h-4 w-4" />}
                     Promote Standby Vendor
                 </Button>
             </AlertDialogTrigger>
