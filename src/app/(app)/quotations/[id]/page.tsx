@@ -1737,7 +1737,7 @@ const ScoringProgressTracker = ({
   requisition,
   quotations,
   allUsers,
-  onFinalize,
+  onSuccess,
   onCommitteeUpdate,
   isFinalizing,
   isAuthorized
@@ -1745,7 +1745,7 @@ const ScoringProgressTracker = ({
   requisition: PurchaseRequisition;
   quotations: Quotation[];
   allUsers: User[];
-  onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
+  onSuccess: () => void;
   onCommitteeUpdate: (open: boolean) => void;
   isFinalizing: boolean;
   isAuthorized: boolean;
@@ -1801,6 +1801,10 @@ const ScoringProgressTracker = ({
         });
     }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id]);
 
+    const handleFinalizeScores = useCallback((awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
+        // This function will be called from the dialogs to trigger the API call in the parent.
+        // It's passed down from the main page component.
+    }, []);
 
     return (
         <Card className="mt-6">
@@ -1852,7 +1856,7 @@ const ScoringProgressTracker = ({
                         onClose={() => { setExtendDialogOpen(false); setSelectedMember(null); }}
                         member={selectedMember}
                         requisition={requisition}
-                        onSuccess={() => onCommitteeUpdate(false)}
+                        onSuccess={onSuccess}
                     />
                     <OverdueReportDialog
                         isOpen={isReportDialogOpen}
@@ -2885,7 +2889,7 @@ export default function QuotationDetailsPage() {
                   requisition={requisition}
                   quotations={quotations}
                   allUsers={allUsers}
-                  onFinalize={handleFinalizeScores}
+                  onSuccess={fetchRequisitionAndQuotes}
                   onCommitteeUpdate={setCommitteeDialogOpen}
                   isFinalizing={isFinalizing}
                   isAuthorized={isAuthorized}
@@ -2908,7 +2912,7 @@ export default function QuotationDetailsPage() {
                 <AwardStandbyButton
                     requisition={requisition}
                     quotations={quotations}
-                    onSuccess={fetchRequisitionAndQuotes}
+                    onPromote={handleAwardChange}
                     isChangingAward={isChangingAward}
                 />
             ) : (
