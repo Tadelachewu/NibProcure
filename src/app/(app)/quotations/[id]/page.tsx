@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -211,22 +212,21 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const getOverallStatusForVendor = (quote: Quotation, itemStatuses: any[], isAwarded: boolean): QuotationStatus => {
-  if (!isAwarded) {
+const getOverallStatusForVendor = (quote: Quotation, itemStatuses: any[]): QuotationStatus => {
+    const isPerItemStrategy = (quote.requisition?.rfqSettings as any)?.awardStrategy === 'item';
+    
+    if (isPerItemStrategy) {
+        const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
+        if (vendorItemStatuses.some(d => d.status === 'Accepted')) return 'Accepted';
+        if (vendorItemStatuses.some(d => d.status === 'Pending_Award' || d.status === 'Awarded')) return 'Partially_Awarded';
+        if (vendorItemStatuses.some(d => d.status === 'Declined')) return 'Declined';
+        if (vendorItemStatuses.some(d => d.status === 'Standby')) return 'Standby';
+        // If the vendor has bids but none of the above, they were not awarded.
+        if (vendorItemStatuses.length > 0) return 'Not Awarded' as any;
+    }
+    
+    // Fallback for single-vendor or if no item statuses match
     return quote.status;
-  }
-  
-  if ((quote.requisition?.rfqSettings as any)?.awardStrategy === 'item') {
-    const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
-    if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
-    if (vendorItemStatuses.some(s => s.status === 'Pending_Award' || s.status === 'Awarded')) return 'Partially_Awarded';
-    if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
-    if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
-    return 'Not Awarded' as any; // If they bid but didn't get any award/standby
-  }
-
-  // Fallback for single-vendor award strategy
-  return quote.status;
 };
 
 
@@ -242,7 +242,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
         );
     }
 
-    const getStatusVariant = (status: QuotationStatus | 'Pending_Award' | 'Awarded' | 'Rejected' | 'Not Awarded') => {
+    const getStatusVariant = (status: QuotationStatus | 'Pending_Award' | 'Awarded' | 'Rejected' | 'Not Awarded' | 'Failed_to_Award') => {
         switch (status) {
             case 'Awarded': 
             case 'Accepted': 
@@ -258,6 +258,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
             case 'Failed': 
                 return 'destructive';
             case 'Invoice_Submitted': return 'outline';
+            default: return 'outline';
         }
     }
 
@@ -280,53 +281,8 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
                 
-                let mainStatus: QuotationStatus | 'Not Awarded' = getOverallStatusForVendor(quote, itemStatuses, isAwarded);
+                let mainStatus = getOverallStatusForVendor(quote, itemStatuses);
                 
-                let itemsToList: QuoteItem[] = [];
-                if (isAwarded && !isPerItemStrategy) {
-                    if (mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded') {
-                        const awardedItemIds = new Set(requisition.awardedQuoteItemIds || []);
-                        if (awardedItemIds.size > 0) {
-                            itemsToList = quote.items.filter(i => awardedItemIds.has(i.id));
-                        } else {
-                            itemsToList = quote.items;
-                        }
-                    } else if (mainStatus === 'Standby' && requisition.evaluationCriteria) {
-                         const championBids: QuoteItem[] = [];
-                        for (const reqItem of requisition.items) {
-                            const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
-                            if (proposalsForItem.length === 0) continue;
-
-                            let bestProposalForItem: QuoteItem | null = null;
-                            let bestItemScore = -1;
-
-                            proposalsForItem.forEach(proposal => {
-                                let totalItemScore = 0;
-                                let scoreCount = 0;
-                                quote.scores?.forEach(scoreSet => {
-                                    const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                                    if (itemScore) {
-                                        totalItemScore += itemScore.finalScore;
-                                        scoreCount++;
-                                    }
-                                });
-                                const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                                
-                                if (averageItemScore > bestItemScore) {
-                                    bestItemScore = averageItemScore;
-                                    bestProposalForItem = proposal;
-                                }
-                            });
-
-                            if (bestProposalForItem) {
-                                championBids.push(bestProposalForItem);
-                            }
-                        }
-                        itemsToList = championBids;
-                    }
-                }
-
-
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Partially_Awarded' || mainStatus === 'Accepted') && !isPerItemStrategy && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
@@ -373,17 +329,6 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                                     </div>
                                                 </div>
                                             ))}
-                                        </div>
-                                     )}
-                                     
-                                     {itemsToList.length > 0 && (
-                                        <div className="text-sm space-y-2 pt-2 border-t">
-                                            <h4 className="font-semibold flex items-center gap-2"><List /> {mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded' ? 'Awarded Items' : 'Standby Items'}</h4>
-                                            <ul className="list-disc pl-5 text-muted-foreground">
-                                            {itemsToList.map(item => (
-                                                <li key={item.id}>{item.name} (Qty: {item.quantity})</li>
-                                            ))}
-                                            </ul>
                                         </div>
                                      )}
                                 </>
@@ -1786,19 +1731,15 @@ const ScoringProgressTracker = ({
   requisition,
   quotations,
   allUsers,
-  onFinalize,
-  onCommitteeUpdate,
   onSuccess,
-  isFinalizing,
+  onCommitteeUpdate,
   isAuthorized
 }: {
   requisition: PurchaseRequisition;
   quotations: Quotation[];
   allUsers: User[];
-  onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
-  onCommitteeUpdate: (open: boolean) => void;
   onSuccess: () => void;
-  isFinalizing: boolean;
+  onCommitteeUpdate: (open: boolean) => void;
   isAuthorized: boolean;
 }) => {
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
@@ -1806,8 +1747,10 @@ const ScoringProgressTracker = ({
     const [selectedMember, setSelectedMember] = useState<User | null>(null);
     const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
     const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
-
+    const [isFinalizing, setIsFinalizing] = useState(false);
+    const { user } = useAuth();
     const { toast } = useToast();
+
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
 
     const assignedCommitteeMembers = useMemo(() => {
@@ -1851,9 +1794,63 @@ const ScoringProgressTracker = ({
              return 0;
         });
     }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id]);
+    
+    const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
+        if (!user || !requisition || !quotations) return;
+        
+        let totalAwardValue = 0;
+        if(awardStrategy === 'all') {
+            const winnerData = awards[Object.keys(awards)[0]];
+            const winnerQuote = quotations.find(q => q.vendorId === Object.keys(awards)[0]);
+            
+            if (winnerQuote && winnerData) {
+                totalAwardValue = winnerData.items.reduce((sum: number, item: any) => {
+                    const quoteItem = winnerQuote.items.find(i => i.id === item.quoteItemId);
+                    return sum + (quoteItem ? quoteItem.unitPrice * quoteItem.quantity : 0);
+                }, 0);
+            }
+        } else {
+            const quoteItemsById: { [key: string]: { price: number; quantity: number } } = {};
+            quotations.forEach(q => {
+                q.items.forEach(i => {
+                    quoteItemsById[i.id] = { price: i.unitPrice, quantity: i.quantity };
+                });
+            });
+
+            totalAwardValue = Object.values(awards).flatMap((a: any) => a.items)
+                .reduce((sum, item: any) => {
+                    const quoteItem = quoteItemsById[item.quoteItemId];
+                    return sum + (quoteItem ? quoteItem.price * quoteItem.quantity : 0);
+                }, 0);
+        }
+
+        setIsFinalizing(true);
+        try {
+             const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, totalAwardValue }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to finalize scores.');
+            }
+            toast({ title: 'Success', description: 'Scores have been finalized and awards are being routed for final review.' });
+            onSuccess();
+        } catch(error) {
+             toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsFinalizing(false);
+        }
+    }
 
 
     return (
+        <>
         <Card className="mt-6">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><GanttChart /> Scoring Progress</CardTitle>
@@ -1896,23 +1893,25 @@ const ScoringProgressTracker = ({
                     ))}
                 </ul>
             </CardContent>
-            {selectedMember && (
-                <>
-                    <ExtendDeadlineDialog
-                        isOpen={isExtendDialogOpen}
-                        onClose={() => { setExtendDialogOpen(false); setSelectedMember(null); }}
-                        member={selectedMember}
-                        requisition={requisition}
-                        onSuccess={() => onSuccess()}
-                    />
-                    <OverdueReportDialog
-                        isOpen={isReportDialogOpen}
-                        onClose={() => { setReportDialogOpen(false); setSelectedMember(null); }}
-                        member={selectedMember}
-                    />
-                </>
-            )}
         </Card>
+
+        {selectedMember && (
+            <>
+                <ExtendDeadlineDialog
+                    isOpen={isExtendDialogOpen}
+                    onClose={() => { setExtendDialogOpen(false); setSelectedMember(null); }}
+                    member={selectedMember}
+                    requisition={requisition}
+                    onSuccess={() => onSuccess()}
+                />
+                <OverdueReportDialog
+                    isOpen={isReportDialogOpen}
+                    onClose={() => { setReportDialogOpen(false); setSelectedMember(null); }}
+                    member={selectedMember}
+                />
+            </>
+        )}
+        </>
     );
 };
 
@@ -2433,66 +2432,28 @@ export default function QuotationDetailsPage() {
 
     const finalStatuses: any[] = [];
     
-    // Group all champion bids by the original requisition item
-    const bidsByItem = requisition.items.reduce((acc, reqItem) => {
-        const itemBids: any[] = [];
-        quotations.forEach(quote => {
-            const proposalsForItem = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
-            if (proposalsForItem.length > 0) {
-                // Find the best proposal from this vendor for this item
-                const bestProposal = proposalsForItem.map(proposal => {
-                    let totalScore = 0;
-                    let scorerCount = 0;
-                    quote.scores?.forEach(scoreSet => {
-                        const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                        if(itemScore) {
-                            totalScore += itemScore.finalScore;
-                            scorerCount++;
-                        }
-                    });
-                    const score = scorerCount > 0 ? totalScore / scorerCount : 0;
-                    return { proposal, score };
-                }).sort((a,b) => b.score - a.score)[0]; // Get the best one
-
-                if (bestProposal) {
-                    itemBids.push({
-                        reqItemId: reqItem.id,
-                        reqItemName: reqItem.name,
-                        vendorId: quote.vendorId,
-                        vendorName: quote.vendorName,
-                        proposalId: bestProposal.proposal.id,
-                        proposedItemName: bestProposal.proposal.name,
-                        score: bestProposal.score,
-                    });
-                }
-            }
+    requisition.items.forEach(reqItem => {
+      if (reqItem.perItemAwardDetails) {
+        (reqItem.perItemAwardDetails as PerItemAwardDetail[]).forEach(detail => {
+          finalStatuses.push({
+            id: `${detail.vendorId}-${reqItem.id}-${detail.quoteItemId}`,
+            reqItemId: reqItem.id,
+            reqItemName: reqItem.name,
+            vendorId: detail.vendorId,
+            vendorName: detail.vendorName,
+            proposalId: detail.quoteItemId,
+            proposedItemName: detail.proposedItemName,
+            score: detail.score,
+            rank: detail.rank,
+            status: detail.status,
+          });
         });
-        acc[reqItem.id] = itemBids;
-        return acc;
-    }, {} as Record<string, any[]>);
-
-    // Rank and assign statuses within each item group
-    Object.values(bidsByItem).forEach((bids: any[]) => {
-        bids.sort((a, b) => b.score - a.score); // Rank by score
-        
-        bids.forEach((bid, index) => {
-            const rank = index + 1;
-            const dbStatus = requisition.items
-                .find(i => i.id === bid.reqItemId)
-                ?.perItemAwardDetails?.find(d => d.quoteItemId === bid.proposalId)?.status;
-
-            finalStatuses.push({ 
-                ...bid, 
-                id: `${bid.vendorId}-${bid.reqItemId}-${bid.proposalId}`, 
-                rank, 
-                status: dbStatus || (rank === 1 ? 'Pending_Award' : rank <= 3 ? 'Standby' : 'Rejected')
-            });
-        });
+      }
     });
     
     return finalStatuses;
 
-}, [requisition, quotations]);
+}, [requisition]);
 
 
   const paginatedQuotes = useMemo(() => {
@@ -2531,7 +2492,7 @@ export default function QuotationDetailsPage() {
                             let scoreCount = 0;
                             quote.scores?.forEach(scoreSet => {
                                 const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                                if (itemScore) {
+                                if(itemScore) {
                                     totalItemScore += itemScore.finalScore;
                                     scoreCount++;
                                 }
@@ -2939,11 +2900,9 @@ export default function QuotationDetailsPage() {
                   requisition={requisition}
                   quotations={quotations}
                   allUsers={allUsers}
-                  onFinalize={handleFinalizeScores}
                   onCommitteeUpdate={setCommitteeDialogOpen}
-                  isFinalizing={isFinalizing}
-                  isAuthorized={isAuthorized}
                   onSuccess={fetchRequisitionAndQuotes}
+                  isAuthorized={isAuthorized}
               />
           )
         )}
@@ -3444,4 +3403,5 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
 
