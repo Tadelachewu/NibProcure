@@ -354,25 +354,25 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         for (const item of itemsNeedingPromotion) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             
-            // 1. Build a list of vendors who have already failed or declined for this item.
-            const ineligibleVendorIds = new Set(
-                currentDetails.filter(d => d.status === 'Failed_to_Award' || d.status === 'Declined').map(d => d.vendorId)
+            // Build a list of ineligible QUOTE ITEM IDs that have already failed.
+            const ineligibleQuoteItemIds = new Set(
+                currentDetails.filter(d => d.status === 'Failed_to_Award' || d.status === 'Declined').map(d => d.quoteItemId)
             );
 
-            // 2. Find the next eligible standby vendor.
+            // Find the next eligible standby vendor.
             const bidToPromote = currentDetails
-                .filter(d => d.status === 'Standby' && !ineligibleVendorIds.has(d.vendorId))
+                .filter(d => d.status === 'Standby' && !ineligibleQuoteItemIds.has(d.quoteItemId))
                 .sort((a, b) => a.rank - b.rank)[0]; // Get the one with the lowest rank (e.g., 2 then 3)
             
             if (bidToPromote) {
                 promotedCount++;
                 auditDetailsMessage += `${bidToPromote.vendorName} for item ${item.name}. `;
                 
-                // 3. Update the statuses within the details array.
                 const updatedDetails = currentDetails.map(d => {
                     if (d.quoteItemId === bidToPromote.quoteItemId) {
                         return { ...d, status: 'Pending_Award' as const };
                     }
+                    // Mark the just-declined bid as failed so it's not picked again
                     if (d.status === 'Declined') {
                         return { ...d, status: 'Failed_to_Award' as const };
                     }
@@ -506,3 +506,5 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
+
+    
