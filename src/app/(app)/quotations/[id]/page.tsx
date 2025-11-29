@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -3211,10 +3212,8 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
             const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
             if (details.length === 0) return false;
             
-            // The item has failed if ALL its bids are in a terminal fail state, and NONE are active or standby.
-            const hasActiveBids = details.some(d => ['Pending_Award', 'Awarded', 'Accepted', 'Standby'].includes(d.status));
-            
-            return !hasActiveBids;
+            // Show the button if there's any item that is in a failed state
+            return details.some(d => d.status === 'Failed_to_Award' || d.status === 'Declined');
         });
     }, [requisition.items, requisition.rfqSettings]);
 
@@ -3397,4 +3396,5 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
