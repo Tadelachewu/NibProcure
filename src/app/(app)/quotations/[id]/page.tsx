@@ -64,6 +64,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
+import { ExtendDeadlineDialog } from '@/components/extend-deadline-dialog';
+import { OverdueReportDialog } from '@/components/overdue-report-dialog';
 
 
 const PAGE_SIZE = 6;
@@ -217,10 +219,10 @@ const getOverallStatusForVendor = (quote: Quotation, itemStatuses: any[], isAwar
   if ((quote.requisition?.rfqSettings as any)?.awardStrategy === 'item') {
     const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
     if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
+    if (vendorItemStatuses.some(s => s.status === 'Pending_Award' || s.status === 'Awarded')) return 'Partially_Awarded';
     if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
-    if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially_Awarded';
     if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
-    return 'Not Awarded'; // If they bid but didn't get any award/standby
+    return 'Not Awarded' as any; // If they bid but didn't get any award/standby
   }
 
   // Fallback for single-vendor award strategy
@@ -278,14 +280,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
                 
-                let mainStatus: QuotationStatus | 'Not Awarded' = quote.status;
-                if(isPerItemStrategy && isAwarded) {
-                    if (thisVendorItemStatuses.some(s => s.status === 'Accepted')) mainStatus = 'Accepted';
-                    else if (thisVendorItemStatuses.some(s => s.status === 'Declined')) mainStatus = 'Declined';
-                    else if (thisVendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) mainStatus = 'Partially_Awarded';
-                    else if (thisVendorItemStatuses.some(s => s.status === 'Standby')) mainStatus = 'Standby';
-                    else mainStatus = 'Not Awarded';
-                }
+                let mainStatus: QuotationStatus | 'Not Awarded' = getOverallStatusForVendor(quote, itemStatuses, isAwarded);
                 
                 let itemsToList: QuoteItem[] = [];
                 if (isAwarded && !isPerItemStrategy) {
@@ -1793,6 +1788,7 @@ const ScoringProgressTracker = ({
   allUsers,
   onFinalize,
   onCommitteeUpdate,
+  onSuccess,
   isFinalizing,
   isAuthorized
 }: {
@@ -1801,6 +1797,7 @@ const ScoringProgressTracker = ({
   allUsers: User[];
   onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
   onCommitteeUpdate: (open: boolean) => void;
+  onSuccess: () => void;
   isFinalizing: boolean;
   isAuthorized: boolean;
 }) => {
@@ -1906,7 +1903,7 @@ const ScoringProgressTracker = ({
                         onClose={() => { setExtendDialogOpen(false); setSelectedMember(null); }}
                         member={selectedMember}
                         requisition={requisition}
-                        onSuccess={() => onCommitteeUpdate(false)}
+                        onSuccess={() => onSuccess()}
                     />
                     <OverdueReportDialog
                         isOpen={isReportDialogOpen}
@@ -2157,123 +2154,16 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     );
 };
 
-
-const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess }: { isOpen: boolean, onClose: () => void, member: User, requisition: PurchaseRequisition, onSuccess: () => void }) => {
-    const { toast } = useToast();
-    const { user } = useAuth();
-    const [isSubmitting, setSubmitting] = useState(false);
-    const [newDeadline, setNewDeadline] = useState<Date|undefined>();
-    const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
-
-    const finalNewDeadline = useMemo(() => {
-        if (!newDeadline) return undefined;
-        const [hours, minutes] = newDeadlineTime.split(':').map(Number);
-        return setMinutes(setHours(newDeadline, hours), minutes);
-    }, [newDeadline, newDeadlineTime]);
-
-    const handleSubmit = async () => {
-        if (!user || !finalNewDeadline) return;
-        if (isBefore(finalNewDeadline, new Date())) {
-            toast({ variant: 'destructive', title: 'Error', description: 'The new deadline must be in the future.' });
-            return;
-        }
-
-        setSubmitting(true);
-        try {
-            const response = await fetch(`/api/requisitions/${requisition.id}/extend-scoring-deadline`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, newDeadline: finalNewDeadline })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to extend deadline.');
-            }
-
-            toast({ title: 'Success', description: 'Scoring deadline has been extended for all committee members.' });
-            onSuccess();
-            onClose();
-
-        } catch (error) {
-             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
-        } finally {
-            setSubmitting(false);
-        }
-    }
-
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Extend Scoring Deadline</DialogTitle>
-                    <DialogDescription>Set a new scoring deadline for all committee members of this requisition.</DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-4">
-                    <div className="space-y-2">
-                        <Label>New Scoring Deadline</Label>
-                        <div className="flex gap-2">
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !newDeadline && "text-muted-foreground")}>
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {newDeadline ? format(newDeadline, "PPP") : <span>Pick a date</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newDeadline} onSelect={setNewDeadline} initialFocus disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} /></PopoverContent>
-                            </Popover>
-                             <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)} />
-                        </div>
-                    </div>
-                </div>
-                 <DialogFooter>
-                    <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                    <Button onClick={handleSubmit} disabled={isSubmitting || !finalNewDeadline}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Confirm Extension
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
-const OverdueReportDialog = ({ isOpen, onClose, member }: { isOpen: boolean, onClose: () => void, member: User }) => {
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Overdue Member Report</DialogTitle>
-                    <DialogDescription>
-                        This is a placeholder for a detailed report about the overdue committee member for internal follow-up.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-4">
-                     <p>This is a placeholder for a detailed report about the overdue committee member for internal follow-up.</p>
-                     <div className="p-4 border rounded-md bg-muted/50">
-                        <p><span className="font-semibold">Member Name:</span> {member.name}</p>
-                        <p><span className="font-semibold">Email:</span> {member.email}</p>
-                        <p><span className="font-semibold">Assigned Role:</span> {(member.roles as any[])?.map(r => r.name).join(', ').replace(/_/g, ' ')}</p>
-                     </div>
-                </div>
-                <DialogFooter>
-                    <Button onClick={onClose}>Close</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
-
 const CommitteeActions = ({
     user,
     requisition,
     quotations,
+    onFinalScoresSubmitted,
 }: {
     user: User,
     requisition: PurchaseRequisition,
     quotations: Quotation[],
+    onFinalScoresSubmitted: () => void,
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
@@ -2301,6 +2191,7 @@ const CommitteeActions = ({
                 throw new Error(errorData.error || 'Failed to submit scores');
             }
             toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
+            onFinalScoresSubmitted();
         } catch (error) {
              toast({
                 variant: 'destructive',
@@ -3035,6 +2926,7 @@ export default function QuotationDetailsPage() {
                 user={user}
                 requisition={requisition}
                 quotations={quotations}
+                onFinalScoresSubmitted={fetchRequisitionAndQuotes}
              />
         )}
 
@@ -3051,6 +2943,7 @@ export default function QuotationDetailsPage() {
                   onCommitteeUpdate={setCommitteeDialogOpen}
                   isFinalizing={isFinalizing}
                   isAuthorized={isAuthorized}
+                  onSuccess={fetchRequisitionAndQuotes}
               />
           )
         )}
@@ -3069,8 +2962,7 @@ export default function QuotationDetailsPage() {
             {requisition.status === 'Award_Declined' ? (
                 <AwardStandbyButton
                     requisition={requisition}
-                    quotations={quotations}
-                    onPromote={handleAwardChange}
+                    onSuccess={handleAwardChange}
                     isChangingAward={isChangingAward}
                 />
             ) : (
@@ -3552,3 +3444,4 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
     
+
