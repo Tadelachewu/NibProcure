@@ -64,6 +64,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
+import { ExtendDeadlineDialog } from '@/components/extend-deadline-dialog';
+import { OverdueReportDialog } from '@/components/overdue-report-dialog';
 
 
 const PAGE_SIZE = 6;
@@ -209,25 +211,6 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const getOverallStatusForVendor = (quote: Quotation, itemStatuses: any[], isAwarded: boolean): QuotationStatus => {
-  if (!isAwarded) {
-    return quote.status;
-  }
-  
-  if ((quote.requisition?.rfqSettings as any)?.awardStrategy === 'item') {
-    const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
-    if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
-    if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
-    if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially_Awarded';
-    if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
-    return 'Not Awarded'; // If they bid but didn't get any award/standby
-  }
-
-  // Fallback for single-vendor award strategy
-  return quote.status;
-};
-
-
 const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean }) => {
     
     if (quotes.length === 0) {
@@ -239,8 +222,33 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
             </div>
         );
     }
+    
+    const getOverallStatusForVendor = (quote: Quotation): QuotationStatus | 'Not Awarded' | 'Partially Awarded' => {
+        const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
-    const getStatusVariant = (status: QuotationStatus | 'Pending_Award' | 'Awarded' | 'Rejected' | 'Not Awarded') => {
+        // For single-vendor strategy, the quote status is the source of truth.
+        if (!isPerItemStrategy) {
+            return quote.status;
+        }
+
+        // For per-item strategy, we need to derive the status from all items this vendor bid on.
+        const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
+
+        // Define a hierarchy of statuses.
+        if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
+        if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially Awarded';
+        if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
+        if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
+
+        // If a quote was submitted but none of the above statuses match, it means they were not awarded anything.
+        if (quote.status === 'Submitted') {
+            return isAwarded ? 'Not Awarded' : 'Submitted';
+        }
+
+        return quote.status; // Fallback to the original quote status
+    };
+
+    const getStatusVariant = (status: QuotationStatus | 'Not Awarded' | 'Partially Awarded') => {
         switch (status) {
             case 'Awarded': 
             case 'Accepted': 
@@ -277,61 +285,10 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
+                const mainStatus = getOverallStatusForVendor(quote);
+
+                const shouldShowItems = isPerItemStrategy && isAwarded && thisVendorItemStatuses.length > 0;
                 
-                let mainStatus: QuotationStatus | 'Not Awarded' = quote.status;
-                if(isPerItemStrategy && isAwarded) {
-                    if (thisVendorItemStatuses.some(s => s.status === 'Accepted')) mainStatus = 'Accepted';
-                    else if (thisVendorItemStatuses.some(s => s.status === 'Declined')) mainStatus = 'Declined';
-                    else if (thisVendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) mainStatus = 'Partially_Awarded';
-                    else if (thisVendorItemStatuses.some(s => s.status === 'Standby')) mainStatus = 'Standby';
-                    else mainStatus = 'Not Awarded';
-                }
-                
-                let itemsToList: QuoteItem[] = [];
-                if (isAwarded && !isPerItemStrategy) {
-                    if (mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded') {
-                        const awardedItemIds = new Set(requisition.awardedQuoteItemIds || []);
-                        if (awardedItemIds.size > 0) {
-                            itemsToList = quote.items.filter(i => awardedItemIds.has(i.id));
-                        } else {
-                            itemsToList = quote.items;
-                        }
-                    } else if (mainStatus === 'Standby' && requisition.evaluationCriteria) {
-                         const championBids: QuoteItem[] = [];
-                        for (const reqItem of requisition.items) {
-                            const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
-                            if (proposalsForItem.length === 0) continue;
-
-                            let bestProposalForItem: QuoteItem | null = null;
-                            let bestItemScore = -1;
-
-                            proposalsForItem.forEach(proposal => {
-                                let totalItemScore = 0;
-                                let scoreCount = 0;
-                                quote.scores?.forEach(scoreSet => {
-                                    const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                                    if (itemScore) {
-                                        totalItemScore += itemScore.finalScore;
-                                        scoreCount++;
-                                    }
-                                });
-                                const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                                
-                                if (averageItemScore > bestItemScore) {
-                                    bestItemScore = averageItemScore;
-                                    bestProposalForItem = proposal;
-                                }
-                            });
-
-                            if (bestProposalForItem) {
-                                championBids.push(bestProposalForItem);
-                            }
-                        }
-                        itemsToList = championBids;
-                    }
-                }
-
-
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Partially_Awarded' || mainStatus === 'Accepted') && !isPerItemStrategy && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
@@ -360,7 +317,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                         </>
                                     )}
 
-                                     {isPerItemStrategy && isAwarded && thisVendorItemStatuses.length > 0 && (
+                                     {shouldShowItems && (
                                         <div className="text-sm space-y-2 pt-2 border-t">
                                             <h4 className="font-semibold">Your Item Statuses</h4>
                                             {thisVendorItemStatuses.map(item => (
@@ -378,17 +335,6 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                                     </div>
                                                 </div>
                                             ))}
-                                        </div>
-                                     )}
-                                     
-                                     {itemsToList.length > 0 && (
-                                        <div className="text-sm space-y-2 pt-2 border-t">
-                                            <h4 className="font-semibold flex items-center gap-2"><List /> {mainStatus === 'Awarded' || mainStatus === 'Accepted' || mainStatus === 'Partially_Awarded' ? 'Awarded Items' : 'Standby Items'}</h4>
-                                            <ul className="list-disc pl-5 text-muted-foreground">
-                                            {itemsToList.map(item => (
-                                                <li key={item.id}>{item.name} (Qty: {item.quantity})</li>
-                                            ))}
-                                            </ul>
                                         </div>
                                      )}
                                 </>
@@ -2158,114 +2104,6 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
 };
 
 
-const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess }: { isOpen: boolean, onClose: () => void, member: User, requisition: PurchaseRequisition, onSuccess: () => void }) => {
-    const { toast } = useToast();
-    const { user } = useAuth();
-    const [isSubmitting, setSubmitting] = useState(false);
-    const [newDeadline, setNewDeadline] = useState<Date|undefined>();
-    const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
-
-    const finalNewDeadline = useMemo(() => {
-        if (!newDeadline) return undefined;
-        const [hours, minutes] = newDeadlineTime.split(':').map(Number);
-        return setMinutes(setHours(newDeadline, hours), minutes);
-    }, [newDeadline, newDeadlineTime]);
-
-    const handleSubmit = async () => {
-        if (!user || !finalNewDeadline) return;
-        if (isBefore(finalNewDeadline, new Date())) {
-            toast({ variant: 'destructive', title: 'Error', description: 'The new deadline must be in the future.' });
-            return;
-        }
-
-        setSubmitting(true);
-        try {
-            const response = await fetch(`/api/requisitions/${requisition.id}/extend-scoring-deadline`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, newDeadline: finalNewDeadline })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to extend deadline.');
-            }
-
-            toast({ title: 'Success', description: 'Scoring deadline has been extended for all committee members.' });
-            onSuccess();
-            onClose();
-
-        } catch (error) {
-             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
-        } finally {
-            setSubmitting(false);
-        }
-    }
-
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Extend Scoring Deadline</DialogTitle>
-                    <DialogDescription>Set a new scoring deadline for all committee members of this requisition.</DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-4">
-                    <div className="space-y-2">
-                        <Label>New Scoring Deadline</Label>
-                        <div className="flex gap-2">
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !newDeadline && "text-muted-foreground")}>
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {newDeadline ? format(newDeadline, "PPP") : <span>Pick a date</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newDeadline} onSelect={setNewDeadline} initialFocus disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} /></PopoverContent>
-                            </Popover>
-                             <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)} />
-                        </div>
-                    </div>
-                </div>
-                 <DialogFooter>
-                    <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                    <Button onClick={handleSubmit} disabled={isSubmitting || !finalNewDeadline}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Confirm Extension
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
-const OverdueReportDialog = ({ isOpen, onClose, member }: { isOpen: boolean, onClose: () => void, member: User }) => {
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Overdue Member Report</DialogTitle>
-                    <DialogDescription>
-                        This is a placeholder for a detailed report about the overdue committee member for internal follow-up.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-4">
-                     <p>This is a placeholder for a detailed report about the overdue committee member for internal follow-up.</p>
-                     <div className="p-4 border rounded-md bg-muted/50">
-                        <p><span className="font-semibold">Member Name:</span> {member.name}</p>
-                        <p><span className="font-semibold">Email:</span> {member.email}</p>
-                        <p><span className="font-semibold">Assigned Role:</span> {(member.roles as any[])?.map(r => r.name).join(', ').replace(/_/g, ' ')}</p>
-                     </div>
-                </div>
-                <DialogFooter>
-                    <Button onClick={onClose}>Close</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
-
-
 const CommitteeActions = ({
     user,
     requisition,
@@ -3070,7 +2908,7 @@ export default function QuotationDetailsPage() {
                 <AwardStandbyButton
                     requisition={requisition}
                     quotations={quotations}
-                    onPromote={handleAwardChange}
+                    onSuccess={fetchRequisitionAndQuotes}
                     isChangingAward={isChangingAward}
                 />
             ) : (
@@ -3550,5 +3388,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
     
 
+
+    
 
     
