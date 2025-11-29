@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -226,26 +225,19 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
     const getOverallStatusForVendor = (quote: Quotation): QuotationStatus | 'Not Awarded' | 'Partially Awarded' => {
         const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
-        // For single-vendor strategy, the quote status is the source of truth.
-        if (!isPerItemStrategy) {
-            return quote.status;
+        if (isPerItemStrategy) {
+            const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
+            if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
+            if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially Awarded';
+            if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
+            if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
+
+            if (quote.status === 'Submitted') {
+                return isAwarded ? 'Not Awarded' : 'Submitted';
+            }
         }
-
-        // For per-item strategy, we need to derive the status from all items this vendor bid on.
-        const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
-
-        // Define a hierarchy of statuses.
-        if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
-        if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially Awarded';
-        if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
-        if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
-
-        // If a quote was submitted but none of the above statuses match, it means they were not awarded anything.
-        if (quote.status === 'Submitted') {
-            return isAwarded ? 'Not Awarded' : 'Submitted';
-        }
-
-        return quote.status; // Fallback to the original quote status
+        
+        return quote.status;
     };
 
     const getStatusVariant = (status: QuotationStatus | 'Not Awarded' | 'Partially Awarded') => {
@@ -3212,10 +3204,19 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
 
-    const failedItems = useMemo(() => 
-        requisition.items.filter(item => 
-            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => (d.status === 'Failed_to_Award' || d.status === 'Declined') && d.status !== 'Restarted')
-        ), [requisition.items]);
+    const failedItems = useMemo(() => {
+        if ((requisition.rfqSettings as any)?.awardStrategy !== 'item') return [];
+        
+        return requisition.items.filter(item => {
+            const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+            if (details.length === 0) return false;
+            
+            // The item has failed if ALL its bids are in a terminal fail state, and NONE are active or standby.
+            const hasActiveBids = details.some(d => ['Pending_Award', 'Awarded', 'Accepted', 'Standby'].includes(d.status));
+            
+            return !hasActiveBids;
+        });
+    }, [requisition.items, requisition.rfqSettings]);
 
     const deadline = useMemo(() => {
         if (!deadlineDate || !deadlineTime) return undefined;
@@ -3223,7 +3224,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
         return setMinutes(setHours(deadlineDate, hours), minutes);
     }, [deadlineDate, deadlineTime]);
     
-    const canRestart = (requisition.rfqSettings as any)?.awardStrategy === 'item' && failedItems.length > 0;
+    const canRestart = failedItems.length > 0;
 
     const handleRestart = async () => {
         if (!user || !deadline || selectedItems.length === 0 || selectedVendors.length === 0) {
@@ -3396,3 +3397,4 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
