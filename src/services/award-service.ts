@@ -1,4 +1,3 @@
-
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -380,7 +379,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                     data: { perItemAwardDetails: updatedDetails as any }
                 });
             } else {
-                const updatedDetails = currentDetails.map(d => 
+                 const updatedDetails = currentDetails.map(d => 
                     d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
                 );
                  await tx.requisitionItem.update({
