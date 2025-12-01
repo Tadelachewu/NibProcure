@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -200,30 +201,32 @@ function useAwardCalculations(requisition: PurchaseRequisition, quotations: Quot
 
 // --- UI COMPONENTS ---
 
-const ScoreBreakdownDialog = ({ calculation, evaluationCriteria }: { calculation: CalculatedItem, evaluationCriteria: EvaluationCriteria }) => {
+export const ScoreBreakdownDialog = ({ calculation, evaluationCriteria, isOpen, onClose }: { calculation: CalculatedItem, evaluationCriteria: EvaluationCriteria, isOpen: boolean, onClose: () => void }) => {
     return (
-        <DialogContent className="max-w-2xl">
-            <DialogHeader>
-                <DialogTitle>Score Breakdown: {calculation.itemName}</DialogTitle>
-                <DialogDescription>
-                    This shows how the final score of <span className="font-bold text-primary">{calculation.finalItemScore.toFixed(2)}</span> was calculated.
-                </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-6 py-4">
-                 <ScoreTable title="Financial Evaluation" scores={calculation.financialScores} weight={evaluationCriteria.financialWeight} totalScore={calculation.totalFinancialScore} />
-                 <ScoreTable title="Technical Evaluation" scores={calculation.technicalScores} weight={evaluationCriteria.technicalWeight} totalScore={calculation.totalTechnicalScore} />
-                 <Separator />
-                <div className="p-4 bg-muted rounded-md text-center">
-                    <p className="text-sm text-muted-foreground">Final Calculation</p>
-                    <p className="text-lg">
-                        (<span className="font-mono">{calculation.totalFinancialScore.toFixed(2)}</span> &times; {evaluationCriteria.financialWeight}%) + (<span className="font-mono">{calculation.totalTechnicalScore.toFixed(2)}</span> &times; {evaluationCriteria.technicalWeight}%) = <span className="font-bold text-xl text-primary">{calculation.finalItemScore.toFixed(2)}</span>
-                    </p>
+         <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>Score Breakdown: {calculation.itemName}</DialogTitle>
+                    <DialogDescription>
+                        This shows how the final score of <span className="font-bold text-primary">{calculation.finalItemScore.toFixed(2)}</span> was calculated.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-6 py-4">
+                    <ScoreTable title="Financial Evaluation" scores={calculation.financialScores} weight={evaluationCriteria.financialWeight} totalScore={calculation.totalFinancialScore} />
+                    <ScoreTable title="Technical Evaluation" scores={calculation.technicalScores} weight={evaluationCriteria.technicalWeight} totalScore={calculation.totalTechnicalScore} />
+                    <Separator />
+                    <div className="p-4 bg-muted rounded-md text-center">
+                        <p className="text-sm text-muted-foreground">Final Calculation</p>
+                        <p className="text-lg">
+                            (<span className="font-mono">{calculation.totalFinancialScore.toFixed(2)}</span> &times; {evaluationCriteria.financialWeight}%) + (<span className="font-mono">{calculation.totalTechnicalScore.toFixed(2)}</span> &times; {evaluationCriteria.technicalWeight}%) = <span className="font-bold text-xl text-primary">{calculation.finalItemScore.toFixed(2)}</span>
+                        </p>
+                    </div>
                 </div>
-            </div>
-            <DialogFooter>
-                <Button variant="outline" asChild><DialogTrigger>Close</DialogTrigger></Button>
-            </DialogFooter>
-        </DialogContent>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     )
 }
 
@@ -289,7 +292,6 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
     }
     
     return (
-        <Dialog onOpenChange={(isOpen) => !isOpen && setSelectedCalculation(null)}>
         <div className="space-y-6">
             <Card>
                 <CardHeader>
@@ -324,11 +326,9 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                         <RankIcon rank={vendor.rank!} />
                                         <span>{vendor.vendorName}</span>
                                     </div>
-                                    <DialogTrigger asChild>
-                                        <Button variant={vendor.rank === 1 ? 'default' : 'secondary'} size="sm" onClick={() => setSelectedCalculation(vendor.itemBids.flatMap(b => b.allProposals)[0])}>
-                                            Final Score: {vendor.finalVendorScore.toFixed(2)}
-                                        </Button>
-                                    </DialogTrigger>
+                                    <Button variant={vendor.rank === 1 ? 'default' : 'secondary'} size="sm" onClick={() => setSelectedCalculation(vendor.itemBids.flatMap(b => b.allProposals)[0])}>
+                                        Final Score: {vendor.finalVendorScore.toFixed(2)}
+                                    </Button>
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -336,23 +336,19 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                     <details key={itemBid.requisitionItemId} className="p-4 border rounded-lg bg-muted/30">
                                         <summary className="font-semibold cursor-pointer flex justify-between items-center">
                                             <span>Proposals for "{itemBid.requisitionItemName}" &rarr; Champion Bid: "{itemBid.championBid.itemName}"</span>
-                                             <DialogTrigger asChild>
-                                                 <Button variant="link" size="sm" onClick={(e) => {e.stopPropagation(); setSelectedCalculation(itemBid.championBid);}}>
-                                                    ({itemBid.championBid.finalItemScore.toFixed(2)} pts)
-                                                 </Button>
-                                            </DialogTrigger>
+                                            <Button variant="link" size="sm" onClick={(e) => {e.stopPropagation(); setSelectedCalculation(itemBid.championBid);}}>
+                                                ({itemBid.championBid.finalItemScore.toFixed(2)} pts)
+                                            </Button>
                                         </summary>
                                         <div className="mt-4 space-y-4">
                                             {itemBid.allProposals.map(proposal => (
                                                  <Card key={proposal.quoteItemId} className={cn("p-4", proposal.quoteItemId === itemBid.championBid.quoteItemId && "border-primary")}>
                                                     <div className="flex justify-between items-center mb-4">
                                                         <h4 className="font-semibold text-base">{proposal.itemName}</h4>
-                                                         <DialogTrigger asChild>
-                                                             <Badge variant={proposal.quoteItemId === itemBid.championBid.quoteItemId ? "default" : "outline"} className="cursor-pointer" onClick={() => setSelectedCalculation(proposal)}>
-                                                                {proposal.quoteItemId === itemBid.championBid.quoteItemId && <Check className="mr-1 h-3 w-3"/>}
-                                                                Final Score: {proposal.finalItemScore.toFixed(2)}
-                                                             </Badge>
-                                                        </DialogTrigger>
+                                                         <Badge variant={proposal.quoteItemId === itemBid.championBid.quoteItemId ? "default" : "outline"} className="cursor-pointer" onClick={() => setSelectedCalculation(proposal)}>
+                                                            {proposal.quoteItemId === itemBid.championBid.quoteItemId && <Check className="mr-1 h-3 w-3"/>}
+                                                            Final Score: {proposal.finalItemScore.toFixed(2)}
+                                                         </Badge>
                                                     </div>
                                                  </Card>
                                             ))}
@@ -395,11 +391,9 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                                 <TableCell>{bid.vendorName}</TableCell>
                                                 <TableCell>{bid.itemName}</TableCell>
                                                 <TableCell className="text-right">
-                                                    <DialogTrigger asChild>
-                                                         <Button variant="link" size="sm" onClick={() => setSelectedCalculation(bid.calculation)}>
-                                                            {bid.calculation.finalItemScore.toFixed(2)}
-                                                         </Button>
-                                                    </DialogTrigger>
+                                                    <Button variant="link" size="sm" onClick={() => setSelectedCalculation(bid.calculation)}>
+                                                        {bid.calculation.finalItemScore.toFixed(2)}
+                                                    </Button>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -416,9 +410,13 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                 </CardContent>
             </Card>
              {selectedCalculation && requisition.evaluationCriteria && (
-                <ScoreBreakdownDialog calculation={selectedCalculation} evaluationCriteria={requisition.evaluationCriteria} />
+                <ScoreBreakdownDialog 
+                    calculation={selectedCalculation} 
+                    evaluationCriteria={requisition.evaluationCriteria}
+                    isOpen={!!selectedCalculation}
+                    onClose={() => setSelectedCalculation(null)}
+                />
             )}
         </div>
-        </Dialog>
     )
 }

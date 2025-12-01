@@ -1870,12 +1870,11 @@ const ScoringProgressTracker = ({
     );
 };
 
-const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClose }: { requisition: PurchaseRequisition; quotations: Quotation[], isOpen: boolean, onClose: () => void }) => {
+const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClose, onSelectCalculation }: { requisition: PurchaseRequisition; quotations: Quotation[], isOpen: boolean, onClose: () => void, onSelectCalculation: (data: any) => void; }) => {
     const { toast } = useToast();
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const printRef = useRef<HTMLDivElement>(null);
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy || 'all';
-    const [selectedItemForBreakdown, setSelectedItemForBreakdown] = useState<any>(null);
 
     const getCriterionName = (criterionId: string | null, criteria?: EvaluationCriterion[]) => {
         if (!criterionId || !criteria) return 'Unknown Criterion';
@@ -1930,7 +1929,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     };
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => { if (!open) setSelectedItemForBreakdown(null); onClose(); }}>
+        <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Cumulative Scoring Report</DialogTitle>
@@ -2016,12 +2015,10 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                 <div className="flex justify-between items-start">
                                                     <div>
                                                         <CardTitle className="text-xl">{quote.vendorName}</CardTitle>
-                                                        <DialogTrigger asChild>
-                                                            <Button variant="link" className="p-0 h-auto" onClick={() => setSelectedItemForBreakdown(quote.scores || [])}>
-                                                                Final Score: <span className="font-bold text-primary ml-1">{quote.finalAverageScore?.toFixed(2)}</span>
-                                                                <HelpCircle className="h-4 w-4 ml-2" />
-                                                            </Button>
-                                                        </DialogTrigger>
+                                                        <Button variant="link" className="p-0 h-auto" onClick={() => onSelectCalculation(quote.scores || [])}>
+                                                            Final Score: <span className="font-bold text-primary ml-1">{quote.finalAverageScore?.toFixed(2)}</span>
+                                                            <HelpCircle className="h-4 w-4 ml-2" />
+                                                        </Button>
                                                     </div>
                                                     <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
                                                 </div>
@@ -2039,12 +2036,10 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                     <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
                                                                 </div>
                                                                 <div className="text-right">
-                                                                    <DialogTrigger asChild>
-                                                                        <Button variant="link" className="p-0 h-auto text-lg" onClick={() => setSelectedItemForBreakdown(scoreSet)}>
-                                                                            <span className="font-bold text-primary">{scoreSet.finalScore.toFixed(2)}</span>
-                                                                            <HelpCircle className="h-4 w-4 ml-2" />
-                                                                        </Button>
-                                                                    </DialogTrigger>
+                                                                    <Button variant="link" className="p-0 h-auto text-lg" onClick={() => onSelectCalculation(scoreSet)}>
+                                                                        <span className="font-bold text-primary">{scoreSet.finalScore.toFixed(2)}</span>
+                                                                        <HelpCircle className="h-4 w-4 ml-2" />
+                                                                    </Button>
                                                                     <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPpp')}</p>
                                                                 </div>
                                                             </div>
@@ -2067,12 +2062,6 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                         Print / Export PDF
                     </Button>
                 </DialogFooter>
-                 {selectedItemForBreakdown && requisition.evaluationCriteria && (
-                    <ScoreBreakdownDialog 
-                        calculation={selectedItemForBreakdown} 
-                        evaluationCriteria={requisition.evaluationCriteria} 
-                    />
-                )}
             </DialogContent>
         </Dialog>
     );
@@ -2257,6 +2246,7 @@ export default function QuotationDetailsPage() {
   const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
   const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
+  const [selectedCalculation, setSelectedCalculation] = useState<any | null>(null);
 
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
@@ -2969,14 +2959,15 @@ export default function QuotationDetailsPage() {
                 quotations={quotations}
                 isOpen={isReportOpen}
                 onClose={() => setReportOpen(false)}
+                onSelectCalculation={setSelectedCalculation}
             />
         )}
-        {selectedQuoteForDetails && requisition && (
-            <QuoteDetailsDialog 
-                quote={selectedQuoteForDetails}
-                requisition={requisition}
-                isOpen={!!selectedQuoteForDetails}
-                onClose={() => setSelectedQuoteForDetails(null)}
+         {selectedCalculation && requisition.evaluationCriteria && (
+            <ScoreBreakdownDialog 
+                isOpen={!!selectedCalculation}
+                onClose={() => setSelectedCalculation(null)}
+                calculation={selectedCalculation} 
+                evaluationCriteria={requisition.evaluationCriteria} 
             />
         )}
         <RFQActionDialog
@@ -3374,6 +3365,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 
