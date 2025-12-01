@@ -209,7 +209,11 @@ async function main() {
   // Seed non-vendor users first
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
     const { committeeAssignments, department, departmentId, vendorId, password, managingDepartment, ...userData } = user;
-    const hashedPassword = await bcrypt.hash(password || 'password123', 10);
+    if (!password) {
+        console.error(`Skipping user ${user.email} due to missing password.`);
+        continue;
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
     const formattedRoleName = userData.role.replace(/ /g, '_');
 
     await prisma.user.upsert({
@@ -254,7 +258,11 @@ async function main() {
           continue;
       }
 
-      const hashedPassword = await bcrypt.hash(vendorUser.password || 'password123', 10);
+      if (!vendorUser.password) {
+          console.error(`Skipping vendor user ${vendorUser.email} due to missing password.`);
+          continue;
+      }
+      const hashedPassword = await bcrypt.hash(vendorUser.password, 10);
       const formattedRoleName = vendorUser.role.replace(/ /g, '_');
 
       // Create user for the vendor first
