@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
     });
     return NextResponse.json(invoices);
   } catch (error) {
-    console.error('Failed to fetch invoices:', error);
+    console.error('Failed to fetch invoices');
     return NextResponse.json({ error: 'Failed to fetch invoices' }, { status: 500 });
   }
 }
@@ -114,10 +115,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newInvoice, { status: 201 });
   } catch (error) {
-    console.error('[SUBMIT-INVOICE] Failed to create invoice:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
+    console.error('[SUBMIT-INVOICE] Failed to create invoice:');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

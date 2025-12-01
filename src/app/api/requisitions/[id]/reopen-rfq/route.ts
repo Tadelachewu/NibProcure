@@ -3,35 +3,36 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User, UserRole } from '@/lib/types';
+import { UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format } from 'date-fns';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const requisitionId = params.id;
     const body = await request.json();
-    const { userId, newDeadline } = body;
+    const { newDeadline } = body;
 
-    const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-    
     // Correct Authorization Logic
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    const userRoles = (user.roles as any[]).map(r => r.name) as UserRole[];
+    const userRoles = actor.roles as UserRole[];
 
     if (userRoles.includes('Admin')) {
         isAuthorized = true;
     } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
         if (setting.type === 'specific') {
-            isAuthorized = setting.userId === userId;
+            isAuthorized = setting.userId === actor.id;
         } else { // 'all' case
             isAuthorized = userRoles.includes('Procurement_Officer');
         }
@@ -102,7 +103,7 @@ export async function POST(
       data: {
         transactionId: requisition.transactionId,
         timestamp: new Date(),
-        user: { connect: { id: userId } },
+        user: { connect: { id: actor.id } },
         action: 'REOPEN_RFQ',
         entity: 'Requisition',
         entityId: requisitionId,
@@ -112,10 +113,7 @@ export async function POST(
 
     return NextResponse.json(updatedRequisition);
   } catch (error) {
-    console.error('Failed to re-open RFQ:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
+    console.error('Failed to re-open RFQ:');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

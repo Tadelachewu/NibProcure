@@ -144,10 +144,7 @@ export async function GET() {
         return NextResponse.json(recordsWithAudit);
 
     } catch (error) {
-        console.error('Failed to fetch records:', error);
-        if (error instanceof Error) {
-            return NextResponse.json({ error: 'Failed to fetch records', details: error.message }, { status: 500 });
-        }
+        console.error('Failed to fetch records:');
         return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
 }

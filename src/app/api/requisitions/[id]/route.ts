@@ -54,10 +54,7 @@ export async function GET(
 
     return NextResponse.json(formatted);
   } catch (error) {
-     console.error('Failed to fetch requisition:', error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
+     console.error('Failed to fetch requisition:');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
@@ -109,10 +106,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'Requisition deleted successfully.' });
   } catch (error) {
-     console.error('Failed to delete requisition:', error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+     console.error('Failed to delete requisition:');
+     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

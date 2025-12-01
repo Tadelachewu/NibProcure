@@ -30,7 +30,7 @@ export async function GET(
         }
         return NextResponse.json(po);
     } catch (error) {
-        console.error('Failed to fetch PO:', error);
+        console.error('Failed to fetch PO:');
         return NextResponse.json({ error: 'Failed to fetch purchase order' }, { status: 500 });
     }
 }

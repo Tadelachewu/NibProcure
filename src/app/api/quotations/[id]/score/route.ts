@@ -148,13 +148,10 @@ export async function POST(
 
     return NextResponse.json(transactionResult);
   } catch (error) {
-    console.error('Failed to submit scores:', error);
-    if (error instanceof Error) {
-        // Check for unique constraint violation
-        if ((error as any).code === 'P2002') {
-             return NextResponse.json({ error: 'A unique constraint violation occurred. This might be due to a duplicate score entry.'}, { status: 409 });
-        }
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+    console.error('Failed to submit scores:');
+    // Check for unique constraint violation
+    if ((error as any).code === 'P2002') {
+          return NextResponse.json({ error: 'A unique constraint violation occurred. This might be due to a duplicate score entry.'}, { status: 409 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }

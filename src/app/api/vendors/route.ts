@@ -12,7 +12,7 @@ export async function GET() {
     });
     return NextResponse.json(vendors);
   } catch (error) {
-    console.error("Failed to fetch vendors", error);
+    console.error("Failed to fetch vendors");
     return NextResponse.json({ error: 'Failed to fetch vendors' }, { status: 500 });
   }
 }
@@ -61,10 +61,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newVendor, { status: 201 });
   } catch (error) {
-    console.error('Failed to create vendor:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process vendor', details: error.message }, { status: 400 });
-    }
+    console.error('Failed to create vendor:');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

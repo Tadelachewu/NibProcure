@@ -3,26 +3,26 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { users } from '@/lib/auth-store';
 import { PurchaseOrderStatus } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Procurement_Officer')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const poId = params.id;
     const body = await request.json();
-    const { status, userId } = body;
+    const { status } = body;
 
-    const validStatuses: PurchaseOrderStatus[] = ['On Hold', 'Cancelled'];
-    if (!validStatuses.includes(status)) {
+    const validStatuses: PurchaseOrderStatus[] = ['On_Hold', 'Cancelled'];
+    if (!validStatuses.includes(status.replace(/ /g, '_'))) {
       return NextResponse.json({ error: 'Invalid or unsupported status for manual update.' }, { status: 400 });
-    }
-    
-    const user = users.find(u => u.id === userId);
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
     const poToUpdate = await prisma.purchaseOrder.findUnique({ where: { id: poId }});
@@ -38,7 +38,7 @@ export async function PATCH(
     
     await prisma.auditLog.create({
         data: {
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'UPDATE_PO_STATUS',
             entity: 'PurchaseOrder',
@@ -49,10 +49,7 @@ export async function PATCH(
 
     return NextResponse.json(updatedPO);
   } catch (error) {
-    console.error('Failed to update PO status:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
+    console.error('Failed to update PO status:');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

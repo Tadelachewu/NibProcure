@@ -86,10 +86,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newPO, { status: 201 });
   } catch (error) {
-    console.error('Failed to create purchase order:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
+    console.error('Failed to create purchase order:');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
@@ -115,10 +112,7 @@ export async function GET(request: Request) {
         });
         return NextResponse.json(purchaseOrders);
     } catch (error) {
-        console.error('Failed to fetch purchase orders:', error);
-        if (error instanceof Error) {
-            return NextResponse.json({ error: 'Failed to fetch purchase orders', details: error.message }, { status: 500 });
-        }
+        console.error('Failed to fetch purchase orders');
         return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
 }

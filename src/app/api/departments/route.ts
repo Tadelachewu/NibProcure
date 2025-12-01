@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -28,7 +29,7 @@ export async function GET() {
         });
         return NextResponse.json(departments);
     } catch (error) {
-        console.error("Failed to fetch departments:", error);
+        console.error("Failed to fetch departments");
         return NextResponse.json({ error: 'Failed to fetch departments' }, { status: 500 });
     }
 }
@@ -74,10 +75,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newDepartment, { status: 201 });
   } catch (error) {
-    console.error("Error creating department:", error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
+    console.error("Error creating department");
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
@@ -143,13 +141,12 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json(updatedDepartment);
   } catch (error) {
-     console.error("Error updating department:", error);
+     console.error("Error updating department");
      if (error instanceof Error) {
         if ((error as any).code === 'P2002' && (error as any).meta?.target?.includes('headId')) {
             return NextResponse.json({ error: 'This user is already the head of another department.' }, { status: 409 });
         }
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
+     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
@@ -179,10 +176,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ message: 'Department deleted successfully' });
   } catch (error) {
-     console.error("Error deleting department:", error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
+     console.error("Error deleting department");
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

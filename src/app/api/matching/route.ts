@@ -1,7 +1,8 @@
+
 import { NextResponse } from 'next/server';
 import { performThreeWayMatch } from '@/services/matching-service';
-import { users } from '@/lib/auth-store';
 import { prisma } from '@/lib/prisma';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -44,23 +45,20 @@ export async function GET(request: Request) {
     return NextResponse.json(result);
 
   } catch (error) {
-    console.error('Failed to perform matching:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
+    console.error('Failed to perform matching:');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
     try {
-        const body = await request.json();
-        const { poId, userId } = body;
-
-        const user = users.find(u => u.id === userId);
-        if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        const actor = await getActorFromToken(request);
+        if (!actor || !(actor.roles as string[]).includes('Finance')) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
+
+        const body = await request.json();
+        const { poId } = body;
 
         const po = await prisma.purchaseOrder.update({
             where: { id: poId },
@@ -79,7 +77,7 @@ export async function POST(request: Request) {
         await prisma.auditLog.create({
             data: {
                 timestamp: new Date(),
-                user: { connect: { id: user.id } },
+                user: { connect: { id: actor.id } },
                 action: 'MANUAL_MATCH',
                 entity: 'PurchaseOrder',
                 entityId: po.id,
@@ -90,10 +88,7 @@ export async function POST(request: Request) {
         const result = performThreeWayMatch(po as any);
         return NextResponse.json(result);
     } catch (error) {
-        console.error('Failed to resolve mismatch:', error);
-        if (error instanceof Error) {
-            return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-        }
+        console.error('Failed to resolve mismatch:');
         return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
 }

@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -115,7 +116,7 @@ export async function POST(request: Request) {
         }, { status: 201 });
 
     } catch (error) {
-        console.error('Registration error:', error);
+        console.error('Registration error');
         return NextResponse.json({ error: 'An internal error occurred' }, { status: 500 });
     }
 }

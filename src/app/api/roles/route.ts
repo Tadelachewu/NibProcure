@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -19,7 +20,7 @@ export async function GET() {
     });
     return NextResponse.json(roles);
   } catch (error) {
-    console.error('Failed to fetch roles:', error);
+    console.error('Failed to fetch roles:');
     return NextResponse.json({ error: 'Failed to fetch roles' }, { status: 500 });
   }
 }
@@ -71,10 +72,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    console.error('Failed to create role:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
+    console.error('Failed to create role:');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
@@ -106,11 +104,8 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json(updatedRole);
   } catch (error) {
-     console.error('Failed to update role:', error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+     console.error('Failed to update role:');
+     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
 
@@ -153,10 +148,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ message: 'Role deleted successfully' });
   } catch (error) {
-     console.error('Failed to delete role:', error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+     console.error('Failed to delete role:');
+     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

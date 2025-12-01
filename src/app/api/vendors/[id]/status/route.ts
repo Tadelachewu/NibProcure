@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendEmail } from '@/services/email-service';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function PATCH(
   request: Request,
@@ -11,20 +12,19 @@ export async function PATCH(
 ) {
   console.log(`PATCH /api/vendors/${params.id}/status`);
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const vendorId = params.id;
     const body = await request.json();
     console.log('Request body:', body);
-    const { status, userId, rejectionReason } = body;
+    const { status, rejectionReason } = body;
 
     if (!['Verified', 'Rejected'].includes(status)) {
       console.error('Invalid status provided:', status);
       return NextResponse.json({ error: 'Invalid status provided.' }, { status: 400 });
-    }
-    
-    const user = await prisma.user.findUnique({ where: { id: userId }});
-    if (!user) {
-        console.error('User not found for ID:', userId);
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
     const vendorToUpdate = await prisma.vendor.findUnique({ where: { id: vendorId } });
@@ -68,7 +68,7 @@ export async function PATCH(
     
     await prisma.auditLog.create({
         data: {
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'VERIFY_VENDOR',
             entity: 'Vendor',
@@ -81,10 +81,7 @@ export async function PATCH(
 
     return NextResponse.json(updatedVendor);
   } catch (error) {
-    console.error('Failed to update vendor status:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
+    console.error('Failed to update vendor status:');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
