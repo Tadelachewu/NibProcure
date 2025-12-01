@@ -5,40 +5,40 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = params;
     const body = await request.json();
-    const { userId, vendorIds, deadline, cpoAmount, rfqSettings } = body;
+    const { vendorIds, deadline, cpoAmount, rfqSettings } = body;
 
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id }});
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
-
-    const user = await prisma.user.findUnique({
-        where: {id: userId},
-        include: { roles: true }
-    });
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
     
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    const userRoles = (user.roles as any[]).map(r => r.name);
+    const userRoles = actor.roles as UserRole[];
 
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+    if (userRoles.includes('Admin')) {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
 
         if (setting.type === 'specific') {
-            isAuthorized = setting.userId === userId;
+            isAuthorized = setting.userId === actor.id;
         } else { // 'all' case
-            isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+            isAuthorized = userRoles.includes('Procurement_Officer');
         }
     }
 
@@ -88,7 +88,7 @@ export async function POST(
     await prisma.auditLog.create({
         data: {
             transactionId: updatedRequisition.transactionId,
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'SEND_RFQ',
             entity: 'Requisition',
@@ -130,10 +130,7 @@ export async function POST(
 
     return NextResponse.json(updatedRequisition);
   } catch (error) {
-    console.error('Failed to send RFQ:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
+    console.error('Failed to send RFQ:');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

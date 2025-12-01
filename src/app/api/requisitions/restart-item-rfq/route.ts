@@ -6,6 +6,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { User, UserRole, PerItemAwardDetail } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format } from 'date-fns';
+import { getActorFromToken } from '@/lib/auth';
 
 const prisma = new PrismaClient();
 
@@ -13,16 +14,16 @@ export async function POST(
   request: Request
 ) {
   try {
-    const body = await request.json();
-    const { originalRequisitionId, itemIds, vendorIds, newDeadline, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({ where: { id: actorUserId }, include: { roles: true } });
+    const actor = await getActorFromToken(request);
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { originalRequisitionId, itemIds, vendorIds, newDeadline } = body;
     
     // --- Authorization Check ---
-    const userRoles = (actor.roles as any[]).map(r => r.name);
+    const userRoles = actor.roles as UserRole[];
     const isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
@@ -172,10 +173,7 @@ export async function POST(
     return NextResponse.json({ message: 'RFQ for failed items has been successfully restarted.', newRequisitionId: newRequisition.id });
 
   } catch (error) {
-    console.error('Failed to restart item RFQ:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
+    console.error('Failed to restart item RFQ:');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
