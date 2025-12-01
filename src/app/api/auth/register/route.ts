@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -16,13 +17,20 @@ export async function POST(request: Request) {
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
+        
+        const vendorRole = await prisma.role.findUnique({ where: { name: 'Vendor' } });
+        if (!vendorRole) {
+            return NextResponse.json({ error: 'Vendor role not found. Please seed the database.' }, { status: 500 });
+        }
 
         const newUser = await prisma.user.create({
             data: {
                 name,
                 email,
                 password: hashedPassword,
-                role: 'Vendor', // All registrations are for Vendors
+                roles: {
+                    connect: { id: vendorRole.id }
+                }
             }
         });
         
@@ -35,7 +43,7 @@ export async function POST(request: Request) {
                     email: email,
                     phone: vendorDetails.phone,
                     address: vendorDetails.address,
-                    userId: newUser.id,
+                    user: { connect: { id: newUser.id } },
                     kycStatus: 'Pending',
                     kycDocuments: {
                         create: [
@@ -61,7 +69,7 @@ export async function POST(request: Request) {
         const finalUser = {
             ...userWithoutPassword,
             vendorId: newVendor?.id,
-            role: userWithoutPassword.role as UserRole
+            roles: ['Vendor'] as UserRole[]
         }
         
         const token = jwt.sign(
@@ -69,7 +77,7 @@ export async function POST(request: Request) {
                 id: finalUser.id, 
                 name: finalUser.name,
                 email: finalUser.email,
-                role: finalUser.role,
+                roles: finalUser.roles,
                 vendorId: finalUser.vendorId,
             }, 
             jwtSecret, 
@@ -79,7 +87,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ 
             user: finalUser, 
             token: token, 
-            role: finalUser.role 
         }, { status: 201 });
 
     } catch (error) {

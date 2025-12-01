@@ -1,7 +1,9 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function GET() {
   try {
@@ -17,12 +19,16 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { purchaseOrderId, vendorId, invoiceDate, items, totalAmount, documentUrl, userId } = body;
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const body = await request.json();
+    const { purchaseOrderId, vendorId, invoiceDate, items, totalAmount, documentUrl } = body;
+
+    if (actor.vendorId !== vendorId && !(actor.roles as string[]).includes('Finance')) {
+        return NextResponse.json({ error: 'You are not authorized to submit an invoice for this vendor.' }, { status: 403 });
     }
 
     const po = await prisma.purchaseOrder.findUnique({ where: { id: purchaseOrderId } });
@@ -64,7 +70,7 @@ export async function POST(request: Request) {
     await prisma.auditLog.create({
         data: {
             transactionId: po.transactionId,
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'CREATE_INVOICE',
             entity: 'Invoice',

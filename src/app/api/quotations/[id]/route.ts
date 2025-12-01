@@ -4,8 +4,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { users } from '@/lib/data-store';
 import { addDays } from 'date-fns';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function GET(
   request: Request,
@@ -26,6 +26,7 @@ export async function GET(
         },
         financialCommitteeMembers: { select: { id: true, name: true, email: true } },
         technicalCommitteeMembers: { select: { id: true, name: true, email: true } },
+        requester: true,
       }
     });
 
@@ -36,8 +37,7 @@ export async function GET(
     // Formatting data to match client-side expectations
     const formatted = {
         ...requisition,
-        status: requisition.status.replace(/_/g, ' '),
-        requesterName: users.find(u => u.id === requisition.requesterId)?.name || 'Unknown',
+        requesterName: requisition.requester.name || 'Unknown',
         financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
         technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
     };
@@ -59,13 +59,13 @@ export async function PATCH(
 ) {
     const quoteId = params.id;
     try {
-        const body = await request.json();
-        const { userId, items, notes, answers, cpoDocumentUrl } = body;
-
-        const user = users.find(u => u.id === userId);
-        if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        const actor = await getActorFromToken(request);
+        if (!actor) {
+            return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
         }
+
+        const body = await request.json();
+        const { items, notes, answers, cpoDocumentUrl } = body;
         
         const quote = await prisma.quotation.findUnique({
              where: { id: quoteId },
@@ -74,6 +74,10 @@ export async function PATCH(
 
         if (!quote) {
             return NextResponse.json({ error: 'Quotation not found' }, { status: 404 });
+        }
+
+        if (quote.vendorId !== actor.vendorId) {
+            return NextResponse.json({ error: 'You are not authorized to edit this quotation.' }, { status: 403 });
         }
         
         const isAwardProcessStarted = await prisma.quotation.count({
@@ -130,7 +134,7 @@ export async function PATCH(
         await prisma.auditLog.create({
             data: {
                 timestamp: new Date(),
-                user: { connect: { id: user.id } },
+                user: { connect: { id: actor.id } },
                 action: 'UPDATE_QUOTATION',
                 entity: 'Quotation',
                 entityId: quoteId,

@@ -1,27 +1,20 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { decodeJwt } from '@/lib/auth';
-import { User, UserRole } from '@/lib/types';
-import { addMinutes } from 'date-fns';
+import { getActorFromToken } from '@/lib/auth';
+import { UserRole } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get('Authorization');
-    const token = authHeader?.split(' ')[1];
-    if (!token) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const userPayload = decodeJwt<User & { roles: UserRole[] }>(token);
-    if (!userPayload) {
-        return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
     
-    // Correctly get roles from the decoded token payload
-    const userRoles = userPayload.roles || [];
-    const userId = userPayload.id;
+    const userRoles = actor.roles as UserRole[];
+    const userId = actor.id;
 
     const orConditions: any[] = [
         { currentApproverId: userId },
