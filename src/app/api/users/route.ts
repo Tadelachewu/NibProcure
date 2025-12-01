@@ -33,7 +33,7 @@ export async function GET() {
     }));
     return NextResponse.json(formattedUsers);
   } catch (error) {
-    console.error("Failed to fetch users:", error);
+    console.error("Failed to fetch users");
     return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
   }
 }
@@ -89,10 +89,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newUser, { status: 201 });
   } catch (error) {
-    console.error("Failed to create user:", error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
+    console.error("Failed to create user");
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
@@ -147,10 +144,7 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json(updatedUser);
   } catch (error) {
-     console.error('Failed to update user:', error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
+     console.error('Failed to update user');
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
@@ -189,9 +183,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ message: 'User deleted successfully' });
   } catch (error) {
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
+     console.error("Failed to delete user");
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
