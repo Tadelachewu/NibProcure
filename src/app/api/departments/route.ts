@@ -16,8 +16,12 @@ const departmentPatchSchema = departmentSchema.extend({
   id: z.string().min(1, 'Department ID is required.'),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const actor = await getActorFromToken(request);
+        if (!actor) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         const departments = await prisma.department.findMany({
             include: {
                 head: {
