@@ -27,19 +27,18 @@ const nextConfig = {
   async headers() {
     const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
 
-    // A strict CSP that uses a nonce for scripts and styles
     const cspHeader = `
       default-src 'self';
       script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
       style-src 'self' 'nonce-${nonce}';
       img-src 'self' https://placehold.co https://picsum.photos data:;
-      font-src 'self' https://fonts.gstatic.com;
+      font-src 'self';
       object-src 'none';
       base-uri 'self';
       form-action 'self';
       frame-ancestors 'none';
       upgrade-insecure-requests;
-    `;
+    `.replace(/\s{2,}/g, ' ').trim();
 
     return [
       {
@@ -47,7 +46,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: cspHeader.replace(/\s{2,}/g, ' ').trim(),
+            value: cspHeader,
           },
           {
             key: 'X-Content-Type-Options',
@@ -58,9 +57,17 @@ const nextConfig = {
             value: 'SAMEORIGIN',
           },
           {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
+          },
+          {
             key: 'Referrer-Policy',
             value: 'origin-when-cross-origin',
           },
+          {
+            key: 'Permissions-Policy',
+            value: "camera=(), microphone=(), geolocation=(), payment=()",
+          }
         ],
       },
     ];
@@ -68,5 +75,3 @@ const nextConfig = {
 };
 
 module.exports = nextConfig;
-
-    
