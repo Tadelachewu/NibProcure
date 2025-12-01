@@ -208,7 +208,7 @@ export const ScoreBreakdownDialog = ({ calculation, evaluationCriteria, isOpen, 
                 <DialogHeader>
                     <DialogTitle>Score Breakdown: {calculation.itemName}</DialogTitle>
                     <DialogDescription>
-                        This shows how the final score of <span className="font-bold text-primary">{calculation.finalItemScore.toFixed(2)}</span> was calculated.
+                        This shows how the final score of <span className="font-bold text-primary">{calculation.finalItemScore?.toFixed(2)}</span> was calculated.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-6 py-4">
@@ -218,7 +218,7 @@ export const ScoreBreakdownDialog = ({ calculation, evaluationCriteria, isOpen, 
                     <div className="p-4 bg-muted rounded-md text-center">
                         <p className="text-sm text-muted-foreground">Final Calculation</p>
                         <p className="text-lg">
-                            (<span className="font-mono">{calculation.totalFinancialScore.toFixed(2)}</span> &times; {evaluationCriteria.financialWeight}%) + (<span className="font-mono">{calculation.totalTechnicalScore.toFixed(2)}</span> &times; {evaluationCriteria.technicalWeight}%) = <span className="font-bold text-xl text-primary">{calculation.finalItemScore.toFixed(2)}</span>
+                            (<span className="font-mono">{calculation.totalFinancialScore.toFixed(2)}</span> &times; {evaluationCriteria.financialWeight}%) + (<span className="font-mono">{calculation.totalTechnicalScore.toFixed(2)}</span> &times; {evaluationCriteria.technicalWeight}%) = <span className="font-bold text-xl text-primary">{calculation.finalItemScore?.toFixed(2)}</span>
                         </p>
                     </div>
                 </div>
@@ -272,10 +272,9 @@ const RankIcon = ({ rank }: { rank: number }) => {
 };
 
 // --- MAIN COMPONENT ---
-export function AwardCalculationDetails({ requisition, quotations }: { requisition: PurchaseRequisition, quotations: Quotation[] }) {
+export function AwardCalculationDetails({ requisition, quotations, onSelectCalculation }: { requisition: PurchaseRequisition, quotations: Quotation[], onSelectCalculation: (data: any) => void }) {
     const { singleVendorResults, bestItemResults } = useAwardCalculations(requisition, quotations);
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy || 'all';
-    const [selectedCalculation, setSelectedCalculation] = useState<CalculatedItem | null>(null);
 
 
     if (!requisition.evaluationCriteria) {
@@ -326,7 +325,7 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                         <RankIcon rank={vendor.rank!} />
                                         <span>{vendor.vendorName}</span>
                                     </div>
-                                    <Button variant={vendor.rank === 1 ? 'default' : 'secondary'} size="sm" onClick={() => setSelectedCalculation(vendor.itemBids.flatMap(b => b.allProposals)[0])}>
+                                    <Button variant={vendor.rank === 1 ? 'default' : 'secondary'} size="sm" onClick={() => onSelectCalculation(vendor.itemBids.flatMap(b => b.allProposals)[0])}>
                                         Final Score: {vendor.finalVendorScore.toFixed(2)}
                                     </Button>
                                 </CardTitle>
@@ -336,7 +335,7 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                     <details key={itemBid.requisitionItemId} className="p-4 border rounded-lg bg-muted/30">
                                         <summary className="font-semibold cursor-pointer flex justify-between items-center">
                                             <span>Proposals for "{itemBid.requisitionItemName}" &rarr; Champion Bid: "{itemBid.championBid.itemName}"</span>
-                                            <Button variant="link" size="sm" onClick={(e) => {e.stopPropagation(); setSelectedCalculation(itemBid.championBid);}}>
+                                            <Button variant="link" size="sm" onClick={(e) => {e.stopPropagation(); onSelectCalculation(itemBid.championBid);}}>
                                                 ({itemBid.championBid.finalItemScore.toFixed(2)} pts)
                                             </Button>
                                         </summary>
@@ -345,7 +344,7 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                                  <Card key={proposal.quoteItemId} className={cn("p-4", proposal.quoteItemId === itemBid.championBid.quoteItemId && "border-primary")}>
                                                     <div className="flex justify-between items-center mb-4">
                                                         <h4 className="font-semibold text-base">{proposal.itemName}</h4>
-                                                         <Badge variant={proposal.quoteItemId === itemBid.championBid.quoteItemId ? "default" : "outline"} className="cursor-pointer" onClick={() => setSelectedCalculation(proposal)}>
+                                                         <Badge variant={proposal.quoteItemId === itemBid.championBid.quoteItemId ? "default" : "outline"} className="cursor-pointer" onClick={() => onSelectCalculation(proposal)}>
                                                             {proposal.quoteItemId === itemBid.championBid.quoteItemId && <Check className="mr-1 h-3 w-3"/>}
                                                             Final Score: {proposal.finalItemScore.toFixed(2)}
                                                          </Badge>
@@ -391,7 +390,7 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                                 <TableCell>{bid.vendorName}</TableCell>
                                                 <TableCell>{bid.itemName}</TableCell>
                                                 <TableCell className="text-right">
-                                                    <Button variant="link" size="sm" onClick={() => setSelectedCalculation(bid.calculation)}>
+                                                    <Button variant="link" size="sm" onClick={() => onSelectCalculation(bid.calculation)}>
                                                         {bid.calculation.finalItemScore.toFixed(2)}
                                                     </Button>
                                                 </TableCell>
@@ -409,14 +408,6 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                     ))}
                 </CardContent>
             </Card>
-             {selectedCalculation && requisition.evaluationCriteria && (
-                <ScoreBreakdownDialog 
-                    calculation={selectedCalculation} 
-                    evaluationCriteria={requisition.evaluationCriteria}
-                    isOpen={!!selectedCalculation}
-                    onClose={() => setSelectedCalculation(null)}
-                />
-            )}
         </div>
     )
 }

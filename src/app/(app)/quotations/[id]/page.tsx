@@ -217,14 +217,18 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
     
     const getOverallStatusForVendor = useCallback((quote: Quotation): QuotationStatus | 'Not Awarded' | 'Partially Awarded' => {
         const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
-
+        
         if (isPerItemStrategy && isAwarded) {
             const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
             if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
             if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially Awarded';
             if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
             if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
-            return 'Not Awarded';
+            
+            // If they submitted a quote but have no active/standby items, they are not awarded.
+            if(quote.status === 'Submitted') {
+                return 'Not Awarded';
+            }
         }
         
         return quote.status;
@@ -1961,7 +1965,12 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                     <TableRow key={q.id}>
                                                         <TableCell className="font-bold flex items-center gap-1">{getRankIcon(q.rank)} {q.rank}</TableCell>
                                                         <TableCell>{q.vendorName}</TableCell>
-                                                        <TableCell className="text-right font-mono">{q.finalAverageScore?.toFixed(2)}</TableCell>
+                                                        <TableCell className="text-right font-mono">
+                                                            <Button variant="link" className="p-0 h-auto" onClick={() => onSelectCalculation(q.scores.flatMap(s => s.itemScores)[0])}>
+                                                                {q.finalAverageScore?.toFixed(2)}
+                                                                <HelpCircle className="h-4 w-4 ml-2" />
+                                                            </Button>
+                                                        </TableCell>
                                                         <TableCell><Badge variant="outline">{q.status.replace(/_/g, ' ')}</Badge></TableCell>
                                                     </TableRow>
                                                 ))}
@@ -2015,10 +2024,6 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                 <div className="flex justify-between items-start">
                                                     <div>
                                                         <CardTitle className="text-xl">{quote.vendorName}</CardTitle>
-                                                        <Button variant="link" className="p-0 h-auto" onClick={() => onSelectCalculation(quote.scores || [])}>
-                                                            Final Score: <span className="font-bold text-primary ml-1">{quote.finalAverageScore?.toFixed(2)}</span>
-                                                            <HelpCircle className="h-4 w-4 ml-2" />
-                                                        </Button>
                                                     </div>
                                                     <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
                                                 </div>
@@ -2036,7 +2041,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                     <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
                                                                 </div>
                                                                 <div className="text-right">
-                                                                    <Button variant="link" className="p-0 h-auto text-lg" onClick={() => onSelectCalculation(scoreSet)}>
+                                                                    <Button variant="link" className="p-0 h-auto text-lg" onClick={() => onSelectCalculation(scoreSet.itemScores[0])}>
                                                                         <span className="font-bold text-primary">{scoreSet.finalScore.toFixed(2)}</span>
                                                                         <HelpCircle className="h-4 w-4 ml-2" />
                                                                     </Button>
@@ -3179,8 +3184,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
         
         return requisition.items.filter(item => {
             const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-            if (details.length === 0) return false;
-            
             // Show the button if there's any item that is in a failed state
             return details.some(d => d.status === 'Failed_to_Award' || d.status === 'Declined');
         });
@@ -3365,6 +3368,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 

@@ -1,7 +1,8 @@
 
+
 'use client';
 
-import { AwardCalculationDetails } from '@/components/award-calculation-details';
+import { AwardCalculationDetails, ScoreBreakdownDialog } from '@/components/award-calculation-details';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useAuth } from '@/contexts/auth-context';
@@ -19,6 +20,7 @@ export default function AwardDetailsPage() {
     const [error, setError] = useState<string | null>(null);
     const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
     const [quotations, setQuotations] = useState<Quotation[]>([]);
+    const [selectedCalculation, setSelectedCalculation] = useState<any | null>(null);
 
 
     const fetchData = useCallback(async () => {
@@ -80,8 +82,19 @@ export default function AwardDetailsPage() {
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back
             </Button>
-            <AwardCalculationDetails requisition={requisition} quotations={quotations} />
+            <AwardCalculationDetails 
+                requisition={requisition} 
+                quotations={quotations}
+                onSelectCalculation={setSelectedCalculation}
+            />
+            {selectedCalculation && requisition.evaluationCriteria && (
+                <ScoreBreakdownDialog 
+                    calculation={selectedCalculation} 
+                    evaluationCriteria={requisition.evaluationCriteria}
+                    isOpen={!!selectedCalculation}
+                    onClose={() => setSelectedCalculation(null)}
+                />
+            )}
         </div>
     );
 }
-
