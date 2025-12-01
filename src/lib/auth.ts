@@ -1,6 +1,7 @@
 
 import type { User, UserRole } from './types';
 import jwt, { JwtPayload } from 'jsonwebtoken';
+import { prisma } from './prisma';
 
 /**
  * Decodes a JWT token without verifying its signature. 
@@ -48,6 +49,28 @@ export async function verifyJwt(token: string) {
     }
 }
 
+
+export async function getActorFromToken(request: Request): Promise<User | null> {
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.split(' ')[1];
+    if (!token) return null;
+    
+    const decoded = await verifyJwt(token);
+    if (!decoded || !decoded.id) return null;
+
+    const user = await prisma.user.findUnique({
+        where: { id: decoded.id },
+        include: { roles: true, department: true }
+    });
+    
+    if (!user) return null;
+
+    return {
+      ...user,
+      department: user.department?.name,
+      roles: user.roles.map(r => r.name as UserRole),
+    }
+}
 
 export async function getUserByToken(token: string): Promise<{ user: User, role: UserRole } | null> {
     try {

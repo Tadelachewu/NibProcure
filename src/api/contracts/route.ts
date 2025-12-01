@@ -1,10 +1,10 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ContractStatus, User } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
 
 export async function GET() {
@@ -60,19 +60,19 @@ export async function GET() {
 
 export async function POST(request: Request) {
     try {
-        const body = await request.json();
-        const { requisitionId, vendorId, startDate, endDate, userId } = body;
-
-        const actor: User | null = await prisma.user.findUnique({where: {id: userId}});
-        if (!actor) {
-            return NextResponse.json({ error: 'Action performing user not found' }, { status: 404 });
+        const actor = await getActorFromToken(request);
+        if (!actor || !(actor.roles as string[]).includes('Procurement_Officer')) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
+
+        const body = await request.json();
+        const { requisitionId, vendorId, startDate, endDate } = body;
 
         const newContract = await prisma.contract.create({
             data: {
                 requisition: { connect: { id: requisitionId } },
                 vendor: { connect: { id: vendorId } },
-                sender: { connect: { id: userId } },
+                sender: { connect: { id: actor.id } },
                 startDate: new Date(startDate),
                 endDate: new Date(endDate),
                 status: 'Draft',
@@ -99,4 +99,3 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
 }
-
