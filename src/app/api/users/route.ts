@@ -1,24 +1,35 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { getActorFromToken } from '@/lib/auth';
+import { z } from 'zod';
+
+const userSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  roles: z.array(z.string()).min(1),
+  departmentId: z.string(),
+  password: z.string().min(8).optional(),
+});
+
+const userEditSchema = userSchema.extend({
+  id: z.string(),
+});
 
 export async function GET() {
   try {
     const users = await prisma.user.findMany({
         include: { 
             department: true,
-            roles: true, // Include the roles relation
+            roles: true,
             committeeAssignments: true,
         }
     });
-    // Return the full user object with the nested roles
     const formattedUsers = users.map(u => ({
         ...u,
         department: u.department?.name || 'N/A',
-        // The roles object is now correctly nested, no flattening needed here.
     }));
     return NextResponse.json(formattedUsers);
   } catch (error) {
@@ -29,16 +40,21 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { name, email, password, roles, departmentId, actorUserId } = body;
-    
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    if (!name || !email || !password || !roles || !Array.isArray(roles) || roles.length === 0 || !departmentId) {
-      return NextResponse.json({ error: 'All fields including at least one role are required' }, { status: 400 });
+    const body = await request.json();
+    const validation = userSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten() }, { status: 400 });
+    }
+    
+    const { name, email, password, roles, departmentId } = validation.data;
+
+    if (!password) {
+        return NextResponse.json({ error: 'Password is required for new users.'}, {status: 400});
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -83,17 +99,17 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
    try {
-    const body = await request.json();
-    const { id, name, email, roles, departmentId, password, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    if (!id || !name || !email || !roles || !Array.isArray(roles) || !departmentId) {
-      return NextResponse.json({ error: 'User ID and all fields are required' }, { status: 400 });
+    const body = await request.json();
+    const validation = userEditSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten() }, { status: 400 });
     }
+    const { id, name, email, roles, departmentId, password } = validation.data;
     
     const oldUser = await prisma.user.findUnique({ where: { id }, include: { roles: true } });
     if (!oldUser) {
@@ -141,17 +157,13 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
    try {
-    const body = await request.json();
-    const { id, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    if (!id) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
-    }
+    const body = await request.json();
+    const { id } = z.object({ id: z.string() }).parse(body);
     
     const userToDelete = await prisma.user.findUnique({ where: { id }, include: { roles: true } });
     if (!userToDelete) {

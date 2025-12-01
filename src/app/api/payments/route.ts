@@ -1,26 +1,32 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PerItemAwardDetail } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
+import { z } from 'zod';
+
+const paymentSchema = z.object({
+  invoiceId: z.string(),
+  paymentEvidenceUrl: z.string().url(),
+});
 
 export async function POST(
   request: Request
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Finance')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const body = await request.json();
-    const { invoiceId, userId, paymentEvidenceUrl } = body;
-
-    const user = await prisma.user.findUnique({where: {id: userId}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const validation = paymentSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten() }, { status: 400 });
     }
+    const { invoiceId, paymentEvidenceUrl } = validation.data;
     
-    if (!paymentEvidenceUrl) {
-      return NextResponse.json({ error: 'Payment evidence document is required.' }, { status: 400 });
-    }
-
     const invoiceToUpdate = await prisma.invoice.findUnique({ 
         where: { id: invoiceId },
         include: { po: true }
@@ -57,16 +63,13 @@ export async function POST(
                 let isFullyComplete = false;
 
                 if (isPerItem) {
-                    // For per-item, every item must be in a terminal state
                     isFullyComplete = requisition.items.every(item => {
                         const details = item.perItemAwardDetails as PerItemAwardDetail[] | null;
-                        if (!details || details.length === 0) return false; // Not resolved if no awards were ever made
-                        // An item is resolved if its winning bid is Accepted/Paid, or if it failed/was restarted
+                        if (!details || details.length === 0) return false;
                         return details.some(d => d.status === 'Accepted' || d.status === 'Failed_to_Award' || d.status === 'Restarted');
                     });
 
                 } else {
-                    // For single-vendor, check if all POs are delivered/closed
                     const allPOsForRequisition = await tx.purchaseOrder.findMany({
                         where: { requisitionId: requisition.id }
                     });
@@ -86,7 +89,7 @@ export async function POST(
         
         await tx.auditLog.create({
             data: {
-                user: { connect: { id: user.id } },
+                user: { connect: { id: actor.id } },
                 timestamp: new Date(),
                 action: 'PROCESS_PAYMENT',
                 entity: 'Invoice',

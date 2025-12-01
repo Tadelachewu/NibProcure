@@ -1,4 +1,3 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -6,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { User, UserRole } from '@/lib/types';
+import { z } from 'zod';
 
 // Define a hierarchy or precedence for roles. Higher number = higher precedence.
 const rolePrecedence: Record<string, number> = {
@@ -37,9 +37,22 @@ const getPrimaryRole = (roles: {name: string}[]): UserRole | null => {
     return (roleNames[0] as UserRole) || null;
 }
 
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+
 export async function POST(request: Request) {
     try {
-        const { email, password } = await request.json();
+        const body = await request.json();
+        const validation = loginSchema.safeParse(body);
+
+        if (!validation.success) {
+            return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten() }, { status: 400 });
+        }
+        
+        const { email, password } = validation.data;
 
         const user = await prisma.user.findUnique({
             where: { email },

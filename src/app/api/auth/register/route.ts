@@ -1,4 +1,3 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -6,10 +5,32 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { User, UserRole } from '@/lib/types';
+import { z } from 'zod';
+
+const registerSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters long"),
+  email: z.string().email(),
+  password: z.string().min(8, "Password must be at least 8 characters long"),
+  vendorDetails: z.object({
+    contactPerson: z.string().min(2),
+    address: z.string().min(5),
+    phone: z.string().min(5),
+    licensePath: z.string().min(1),
+    taxIdPath: z.string().min(1),
+  }),
+});
+
 
 export async function POST(request: Request) {
     try {
-        const { name, email, password, role, vendorDetails } = await request.json();
+        const body = await request.json();
+        const validation = registerSchema.safeParse(body);
+
+        if (!validation.success) {
+            return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten() }, { status: 400 });
+        }
+
+        const { name, email, password, vendorDetails } = validation.data;
 
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
@@ -35,7 +56,7 @@ export async function POST(request: Request) {
         });
         
         let newVendor;
-        if (role === 'Vendor' && vendorDetails) {
+        if (vendorDetails) {
             newVendor = await prisma.vendor.create({
                 data: {
                     name: name,

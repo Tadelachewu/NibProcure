@@ -1,9 +1,26 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
+import { z } from 'zod';
+
+const invoiceItemSchema = z.object({
+  name: z.string(),
+  quantity: z.number().positive(),
+  unitPrice: z.number().positive(),
+  totalPrice: z.number().positive(),
+});
+
+const invoiceSchema = z.object({
+  purchaseOrderId: z.string(),
+  vendorId: z.string(),
+  invoiceDate: z.string().refine((date) => !isNaN(Date.parse(date)), { message: "Invalid date string" }),
+  items: z.array(invoiceItemSchema),
+  totalAmount: z.number().positive(),
+  documentUrl: z.string().url().optional(),
+});
+
 
 export async function GET() {
   try {
@@ -25,7 +42,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { purchaseOrderId, vendorId, invoiceDate, items, totalAmount, documentUrl } = body;
+    const validation = invoiceSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten() }, { status: 400 });
+    }
+    const { purchaseOrderId, vendorId, invoiceDate, items, totalAmount, documentUrl } = validation.data;
 
     if (actor.vendorId !== vendorId && !(actor.roles as string[]).includes('Finance')) {
         return NextResponse.json({ error: 'You are not authorized to submit an invoice for this vendor.' }, { status: 403 });
@@ -34,6 +55,12 @@ export async function POST(request: Request) {
     const po = await prisma.purchaseOrder.findUnique({ where: { id: purchaseOrderId } });
     if (!po) {
       return NextResponse.json({ error: 'Purchase Order not found' }, { status: 404 });
+    }
+
+    // Server-side validation of total amount
+    const calculatedTotal = items.reduce((acc, item) => acc + item.totalPrice, 0);
+    if (Math.abs(calculatedTotal - totalAmount) > 0.01) { // Use a tolerance for floating point
+        return NextResponse.json({ error: `Calculated total (${calculatedTotal.toFixed(2)}) does not match submitted total amount (${totalAmount.toFixed(2)}).`}, { status: 400 });
     }
 
     const newInvoice = await prisma.invoice.create({

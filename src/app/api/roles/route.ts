@@ -1,9 +1,14 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { useAuth } from '@/contexts/auth-context';
+import { getActorFromToken } from '@/lib/auth';
+import { z } from 'zod';
+
+const roleSchema = z.object({
+  name: z.string().min(2),
+  description: z.string().optional(),
+});
 
 export async function GET() {
   try {
@@ -21,17 +26,17 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const body = await request.json();
-    const { name, description, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({ where: { id: actorUserId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const validation = roleSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten() }, { status: 400 });
     }
-
-    if (!name) {
-      return NextResponse.json({ error: 'Role name is required' }, { status: 400 });
-    }
+    const { name, description } = validation.data;
     
     const formattedName = name.replace(/ /g, '_');
     const existingRole = await prisma.role.findFirst({ where: { name: { equals: formattedName, mode: 'insensitive' } } });
@@ -48,15 +53,13 @@ export async function POST(request: Request) {
           },
         });
 
-        // Add the new role to the rolePermissions setting
         const permissionsSetting = await tx.setting.findUnique({
             where: { key: 'rolePermissions' }
         });
 
         if (permissionsSetting) {
             const currentPermissions = permissionsSetting.value as any;
-            currentPermissions[formattedName] = []; // Add new role with no permissions
-            
+            currentPermissions[formattedName] = [];
             await tx.setting.update({
                 where: { key: 'rolePermissions' },
                 data: { value: currentPermissions }
@@ -65,7 +68,6 @@ export async function POST(request: Request) {
         
         return newRole;
     });
-
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
@@ -79,17 +81,17 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
    try {
-    const body = await request.json();
-    const { id, name, description, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    if (!id || !name) {
-      return NextResponse.json({ error: 'Role ID and name are required' }, { status: 400 });
+    const body = await request.json();
+    const validation = roleSchema.extend({ id: z.string() }).safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Invalid request data', details: validation.error.flatten() }, { status: 400 });
     }
+    const { id, name, description } = validation.data;
     
     const formattedName = name.replace(/ /g, '_');
     const existingRole = await prisma.role.findFirst({ where: { name: { equals: formattedName, mode: 'insensitive' }, NOT: { id } } });
@@ -114,46 +116,25 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
    try {
-    const body = await request.json();
-    const { id, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
-    if (!id) {
-      return NextResponse.json({ error: 'Role ID is required' }, { status: 400 });
-    }
+    const body = await request.json();
+    const { id } = z.object({ id: z.string() }).parse(body);
     
     const roleToDelete = await prisma.role.findUnique({ where: { id } });
     if (!roleToDelete) {
         return NextResponse.json({ error: 'Role not found' }, { status: 404 });
     }
     
-    const coreRoles: string[] = [
-        'Admin', 
-        'Procurement_Officer', 
-        'Requester', 
-        'Approver', 
-        'Vendor',
-        'Finance',
-        'Receiving',
-        'Committee',
-        'Committee_A_Member',
-        'Committee_B_Member',
-        'Committee_Member',
-        'Manager_Procurement_Division',
-        'Director_Supply_Chain_and_Property_Management',
-        'VP_Resources_and_Facilities',
-        'President'
-    ].map(r => r.toUpperCase());
+    const coreRoles: string[] = ['Admin', 'Procurement_Officer', 'Requester', 'Approver', 'Vendor', 'Finance', 'Receiving', 'Committee', 'Committee_A_Member', 'Committee_B_Member', 'Committee_Member', 'Manager_Procurement_Division', 'Director_Supply_Chain_and_Property_Management', 'VP_Resources_and_Facilities', 'President'].map(r => r.toUpperCase());
     if (coreRoles.includes(roleToDelete.name.toUpperCase())) {
         return NextResponse.json({ error: `Cannot delete core system role: ${roleToDelete.name.replace(/_/g, ' ')}` }, { status: 403 });
     }
     
     await prisma.$transaction(async (tx) => {
-        // Remove from rolePermissions setting
         const permissionsSetting = await tx.setting.findUnique({
             where: { key: 'rolePermissions' }
         });
@@ -169,7 +150,6 @@ export async function DELETE(request: Request) {
         
         await tx.role.delete({ where: { id } });
     });
-
 
     return NextResponse.json({ message: 'Role deleted successfully' });
   } catch (error) {
