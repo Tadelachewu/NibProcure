@@ -22,8 +22,14 @@ const invoiceSchema = z.object({
 });
 
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Enforce authentication for this endpoint
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
     const invoices = await prisma.invoice.findMany({
       orderBy: { invoiceDate: 'desc' },
     });

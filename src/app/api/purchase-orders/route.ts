@@ -1,18 +1,17 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
-
+import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { requisitionId, userId } = body;
-
-    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Procurement_Officer')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { requisitionId } = body;
 
     const requisition = await prisma.purchaseRequisition.findUnique({ 
         where: { id: requisitionId },
@@ -77,7 +76,7 @@ export async function POST(request: Request) {
         data: {
             transactionId: requisition.transactionId,
             timestamp: new Date(),
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             action: 'CREATE_PO',
             entity: 'PurchaseOrder',
             entityId: newPO.id,
@@ -95,8 +94,14 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        // Enforce authentication for this endpoint
+        const actor = await getActorFromToken(request);
+        if (!actor) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const purchaseOrders = await prisma.purchaseOrder.findMany({
             include: {
                 vendor: true,

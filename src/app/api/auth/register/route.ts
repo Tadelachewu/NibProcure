@@ -7,6 +7,9 @@ import jwt from 'jsonwebtoken';
 import type { User, UserRole } from '@/lib/types';
 import { z } from 'zod';
 
+// TODO: Implement rate limiting to prevent spam registrations.
+// For example, using a library like `upstash/ratelimit`.
+
 const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters long"),
   email: z.string().email(),
@@ -85,10 +88,11 @@ export async function POST(request: Request) {
             throw new Error('JWT_SECRET is not defined in environment variables.');
         }
 
-        const { password: _, ...userWithoutPassword } = newUser;
-        
-        const finalUser = {
-            ...userWithoutPassword,
+        // Sanitize the user object before sending it to the client.
+        const finalUser: User = {
+            id: newUser.id,
+            name: newUser.name,
+            email: newUser.email,
             vendorId: newVendor?.id,
             roles: ['Vendor'] as UserRole[]
         }

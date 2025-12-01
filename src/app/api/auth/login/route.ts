@@ -7,35 +7,8 @@ import jwt from 'jsonwebtoken';
 import type { User, UserRole } from '@/lib/types';
 import { z } from 'zod';
 
-// Define a hierarchy or precedence for roles. Higher number = higher precedence.
-const rolePrecedence: Record<string, number> = {
-  Admin: 10,
-  Procurement_Officer: 9,
-  Committee: 8,
-  Finance: 7,
-  Approver: 6,
-  Receiving: 5,
-  Requester: 4,
-  Committee_A_Member: 3,
-  Committee_B_Member: 3,
-  Committee_Member: 3,
-  Manager_Procurement_Division: 7,
-  Director_Supply_Chain_and_Property_Management: 7,
-  VP_Resources_and_Facilities: 7,
-  President: 7,
-  Vendor: 1,
-};
-
-const getPrimaryRole = (roles: {name: string}[]): UserRole | null => {
-    if (!roles || roles.length === 0) return null;
-    
-    const roleNames = roles.map(r => r.name);
-    
-    // Sort by precedence (descending)
-    roleNames.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0));
-    
-    return (roleNames[0] as UserRole) || null;
-}
+// TODO: Implement rate limiting to prevent brute-force attacks
+// For example, using a library like `upstash/ratelimit`.
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -64,23 +37,23 @@ export async function POST(request: Request) {
         });
 
         if (!user) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
         }
 
         if (user && user.password && await bcrypt.compare(password, user.password)) {
             const { password: _, ...userWithoutPassword } = user;
             
-            const primaryRole = getPrimaryRole(user.roles);
-            if (!primaryRole) {
-                return NextResponse.json({ error: 'User has no assigned role.' }, { status: 403 });
-            }
-            
             const roleNames = user.roles.map(r => r.name as UserRole);
 
-            const finalUser: Omit<User, 'roles'> & { roles: UserRole[] } = {
-                ...userWithoutPassword,
+            // Sanitize the user object before sending it to the client.
+            // NEVER return the full user object from the database.
+            const finalUser: User = {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                roles: roleNames,
+                vendorId: user.vendorId,
                 department: user.department?.name,
-                roles: roleNames, // Return a simple array of role names
             };
 
             const jwtSecret = process.env.JWT_SECRET;
@@ -93,7 +66,7 @@ export async function POST(request: Request) {
                     id: finalUser.id, 
                     name: finalUser.name,
                     email: finalUser.email,
-                    roles: roleNames, // Token contains the array of role names
+                    roles: finalUser.roles,
                     vendorId: finalUser.vendorId,
                     department: finalUser.department,
                 }, 
@@ -107,7 +80,7 @@ export async function POST(request: Request) {
             });
         }
         
-        return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
+        return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
 
     } catch (error) {
         console.error('Login error:', error);
