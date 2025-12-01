@@ -25,10 +25,13 @@ const nextConfig = {
     ],
   },
   async headers() {
+    const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+
+    // A strict CSP that uses a nonce for scripts and styles
     const cspHeader = `
       default-src 'self';
-      script-src 'self' 'unsafe-eval' 'unsafe-inline';
-      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
+      style-src 'self' 'nonce-${nonce}';
       img-src 'self' https://placehold.co https://picsum.photos data:;
       font-src 'self' https://fonts.gstatic.com;
       object-src 'none';
@@ -50,6 +53,14 @@ const nextConfig = {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
           },
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'origin-when-cross-origin',
+          },
         ],
       },
     ];
@@ -57,3 +68,5 @@ const nextConfig = {
 };
 
 module.exports = nextConfig;
+
+    
