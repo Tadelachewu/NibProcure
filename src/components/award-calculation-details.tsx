@@ -1,15 +1,17 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
-import { PurchaseRequisition, Quotation, EvaluationCriterion, QuoteItem } from '@/lib/types';
+import React, { useMemo, useState } from 'react';
+import { PurchaseRequisition, Quotation, EvaluationCriteria, QuoteItem } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { cn } from '@/lib/utils';
-import { AlertCircle, ArrowRight, Calculator, Check, Crown, Medal, Trophy, X } from 'lucide-react';
+import { AlertCircle, ArrowRight, Calculator, Check, Crown, HelpCircle, Medal, Trophy, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Button } from './ui/button';
 
 
 // --- TYPE DEFINITIONS ---
@@ -52,7 +54,7 @@ interface CalculatedQuote {
  * Calculates the score for a single criterion.
  */
 function calculateCriterionScore(
-    criterion: EvaluationCriterion,
+    criterion: { id: string; name: string; weight: number },
     scores: { criterionId: string, score: number }[]
 ): CalculatedScore {
     const foundScore = scores.find(s => s.criterionId === criterion.id);
@@ -180,9 +182,9 @@ function useAwardCalculations(requisition: PurchaseRequisition, quotations: Quot
                         vendorName: quote.vendorName,
                         quoteItemId: item.id,
                         itemName: item.name,
-                        finalItemScore: calculateItemScores(item, evaluationCriteria, quote.scores || []).finalItemScore
+                        calculation: calculateItemScores(item, evaluationCriteria, quote.scores || [])
                     }))
-            ).sort((a,b) => b.finalItemScore - a.finalItemScore);
+            ).sort((a,b) => b.calculation.finalItemScore - a.calculation.finalItemScore);
 
             return {
                 itemName: reqItem.name,
@@ -198,31 +200,60 @@ function useAwardCalculations(requisition: PurchaseRequisition, quotations: Quot
 
 // --- UI COMPONENTS ---
 
+const ScoreBreakdownDialog = ({ calculation, evaluationCriteria }: { calculation: CalculatedItem, evaluationCriteria: EvaluationCriteria }) => {
+    return (
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Score Breakdown: {calculation.itemName}</DialogTitle>
+                <DialogDescription>
+                    This shows how the final score of <span className="font-bold text-primary">{calculation.finalItemScore.toFixed(2)}</span> was calculated.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6 py-4">
+                 <ScoreTable title="Financial Evaluation" scores={calculation.financialScores} weight={evaluationCriteria.financialWeight} totalScore={calculation.totalFinancialScore} />
+                 <ScoreTable title="Technical Evaluation" scores={calculation.technicalScores} weight={evaluationCriteria.technicalWeight} totalScore={calculation.totalTechnicalScore} />
+                 <Separator />
+                <div className="p-4 bg-muted rounded-md text-center">
+                    <p className="text-sm text-muted-foreground">Final Calculation</p>
+                    <p className="text-lg">
+                        (<span className="font-mono">{calculation.totalFinancialScore.toFixed(2)}</span> &times; {evaluationCriteria.financialWeight}%) + (<span className="font-mono">{calculation.totalTechnicalScore.toFixed(2)}</span> &times; {evaluationCriteria.technicalWeight}%) = <span className="font-bold text-xl text-primary">{calculation.finalItemScore.toFixed(2)}</span>
+                    </p>
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" asChild><DialogTrigger>Close</DialogTrigger></Button>
+            </DialogFooter>
+        </DialogContent>
+    )
+}
+
 const ScoreTable = ({ title, scores, weight, totalScore }: { title: string, scores: CalculatedScore[], weight: number, totalScore: number }) => (
     <div>
-        <h4 className="font-semibold text-base mb-1">{title} ({weight}%)</h4>
-        <Table>
-            <TableHeader>
-                <TableRow>
-                    <TableHead>Criterion</TableHead>
-                    <TableHead className="text-right">Score</TableHead>
-                    <TableHead className="text-right">Weight</TableHead>
-                    <TableHead className="text-right">Weighted Score</TableHead>
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {scores.map(s => (
-                    <TableRow key={s.criterionId}>
-                        <TableCell>{s.criterionName}</TableCell>
-                        <TableCell className="text-right font-mono">{s.score.toFixed(2)}</TableCell>
-                        <TableCell className="text-right font-mono">{s.weight}%</TableCell>
-                        <TableCell className="text-right font-mono font-bold">{s.weightedScore.toFixed(2)}</TableCell>
+        <h4 className="font-semibold text-base mb-1">{title} (Overall Weight: {weight}%)</h4>
+        <div className="border rounded-md">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Criterion</TableHead>
+                        <TableHead className="text-right">Avg. Score</TableHead>
+                        <TableHead className="text-right">Weight</TableHead>
+                        <TableHead className="text-right">Weighted Score</TableHead>
                     </TableRow>
-                ))}
-            </TableBody>
-        </Table>
+                </TableHeader>
+                <TableBody>
+                    {scores.map(s => (
+                        <TableRow key={s.criterionId}>
+                            <TableCell>{s.criterionName}</TableCell>
+                            <TableCell className="text-right font-mono">{s.score.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-mono">{s.weight}%</TableCell>
+                            <TableCell className="text-right font-mono font-bold">{s.weightedScore.toFixed(2)}</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
         <div className="text-right mt-2 pr-4">
-            <p className="text-sm">Sub-total: <span className="font-bold font-mono">{totalScore.toFixed(2)}</span></p>
+            <p className="text-sm">Sub-total (Score &times; Weight): <span className="font-bold font-mono">{totalScore.toFixed(2)}</span></p>
         </div>
     </div>
 );
@@ -241,6 +272,8 @@ const RankIcon = ({ rank }: { rank: number }) => {
 export function AwardCalculationDetails({ requisition, quotations }: { requisition: PurchaseRequisition, quotations: Quotation[] }) {
     const { singleVendorResults, bestItemResults } = useAwardCalculations(requisition, quotations);
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy || 'all';
+    const [selectedCalculation, setSelectedCalculation] = useState<CalculatedItem | null>(null);
+
 
     if (!requisition.evaluationCriteria) {
         return (
@@ -256,6 +289,7 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
     }
     
     return (
+        <Dialog onOpenChange={(isOpen) => !isOpen && setSelectedCalculation(null)}>
         <div className="space-y-6">
             <Card>
                 <CardHeader>
@@ -267,7 +301,7 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                 <CardContent>
                      <Alert>
                         <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Award Strategy: {awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}</AlertTitle>
+                        <AlertTitle>Award Strategy Used: {awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}</AlertTitle>
                         <AlertDescription>
                             This report shows the calculations for both potential award strategies. The final decision was made using the strategy indicated here.
                         </AlertDescription>
@@ -290,28 +324,35 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                         <RankIcon rank={vendor.rank!} />
                                         <span>{vendor.vendorName}</span>
                                     </div>
-                                    <Badge variant={vendor.rank === 1 ? 'default' : 'secondary'}>Final Score: {vendor.finalVendorScore.toFixed(2)}</Badge>
+                                    <DialogTrigger asChild>
+                                        <Button variant={vendor.rank === 1 ? 'default' : 'secondary'} size="sm" onClick={() => setSelectedCalculation(vendor.itemBids.flatMap(b => b.allProposals)[0])}>
+                                            Final Score: {vendor.finalVendorScore.toFixed(2)}
+                                        </Button>
+                                    </DialogTrigger>
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 {vendor.itemBids.map(itemBid => (
                                     <details key={itemBid.requisitionItemId} className="p-4 border rounded-lg bg-muted/30">
-                                        <summary className="font-semibold cursor-pointer">
-                                            Proposals for "{itemBid.requisitionItemName}" &rarr; Champion Bid: "{itemBid.championBid.itemName}" ({itemBid.championBid.finalItemScore.toFixed(2)} pts)
+                                        <summary className="font-semibold cursor-pointer flex justify-between items-center">
+                                            <span>Proposals for "{itemBid.requisitionItemName}" &rarr; Champion Bid: "{itemBid.championBid.itemName}"</span>
+                                             <DialogTrigger asChild>
+                                                 <Button variant="link" size="sm" onClick={(e) => {e.stopPropagation(); setSelectedCalculation(itemBid.championBid);}}>
+                                                    ({itemBid.championBid.finalItemScore.toFixed(2)} pts)
+                                                 </Button>
+                                            </DialogTrigger>
                                         </summary>
                                         <div className="mt-4 space-y-4">
                                             {itemBid.allProposals.map(proposal => (
                                                  <Card key={proposal.quoteItemId} className={cn("p-4", proposal.quoteItemId === itemBid.championBid.quoteItemId && "border-primary")}>
                                                     <div className="flex justify-between items-center mb-4">
                                                         <h4 className="font-semibold text-base">{proposal.itemName}</h4>
-                                                        <Badge variant={proposal.quoteItemId === itemBid.championBid.quoteItemId ? "default" : "outline"}>
-                                                            {proposal.quoteItemId === itemBid.championBid.quoteItemId && <Check className="mr-1 h-3 w-3"/>}
-                                                            Final Score: {proposal.finalItemScore.toFixed(2)}
-                                                        </Badge>
-                                                    </div>
-                                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                                        <ScoreTable title="Financial Evaluation" scores={proposal.financialScores} weight={requisition.evaluationCriteria!.financialWeight} totalScore={proposal.totalFinancialScore} />
-                                                        <ScoreTable title="Technical Evaluation" scores={proposal.technicalScores} weight={requisition.evaluationCriteria!.technicalWeight} totalScore={proposal.totalTechnicalScore} />
+                                                         <DialogTrigger asChild>
+                                                             <Badge variant={proposal.quoteItemId === itemBid.championBid.quoteItemId ? "default" : "outline"} className="cursor-pointer" onClick={() => setSelectedCalculation(proposal)}>
+                                                                {proposal.quoteItemId === itemBid.championBid.quoteItemId && <Check className="mr-1 h-3 w-3"/>}
+                                                                Final Score: {proposal.finalItemScore.toFixed(2)}
+                                                             </Badge>
+                                                        </DialogTrigger>
                                                     </div>
                                                  </Card>
                                             ))}
@@ -349,11 +390,17 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                     </TableHeader>
                                     <TableBody>
                                         {item.bids.map((bid, index) => (
-                                            <TableRow key={bid.vendorName} className={cn(index === 0 && "bg-green-500/10")}>
+                                            <TableRow key={bid.vendorName + bid.itemName} className={cn(index === 0 && "bg-green-500/10")}>
                                                 <TableCell className="font-bold flex items-center gap-2"><RankIcon rank={index+1} /></TableCell>
                                                 <TableCell>{bid.vendorName}</TableCell>
                                                 <TableCell>{bid.itemName}</TableCell>
-                                                <TableCell className="text-right font-mono font-semibold">{bid.finalItemScore.toFixed(2)}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <DialogTrigger asChild>
+                                                         <Button variant="link" size="sm" onClick={() => setSelectedCalculation(bid.calculation)}>
+                                                            {bid.calculation.finalItemScore.toFixed(2)}
+                                                         </Button>
+                                                    </DialogTrigger>
+                                                </TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -368,6 +415,10 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                     ))}
                 </CardContent>
             </Card>
+             {selectedCalculation && requisition.evaluationCriteria && (
+                <ScoreBreakdownDialog calculation={selectedCalculation} evaluationCriteria={requisition.evaluationCriteria} />
+            )}
         </div>
+        </Dialog>
     )
 }
