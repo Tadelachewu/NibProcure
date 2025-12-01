@@ -1,3 +1,4 @@
+
 {
   "name": "nextn",
   "version": "0.1.0",
@@ -13,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate dev --name init",
     "db:seed": "prisma db seed",
-    "db:rebuild": "npm install && prisma migrate reset --force && npm run db:seed",
+    "db:rebuild": "pnpm install && prisma migrate reset --force && pnpm db:seed",
     "db:reset": "prisma migrate reset --force",
     "postinstall": "prisma generate",
     "test:e2e": "playwright test",

@@ -1,3 +1,4 @@
+
 name: Deploy Next.js to IIS Remotely
 
 on:
@@ -21,12 +22,17 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+        
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 8
 
     - name: Install dependencies
-      run: npm install
+      run: pnpm install
 
     - name: Build Next.js app
-      run: npm run build
+      run: pnpm build
 
     - name: Prisma Migrations & Seed
       run: |
@@ -35,7 +41,7 @@ jobs:
         echo "Generating Prisma client..."
         npx prisma generate
         echo "Seeding database..."
-        npm run db:seed:force
+        pnpm db:seed
       shell: pwsh
 
     - name: Deploy to IIS via PowerShell Remoting
