@@ -52,6 +52,7 @@ export function GoodsReceiptForm() {
   const [isSubmitting, setSubmitting] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  const storageKey = 'goods-receipt-form';
   
   const form = useForm<ReceiptFormValues>({
     resolver: zodResolver(receiptFormSchema),
@@ -60,6 +61,26 @@ export function GoodsReceiptForm() {
         items: [],
     },
   });
+
+  useEffect(() => {
+    const savedData = localStorage.getItem(storageKey);
+    if (savedData) {
+      try {
+        form.reset(JSON.parse(savedData));
+        toast({ title: 'Draft Restored', description: 'Your previous goods receipt entry has been restored.' });
+      } catch (e) {
+        console.error("Failed to parse saved GRN data", e);
+      }
+    }
+  }, [form, toast]);
+
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      localStorage.setItem(storageKey, JSON.stringify(value));
+    });
+    return () => subscription.unsubscribe();
+  }, [form, storageKey]);
+
 
   const { fields, replace } = useFieldArray({
     control: form.control,
@@ -121,6 +142,7 @@ export function GoodsReceiptForm() {
         }
 
         toast({ title: 'Success!', description: 'Goods receipt has been logged.' });
+        localStorage.removeItem(storageKey);
         form.reset();
         setSelectedPO(null);
         replace([]);

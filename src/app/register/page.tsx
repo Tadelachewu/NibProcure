@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,6 +35,29 @@ export default function RegisterPage() {
   const { login: authLogin } = useAuth();
   const { toast } = useToast();
   const role: UserRole = 'Vendor'; // Hardcode role to Vendor
+  const storageKey = 'vendor-registration-form';
+
+  useEffect(() => {
+    const savedData = localStorage.getItem(storageKey);
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        setName(parsed.name || '');
+        setEmail(parsed.email || '');
+        setContactPerson(parsed.contactPerson || '');
+        setAddress(parsed.address || '');
+        setPhone(parsed.phone || '');
+        toast({ title: 'Draft Restored', description: 'Your registration information has been restored.'});
+      } catch (e) {
+        console.error("Failed to parse saved registration data", e);
+      }
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    const dataToSave = JSON.stringify({ name, email, contactPerson, address, phone });
+    localStorage.setItem(storageKey, dataToSave);
+  }, [name, email, contactPerson, address, phone]);
 
   const uploadFile = async (file: File) => {
     const formData = new FormData();
@@ -87,6 +110,7 @@ export default function RegisterPage() {
         const result = await response.json();
 
         if (response.ok) {
+            localStorage.removeItem(storageKey); // Clear saved data on success
             authLogin(result.token, result.user, result.roles);
             toast({
                 title: 'Registration Successful',

@@ -33,6 +33,7 @@ export default function VendorProfilePage() {
     const [vendor, setVendor] = useState<Vendor | null>(null);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setSubmitting] = useState(false);
+    const storageKey = `vendor-profile-form-${user?.vendorId}`;
 
     const form = useForm<ProfileFormValues>({
         resolver: zodResolver(profileFormSchema),
@@ -53,12 +54,22 @@ export default function VendorProfilePage() {
                     const currentVendor = vendors.find(v => v.id === user.vendorId);
                     if (currentVendor) {
                         setVendor(currentVendor);
-                        form.reset({
-                            name: currentVendor.name,
-                            contactPerson: currentVendor.contactPerson,
-                            phone: currentVendor.phone,
-                            address: currentVendor.address,
-                        });
+                        const savedData = localStorage.getItem(storageKey);
+                        if (savedData) {
+                            try {
+                                form.reset(JSON.parse(savedData));
+                                toast({ title: 'Draft Restored', description: 'Your unsaved profile changes have been restored.' });
+                            } catch (e) {
+                                console.error("Failed to parse saved profile data", e);
+                            }
+                        } else {
+                             form.reset({
+                                name: currentVendor.name,
+                                contactPerson: currentVendor.contactPerson,
+                                phone: currentVendor.phone,
+                                address: currentVendor.address,
+                            });
+                        }
                     }
                 })
                 .catch(err => {
@@ -67,7 +78,14 @@ export default function VendorProfilePage() {
                 })
                 .finally(() => setLoading(false));
         }
-    }, [user, form, toast]);
+    }, [user, form, toast, storageKey]);
+
+    useEffect(() => {
+        const subscription = form.watch((value) => {
+            localStorage.setItem(storageKey, JSON.stringify(value));
+        });
+        return () => subscription.unsubscribe();
+    }, [form, storageKey]);
 
     const uploadFile = async (file: File, directory: string) => {
         const formData = new FormData();
@@ -118,6 +136,7 @@ export default function VendorProfilePage() {
                 throw new Error(errorData.error || 'Failed to update profile.');
             }
             
+            localStorage.removeItem(storageKey);
             toast({ title: 'Profile Updated', description: 'Your information has been submitted for verification.'});
 
         } catch (error) {
