@@ -66,7 +66,7 @@ export async function POST(request: Request) {
             data: { status: newPOStatus }
         });
         
-        await prisma.auditLog.create({
+        await tx.auditLog.create({
             data: {
                 transactionId: po.transactionId,
                 user: { connect: { id: actor.id } },
