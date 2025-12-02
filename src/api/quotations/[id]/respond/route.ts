@@ -3,7 +3,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { PerItemAwardDetail, User, UserRole } from '@/lib/types';
+import { handleAwardRejection } from '@/services/award-service';
 
 
 export async function POST(
@@ -11,56 +12,114 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const quoteId = params.id;
+  console.log(`[RESPOND-AWARD] Received request for Quote ID: ${quoteId}`);
   try {
     const body = await request.json();
-    const { userId, action } = body as { userId: string; action: 'accept' | 'reject' };
+    const { userId, action, quoteItemId } = body as { userId: string; action: 'accept' | 'reject'; quoteItemId?: string };
+    console.log(`[RESPOND-AWARD] Action: ${action} by User ID: ${userId}. Item-specific: ${!!quoteItemId}`);
 
-    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
-    if (!user || user.role !== 'Vendor') {
+    const user = await prisma.user.findUnique({
+        where: {id: userId},
+        include: { roles: true }
+    });
+    
+    if (!user || !user.roles.some(r => r.name === 'Vendor')) {
+      console.error(`[RESPOND-AWARD] Unauthorized attempt by User ID: ${userId}`);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
+    console.log(`[RESPOND-AWARD] Starting transaction for Quote ID: ${quoteId}`);
     const transactionResult = await prisma.$transaction(async (tx) => {
         const quote = await tx.quotation.findUnique({ 
             where: { id: quoteId },
-            include: { items: true, requisition: { include: { quotations: { include: { items: true } } } } }
+            include: { items: true, requisition: { include: { items: true } } }
         });
 
         if (!quote || quote.vendorId !== user.vendorId) {
           throw new Error('Quotation not found or not owned by this vendor');
         }
         
-        if (quote.status !== 'Awarded' && quote.status !== 'Partially_Awarded') {
-            throw new Error('This quote is not currently in an awarded state.');
-        }
-        
         const requisition = quote.requisition;
         if (!requisition) {
            throw new Error('Associated requisition not found');
         }
+        console.log(`[RESPOND-AWARD] Found Requisition ID: ${requisition.id} with status ${requisition.status}`);
+
+        // **SAFEGUARD START**
+        // Prevent creating a PO for a requisition that is already closed.
+        if (requisition.status === 'Closed' || requisition.status === 'Fulfilled') {
+            console.error(`[RESPOND-AWARD] Aborting: Requisition ${requisition.id} is already in a final state (${requisition.status}).`);
+            throw new Error(`Cannot accept award because the parent requisition '${requisition.id}' is already closed.`);
+        }
+        // **SAFEGUARD END**
+        
+        const isPerItemAward = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+        console.log(`[RESPOND-AWARD] Award strategy is: ${isPerItemAward ? 'Per-Item' : 'Single Vendor'}`);
 
         if (action === 'accept') {
-            await tx.quotation.update({
-                where: { id: quoteId },
-                data: { status: 'Accepted' }
-            });
+            let awardedQuoteItems: any[] = [];
             
-            // Logic to handle both full and partial awards when creating a PO
-            const awardedQuoteItems = quote.items.filter(item => 
-                requisition.awardedQuoteItemIds.includes(item.id)
-            );
+            if (isPerItemAward) {
+                console.log('[RESPOND-AWARD] Handling per-item award acceptance.');
+                // Find all items awarded to this vendor for this requisition
+                const itemsAwardedToThisVendor = requisition.items.flatMap(item => 
+                    (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId && d.status === 'Awarded')
+                );
 
-            const thisVendorAwardedItems = awardedQuoteItems.length > 0 ? awardedQuoteItems : quote.items;
+                if (itemsAwardedToThisVendor.length === 0) {
+                     throw new Error("No items in 'Awarded' status found for you to accept.");
+                }
 
-            const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+                console.log(`[RESPOND-AWARD] Found ${itemsAwardedToThisVendor.length} item(s) to accept.`);
+                const awardedQuoteItemIds = new Set(itemsAwardedToThisVendor.map(d => d.quoteItemId));
+                
+                awardedQuoteItems = quote.items.filter(item => awardedQuoteItemIds.has(item.id));
+                
+                // Update the status on the requisition items themselves
+                for (const item of requisition.items) {
+                    const originalDetails = item.perItemAwardDetails as PerItemAwardDetail[] | null;
+                    if (originalDetails) {
+                        const newDetails = originalDetails.map(d => 
+                            awardedQuoteItemIds.has(d.quoteItemId) ? { ...d, status: 'Accepted' as const } : d
+                        );
+                        await tx.requisitionItem.update({
+                            where: { id: item.id },
+                            data: { perItemAwardDetails: newDetails }
+                        });
+                    }
+                }
+                console.log(`[RESPOND-AWARD] Updated perItemAwardDetails on requisition items.`);
+
+            } else { // Single vendor award
+                console.log('[RESPOND-AWARD] Handling single-vendor award acceptance.');
+                 await tx.quotation.update({
+                    where: { id: quoteId },
+                    data: { status: 'Accepted' }
+                });
+                
+                const awardedIds = new Set(requisition.awardedQuoteItemIds || []);
+                if (awardedIds.size > 0) {
+                  awardedQuoteItems = quote.items.filter(item => awardedIds.has(item.id));
+                } else {
+                  awardedQuoteItems = quote.items;
+                }
+            }
+
+            if (awardedQuoteItems.length === 0) {
+              throw new Error("No awarded items found for this vendor to accept.");
+            }
+
+            const totalPriceForThisPO = awardedQuoteItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
+            console.log(`[RESPOND-AWARD] Total price for new PO: ${totalPriceForThisPO}`);
 
             const newPO = await tx.purchaseOrder.create({
                 data: {
+                    transactionId: requisition.transactionId,
                     requisition: { connect: { id: requisition.id } },
                     requisitionTitle: requisition.title,
                     vendor: { connect: { id: quote.vendorId } },
                     items: {
-                        create: thisVendorAwardedItems.map(item => ({
+                        create: awardedQuoteItems.map((item: any) => ({
                             requisitionItemId: item.requisitionItemId,
                             name: item.name,
                             quantity: item.quantity,
@@ -73,23 +132,7 @@ export async function POST(
                     status: 'Issued',
                 }
             });
-
-            // Check if all awards are accepted to update the main requisition status
-            const allAwardedQuotes = await tx.quotation.findMany({
-                where: {
-                    requisitionId: requisition.id,
-                    status: { in: ['Awarded', 'Partially_Awarded'] }
-                }
-            });
-            
-            if (allAwardedQuotes.length === 0) {
-                 await tx.purchaseRequisition.update({
-                    where: { id: requisition.id },
-                    data: {
-                        status: 'PO_Created',
-                    }
-                });
-            }
+            console.log(`[RESPOND-AWARD] Created new Purchase Order: ${newPO.id}`);
             
             await tx.auditLog.create({
                 data: {
@@ -98,73 +141,40 @@ export async function POST(
                     action: 'ACCEPT_AWARD',
                     entity: 'Quotation',
                     entityId: quoteId,
-                    details: `Vendor accepted award. PO ${newPO.id} auto-generated.`,
+                    details: `Vendor accepted award. PO ${newPO.id} auto-generated for ${awardedQuoteItems.length} item(s).`,
+                    transactionId: requisition.transactionId,
                 }
             });
             
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
-            await tx.quotation.update({ where: { id: quoteId }, data: { status: 'Declined' }});
-
-            await tx.auditLog.create({
-                data: {
-                    timestamp: new Date(),
-                    user: { connect: { id: user.id } },
-                    action: 'REJECT_AWARD',
-                    entity: 'Quotation',
-                    entityId: quoteId,
-                    details: `Vendor declined award.`,
-                }
-            });
-
-            const nextRank = (quote.rank || 0) + 1;
-            const nextQuote = await tx.quotation.findFirst({
-                where: { requisitionId: quote.requisitionId, rank: nextRank }
-            });
-
-            if (nextQuote) {
-                await tx.quotation.update({ where: { id: nextQuote.id }, data: { status: 'Awarded' } });
-                
-                await tx.auditLog.create({
-                    data: {
-                        timestamp: new Date(),
-                        action: 'PROMOTE_STANDBY',
-                        entity: 'Quotation',
-                        entityId: nextQuote.id,
-                        details: `Promoted standby vendor ${nextQuote.vendorName} to Awarded.`,
-                    }
-                });
-                return { message: `Award declined. Next vendor (${nextQuote.vendorName}) has been notified.` };
-            } else {
-                 await tx.purchaseRequisition.update({
-                    where: { id: requisition.id },
-                    data: { status: 'Approved', deadline: null }
-                });
-                 await tx.quotation.updateMany({
-                    where: { requisitionId: requisition.id },
-                    data: { status: 'Submitted', rank: null }
-                });
-                 await tx.auditLog.create({
-                    data: {
-                        timestamp: new Date(),
-                        action: 'RESTART_RFQ',
-                        entity: 'Requisition',
-                        entityId: requisition.id,
-                        details: `All vendors declined award. RFQ process has been reset.`,
-                    }
-                });
-                return { message: 'Award declined. No more standby vendors. Requisition has been reset for new RFQ process.' };
-            }
+            const declinedItemIds = quoteItemId
+                ? [quote.items.find(i => i.id === quoteItemId)?.requisitionItemId].filter(Boolean) as string[]
+                : requisition.items
+                    .filter(item => (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user.vendorId && d.status === 'Awarded'))
+                    .map(item => item.id);
+            
+            console.log(`[RESPOND-AWARD] Handling award rejection. Declined item IDs: ${declinedItemIds.join(', ')}`);
+            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds, quoteItemId);
         }
+        
         throw new Error('Invalid action.');
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
     });
     
+    console.log(`[RESPOND-AWARD] Transaction complete for Quote ID: ${quoteId}`);
     return NextResponse.json(transactionResult);
 
   } catch (error) {
     console.error('Failed to respond to award:', error);
     if (error instanceof Error) {
+      if ((error as any).code === 'P2014') {
+        // More specific error for foreign key violation
+        return NextResponse.json({ error: 'Failed to process award acceptance due to a data conflict. The Purchase Order could not be linked to the Requisition.', details: (error as any).meta?.relation_name || 'Unknown relation' }, { status: 500 });
+      }
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
