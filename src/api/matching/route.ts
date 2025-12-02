@@ -5,6 +5,10 @@ import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 
 export async function GET(request: Request) {
+  const actor = await getActorFromToken(request);
+  if (!actor || !(actor.roles as string[]).includes('Finance')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
   const { searchParams } = new URL(request.url);
   const invoiceId = searchParams.get('invoiceId');
   
@@ -46,9 +50,6 @@ export async function GET(request: Request) {
 
   } catch (error) {
     console.error('Failed to perform matching:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
@@ -92,9 +93,6 @@ export async function POST(request: Request) {
         return NextResponse.json(result);
     } catch (error) {
         console.error('Failed to resolve mismatch:', error);
-        if (error instanceof Error) {
-            return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-        }
         return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
 }

@@ -174,9 +174,6 @@ export async function POST(
 
   } catch (error) {
     console.error('Failed to restart item RFQ:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

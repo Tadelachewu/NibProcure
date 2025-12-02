@@ -19,7 +19,7 @@ export async function PATCH(
     const body = await request.json();
     const { status } = body;
 
-    const validStatuses = ['Approved for Payment', 'Disputed'];
+    const validStatuses = ['Approved_for_Payment', 'Disputed'];
     if (!validStatuses.includes(status)) {
       return NextResponse.json({ error: 'Invalid status provided.' }, { status: 400 });
     }
@@ -49,9 +49,6 @@ export async function PATCH(
     return NextResponse.json(updatedInvoice);
   } catch (error) {
     console.error('Failed to update invoice status:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

@@ -103,9 +103,6 @@ export async function POST(
     return NextResponse.json(transactionResult);
   } catch (error) {
     console.error('[PROCESS-PAYMENT] Failed to process payment:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

@@ -5,8 +5,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const actor = await getActorFromToken(request);
+        if (!actor) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
         const departments = await prisma.department.findMany({
             include: {
                 head: {
@@ -64,9 +69,6 @@ export async function POST(request: Request) {
     return NextResponse.json(newDepartment, { status: 201 });
   } catch (error) {
     console.error("Error creating department:", error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
@@ -135,12 +137,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json(updatedDepartment);
   } catch (error) {
      console.error("Error updating department:", error);
-     if (error instanceof Error) {
-        // Handle potential unique constraint errors on the 'headId' field
-        if ((error as any).code === 'P2002' && (error as any).meta?.target?.includes('headId')) {
-            return NextResponse.json({ error: 'This user is already the head of another department.' }, { status: 409 });
-        }
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+    if ((error as any).code === 'P2002' && (error as any).meta?.target?.includes('headId')) {
+        return NextResponse.json({ error: 'This user is already the head of another department.' }, { status: 409 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
@@ -176,9 +174,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ message: 'Department deleted successfully' });
   } catch (error) {
      console.error("Error deleting department:", error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

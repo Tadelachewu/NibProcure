@@ -66,7 +66,7 @@ export async function POST(
             entity: 'Requisition',
             entityId: id,
             timestamp: new Date(),
-            details: `Extended committee scoring deadline from ${oldDeadline ? format(new Date(oldDeadline), 'PPp') : 'N/A'} to ${format(new Date(newDeadline), 'PPp')}.`,
+            details: `Extended committee scoring deadline from ${oldDeadline ? format(new Date(oldDeadline), 'PPp') : 'N/A'} to ${format(new Date(newDeadline), 'PPpp')}.`,
         }
     });
 
@@ -75,9 +75,6 @@ export async function POST(
 
   } catch (error) {
     console.error('Failed to extend scoring deadline:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

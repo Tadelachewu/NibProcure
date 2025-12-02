@@ -93,9 +93,6 @@ export async function POST(request: Request) {
     return NextResponse.json(txResult, { status: 201 });
   } catch (error) {
     console.error('[RECEIVE-GOODS] Failed to create goods receipt:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
