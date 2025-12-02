@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -64,6 +63,24 @@ export function ApprovalsTable() {
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
 
+  useEffect(() => {
+    if (isActionDialogOpen && selectedRequisition) {
+      const savedComment = localStorage.getItem(`approval-comment-${selectedRequisition.id}`);
+      if (savedComment) {
+        setComment(savedComment);
+      }
+    } else {
+        setComment(''); // Clear comment when dialog closes
+    }
+  }, [isActionDialogOpen, selectedRequisition]);
+
+  useEffect(() => {
+    if (isActionDialogOpen && selectedRequisition) {
+      localStorage.setItem(`approval-comment-${selectedRequisition.id}`, comment);
+    }
+  }, [comment, isActionDialogOpen, selectedRequisition]);
+
+
   const fetchRequisitions = useCallback(async () => {
     if (!user) return;
     try {
@@ -115,7 +132,6 @@ export function ApprovalsTable() {
       if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userId) {
         rfqSenderId = rfqSenderSetting.userId;
       } else {
-        // Fallback to the first available Procurement Officer if 'all' is selected or specific user not found
         const firstProcOfficer = allUsers.find(u => (u.roles as any[]).some(r => r.name === 'Procurement_Officer'));
         rfqSenderId = firstProcOfficer?.id || null;
       }
@@ -130,7 +146,7 @@ export function ApprovalsTable() {
             status: actionType === 'approve' ? 'PreApproved' : 'Rejected', 
             userId: user.id, 
             comment,
-            rfqSenderId, // Pass the designated RFQ sender ID to the API
+            rfqSenderId,
         }),
       });
       if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
@@ -138,7 +154,8 @@ export function ApprovalsTable() {
         title: "Success",
         description: `Requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
-      fetchRequisitions(); // Re-fetch data to update the table
+      localStorage.removeItem(`approval-comment-${selectedRequisition.id}`);
+      fetchRequisitions();
     } catch (error) {
       toast({
         variant: 'destructive',
@@ -340,5 +357,3 @@ export function ApprovalsTable() {
     </>
   );
 }
-
-    

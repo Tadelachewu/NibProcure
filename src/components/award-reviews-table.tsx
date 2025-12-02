@@ -70,6 +70,23 @@ export function AwardReviewsTable() {
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
   
+  useEffect(() => {
+    if (isActionDialogOpen && selectedRequisition) {
+        const savedComment = localStorage.getItem(`award-review-comment-${selectedRequisition.id}`);
+        if (savedComment) {
+            setJustification(savedComment);
+        }
+    } else {
+        setJustification('');
+    }
+  }, [isActionDialogOpen, selectedRequisition]);
+
+  useEffect(() => {
+      if (isActionDialogOpen && selectedRequisition) {
+          localStorage.setItem(`award-review-comment-${selectedRequisition.id}`, justification);
+      }
+  }, [justification, isActionDialogOpen, selectedRequisition]);
+
 
   const fetchRequisitions = useCallback(async () => {
     if (!user || !token) {
@@ -148,7 +165,7 @@ export function AwardReviewsTable() {
         title: "Success",
         description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
-      
+      localStorage.removeItem(`award-review-comment-${selectedRequisition.id}`);
       fetchRequisitions();
 
     } catch (error) {

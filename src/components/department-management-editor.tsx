@@ -58,6 +58,8 @@ export function DepartmentManagementEditor() {
   
   const { toast } = useToast();
   const { user: actor, allUsers, fetchAllUsers, fetchAllDepartments, departments: contextDepartments } = useAuth();
+  
+  const storageKey = useMemo(() => `department-form-${departmentToEdit?.id || 'new'}`, [departmentToEdit]);
 
   useEffect(() => {
     setDepartments(contextDepartments);
@@ -67,6 +69,29 @@ export function DepartmentManagementEditor() {
     fetchAllUsers();
     fetchAllDepartments();
   }, []);
+
+  useEffect(() => {
+    if (isDialogOpen) {
+        const savedData = localStorage.getItem(storageKey);
+        if (savedData) {
+            try {
+                const parsed = JSON.parse(savedData);
+                setDepartmentName(parsed.departmentName || (departmentToEdit?.name || ''));
+                setDepartmentDesc(parsed.departmentDesc || (departmentToEdit?.description || ''));
+                setDepartmentHeadId(parsed.departmentHeadId || (departmentToEdit?.headId || null));
+            } catch (e) {
+                 console.error("Failed to parse department form data", e);
+            }
+        }
+    }
+  }, [isDialogOpen, storageKey, departmentToEdit]);
+
+  useEffect(() => {
+      if (isDialogOpen) {
+          localStorage.setItem(storageKey, JSON.stringify({ departmentName, departmentDesc, departmentHeadId }));
+      }
+  }, [departmentName, departmentDesc, departmentHeadId, isDialogOpen, storageKey]);
+
 
   const handleFormSubmit = async () => {
     if (!departmentName.trim()) {
@@ -102,9 +127,8 @@ export function DepartmentManagementEditor() {
             title: `Department ${isEditing ? 'Updated' : 'Added'}`,
             description: `The department "${departmentName}" has been successfully ${isEditing ? 'updated' : 'added'}.`,
         });
-        
+        localStorage.removeItem(storageKey);
         setDialogOpen(false);
-        // Correctly refetch users first, THEN departments to link the data
         await fetchAllUsers(); 
         await fetchAllDepartments();
     } catch (error) {
@@ -157,11 +181,8 @@ export function DepartmentManagementEditor() {
   
   const potentialHeadsForSelectedDept = useMemo(() => {
     if (!departmentToEdit) {
-      // When CREATING a new department, no users belong to it yet.
-      // Show all non-vendor/requester users as potential heads.
       return allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as any[]).some(r => r.name === 'Vendor' || r.name === 'Requester'));
     }
-    // When EDITING, only show users who are members of the department being edited.
     return allUsers.filter(u => u.departmentId === departmentToEdit.id);
   }, [allUsers, departmentToEdit]);
 
@@ -253,7 +274,7 @@ export function DepartmentManagementEditor() {
             </Table>
         </div>
       </CardContent>
-       <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) setDepartmentToEdit(null); setDialogOpen(open);}}>
+       <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) { setDepartmentToEdit(null); localStorage.removeItem(storageKey); } setDialogOpen(open);}}>
         <DialogContent>
             <DialogHeader>
                 <DialogTitle>{departmentToEdit ? 'Edit Department' : 'Add New Department'}</DialogTitle>
