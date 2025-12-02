@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -51,7 +50,7 @@ export function GoodsReceiptForm() {
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const storageKey = 'goods-receipt-form';
   
   const form = useForm<ReceiptFormValues>({
@@ -66,13 +65,16 @@ export function GoodsReceiptForm() {
     const savedData = localStorage.getItem(storageKey);
     if (savedData) {
       try {
-        form.reset(JSON.parse(savedData));
+        const parsedData = JSON.parse(savedData);
+        if (parsedData.purchaseOrderId) {
+            handlePOChange(parsedData.purchaseOrderId, parsedData.items);
+        }
         toast({ title: 'Draft Restored', description: 'Your previous goods receipt entry has been restored.' });
       } catch (e) {
         console.error("Failed to parse saved GRN data", e);
       }
     }
-  }, [form, toast]);
+  }, []);
 
   useEffect(() => {
     const subscription = form.watch((value) => {
@@ -87,39 +89,44 @@ export function GoodsReceiptForm() {
     name: "items",
   });
 
-  useEffect(() => {
-    const fetchPOs = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch('/api/purchase-orders');
-        const data: PurchaseOrder[] = await response.json();
-        const openPOs = data.filter(po => 
-          ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_'))
-        );
-        setPurchaseOrders(openPOs);
-      } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch purchase orders.' });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchPOs();
+  const fetchPOs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/purchase-orders');
+      const data: PurchaseOrder[] = await response.json();
+      const openPOs = data.filter(po => 
+        ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_'))
+      );
+      setPurchaseOrders(openPOs);
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch purchase orders.' });
+    } finally {
+      setLoading(false);
+    }
   }, [toast]);
 
-  const handlePOChange = (poId: string) => {
+  useEffect(() => {
+    fetchPOs();
+  }, [fetchPOs]);
+
+  const handlePOChange = (poId: string, restoredItems?: any[]) => {
     form.setValue('purchaseOrderId', poId);
     const po = purchaseOrders.find(p => p.id === poId);
     if (po) {
         setSelectedPO(po);
-        const formItems = po.items.map(item => ({
-            poItemId: item.id,
-            name: item.name,
-            quantityOrdered: item.quantity,
-            quantityReceived: 0,
-            condition: 'Good' as const,
-            notes: "",
-        }));
-        replace(formItems);
+        if (restoredItems && restoredItems.length > 0) {
+            replace(restoredItems);
+        } else {
+            const formItems = po.items.map(item => ({
+                poItemId: item.id,
+                name: item.name,
+                quantityOrdered: item.quantity,
+                quantityReceived: 0,
+                condition: 'Good' as const,
+                notes: "",
+            }));
+            replace(formItems);
+        }
     } else {
         setSelectedPO(null);
         replace([]);
@@ -127,13 +134,16 @@ export function GoodsReceiptForm() {
   }
 
   const onSubmit = async (values: ReceiptFormValues) => {
-      if (!user) return;
+      if (!user || !token) return;
       setSubmitting(true);
       try {
         const response = await fetch('/api/receipts', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...values, userId: user.id }),
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify(values),
         });
         
         if (!response.ok) {
@@ -146,6 +156,7 @@ export function GoodsReceiptForm() {
         form.reset();
         setSelectedPO(null);
         replace([]);
+        await fetchPOs(); // Refresh PO list
       } catch (error) {
          toast({
             variant: 'destructive',
@@ -172,7 +183,7 @@ export function GoodsReceiptForm() {
                 render={({ field }) => (
                     <FormItem>
                     <FormLabel>Select Purchase Order</FormLabel>
-                    <Select onValueChange={handlePOChange} value={field.value}>
+                    <Select onValueChange={(value) => handlePOChange(value)} value={field.value}>
                         <FormControl>
                         <SelectTrigger className="w-full md:w-1/2">
                             <SelectValue placeholder={loading ? "Loading POs..." : "Select a PO to receive against"} />
