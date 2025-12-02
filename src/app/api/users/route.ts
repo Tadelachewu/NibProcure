@@ -22,10 +22,11 @@ export async function GET(request: Request) {
             vendorId: true,
             departmentId: true,
             department: true,
-            roles: true,
+            roles: true, // This now includes the full role objects
         }
     });
-    // Return the user object without the password
+    
+    // The formattedUsers mapping now correctly handles the nested department object
     const formattedUsers = users.map(u => ({
         ...u,
         department: u.department?.name || 'N/A',
