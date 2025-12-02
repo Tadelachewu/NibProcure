@@ -57,37 +57,75 @@ const quoteFormSchema = z.object({
 
 
 const invoiceFormSchema = z.object({
-    documentUrl: z.string().min(1, "Invoice document is required"),
+    documentUrl: z.string().optional(),
     invoiceDate: z.string().min(1, "Invoice date is required"),
+    invoiceFile: z.any().optional(),
 });
 
 function InvoiceSubmissionForm({ po, onInvoiceSubmitted }: { po: PurchaseOrder; onInvoiceSubmitted: () => void }) {
     const { toast } = useToast();
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const [isSubmitting, setSubmitting] = useState(false);
     const form = useForm<z.infer<typeof invoiceFormSchema>>({
         resolver: zodResolver(invoiceFormSchema),
         defaultValues: {
-            documentUrl: "",
             invoiceDate: new Date().toISOString().split('T')[0],
         },
     });
 
+    const handleFileUpload = async (file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('directory', 'invoices');
+        
+        try {
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || 'File upload failed');
+            }
+            return result.path;
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Upload Failed',
+                description: error instanceof Error ? error.message : 'Could not upload file.',
+            });
+            return null;
+        }
+    };
+
+
     const onSubmit = async (values: z.infer<typeof invoiceFormSchema>) => {
-        if (!user || !po) return;
+        if (!user || !po || !token) return;
+        if (!values.invoiceFile || values.invoiceFile.length === 0) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please upload an invoice document.' });
+            return;
+        }
+
         setSubmitting(true);
         try {
+
+            const uploadedPath = await handleFileUpload(values.invoiceFile[0]);
+            if (!uploadedPath) {
+                setSubmitting(false);
+                return;
+            }
+
             const response = await fetch('/api/invoices', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
                     purchaseOrderId: po.id,
                     vendorId: po.vendor.id,
                     invoiceDate: values.invoiceDate,
-                    documentUrl: values.documentUrl,
+                    documentUrl: uploadedPath,
                     items: po.items,
                     totalAmount: po.totalAmount,
-                    userId: user.id
+                    actorUserId: user.id
                 }),
             });
             if (!response.ok) {
@@ -149,12 +187,12 @@ function InvoiceSubmissionForm({ po, onInvoiceSubmitted }: { po: PurchaseOrder; 
                         />
                          <FormField
                             control={form.control}
-                            name="documentUrl"
+                            name="invoiceFile"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Invoice Document (PDF)</FormLabel>
-                                    <FormControl>
-                                        <Input type="file" accept=".pdf" onChange={(e) => field.onChange(e.target.files?.[0]?.name || "")} />
+                                     <FormControl>
+                                        <Input type="file" accept=".pdf" onChange={(e) => field.onChange(e.target.files)} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -162,6 +200,7 @@ function InvoiceSubmissionForm({ po, onInvoiceSubmitted }: { po: PurchaseOrder; 
                         />
                     </div>
                     <DialogFooter>
+                        <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
                         <Button type="submit" disabled={isSubmitting}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Submit Invoice
