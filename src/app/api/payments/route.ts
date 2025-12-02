@@ -67,12 +67,12 @@ export async function POST(
                         
                         if (hasAcceptedAward) {
                              const acceptedPO = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
-                             // If the PO exists, check if any of its invoices are paid.
+                             // If the PO exists, check if any of its invoices are paid. This is the crucial check.
                              const isPaid = acceptedPO ? acceptedPO.invoices.some(inv => inv.status === 'Paid') : false;
                              return isPaid;
                         }
                         
-                        // If not accepted, check for other terminal states
+                        // If not accepted, check for other terminal states which also count as "finished" for this item.
                         const isOtherwiseResolved = details.some(d => ['Failed_to_Award', 'Restarted', 'Declined'].includes(d.status));
                         return isOtherwiseResolved;
                     });
