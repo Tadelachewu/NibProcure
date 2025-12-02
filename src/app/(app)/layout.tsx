@@ -102,8 +102,8 @@ export default function AppLayout({
   
   // Page-level access check
   useEffect(() => {
-    if (loading || !role || !pathname || !rolePermissions || !user) {
-        return; // Wait for all auth data to be loaded
+    if (loading || !role || !pathname || !rolePermissions || Object.keys(rolePermissions).length === 0 || !user) {
+        return; // Wait for all auth data to be loaded, including permissions
     }
     
     // The 'Combined' key now holds the merged permissions for the current user
