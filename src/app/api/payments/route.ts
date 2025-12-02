@@ -50,7 +50,7 @@ export async function POST(
         if (invoiceToUpdate.po?.requisitionId) {
             const requisition = await tx.purchaseRequisition.findUnique({
                 where: { id: invoiceToUpdate.po.requisitionId },
-                include: { items: true, purchaseOrders: { include: { invoices: true }}}
+                include: { items: true, purchaseOrders: { include: { items: true, invoices: true }}}
             });
             
             if (requisition) {
@@ -58,23 +58,23 @@ export async function POST(
                 let isFullyComplete = false;
 
                 if (isPerItem) {
-                    // For per-item, every item must be in a terminal state (Accepted, Failed, or Restarted)
+                    // For per-item, every item must be in a terminal state (Accepted and Paid, Failed, or Restarted)
                     isFullyComplete = requisition.items.every(item => {
                         const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                         if (details.length === 0) return true; // If an item never went to award, it's considered "complete" for this check
                         
-                        // Check if an item is considered resolved.
-                        const isResolved = details.some(d => ['Accepted', 'Failed_to_Award', 'Restarted'].includes(d.status));
+                        const hasAcceptedAward = details.some(d => d.status === 'Accepted');
                         
-                        // If it's resolved and Accepted, we need to make sure its corresponding invoice is paid.
-                        if (details.some(d => d.status === 'Accepted')) {
+                        if (hasAcceptedAward) {
                              const acceptedPO = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
-                             const isPaid = acceptedPO?.invoices.some(inv => inv.status === 'Paid');
+                             // If the PO exists, check if any of its invoices are paid.
+                             const isPaid = acceptedPO ? acceptedPO.invoices.some(inv => inv.status === 'Paid') : false;
                              return isPaid;
                         }
-
-                        // If it's not in an 'Accepted' state, being Failed or Restarted is enough to be complete.
-                        return isResolved && !details.some(d => d.status === 'Accepted');
+                        
+                        // If not accepted, check for other terminal states
+                        const isOtherwiseResolved = details.some(d => ['Failed_to_Award', 'Restarted', 'Declined'].includes(d.status));
+                        return isOtherwiseResolved;
                     });
 
                 } else {
@@ -87,7 +87,7 @@ export async function POST(
                     const allPOsClosed = allPOsForRequisition.length > 0 && allPOsForRequisition.every(po => 
                         ['Delivered', 'Closed', 'Cancelled'].includes(po.status.replace(/_/g, ' '))
                     );
-                    const allInvoicesPaid = allPOsForRequisition.flatMap(po => po.invoices).every(inv => inv.status === 'Paid');
+                    const allInvoicesPaid = allPOsForRequisition.length > 0 && allPOsForRequisition.flatMap(po => po.invoices).every(inv => inv.status === 'Paid');
 
                     isFullyComplete = allPOsClosed && allInvoicesPaid;
                 }
