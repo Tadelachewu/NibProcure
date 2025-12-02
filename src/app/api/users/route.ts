@@ -4,21 +4,25 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
+import { getActorFromToken } from '@/lib/auth';
+import { userSchema } from '@/lib/schemas';
+import { ZodError } from 'zod';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
     const users = await prisma.user.findMany({
         include: { 
             department: true,
-            roles: true, // Include the roles relation
-            committeeAssignments: true,
+            roles: true,
         }
     });
-    // Return the full user object with the nested roles
     const formattedUsers = users.map(u => ({
         ...u,
         department: u.department?.name || 'N/A',
-        // The roles object is now correctly nested, no flattening needed here.
     }));
     return NextResponse.json(formattedUsers);
   } catch (error) {
@@ -29,23 +33,21 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { name, email, password, roles, departmentId, actorUserId } = body;
-    
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
-
-    if (!name || !email || !password || !roles || !Array.isArray(roles) || roles.length === 0 || !departmentId) {
-      return NextResponse.json({ error: 'All fields including at least one role are required' }, { status: 400 });
-    }
+    const body = await request.json();
+    const { name, email, password, roles, departmentId } = userSchema.parse(body);
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
         return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
     }
     
+    if (!password) {
+        return NextResponse.json({ error: 'Password is required for new users' }, { status: 400 });
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await prisma.user.create({
@@ -73,26 +75,26 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newUser, { status: 201 });
   } catch (error) {
-    console.error("Failed to create user:", error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+    if (error instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
     }
+    console.error("Failed to create user:", error);
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
 
 export async function PATCH(request: Request) {
    try {
-    const body = await request.json();
-    const { id, name, email, roles, departmentId, password, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+    const body = await request.json();
+    const { id, ...updateData } = body;
+    const { name, email, roles, departmentId, password } = userSchema.partial().parse(updateData);
 
-    if (!id || !name || !email || !roles || !Array.isArray(roles) || !departmentId) {
-      return NextResponse.json({ error: 'User ID and all fields are required' }, { status: 400 });
+    if (!id) {
+        return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
     
     const oldUser = await prisma.user.findUnique({ where: { id }, include: { roles: true } });
@@ -100,22 +102,25 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
-    const updateData: any = {
+    const dataToUpdate: any = {
         name,
         email,
-        roles: {
-          set: roles.map((roleName: string) => ({ name: roleName.replace(/ /g, '_') }))
-        },
-        department: { connect: { id: departmentId } },
+        department: departmentId ? { connect: { id: departmentId } } : undefined,
     };
     
+    if (roles) {
+        dataToUpdate.roles = {
+            set: roles.map((roleName: string) => ({ name: roleName.replace(/ /g, '_') }))
+        };
+    }
+
     if (password) {
-        updateData.password = await bcrypt.hash(password, 10);
+        dataToUpdate.password = await bcrypt.hash(password, 10);
     }
 
     const updatedUser = await prisma.user.update({
         where: { id },
-        data: updateData
+        data: dataToUpdate
     });
 
     await prisma.auditLog.create({
@@ -125,29 +130,27 @@ export async function PATCH(request: Request) {
             action: 'UPDATE_USER',
             entity: 'User',
             entityId: id,
-            details: `Updated user "${oldUser.name}". Name: ${oldUser.name} -> ${name}. Roles: ${oldUser.roles.map(r=>r.name).join(', ')} -> ${roles.join(', ')}.`,
+            details: `Updated user "${oldUser.name}".`,
         }
     });
 
     return NextResponse.json(updatedUser);
   } catch (error) {
-     console.error('Failed to update user:', error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+    if (error instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
     }
+    console.error('Failed to update user:', error);
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
    try {
-    const body = await request.json();
-    const { id, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+    const { id } = await request.json();
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
@@ -177,9 +180,6 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ message: 'User deleted successfully' });
   } catch (error) {
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

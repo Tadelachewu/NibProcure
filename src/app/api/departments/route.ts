@@ -3,10 +3,17 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
+import { departmentSchema } from '@/lib/schemas';
+import { ZodError } from 'zod';
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const actor = await getActorFromToken(request);
+        if (!actor) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
         const departments = await prisma.department.findMany({
             include: {
                 head: {
@@ -25,17 +32,13 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { name, description, headId, userId } = body;
-    
-    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    if (!name) {
-      return NextResponse.json({ error: 'Department name is required' }, { status: 400 });
-    }
+    const body = await request.json();
+    const { name, description, headId } = departmentSchema.parse(body);
     
     const existingDepartment = await prisma.department.findUnique({ where: { name } });
     if (existingDepartment) {
@@ -46,7 +49,7 @@ export async function POST(request: Request) {
       data: { 
         name,
         description,
-        headId: headId === 'null' ? null : headId
+        headId: headId || null
       },
     });
 
@@ -63,26 +66,28 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newDepartment, { status: 201 });
   } catch (error) {
-    console.error("Error creating department:", error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+     if (error instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
     }
+    console.error("Error creating department:", error);
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
 
 export async function PATCH(request: Request) {
    try {
-    const body = await request.json();
-    const { id, name, description, headId, userId } = body;
-    
-    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    if (!id || !name) {
-      return NextResponse.json({ error: 'Department ID and name are required' }, { status: 400 });
+    const body = await request.json();
+    const { id, ...updateData } = body;
+    const { name, description, headId } = departmentSchema.parse(updateData);
+
+
+    if (!id) {
+      return NextResponse.json({ error: 'Department ID is required' }, { status: 400 });
     }
     
     const department = await prisma.department.findUnique({ where: { id }});
@@ -97,7 +102,7 @@ export async function PATCH(request: Request) {
     }
 
     // Check if the new head is already a head of another department
-    const newHeadId = headId === 'null' ? null : headId;
+    const newHeadId = headId;
     if (newHeadId) {
         const anotherDeptWithHead = await prisma.department.findFirst({
             where: {
@@ -134,27 +139,25 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json(updatedDepartment);
   } catch (error) {
-     console.error("Error updating department:", error);
-     if (error instanceof Error) {
-        // Handle potential unique constraint errors on the 'headId' field
-        if ((error as any).code === 'P2002' && (error as any).meta?.target?.includes('headId')) {
-            return NextResponse.json({ error: 'This user is already the head of another department.' }, { status: 409 });
-        }
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+     if (error instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
     }
+    if ((error as any).code === 'P2002' && (error as any).meta?.target?.includes('headId')) {
+        return NextResponse.json({ error: 'This user is already the head of another department.' }, { status: 409 });
+    }
+    console.error("Error updating department:", error);
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
    try {
-    const body = await request.json();
-    const { id, userId } = body;
-
-    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const { id } = await request.json();
 
     if (!id) {
       return NextResponse.json({ error: 'Department ID is required' }, { status: 400 });
@@ -176,9 +179,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ message: 'Department deleted successfully' });
   } catch (error) {
      console.error("Error deleting department:", error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }

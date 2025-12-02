@@ -6,8 +6,9 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { User, UserRole } from '@/lib/types';
+import { loginSchema } from '@/lib/schemas';
+import { ZodError } from 'zod';
 
-// Define a hierarchy or precedence for roles. Higher number = higher precedence.
 const rolePrecedence: Record<string, number> = {
   Admin: 10,
   Procurement_Officer: 9,
@@ -31,7 +32,6 @@ const getPrimaryRole = (roles: {name: string}[]): UserRole | null => {
     
     const roleNames = roles.map(r => r.name);
     
-    // Sort by precedence (descending)
     roleNames.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0));
     
     return (roleNames[0] as UserRole) || null;
@@ -39,7 +39,8 @@ const getPrimaryRole = (roles: {name: string}[]): UserRole | null => {
 
 export async function POST(request: Request) {
     try {
-        const { email, password } = await request.json();
+        const body = await request.json();
+        const { email, password } = loginSchema.parse(body);
 
         const user = await prisma.user.findUnique({
             where: { email },
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
             const finalUser: Omit<User, 'roles'> & { roles: UserRole[] } = {
                 ...userWithoutPassword,
                 department: user.department?.name,
-                roles: roleNames, // Return a simple array of role names
+                roles: roleNames,
             };
 
             const jwtSecret = process.env.JWT_SECRET;
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
                     id: finalUser.id, 
                     name: finalUser.name,
                     email: finalUser.email,
-                    roles: roleNames, // Token contains the array of role names
+                    roles: roleNames,
                     vendorId: finalUser.vendorId,
                     department: finalUser.department,
                 }, 
@@ -97,10 +98,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
 
     } catch (error) {
-        console.error('Login error:', error);
-        if (error instanceof Error) {
-            return NextResponse.json({ error: 'An internal server error occurred', details: error.message }, { status: 500 });
+        if (error instanceof ZodError) {
+            return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
         }
+        console.error('Login error:', error);
         return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
     }
 }
