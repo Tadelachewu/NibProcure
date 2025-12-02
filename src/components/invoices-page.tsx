@@ -123,10 +123,9 @@ function AddInvoiceForm({ onInvoiceAdded }: { onInvoiceAdded: () => void }) {
         try {
             const response = await fetch('/api/invoices', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
                 body: JSON.stringify({ 
-                    ...values, 
-                    userId: user.id, 
+                    ...values,
                     vendorId: selectedPO.vendor.id,
                     totalAmount
                 }),
@@ -276,7 +275,7 @@ function MatchDetailsDialog({ result, onResolve, onCancel }: { result: MatchingR
         try {
             const response = await fetch('/api/matching', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
                 body: JSON.stringify({ poId: result.poId, userId: user.id })
             });
             if (!response.ok) throw new Error("Failed to resolve mismatch.");
@@ -557,7 +556,7 @@ export function InvoicesPage() {
       try {
           const response = await fetch(`/api/invoices/${invoiceId}/status`, {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
               body: JSON.stringify({ status, userId: user.id })
           });
           if (!response.ok) throw new Error(`Failed to mark invoice as ${status}.`);
@@ -580,7 +579,7 @@ export function InvoicesPage() {
      try {
         const response = await fetch(`/api/payments`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
             body: JSON.stringify({ invoiceId, userId: user.id, paymentEvidenceUrl })
         });
         if (!response.ok) {

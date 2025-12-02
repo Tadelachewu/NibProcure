@@ -4,18 +4,19 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PerItemAwardDetail } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(
   request: Request
 ) {
   try {
-    const body = await request.json();
-    const { invoiceId, userId, paymentEvidenceUrl } = body;
-
-    const user = await prisma.user.findUnique({where: {id: userId}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Finance')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { invoiceId, paymentEvidenceUrl } = body;
     
     if (!paymentEvidenceUrl) {
       return NextResponse.json({ error: 'Payment evidence document is required.' }, { status: 400 });
@@ -49,7 +50,7 @@ export async function POST(
         if (invoiceToUpdate.po?.requisitionId) {
             const requisition = await tx.purchaseRequisition.findUnique({
                 where: { id: invoiceToUpdate.po.requisitionId },
-                include: { items: true }
+                include: { items: true, purchaseOrders: { include: { invoices: true }}}
             });
             
             if (requisition) {
@@ -57,22 +58,38 @@ export async function POST(
                 let isFullyComplete = false;
 
                 if (isPerItem) {
-                    // For per-item, every item must be in a terminal state
+                    // For per-item, every item must be in a terminal state (Accepted, Failed, or Restarted)
                     isFullyComplete = requisition.items.every(item => {
-                        const details = item.perItemAwardDetails as PerItemAwardDetail[] | null;
-                        if (!details || details.length === 0) return false; // Not resolved if no awards were ever made
-                        // An item is resolved if its winning bid is Accepted/Paid, or if it failed/was restarted
-                        return details.some(d => d.status === 'Accepted' || d.status === 'Failed_to_Award' || d.status === 'Restarted');
+                        const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                        if (details.length === 0) return true; // If an item never went to award, it's considered "complete" for this check
+                        
+                        // Check if an item is considered resolved.
+                        const isResolved = details.some(d => ['Accepted', 'Failed_to_Award', 'Restarted'].includes(d.status));
+                        
+                        // If it's resolved and Accepted, we need to make sure its corresponding invoice is paid.
+                        if (details.some(d => d.status === 'Accepted')) {
+                             const acceptedPO = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
+                             const isPaid = acceptedPO?.invoices.some(inv => inv.status === 'Paid');
+                             return isPaid;
+                        }
+
+                        // If it's not in an 'Accepted' state, being Failed or Restarted is enough to be complete.
+                        return isResolved && !details.some(d => d.status === 'Accepted');
                     });
 
                 } else {
-                    // For single-vendor, check if all POs are delivered/closed
+                    // For single-vendor, check if all POs for this req are Delivered/Closed AND all invoices are Paid
                     const allPOsForRequisition = await tx.purchaseOrder.findMany({
-                        where: { requisitionId: requisition.id }
+                        where: { requisitionId: requisition.id },
+                        include: { invoices: true }
                     });
-                    isFullyComplete = allPOsForRequisition.length > 0 && allPOsForRequisition.every(po => 
+                    
+                    const allPOsClosed = allPOsForRequisition.length > 0 && allPOsForRequisition.every(po => 
                         ['Delivered', 'Closed', 'Cancelled'].includes(po.status.replace(/_/g, ' '))
                     );
+                    const allInvoicesPaid = allPOsForRequisition.flatMap(po => po.invoices).every(inv => inv.status === 'Paid');
+
+                    isFullyComplete = allPOsClosed && allInvoicesPaid;
                 }
 
                 if (isFullyComplete) {
@@ -86,7 +103,7 @@ export async function POST(
         
         await tx.auditLog.create({
             data: {
-                user: { connect: { id: user.id } },
+                user: { connect: { id: actor.id } },
                 timestamp: new Date(),
                 action: 'PROCESS_PAYMENT',
                 entity: 'Invoice',
