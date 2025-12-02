@@ -177,10 +177,10 @@ export async function POST(
 
         } else if (action === 'reject') {
             const declinedItemIds = quoteItemId
-                ? [quote.items.find(i => i.id === quoteItemId)?.requisitionItemId].filter(Boolean) as string[]
+                ? [quote.items.find((i: any) => i.id === quoteItemId)?.requisitionItemId].filter(Boolean) as string[]
                 : requisition.items
-                    .filter(item => (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user.vendorId && d.status === 'Awarded'))
-                    .map(item => item.id);
+                    .filter((item: any) => (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.vendorId === user.vendorId && d.status === 'Awarded'))
+                    .map((item: any) => item.id);
             
             console.log(`[RESPOND-AWARD] Handling award rejection. Declined item IDs: ${declinedItemIds.join(', ')}`);
             return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds, quoteItemId);
