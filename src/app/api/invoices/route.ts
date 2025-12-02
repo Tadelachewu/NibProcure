@@ -21,16 +21,19 @@ export async function POST(request: Request) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        return NextResponse.json({ error: 'Unauthorized: No valid user token found.' }, { status: 401 });
     }
 
     const body = await request.json();
     const { purchaseOrderId, vendorId, invoiceDate, items, totalAmount, documentUrl } = body;
 
-    if (actor.vendorId !== vendorId && !(actor.roles as string[]).includes('Finance')) {
+    const isFinanceUser = (actor.roles as string[]).includes('Finance');
+    const isCorrectVendor = actor.vendorId === vendorId;
+
+    if (!isFinanceUser && !isCorrectVendor) {
         return NextResponse.json({ error: 'You are not authorized to submit an invoice for this vendor.' }, { status: 403 });
     }
-
+    
     const po = await prisma.purchaseOrder.findUnique({ where: { id: purchaseOrderId } });
     if (!po) {
       return NextResponse.json({ error: 'Purchase Order not found' }, { status: 404 });
