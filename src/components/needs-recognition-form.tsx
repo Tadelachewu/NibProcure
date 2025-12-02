@@ -126,6 +126,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   const [loading, setLoading] = useState(false);
   const { user, departments } = useAuth();
   const isEditMode = !!existingRequisition;
+  const storageKey = isEditMode ? `requisition-form-${existingRequisition.id}` : 'new-requisition-form';
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -167,6 +168,29 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
       customQuestions: [],
     },
   });
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    const savedData = localStorage.getItem(storageKey);
+    if (savedData) {
+        try {
+            const parsedData = JSON.parse(savedData);
+            form.reset(parsedData);
+            toast({ title: 'Form Restored', description: 'Your previously entered data has been restored.' });
+        } catch (e) {
+            console.error("Failed to parse saved form data", e);
+        }
+    }
+  }, [storageKey, form, toast]);
+
+  // Save to localStorage on change
+  useEffect(() => {
+      const subscription = form.watch((value) => {
+          localStorage.setItem(storageKey, JSON.stringify(value));
+      });
+      return () => subscription.unsubscribe();
+  }, [form, storageKey]);
+
 
   useEffect(() => {
     // If user data loads after form initialization, update the fields
@@ -241,6 +265,8 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
             title: `Requisition ${isEditMode ? 'Updated' : (isDraft ? 'Saved' : 'Submitted')}`,
             description: `Your purchase requisition has been successfully ${isEditMode ? 'updated' : (isDraft ? 'saved as a draft' : 'submitted for approval')}.`,
         });
+        
+        localStorage.removeItem(storageKey); // Clear saved data on success
 
         if (onSuccess) {
             onSuccess();
