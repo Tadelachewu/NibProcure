@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User, UserRole, PerItemAwardDetail, QuoteItem } from '@/lib/types';
 import { getNextApprovalStep } from '@/services/award-service';
+import { generateAndSaveMinute } from '@/services/minute-service';
 
 export async function POST(
   request: Request,
@@ -49,7 +50,12 @@ export async function POST(
             
             const requisition = await tx.purchaseRequisition.findUnique({ 
                 where: { id: requisitionId }, 
-                include: { items: true, evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } } } 
+                include: { 
+                    items: true, 
+                    evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } },
+                    financialCommitteeMembers: { include: { roles: true } },
+                    technicalCommitteeMembers: { include: { roles: true } },
+                } 
             });
             if (!requisition) {
                 throw new Error("Requisition not found.");
@@ -66,6 +72,7 @@ export async function POST(
             
             let finalAwardValue = 0;
             let finalAwardedItemIds: string[] = [];
+            const winningVendorIds = new Set<string>();
 
             if (awardStrategy === 'all') {
                 console.log('[FINALIZE-SCORES] Calculating for "Award All to Single Vendor" strategy.');
@@ -119,6 +126,7 @@ export async function POST(
                 if (rankedVendors.length === 0) throw new Error("Could not determine a winning vendor.");
 
                 const winner = rankedVendors[0];
+                winningVendorIds.add(winner.vendorId);
                 const winningQuote = allQuotes.find(q => q.vendorId === winner.vendorId);
                 if (!winningQuote) throw new Error("Winning quote not found in database.");
                 console.log(`[FINALIZE-SCORES] Winner is ${winningQuote.vendorName} with score ${winner.avgScore.toFixed(2)}`);
@@ -199,6 +207,10 @@ export async function POST(
                         status: (index === 0) ? 'Pending_Award' : 'Standby'
                     }));
                     
+                    if (rankedProposals.length > 0) {
+                        winningVendorIds.add(rankedProposals[0].vendorId);
+                    }
+                    
                     console.log(`[FINALIZE-SCORES] For item ${reqItem.name}, ranked champion bids:`, rankedProposals.map(p => ({vendor: p.vendorName, rank: p.rank, status: p.status})));
 
                     await tx.requisitionItem.update({
@@ -209,6 +221,11 @@ export async function POST(
                     });
                 }
             }
+
+            console.log('[FINALIZE-SCORES] Generating procurement minute...');
+            await generateAndSaveMinute(tx, requisition, allQuotes, Array.from(winningVendorIds), user);
+            console.log('[FINALIZE-SCORES] Minute generated and saved.');
+
 
             console.log('[FINALIZE-SCORES] Getting next approval step...');
             const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: finalAwardValue }, user);

@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -402,8 +403,26 @@ export async function PATCH(
                 where: { id },
                 data: dataToUpdate,
             });
-            
-            if (minute) {
+
+            // Find the minute associated with this requisition
+            const existingMinute = await tx.minute.findUnique({
+                where: { requisitionId: id },
+            });
+
+            if (existingMinute) {
+                 // Create a Review record linked to the minute
+                await tx.review.create({
+                    data: {
+                        requisitionId: id,
+                        minuteId: existingMinute.id,
+                        reviewerId: userId,
+                        decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
+                        comment: comment,
+                        signature: Buffer.from(`${userId}-${Date.now()}`).toString('hex'), // Simple digital signature
+                    }
+                });
+                auditDetails += ` Review recorded against minute ${existingMinute.minuteReference}.`;
+            } else if (minute) {
                 await tx.minute.create({
                     data: {
                         requisition: { connect: { id: id } },
@@ -419,26 +438,6 @@ export async function PATCH(
                 auditDetails += ` Minute recorded.`;
                 console.log(`[PATCH /api/requisitions] Minute recorded for Req ID: ${id}`);
             }
-
-            // Use upsert to avoid unique constraint errors
-            await tx.review.upsert({
-                where: {
-                    requisitionId_reviewerId: {
-                        requisitionId: id,
-                        reviewerId: userId,
-                    }
-                },
-                update: {
-                    decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
-                    comment: comment,
-                },
-                create: {
-                    requisition: { connect: { id: id } },
-                    reviewer: { connect: { id: userId } },
-                    decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
-                    comment: comment,
-                }
-            });
 
             await tx.auditLog.create({
                 data: {
