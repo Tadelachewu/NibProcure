@@ -1,6 +1,7 @@
+
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -61,53 +62,10 @@ export function GoodsReceiptForm() {
     },
   });
 
-  useEffect(() => {
-    const savedData = localStorage.getItem(storageKey);
-    if (savedData) {
-      try {
-        const parsedData = JSON.parse(savedData);
-        if (parsedData.purchaseOrderId) {
-            handlePOChange(parsedData.purchaseOrderId, parsedData.items);
-        }
-        toast({ title: 'Draft Restored', description: 'Your previous goods receipt entry has been restored.' });
-      } catch (e) {
-        console.error("Failed to parse saved GRN data", e);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    const subscription = form.watch((value) => {
-      localStorage.setItem(storageKey, JSON.stringify(value));
-    });
-    return () => subscription.unsubscribe();
-  }, [form, storageKey]);
-
-
   const { fields, replace } = useFieldArray({
     control: form.control,
     name: "items",
   });
-
-  const fetchPOs = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/purchase-orders');
-      const data: PurchaseOrder[] = await response.json();
-      const openPOs = data.filter(po => 
-        ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_'))
-      );
-      setPurchaseOrders(openPOs);
-    } catch (error) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch purchase orders.' });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    fetchPOs();
-  }, [fetchPOs]);
 
   const handlePOChange = (poId: string, restoredItems?: any[]) => {
     form.setValue('purchaseOrderId', poId);
@@ -132,6 +90,50 @@ export function GoodsReceiptForm() {
         replace([]);
     }
   }
+  
+  useEffect(() => {
+    const savedData = localStorage.getItem(storageKey);
+    if (savedData) {
+      try {
+        const parsedData = JSON.parse(savedData);
+        if (parsedData.purchaseOrderId) {
+            handlePOChange(parsedData.purchaseOrderId, parsedData.items);
+        }
+        toast({ title: 'Draft Restored', description: 'Your previous goods receipt entry has been restored.' });
+      } catch (e) {
+        console.error("Failed to parse saved GRN data", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      localStorage.setItem(storageKey, JSON.stringify(value));
+    });
+    return () => subscription.unsubscribe();
+  }, [form, storageKey]);
+
+
+  const fetchPOs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/purchase-orders');
+      const data: PurchaseOrder[] = await response.json();
+      const openPOs = data.filter(po => 
+        ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_'))
+      );
+      setPurchaseOrders(openPOs);
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch purchase orders.' });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchPOs();
+  }, [fetchPOs]);
+
 
   const onSubmit = async (values: ReceiptFormValues) => {
       if (!user || !token) return;
