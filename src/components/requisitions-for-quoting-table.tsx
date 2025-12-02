@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -78,27 +77,15 @@ export function RequisitionsForQuotingTable() {
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
     const awardStrategy = (req.rfqSettings as any)?.awardStrategy;
 
-    // --- Terminal Statuses ---
+    // --- Terminal Statuses (Highest Priority) ---
     if (req.status === 'Closed' || req.status === 'Fulfilled') {
         return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
     }
     
     // --- Award by Best Item Strategy Logic ---
     if (awardStrategy === 'item') {
-        const itemsWithAwards = req.items.filter(item => 
-            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.length ?? 0 > 0
-        );
-        const awardedItemCount = itemsWithAwards.length;
-        const acceptedItemCount = itemsWithAwards.filter(item => 
-            (item.perItemAwardDetails as PerItemAwardDetail[]).some(d => d.status === 'Accepted')
-        ).length;
-
-        if (awardedItemCount > 0 && awardedItemCount === acceptedItemCount) {
-             return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
-        }
-
-        const hasAcceptedItem = itemsWithAwards.some(item => 
-            (item.perItemAwardDetails as PerItemAwardDetail[]).some(d => d.status === 'Accepted')
+        const hasAcceptedItem = req.items.some(item => 
+            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Accepted')
         );
         if (hasAcceptedItem) {
              return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
