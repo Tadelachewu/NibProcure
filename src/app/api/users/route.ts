@@ -5,8 +5,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { getActorFromToken } from '@/lib/auth';
-import { userSchema } from '@/lib/schemas';
-import { ZodError } from 'zod';
 
 export async function GET(request: Request) {
   try {
@@ -15,11 +13,17 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     const users = await prisma.user.findMany({
-        include: { 
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            vendorId: true,
+            departmentId: true,
             department: true,
             roles: true,
         }
     });
+    // Return the full user object with the nested roles
     const formattedUsers = users.map(u => ({
         ...u,
         department: u.department?.name || 'N/A',
@@ -38,16 +42,18 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     const body = await request.json();
-    const { name, email, password, roles, departmentId } = userSchema.parse(body);
+    const { name, email, password, roles, departmentId } = body;
+    
+
+    if (!name || !email || !password || !roles || !Array.isArray(roles) || roles.length === 0 || !departmentId) {
+      return NextResponse.json({ error: 'All fields including at least one role are required' }, { status: 400 });
+    }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
         return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
     }
     
-    if (!password) {
-        return NextResponse.json({ error: 'Password is required for new users' }, { status: 400 });
-    }
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await prisma.user.create({
@@ -73,11 +79,9 @@ export async function POST(request: Request) {
         }
     });
 
-    return NextResponse.json(newUser, { status: 201 });
+    const { password: _, ...safeUser } = newUser;
+    return NextResponse.json(safeUser, { status: 201 });
   } catch (error) {
-    if (error instanceof ZodError) {
-        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
-    }
     console.error("Failed to create user:", error);
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
@@ -90,11 +94,11 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     const body = await request.json();
-    const { id, ...updateData } = body;
-    const { name, email, roles, departmentId, password } = userSchema.partial().parse(updateData);
+    const { id, name, email, roles, departmentId, password } = body;
 
-    if (!id) {
-        return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+
+    if (!id || !name || !email || !roles || !Array.isArray(roles) || !departmentId) {
+      return NextResponse.json({ error: 'User ID and all fields are required' }, { status: 400 });
     }
     
     const oldUser = await prisma.user.findUnique({ where: { id }, include: { roles: true } });
@@ -105,15 +109,12 @@ export async function PATCH(request: Request) {
     const dataToUpdate: any = {
         name,
         email,
-        department: departmentId ? { connect: { id: departmentId } } : undefined,
+        roles: {
+          set: roles.map((roleName: string) => ({ name: roleName.replace(/ /g, '_') }))
+        },
+        department: { connect: { id: departmentId } },
     };
     
-    if (roles) {
-        dataToUpdate.roles = {
-            set: roles.map((roleName: string) => ({ name: roleName.replace(/ /g, '_') }))
-        };
-    }
-
     if (password) {
         dataToUpdate.password = await bcrypt.hash(password, 10);
     }
@@ -130,16 +131,14 @@ export async function PATCH(request: Request) {
             action: 'UPDATE_USER',
             entity: 'User',
             entityId: id,
-            details: `Updated user "${oldUser.name}".`,
+            details: `Updated user "${oldUser.name}". Name: ${oldUser.name} -> ${name}. Roles: ${oldUser.roles.map(r=>r.name).join(', ')} -> ${roles.join(', ')}.`,
         }
     });
-
-    return NextResponse.json(updatedUser);
+    
+    const { password: _, ...safeUser } = updatedUser;
+    return NextResponse.json(safeUser);
   } catch (error) {
-    if (error instanceof ZodError) {
-        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
-    }
-    console.error('Failed to update user:', error);
+     console.error('Failed to update user:', error);
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
@@ -150,7 +149,9 @@ export async function DELETE(request: Request) {
     if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
-    const { id } = await request.json();
+    const body = await request.json();
+    const { id } = body;
+
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });

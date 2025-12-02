@@ -6,13 +6,12 @@ import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { User, UserRole } from '@/lib/types';
-import { registerSchema } from '@/lib/schemas';
-import { ZodError } from 'zod';
 
+// TODO: Add rate limiting to this route to prevent abuse.
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { name, email, password, role, vendorDetails } = registerSchema.parse(body);
+        const { name, email, password, role, vendorDetails } = body;
 
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
@@ -93,9 +92,6 @@ export async function POST(request: Request) {
         }, { status: 201 });
 
     } catch (error) {
-        if (error instanceof ZodError) {
-            return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
-        }
         console.error('Registration error:', error);
         return NextResponse.json({ error: 'An internal error occurred' }, { status: 500 });
     }

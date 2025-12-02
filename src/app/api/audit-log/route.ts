@@ -3,9 +3,16 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActorFromToken } from '@/lib/auth';
+import { UserRole } from '@/lib/types';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as UserRole[]).some(role => ['Admin', 'Procurement_Officer'].includes(role))) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const logs = await prisma.auditLog.findMany({
       include: {
         user: {
