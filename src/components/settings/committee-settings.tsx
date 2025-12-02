@@ -123,7 +123,7 @@ export function CommitteeSettings() {
     const handleRoleChange = async (userToUpdate: User, committeeRoleName: UserRole, action: 'add' | 'remove') => {
         if (!actor) return;
         
-        const currentRoles = (userToUpdate.roles as any[]).map(r => r.name) as UserRole[];
+        const currentRoles = (userToUpdate.roles as UserRole[]) || [];
         let newRoles: UserRole[];
 
         if (action === 'add') {
@@ -214,8 +214,8 @@ export function CommitteeSettings() {
         if (!committee) return null;
         
         const roleName: UserRole = `Committee_${committeeKey}_Member`;
-        const members = allUsers.filter(u => Array.isArray(u.roles) && (u.roles as any[]).some(r => r.name === roleName));
-        const nonMembers = allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as any[]).some(r => r.name === roleName || r.name === 'Admin' || r.name === 'Vendor'))
+        const members = allUsers.filter(u => Array.isArray(u.roles) && (u.roles as UserRole[]).includes(roleName));
+        const nonMembers = allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as UserRole[]).some(r => r === roleName || r === 'Admin' || r === 'Vendor'))
             .filter(u => departmentFilters[committeeKey] === 'all' || u.departmentId === departmentFilters[committeeKey])
             .filter(u => u.name.toLowerCase().includes(searchTerms[committeeKey]?.toLowerCase() || ''));
 

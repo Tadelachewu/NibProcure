@@ -93,7 +93,7 @@ export function UserManagementEditor() {
     setIsLoading(true);
     try {
       await Promise.all([fetchAllUsers(), fetchAllDepartments()]);
-      setRoles(Object.keys(rolePermissions)); // Include all roles now
+      setRoles(Object.keys(rolePermissions));
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not load initial data.' });
     } finally {
@@ -103,7 +103,7 @@ export function UserManagementEditor() {
 
   useEffect(() => {
     fetchData();
-  }, [rolePermissions]); // Re-fetch if roles change
+  }, [rolePermissions]);
 
   const handleFormSubmit = async (values: UserFormValues) => {
     if (!actor) return;
@@ -180,7 +180,7 @@ export function UserManagementEditor() {
       form.reset({
         name: user.name,
         email: user.email,
-        roles: (user.roles as any[]).map(r => r.name),
+        roles: (user.roles as UserRole[]), // Directly use the string array
         departmentId: user.departmentId || '',
         password: '',
       });
@@ -238,8 +238,8 @@ export function UserManagementEditor() {
                                 <TableCell>{user.email}</TableCell>
                                 <TableCell>
                                   <div className="flex flex-wrap gap-1">
-                                    {(user.roles as any[]).map(role => (
-                                      <Badge key={role.id} variant="secondary">{role.name.replace(/_/g, ' ')}</Badge>
+                                    {(user.roles as UserRole[]).map(role => (
+                                      <Badge key={role} variant="secondary">{role.replace(/_/g, ' ')}</Badge>
                                     ))}
                                   </div>
                                 </TableCell>
@@ -252,7 +252,7 @@ export function UserManagementEditor() {
                                         </Button>
                                         <AlertDialog>
                                             <AlertDialogTrigger asChild>
-                                                <Button variant="destructive" size="sm" disabled={(user.roles as any[]).some(r => r.name === 'Admin')}>
+                                                <Button variant="destructive" size="sm" disabled={(user.roles as UserRole[]).includes('Admin')}>
                                                     <Trash2 className="mr-2 h-4 w-4" />
                                                     Delete
                                                 </Button>

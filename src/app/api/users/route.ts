@@ -7,6 +7,7 @@ import bcrypt from 'bcryptjs';
 import { getActorFromToken } from '@/lib/auth';
 import { userSchema } from '@/lib/schemas';
 import { ZodError } from 'zod';
+import { UserRole } from '@/lib/types';
 
 export async function GET(request: Request) {
   try {
@@ -15,22 +16,20 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     const users = await prisma.user.findMany({
-        select: {
-            id: true,
-            name: true,
-            email: true,
-            vendorId: true,
-            departmentId: true,
+        include: { 
             department: true,
-            roles: true, // This now includes the full role objects
+            roles: true,
+            committeeAssignments: true,
         }
     });
     
-    // The formattedUsers mapping now correctly handles the nested department object
+    // Format users to have a simple array of role names and department name
     const formattedUsers = users.map(u => ({
         ...u,
         department: u.department?.name || 'N/A',
+        roles: u.roles.map(r => r.name as UserRole),
     }));
+
     return NextResponse.json(formattedUsers);
   } catch (error) {
     console.error("Failed to fetch users:", error instanceof Error ? error.message : 'An unknown error occurred');
