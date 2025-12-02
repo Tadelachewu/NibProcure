@@ -24,7 +24,6 @@ export async function GET() {
         include: { 
             department: true,
             roles: true,
-            committeeAssignments: true,
         }
     });
     const formattedUsers = users.map(u => ({
