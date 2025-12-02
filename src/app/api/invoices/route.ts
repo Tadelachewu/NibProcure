@@ -4,6 +4,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
+import { invoiceSchema } from '@/lib/schemas';
+import { ZodError } from 'zod';
 
 export async function GET() {
   try {
@@ -12,8 +14,8 @@ export async function GET() {
     });
     return NextResponse.json(invoices);
   } catch (error) {
-    console.error('Failed to fetch invoices:', error);
-    return NextResponse.json({ error: 'Failed to fetch invoices' }, { status: 500 });
+    console.error('Failed to fetch invoices:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }
 
@@ -25,7 +27,8 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { purchaseOrderId, vendorId, invoiceDate, items, totalAmount, documentUrl } = body;
+    const { purchaseOrderId, vendorId, invoiceDate, items, totalAmount, documentUrl } = invoiceSchema.parse(body);
+
 
     if (actor.vendorId !== vendorId && !(actor.roles as string[]).includes('Finance')) {
         return NextResponse.json({ error: 'You are not authorized to submit an invoice for this vendor.' }, { status: 403 });
@@ -81,10 +84,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newInvoice, { status: 201 });
   } catch (error) {
-    console.error('[SUBMIT-INVOICE] Failed to create invoice:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+     if (error instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
     }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error('[SUBMIT-INVOICE] Failed to create invoice:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }

@@ -3,19 +3,25 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function GET() {
     try {
         const settings = await prisma.setting.findMany();
         return NextResponse.json(settings);
     } catch (error) {
-        console.error("Failed to fetch settings:", error);
-        return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
+        console.error("Failed to fetch settings:", error instanceof Error ? error.message : 'An unknown error occurred');
+        return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
     }
 }
 
 export async function POST(request: Request) {
     try {
+        const actor = await getActorFromToken(request);
+        if (!actor || !(actor.roles as string[]).includes('Admin')) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
         const body = await request.json();
         const { key, value } = body;
 
@@ -32,10 +38,7 @@ export async function POST(request: Request) {
         return NextResponse.json(updatedSetting, { status: 200 });
 
     } catch (error) {
-        console.error('Failed to save setting:', error);
-        if (error instanceof Error) {
-            return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-        }
-        return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+        console.error('Failed to save setting:', error instanceof Error ? error.message : 'An unknown error occurred');
+        return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
     }
 }

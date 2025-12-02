@@ -1,18 +1,19 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
-
+import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { requisitionId, userId } = body;
-
-    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Procurement_Officer')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { requisitionId } = body;
 
     const requisition = await prisma.purchaseRequisition.findUnique({ 
         where: { id: requisitionId },
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
         data: {
             transactionId: requisition.transactionId,
             timestamp: new Date(),
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             action: 'CREATE_PO',
             entity: 'PurchaseOrder',
             entityId: newPO.id,
@@ -87,11 +88,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(newPO, { status: 201 });
   } catch (error) {
-    console.error('Failed to create purchase order:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error('Failed to create purchase order:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }
 
@@ -110,10 +108,7 @@ export async function GET() {
         });
         return NextResponse.json(purchaseOrders);
     } catch (error) {
-        console.error('Failed to fetch purchase orders:', error);
-        if (error instanceof Error) {
-            return NextResponse.json({ error: 'Failed to fetch purchase orders', details: error.message }, { status: 500 });
-        }
-        return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+        console.error('Failed to fetch purchase orders:', error instanceof Error ? error.message : 'An unknown error occurred');
+        return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
     }
 }

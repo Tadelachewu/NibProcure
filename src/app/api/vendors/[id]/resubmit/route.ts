@@ -3,6 +3,9 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActorFromToken } from '@/lib/auth';
+import { vendorDetailsSchema } from '@/lib/schemas';
+import { ZodError } from 'zod';
 
 export async function POST(
   request: Request,
@@ -10,8 +13,14 @@ export async function POST(
 ) {
   const vendorId = params.id;
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor || actor.vendorId !== vendorId) {
+        return NextResponse.json({ error: 'Unauthorized: You can only update your own vendor profile.' }, { status: 403 });
+    }
+
     const body = await request.json();
-    const { name, contactPerson, phone, address, licensePath, taxIdPath } = body;
+    const { name, contactPerson, phone, address, licensePath, taxIdPath } = vendorDetailsSchema.parse(body);
+
 
     const vendor = await prisma.vendor.findUnique({
       where: { id: vendorId },
@@ -79,10 +88,10 @@ export async function POST(
 
     return NextResponse.json({ message: 'Profile updated and resubmitted for verification.' });
   } catch (error) {
-    console.error('Failed to resubmit KYC:', error);
-    if (error instanceof Error) {
-      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+     if (error instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
     }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error('Failed to resubmit KYC:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }

@@ -1,18 +1,21 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { users } from '@/lib/data-store';
+import { getActorFromToken } from '@/lib/auth';
+import { goodsReceiptSchema } from '@/lib/schemas';
+import { ZodError } from 'zod';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { purchaseOrderId, userId, items } = body;
-
-    const user = users.find(u => u.id === userId);
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Receiving')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { purchaseOrderId, items } = goodsReceiptSchema.parse(body);
 
     const txResult = await prisma.$transaction(async (tx) => {
         const po = await tx.purchaseOrder.findUnique({ 
@@ -28,7 +31,7 @@ export async function POST(request: Request) {
           data: {
               transactionId: po.transactionId,
               purchaseOrder: { connect: { id: purchaseOrderId } },
-              receivedBy: { connect: { id: user.id } },
+              receivedBy: { connect: { id: actor.id } },
               items: {
                   create: items.map((item: any) => ({
                       poItemId: item.poItemId,
@@ -77,7 +80,7 @@ export async function POST(request: Request) {
         await prisma.auditLog.create({
             data: {
                 transactionId: po.transactionId,
-                user: { connect: { id: user.id } },
+                user: { connect: { id: actor.id } },
                 timestamp: new Date(),
                 action: 'RECEIVE_GOODS',
                 entity: 'PurchaseOrder',
@@ -91,10 +94,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(txResult, { status: 201 });
   } catch (error) {
-    console.error('[RECEIVE-GOODS] Failed to create goods receipt:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+    if (error instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
     }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error('[RECEIVE-GOODS] Failed to create goods receipt:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }

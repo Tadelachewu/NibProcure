@@ -3,27 +3,28 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User, UserRole } from '@/lib/types';
+import { UserRole } from '@/lib/types';
 import { format } from 'date-fns';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+
     const { id } = params;
     const body = await request.json();
-    const { userId, newDeadline } = body;
+    const { newDeadline } = body;
 
-    const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-    
     // Authorization check
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    const userRoles = user.roles.map(r => r.name as UserRole);
+    const userRoles = actor.roles as UserRole[];
 
     if (userRoles.includes('Admin')) {
         isAuthorized = true;
@@ -31,11 +32,10 @@ export async function POST(
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
         if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
             isAuthorized = true;
-        } else if (setting.type === 'specific' && setting.userId === userId) {
+        } else if (setting.type === 'specific' && setting.userId === actor.id) {
             isAuthorized = true;
         }
     }
-
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized: You do not have permission to extend deadlines.' }, { status: 403 });
@@ -61,7 +61,7 @@ export async function POST(
     await prisma.auditLog.create({
         data: {
             transactionId: requisition.transactionId,
-            user: { connect: { id: userId } },
+            user: { connect: { id: actor.id } },
             action: 'EXTEND_SCORING_DEADLINE',
             entity: 'Requisition',
             entityId: id,
@@ -74,10 +74,7 @@ export async function POST(
     return NextResponse.json(updatedRequisition);
 
   } catch (error) {
-    console.error('Failed to extend scoring deadline:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error('Failed to extend scoring deadline:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }

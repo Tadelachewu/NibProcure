@@ -66,10 +66,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Invalid password' }, { status: 401 });
 
     } catch (error) {
-        console.error('Login error:', error);
-        if (error instanceof Error) {
-            return NextResponse.json({ error: 'An internal server error occurred', details: error.message }, { status: 500 });
-        }
+        console.error('Login error:', error instanceof Error ? error.message : 'An unknown error occurred');
         return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
     }
 }

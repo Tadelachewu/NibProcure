@@ -1,26 +1,27 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { users } from '@/lib/auth-store';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const invoiceId = params.id;
-    const body = await request.json();
-    const { status, userId } = body;
-
-    const validStatuses = ['Approved for Payment', 'Disputed'];
-    if (!validStatuses.includes(status)) {
-      return NextResponse.json({ error: 'Invalid status provided.' }, { status: 400 });
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Finance')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
-    const user = users.find(u => u.id === userId);
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const invoiceId = params.id;
+    const body = await request.json();
+    const { status } = body;
+
+    const validStatuses = ['Approved_for_Payment', 'Disputed'];
+    if (!validStatuses.includes(status)) {
+      return NextResponse.json({ error: 'Invalid status provided.' }, { status: 400 });
     }
     
     const invoiceToUpdate = await prisma.invoice.findUnique({ where: { id: invoiceId } });
@@ -36,7 +37,7 @@ export async function PATCH(
     
     await prisma.auditLog.create({
         data: {
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'UPDATE_INVOICE_STATUS',
             entity: 'Invoice',
@@ -47,10 +48,7 @@ export async function PATCH(
 
     return NextResponse.json(updatedInvoice);
   } catch (error) {
-    console.error('Failed to update invoice status:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error('Failed to update invoice status:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }

@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(formattedLogs);
   } catch (error) {
-    console.error("Failed to fetch audit logs:", error);
-    return NextResponse.json({ error: "Failed to fetch audit logs" }, { status: 500 });
+    console.error("Failed to fetch audit logs:", error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: "An internal server error occurred" }, { status: 500 });
   }
 }

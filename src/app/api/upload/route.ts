@@ -74,10 +74,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, path: publicPath });
 
   } catch (error) {
-    console.error('Failed to save file:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ success: false, error: 'Failed to save file', details: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ success: false, error: 'An unknown error occurred' }, { status: 500 });
+    console.error('File upload error:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ success: false, error: 'An internal server error occurred' }, { status: 500 });
   }
 }

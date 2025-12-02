@@ -25,8 +25,8 @@ export async function GET(request: Request) {
         });
         return NextResponse.json(departments);
     } catch (error) {
-        console.error("Failed to fetch departments:", error);
-        return NextResponse.json({ error: 'Failed to fetch departments' }, { status: 500 });
+        console.error("Failed to fetch departments:", error instanceof Error ? error.message : 'An unknown error occurred');
+        return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
     }
 }
 
@@ -69,8 +69,8 @@ export async function POST(request: Request) {
      if (error instanceof ZodError) {
         return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
     }
-    console.error("Error creating department:", error);
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error("Error creating department:", error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }
 
@@ -145,8 +145,8 @@ export async function PATCH(request: Request) {
     if ((error as any).code === 'P2002' && (error as any).meta?.target?.includes('headId')) {
         return NextResponse.json({ error: 'This user is already the head of another department.' }, { status: 409 });
     }
-    console.error("Error updating department:", error);
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error("Error updating department:", error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }
 
@@ -178,7 +178,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ message: 'Department deleted successfully' });
   } catch (error) {
-     console.error("Error deleting department:", error);
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+     console.error("Error deleting department:", error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }

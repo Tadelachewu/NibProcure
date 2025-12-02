@@ -5,6 +5,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { getActorFromToken } from '@/lib/auth';
+import { userSchema } from '@/lib/schemas';
+import { ZodError } from 'zod';
 
 export async function GET(request: Request) {
   try {
@@ -23,15 +25,15 @@ export async function GET(request: Request) {
             roles: true,
         }
     });
-    // Return the full user object with the nested roles
+    // Return the user object without the password
     const formattedUsers = users.map(u => ({
         ...u,
         department: u.department?.name || 'N/A',
     }));
     return NextResponse.json(formattedUsers);
   } catch (error) {
-    console.error("Failed to fetch users:", error);
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    console.error("Failed to fetch users:", error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }
 
@@ -42,18 +44,17 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     const body = await request.json();
-    const { name, email, password, roles, departmentId } = body;
-    
-
-    if (!name || !email || !password || !roles || !Array.isArray(roles) || roles.length === 0 || !departmentId) {
-      return NextResponse.json({ error: 'All fields including at least one role are required' }, { status: 400 });
-    }
+    const { name, email, password, roles, departmentId } = userSchema.parse(body);
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
         return NextResponse.json({ error: 'A user with this email already exists' }, { status: 409 });
     }
     
+    if (!password) {
+        return NextResponse.json({ error: 'Password is required for new users' }, { status: 400 });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await prisma.user.create({
@@ -82,8 +83,11 @@ export async function POST(request: Request) {
     const { password: _, ...safeUser } = newUser;
     return NextResponse.json(safeUser, { status: 201 });
   } catch (error) {
-    console.error("Failed to create user:", error);
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+     if (error instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
+    }
+    console.error("Failed to create user:", error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }
 
@@ -94,11 +98,11 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     const body = await request.json();
-    const { id, name, email, roles, departmentId, password } = body;
+    const { id, password, ...updateData } = userSchema.partial().parse(body);
 
 
-    if (!id || !name || !email || !roles || !Array.isArray(roles) || !departmentId) {
-      return NextResponse.json({ error: 'User ID and all fields are required' }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
     
     const oldUser = await prisma.user.findUnique({ where: { id }, include: { roles: true } });
@@ -107,12 +111,12 @@ export async function PATCH(request: Request) {
     }
     
     const dataToUpdate: any = {
-        name,
-        email,
-        roles: {
-          set: roles.map((roleName: string) => ({ name: roleName.replace(/ /g, '_') }))
-        },
-        department: { connect: { id: departmentId } },
+        name: updateData.name,
+        email: updateData.email,
+        roles: updateData.roles ? {
+          set: updateData.roles.map((roleName: string) => ({ name: roleName.replace(/ /g, '_') }))
+        } : undefined,
+        department: updateData.departmentId ? { connect: { id: updateData.departmentId } } : undefined,
     };
     
     if (password) {
@@ -131,15 +135,18 @@ export async function PATCH(request: Request) {
             action: 'UPDATE_USER',
             entity: 'User',
             entityId: id,
-            details: `Updated user "${oldUser.name}". Name: ${oldUser.name} -> ${name}. Roles: ${oldUser.roles.map(r=>r.name).join(', ')} -> ${roles.join(', ')}.`,
+            details: `Updated user "${oldUser.name}". Name: ${oldUser.name} -> ${updateData.name}. Roles: ${oldUser.roles.map(r=>r.name).join(', ')} -> ${updateData.roles?.join(', ')}.`,
         }
     });
     
     const { password: _, ...safeUser } = updatedUser;
     return NextResponse.json(safeUser);
   } catch (error) {
-     console.error('Failed to update user:', error);
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+     if (error instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
+    }
+    console.error('Failed to update user:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }
 
@@ -149,8 +156,7 @@ export async function DELETE(request: Request) {
     if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
-    const body = await request.json();
-    const { id } = body;
+    const { id } = await request.json();
 
 
     if (!id) {
@@ -181,6 +187,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ message: 'User deleted successfully' });
   } catch (error) {
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error("Error deleting user:", error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }

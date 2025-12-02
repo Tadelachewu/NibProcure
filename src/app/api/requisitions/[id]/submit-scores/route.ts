@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -10,28 +11,25 @@ export async function POST(
 ) {
   const requisitionId = params.id;
   try {
-    const body = await request.json();
-    const { userId } = body;
-
-    const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    if (!user.roles.some(r => r.name === 'Committee_Member')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (!(actor.roles as string[]).includes('Committee_Member')) {
+        return NextResponse.json({ error: 'Unauthorized: Only committee members can submit scores.' }, { status: 403 });
     }
     
     await prisma.committeeAssignment.upsert({
       where: {
         userId_requisitionId: {
-          userId: userId,
+          userId: actor.id,
           requisitionId: requisitionId,
         }
       },
       update: { scoresSubmitted: true },
       create: {
-        userId: userId,
+        userId: actor.id,
         requisitionId: requisitionId,
         scoresSubmitted: true,
       },
@@ -65,7 +63,7 @@ export async function POST(
         data: {
             transactionId: requisitionId,
             timestamp: new Date(),
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             action: 'SUBMIT_SCORES',
             entity: 'Requisition',
             entityId: requisitionId,
@@ -75,10 +73,7 @@ export async function POST(
 
     return NextResponse.json({ message: 'All scores have been successfully submitted.' });
   } catch (error) {
-    console.error('Failed to submit final scores:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error('Failed to submit final scores:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }

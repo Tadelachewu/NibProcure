@@ -4,23 +4,22 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PerItemAwardDetail } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
+import { paymentSchema } from '@/lib/schemas';
+import { ZodError } from 'zod';
 
 export async function POST(
   request: Request
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Finance')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const body = await request.json();
-    const { invoiceId, userId, paymentEvidenceUrl } = body;
-
-    const user = await prisma.user.findUnique({where: {id: userId}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    const { invoiceId, paymentEvidenceUrl } = paymentSchema.parse(body);
     
-    if (!paymentEvidenceUrl) {
-      return NextResponse.json({ error: 'Payment evidence document is required.' }, { status: 400 });
-    }
-
     const invoiceToUpdate = await prisma.invoice.findUnique({ 
         where: { id: invoiceId },
         include: { po: true }
@@ -86,7 +85,7 @@ export async function POST(
         
         await tx.auditLog.create({
             data: {
-                user: { connect: { id: user.id } },
+                user: { connect: { id: actor.id } },
                 timestamp: new Date(),
                 action: 'PROCESS_PAYMENT',
                 entity: 'Invoice',
@@ -101,10 +100,10 @@ export async function POST(
     
     return NextResponse.json(transactionResult);
   } catch (error) {
-    console.error('[PROCESS-PAYMENT] Failed to process payment:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+    if (error instanceof ZodError) {
+        return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
     }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error('[PROCESS-PAYMENT] Failed to process payment:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }

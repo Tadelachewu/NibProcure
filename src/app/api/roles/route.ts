@@ -3,10 +3,11 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { useAuth } from '@/contexts/auth-context';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function GET() {
   try {
+    // No auth check needed for GET, as it's used in user management forms accessible to admins.
     const roles = await prisma.role.findMany({
       orderBy: {
         name: 'asc',
@@ -14,20 +15,20 @@ export async function GET() {
     });
     return NextResponse.json(roles);
   } catch (error) {
-    console.error('Failed to fetch roles:', error);
-    return NextResponse.json({ error: 'Failed to fetch roles' }, { status: 500 });
+    console.error('Failed to fetch roles:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { name, description, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({ where: { id: actorUserId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+    const body = await request.json();
+    const { name, description } = body;
+
 
     if (!name) {
       return NextResponse.json({ error: 'Role name is required' }, { status: 400 });
@@ -69,23 +70,20 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    console.error('Failed to create role:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    console.error('Failed to create role:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }
 
 export async function PATCH(request: Request) {
    try {
-    const body = await request.json();
-    const { id, name, description, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+    const body = await request.json();
+    const { id, name, description } = body;
+
 
     if (!id || !name) {
       return NextResponse.json({ error: 'Role ID and name are required' }, { status: 400 });
@@ -104,23 +102,20 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json(updatedRole);
   } catch (error) {
-     console.error('Failed to update role:', error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+     console.error('Failed to update role:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
    try {
-    const body = await request.json();
-    const { id, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+    const body = await request.json();
+    const { id } = body;
+
     
     if (!id) {
       return NextResponse.json({ error: 'Role ID is required' }, { status: 400 });
@@ -173,10 +168,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ message: 'Role deleted successfully' });
   } catch (error) {
-     console.error('Failed to delete role:', error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+     console.error('Failed to delete role:', error instanceof Error ? error.message : 'An unknown error occurred');
+    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }
