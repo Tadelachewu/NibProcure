@@ -62,9 +62,15 @@ export function CommitteeSettings() {
             try {
                 const res = await fetch('/api/departments');
                 const data = await res.json();
-                setDepartments(data);
+                if (Array.isArray(data)) {
+                    setDepartments(data);
+                } else {
+                    console.error("Fetched departments is not an array:", data);
+                    setDepartments([]); // Ensure it's an array
+                }
             } catch (e) {
                 console.error("Failed to fetch departments", e);
+                setDepartments([]);
             }
         };
         fetchDepts();
@@ -261,7 +267,7 @@ export function CommitteeSettings() {
                                     <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Departments</SelectItem>
-                                        {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                        {Array.isArray(departments) && departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                              </div>
@@ -328,5 +334,3 @@ export function CommitteeSettings() {
         </div>
     );
 }
-
-    
