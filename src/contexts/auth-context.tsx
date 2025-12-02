@@ -118,8 +118,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   const fetchAllUsers = useCallback(async () => {
+    const currentToken = localStorage.getItem('authToken');
+    if (!currentToken) return [];
+
     try {
-        const response = await fetch('/api/users');
+        const response = await fetch('/api/users', {
+            headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
         if (response.ok) {
             const usersData = await response.json();
             setAllUsers(usersData);
@@ -133,8 +138,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const fetchAllDepartments = useCallback(async () => {
+    const currentToken = localStorage.getItem('authToken');
+    if (!currentToken) return;
     try {
-      const response = await fetch('/api/departments');
+      const response = await fetch('/api/departments', {
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+      });
       if (response.ok) {
         const deptsData = await response.json();
         setDepartments(deptsData);
