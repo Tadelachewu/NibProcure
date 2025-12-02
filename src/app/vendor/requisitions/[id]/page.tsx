@@ -177,6 +177,8 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
     const { user, token } = useAuth();
     const [isSubmitting, setSubmitting] = useState(false);
     const { toast } = useToast();
+    const isEditMode = !!quote;
+    const storageKey = `quote-form-${requisition.id}`;
 
     const form = useForm<z.infer<typeof quoteFormSchema>>({
         resolver: zodResolver(quoteFormSchema),
@@ -207,6 +209,29 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             experienceDocumentUrl: '',
         },
     });
+
+    useEffect(() => {
+        const savedData = localStorage.getItem(storageKey);
+        if (savedData && !isEditMode) { // Only restore for new quotes
+            try {
+                const parsedData = JSON.parse(savedData);
+                form.reset(parsedData);
+                toast({ title: 'Draft Restored', description: 'Your previously entered quote data has been restored.' });
+            } catch (e) {
+                console.error("Failed to parse saved form data", e);
+            }
+        }
+    }, [storageKey, form, toast, isEditMode]);
+
+    useEffect(() => {
+        const subscription = form.watch((value) => {
+            if (!isEditMode) {
+                 localStorage.setItem(storageKey, JSON.stringify(value));
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, [form, storageKey, isEditMode]);
+
 
      const { fields, append, remove } = useFieldArray({
         control: form.control,
@@ -288,9 +313,8 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
 
         setSubmitting(true);
         try {
-            const isEditing = !!quote;
-            const url = isEditing ? `/api/quotations/${quote.id}` : '/api/quotations';
-            const method = isEditing ? 'PATCH' : 'POST';
+            const url = isEditMode ? `/api/quotations/${quote.id}` : '/api/quotations';
+            const method = isEditMode ? 'PATCH' : 'POST';
 
             const response = await fetch(url, {
                 method,
@@ -305,12 +329,14 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `Failed to ${isEditing ? 'update' : 'submit'} quote.`);
+                throw new Error(errorData.error || `Failed to ${isEditMode ? 'update' : 'submit'} quote.`);
             }
+            
+            localStorage.removeItem(storageKey);
 
             toast({
                 title: 'Success!',
-                description: `Your quotation has been ${isEditing ? 'updated' : 'submitted'}.`,
+                description: `Your quotation has been ${isEditMode ? 'updated' : 'submitted'}.`,
             });
             onQuoteSubmitted();
         } catch (error) {
