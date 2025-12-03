@@ -65,7 +65,7 @@ export async function constructMinuteData(
         result: awardStrategy === 'item' 
             ? 'Each item awarded to the vendor with the highest score for that specific item.'
             : `All items awarded to the single vendor with the highest overall average score.`,
-        winner: awardStrategy === 'all' ? winningQuotes[0]?.vendorName : 'Multiple',
+        winner: awardStrategy === 'all' && winningQuotes.length > 0 ? winningQuotes[0]?.vendorName : 'Multiple',
     };
 
     const auditMetadata = {
@@ -107,7 +107,7 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
         data: {
             requisition: { connect: { id: requisition.id } },
             author: { connect: { id: actor.id } },
-            decision: 'APPROVED',
+            decision: 'APPROVED', // This minute is generated on the pre-approval step
             decisionBody: 'Award Finalization Committee',
             justification: minuteJsonData.awardRecommendation.justification,
             attendees: {
@@ -117,7 +117,15 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
                     { id: actor.id },
                 ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
             },
-            ...minuteJsonData, // Spread the JSON data here
+            // Spread the JSON data here, ensuring it matches the schema
+            minuteReference: minuteJsonData.minuteReference,
+            meetingDate: minuteJsonData.meetingDate,
+            procurementSummary: minuteJsonData.procurementSummary,
+            evaluationSummary: minuteJsonData.evaluationSummary,
+            systemAnalysis: minuteJsonData.systemAnalysis,
+            awardRecommendation: minuteJsonData.awardRecommendation,
+            conclusion: minuteJsonData.conclusion,
+            auditMetadata: minuteJsonData.auditMetadata,
         },
     });
 
