@@ -15,7 +15,7 @@ export async function POST(
   console.log(`[RESPOND-AWARD] Received request for Quote ID: ${quoteId}`);
   try {
     const body = await request.json();
-    const { userId, action, quoteItemId } = body as { userId: string; action: 'accept' | 'reject'; quoteItemId?: string };
+    const { userId, action, quoteItemId, reason } = body as { userId: string; action: 'accept' | 'reject'; quoteItemId?: string, reason?: string };
     console.log(`[RESPOND-AWARD] Action: ${action} by User ID: ${userId}. Item-specific: ${!!quoteItemId}`);
 
     const user = await prisma.user.findUnique({
@@ -133,34 +133,6 @@ export async function POST(
                 }
             });
             console.log(`[RESPOND-AWARD] Created new Purchase Order: ${newPO.id}`);
-
-            // **MODIFIED LOGIC**: After a vendor accepts, check if there are other awards still pending for OTHER vendors.
-            // Only if all awards are actioned (accepted or declined), then update the parent requisition status.
-            const updatedRequisitionAfterAcceptance = await tx.purchaseRequisition.findUnique({
-                where: { id: requisition.id },
-                include: { items: true, quotations: true }
-            });
-            if (!updatedRequisitionAfterAcceptance) throw new Error("Could not refetch requisition to check completion status.");
-
-            let allAwardsActioned = false;
-            if (isPerItemAward) {
-                // Check if any item still has a status of 'Awarded' or 'Standby' for ANY vendor.
-                 allAwardsActioned = !updatedRequisitionAfterAcceptance.items.some(item =>
-                    (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Awarded' || d.status === 'Standby')
-                );
-            } else {
-                 allAwardsActioned = !updatedRequisitionAfterAcceptance.quotations.some(q => q.status === 'Awarded' || q.status === 'Standby');
-            }
-
-            if (allAwardsActioned) {
-                 console.log(`[RESPOND-AWARD] All awards for Req ${requisition.id} have been actioned. Updating parent status to PO_Created.`);
-                 await tx.purchaseRequisition.update({
-                    where: { id: requisition.id },
-                    data: { status: 'PO_Created' }
-                });
-            } else {
-                console.log(`[RESPOND-AWARD] Other awards for Req ${requisition.id} are still pending. Parent status remains active.`);
-            }
             
             await tx.auditLog.create({
                 data: {
@@ -177,6 +149,9 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
+            if (!reason) {
+                throw new Error("A reason for declining the award is required.");
+            }
             const declinedItemIds = quoteItemId
                 ? [quote.items.find(i => i.id === quoteItemId)?.requisitionItemId].filter(Boolean) as string[]
                 : requisition.items
@@ -184,7 +159,7 @@ export async function POST(
                     .map(item => item.id);
             
             console.log(`[RESPOND-AWARD] Handling award rejection. Declined item IDs: ${declinedItemIds.join(', ')}`);
-            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds, quoteItemId);
+            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds, rejectedQuoteItemId, reason);
         }
         
         throw new Error('Invalid action.');

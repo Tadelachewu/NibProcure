@@ -219,6 +219,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
  * @param actor - The user performing the action.
  * @param declinedItemIds - The specific requisition item IDs that were declined (for per-item awards).
  * @param rejectedQuoteItemId - The specific quote item that was rejected (for per-item awards).
+ * @param reason - The reason for declining the award.
  * @returns A message indicating the result of the operation.
  */
 export async function handleAwardRejection(
@@ -227,7 +228,8 @@ export async function handleAwardRejection(
     requisition: any,
     actor: any,
     declinedItemIds: string[] = [],
-    rejectedQuoteItemId?: string
+    rejectedQuoteItemId?: string,
+    reason?: string,
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
     
@@ -266,7 +268,7 @@ export async function handleAwardRejection(
                     action: 'DECLINE_AWARD', 
                     entity: 'Requisition', 
                     entityId: requisition.id, 
-                    details: `Vendor ${quote.vendorName} declined the award for item "${itemToUpdate.name}". Manual promotion of standby is now possible.`, 
+                    details: `Vendor ${quote.vendorName} declined the award for item "${itemToUpdate.name}". Reason: "${reason}". Manual promotion of standby is now possible.`, 
                     transactionId: requisition.transactionId 
                 } 
             });
@@ -276,7 +278,7 @@ export async function handleAwardRejection(
         throw new Error("No awarded items found for this vendor to decline.");
 
     } else { // Single Vendor Strategy
-        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
+        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined', rejectionReason: reason } });
         
         await tx.auditLog.create({ 
             data: { 
@@ -285,7 +287,7 @@ export async function handleAwardRejection(
                 action: 'DECLINE_AWARD', 
                 entity: 'Quotation', 
                 entityId: quote.id, 
-                details: `Vendor declined award.`, 
+                details: `Vendor declined award. Reason: "${reason}"`, 
                 transactionId: requisition.transactionId 
             } 
         });
@@ -506,5 +508,3 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
-
-    
