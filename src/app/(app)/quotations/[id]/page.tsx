@@ -1890,7 +1890,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             const imgWidth = canvas.width;
             const imgHeight = canvas.height;
             const ratio = imgWidth / imgHeight;
-            let width = pdfWidth - 20;
+            let width = pdfWidth - 20; // with margin
             let height = width / ratio;
 
             if (height > pdfHeight - 20) {
@@ -2105,10 +2105,12 @@ const CommitteeActions = ({
     user,
     requisition,
     quotations,
+    onFinalScoresSubmitted,
 }: {
     user: User,
     requisition: PurchaseRequisition,
     quotations: Quotation[],
+    onFinalScoresSubmitted: () => void,
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
@@ -2136,6 +2138,7 @@ const CommitteeActions = ({
                 throw new Error(errorData.error || 'Failed to submit scores');
             }
             toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
+            onFinalScoresSubmitted();
         } catch (error) {
              toast({
                 variant: 'destructive',
@@ -2146,6 +2149,27 @@ const CommitteeActions = ({
             setIsSubmitting(false);
         }
     };
+
+    if (user.role !== 'Committee_Member') {
+        return null;
+    }
+
+    if (scoresAlreadyFinalized) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Committee Actions</CardTitle>
+                    <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button variant="outline" disabled>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Scores Submitted
+                    </Button>
+                </CardContent>
+            </Card>
+        )
+    }
 
     return (
         <Card>
@@ -2870,6 +2894,7 @@ export default function QuotationDetailsPage() {
                 user={user}
                 requisition={requisition}
                 quotations={quotations}
+                onFinalScoresSubmitted={fetchRequisitionAndQuotes}
              />
         )}
 
@@ -3389,6 +3414,8 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
 
+
+    
 
     
 
