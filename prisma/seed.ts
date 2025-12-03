@@ -37,8 +37,9 @@ async function main() {
   await prisma.purchaseRequisition.deleteMany({});
   await prisma.kYC_Document.deleteMany({});
   await prisma.vendor.deleteMany({});
-  await prisma.user.deleteMany({});
+  // Corrected Order: Delete Departments before Users
   await prisma.department.deleteMany({});
+  await prisma.user.deleteMany({});
   await prisma.approvalStep.deleteMany({});
   await prisma.approvalThreshold.deleteMany({});
   await prisma.role.deleteMany({});
