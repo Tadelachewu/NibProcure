@@ -451,6 +451,45 @@ async function main() {
                })
            }
        }
+
+        if (scores && requisition.evaluationCriteria) {
+            for (const scoreSet of scores) {
+                const finalScore = 0; // This will be recalculated later if needed, or derived from item scores
+                const createdScoreSet = await prisma.committeeScoreSet.create({
+                    data: {
+                        quotationId: createdQuote.id,
+                        scorerId: scoreSet.scorerId,
+                        committeeComment: scoreSet.committeeComment,
+                        finalScore,
+                        submittedAt: new Date(scoreSet.submittedAt),
+                    }
+                });
+
+                for (const itemScore of scoreSet.itemScores) {
+                    const createdItemScore = await prisma.itemScore.create({
+                        data: {
+                            scoreSetId: createdScoreSet.id,
+                            quoteItemId: itemScore.quoteItemId,
+                            finalScore: itemScore.finalScore,
+                        }
+                    });
+
+                    const allScores = [...itemScore.financialScores, ...itemScore.technicalScores];
+                    for (const score of allScores) {
+                        await prisma.score.create({
+                            data: {
+                                itemScoreId: createdItemScore.id,
+                                score: score.score,
+                                comment: score.comment,
+                                type: score.type,
+                                financialCriterionId: score.type === 'FINANCIAL' ? score.criterionId : null,
+                                technicalCriterionId: score.type === 'TECHNICAL' ? score.criterionId : null,
+                            }
+                        });
+                    }
+                }
+            }
+        }
    }
    console.log('Seeded quotations and related items/answers.');
 
@@ -574,3 +613,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    

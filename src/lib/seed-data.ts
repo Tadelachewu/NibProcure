@@ -105,6 +105,43 @@ const seedData: AppData = {
             financialCommitteeMemberIds: ['9'],
             technicalCommitteeMemberIds: ['10'],
         },
+        {
+            id: 'REQ-E2E-AWARD-TEST',
+            transactionId: 'REQ-E2E-AWARD-TEST',
+            requesterId: '1',
+            departmentId: 'DEPT-4',
+            title: 'E2E Award Test - Office Furnishings',
+            justification: 'New office setup for the expanding marketing team requires ergonomic furniture to ensure employee well-being and productivity.',
+            status: 'Scoring_Complete',
+            urgency: 'Medium',
+            totalPrice: 11500,
+            createdAt: new Date('2024-05-10T09:00:00Z'),
+            updatedAt: new Date('2024-05-25T14:00:00Z'),
+            deadline: new Date('2024-05-20T17:00:00Z'),
+            scoringDeadline: new Date('2024-05-25T17:00:00Z'),
+            items: [
+                { id: 'ITEM-FURN-1', name: 'Ergonomic Office Chair', quantity: 10, unitPrice: 450, description: 'High-back, adjustable lumbar support, and armrests' },
+                { id: 'ITEM-FURN-2', name: 'Standing Desk (Electric)', quantity: 10, unitPrice: 700, description: 'Dual motor, memory presets, 140x70cm top' }
+            ],
+            customQuestions: [
+                { id: 'CQ-FURN-1', questionText: 'What is the warranty period for the chairs?', questionType: 'text', isRequired: true },
+                { id: 'CQ-FURN-2', questionText: 'Do you offer bulk assembly services?', questionType: 'boolean', isRequired: true },
+            ],
+            evaluationCriteria: {
+                financialWeight: 40,
+                technicalWeight: 60,
+                financialCriteria: [{ id: 'fc-1', name: 'Price per Unit', weight: 100 }],
+                technicalCriteria: [
+                    { id: 'tc-1', name: 'Product Durability', weight: 50 },
+                    { id: 'tc-2', name: 'Warranty Period', weight: 50 }
+                ],
+            },
+            financialCommitteeMemberIds: ['9'], // Fiona
+            technicalCommitteeMemberIds: ['10'], // George
+            committeeName: 'Office Furnishing Evaluation Committee',
+            committeePurpose: 'To select the best value ergonomic furniture for the new marketing office.',
+            quotations: [],
+        }
     ],
 
     auditLogs: [
@@ -112,7 +149,68 @@ const seedData: AppData = {
     ],
 
     quotations: [
-        // Empty as the linked requisitions were removed
+        {
+            id: 'QUO-FURN-001',
+            transactionId: 'REQ-E2E-AWARD-TEST',
+            requisitionId: 'REQ-E2E-AWARD-TEST',
+            vendorId: 'VENDOR-001',
+            vendorName: 'Apple Inc.',
+            totalPrice: 12500,
+            deliveryDate: new Date('2024-06-10T00:00:00Z'),
+            createdAt: new Date('2024-05-15T10:00:00Z'),
+            updatedAt: new Date('2024-05-15T10:00:00Z'),
+            status: 'Submitted',
+            notes: 'Premium materials, 10 year warranty.',
+            items: [
+                { id: 'QI-FURN-1A', requisitionItemId: 'ITEM-FURN-1', name: 'Herman Miller Aeron', quantity: 10, unitPrice: 500, leadTimeDays: 14, brandDetails: 'Herman Miller', imageUrl: 'https://picsum.photos/seed/chair1/400/300' },
+                { id: 'QI-FURN-2A', requisitionItemId: 'ITEM-FURN-2', name: 'Fully Jarvis Standing Desk', quantity: 10, unitPrice: 750, leadTimeDays: 20, brandDetails: 'Fully', imageUrl: 'https://picsum.photos/seed/desk1/400/300' }
+            ],
+            answers: [
+                { questionId: 'CQ-FURN-1', answer: 'We offer a 12-year warranty on the Aeron chairs.' },
+                { questionId: 'CQ-FURN-2', answer: 'true' }
+            ],
+        },
+        {
+            id: 'QUO-FURN-002',
+            transactionId: 'REQ-E2E-AWARD-TEST',
+            requisitionId: 'REQ-E2E-AWARD-TEST',
+            vendorId: 'VENDOR-002',
+            vendorName: 'Dell Technologies',
+            totalPrice: 11000,
+            deliveryDate: new Date('2024-06-15T00:00:00Z'),
+            createdAt: new Date('2024-05-16T11:00:00Z'),
+            updatedAt: new Date('2024-05-16T11:00:00Z'),
+            status: 'Submitted',
+            notes: 'Best value proposition.',
+            items: [
+                { id: 'QI-FURN-1B', requisitionItemId: 'ITEM-FURN-1', name: 'Steelcase Series 2', quantity: 10, unitPrice: 420, leadTimeDays: 10, brandDetails: 'Steelcase', imageUrl: 'https://picsum.photos/seed/chair2/400/300' },
+                { id: 'QI-FURN-2B', requisitionItemId: 'ITEM-FURN-2', name: 'Uplift V2 Standing Desk', quantity: 10, unitPrice: 680, leadTimeDays: 15, brandDetails: 'Uplift Desk', imageUrl: 'https://picsum.photos/seed/desk2/400/300' }
+            ],
+            answers: [
+                { questionId: 'CQ-FURN-1', answer: '5-year warranty on all parts.' },
+                { questionId: 'CQ-FURN-2', answer: 'false' }
+            ],
+        },
+        {
+            id: 'QUO-FURN-003',
+            transactionId: 'REQ-E2E-AWARD-TEST',
+            requisitionId: 'REQ-E2E-AWARD-TEST',
+            vendorId: 'VENDOR-004',
+            vendorName: 'HP Inc.',
+            totalPrice: 11800,
+            deliveryDate: new Date('2024-06-20T00:00:00Z'),
+            createdAt: new Date('2024-05-17T14:00:00Z'),
+            updatedAt: new Date('2024-05-17T14:00:00Z'),
+            status: 'Submitted',
+            items: [
+                { id: 'QI-FURN-1C', requisitionItemId: 'ITEM-FURN-1', name: 'Haworth Fern', quantity: 10, unitPrice: 480, leadTimeDays: 12, brandDetails: 'Haworth', imageUrl: 'https://picsum.photos/seed/chair3/400/300' },
+                { id: 'QI-FURN-2C', requisitionItemId: 'ITEM-FURN-2', name: 'Vari Electric Standing Desk', quantity: 10, unitPrice: 700, leadTimeDays: 18, brandDetails: 'Vari', imageUrl: 'https://picsum.photos/seed/desk3/400/300' }
+            ],
+            answers: [
+                { questionId: 'CQ-FURN-1', answer: '8-year warranty.' },
+                { questionId: 'CQ-FURN-2', answer: 'true' }
+            ],
+        }
     ],
     purchaseOrders: [],
     goodsReceipts: [],
@@ -147,3 +245,5 @@ const seedData: AppData = {
         { id: 'DEPT-6', name: 'Human Resources', description: 'Manages employee relations and hiring.', headId: null },
     ]
 };
+
+    
