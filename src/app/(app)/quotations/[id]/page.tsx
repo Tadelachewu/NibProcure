@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -2516,7 +2517,7 @@ export default function QuotationDetailsPage() {
   }, [id, user, fetchRequisitionAndQuotes]);
   
 
-  const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
+  const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system' | 'manual', minuteFilePath?: string) => {
         if (!user || !requisition || !quotations) return;
         
         let totalAwardValue = 0;
@@ -2550,7 +2551,7 @@ export default function QuotationDetailsPage() {
              const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, totalAwardValue }),
+                body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, totalAwardValue, minuteType, minuteFilePath }),
             });
             if (!response.ok) {
                 const errorData = await response.json();
@@ -2896,7 +2897,7 @@ export default function QuotationDetailsPage() {
             <CardTitle>Awarding Center</CardTitle>
             <CardDescription>
               {requisition.status === 'Award_Declined'
-                ? 'An award was declined. You may now promote a standby vendor.'
+                ? 'An award was declined. You may now promote a standby vendor or restart the RFQ for the failed items.'
                 : 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
             </CardDescription>
           </CardHeader>
@@ -3398,3 +3399,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
 
+
+
+    

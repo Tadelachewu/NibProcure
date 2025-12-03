@@ -104,10 +104,11 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        // Corrected: Use a static, valid list of statuses from the RequisitionStatus enum
         const rfqLifecycleStatuses = [
-            'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved', 'PO_Created', 'Fulfilled', 'Closed',
-            'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review', 'Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval'
+          'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 
+          'Award_Declined', 'Awarded', 'PostApproved', 'PO_Created', 'Fulfilled', 'Closed',
+          'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review', 'Pending_Managerial_Approval', 
+          'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval'
         ];
 
         const userRoles = userPayload?.roles.map(r => r.name) || [];
@@ -399,8 +400,9 @@ export async function PATCH(
             });
 
             // Find the minute associated with this requisition
-            const existingMinute = await tx.minute.findUnique({
+            const existingMinute = await tx.minute.findFirst({
                 where: { requisitionId: id },
+                orderBy: { createdAt: 'desc' }
             });
 
             if (existingMinute) {
@@ -719,3 +721,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
