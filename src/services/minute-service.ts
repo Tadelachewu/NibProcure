@@ -99,10 +99,10 @@ export async function constructMinuteData(
         minuteReference,
         meetingDate: new Date().toISOString(),
         participants,
-        procurementDetails, // Kept inside for the full document view
+        procurementDetails,
         bidders,
-        evaluationSummary, // Kept inside for the full document view
-        systemAnalysis, // Kept inside for the full document view
+        evaluationSummary,
+        systemAnalysis,
         awardRecommendation,
         conclusion: 'The committee recommends proceeding with the award as detailed above, subject to final approvals as per the procurement policy.',
         auditMetadata,
@@ -112,6 +112,7 @@ export async function constructMinuteData(
         procurementSummary: procurementDetails,
         evaluationSummary: evaluationSummary,
         systemAnalysis: systemAnalysis,
+        awardRecommendation: awardRecommendation,
         minuteData: minuteJson,
     };
 }
@@ -126,7 +127,7 @@ export async function constructMinuteData(
  * @returns The newly created minute object.
  */
 export async function generateAndSaveMinute(tx: any, requisition: any, quotations: any[], winningVendorIds: string[], actor: any) {
-    const { procurementSummary, evaluationSummary, systemAnalysis, minuteData } = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
+    const { procurementSummary, evaluationSummary, systemAnalysis, awardRecommendation, minuteData } = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
 
     const createdMinute = await tx.minute.create({
         data: {
@@ -145,9 +146,11 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
             procurementSummary: procurementSummary as any,
             evaluationSummary: evaluationSummary as any,
             systemAnalysis: systemAnalysis as any,
+            awardRecommendation: awardRecommendation as any,
             minuteData: minuteData,
         },
     });
 
     return createdMinute;
 }
+
