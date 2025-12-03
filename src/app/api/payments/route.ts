@@ -58,22 +58,24 @@ export async function POST(
                 let isFullyComplete = false;
 
                 if (isPerItem) {
-                    // For per-item, every item must be in a terminal state (Accepted and Paid, Failed, or Restarted)
+                    // Corrected Logic: For per-item, every item must be in a terminal state.
                     isFullyComplete = requisition.items.every(item => {
                         const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-                        if (details.length === 0) return true; // If an item never went to award, it's considered "complete" for this check
-                        
+                        if (details.length === 0) return true; // If an item never went to award, it's considered "complete".
+
                         const hasAcceptedAward = details.some(d => d.status === 'Accepted');
                         
                         if (hasAcceptedAward) {
                              const acceptedPO = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
-                             // If the PO exists, check if ALL of its invoices are paid. An item is only complete if its PO is fully paid.
-                             const isPaid = acceptedPO ? acceptedPO.invoices.every(inv => inv.status === 'Paid') : false;
+                             // Check if the PO exists AND all of its invoices are paid. This includes the one just paid.
+                             const isPaid = acceptedPO ? acceptedPO.invoices.every(inv => inv.status === 'Paid' || inv.id === updatedInvoice.id) : false;
                              return isPaid;
                         }
                         
-                        // If not accepted, check for other terminal states which also count as "finished" for this item.
-                        const isOtherwiseResolved = details.some(d => ['Failed_to_Award', 'Restarted', 'Declined'].includes(d.status));
+                        // If not accepted, check for other terminal states which also count as "finished".
+                        const isOtherwiseResolved = details.some(d => 
+                            ['Failed_to_Award', 'Declined', 'Restarted'].includes(d.status)
+                        );
                         return isOtherwiseResolved;
                     });
 
@@ -87,7 +89,7 @@ export async function POST(
                     const allPOsClosed = allPOsForRequisition.length > 0 && allPOsForRequisition.every(po => 
                         ['Delivered', 'Closed', 'Cancelled'].includes(po.status.replace(/_/g, ' '))
                     );
-                    const allInvoicesPaid = allPOsForRequisition.length > 0 && allPOsForRequisition.flatMap(po => po.invoices).every(inv => inv.status === 'Paid');
+                    const allInvoicesPaid = allPOsForRequisition.length > 0 && allPOsForRequisition.flatMap(po => po.invoices).every(inv => inv.status === 'Paid' || inv.id === updatedInvoice.id);
 
                     isFullyComplete = allPOsClosed && allInvoicesPaid;
                 }
