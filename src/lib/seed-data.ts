@@ -106,40 +106,36 @@ const seedData: AppData = {
             technicalCommitteeMemberIds: ['10'],
         },
         {
-            id: 'REQ-E2E-AWARD-TEST',
-            transactionId: 'REQ-E2E-AWARD-TEST',
+            id: 'REQ-READY-FOR-AWARD-01',
+            transactionId: 'REQ-READY-FOR-AWARD-01',
             requesterId: '1',
-            departmentId: 'DEPT-4',
-            title: 'E2E Award Test - Office Furnishings',
-            justification: 'New office setup for the expanding marketing team requires ergonomic furniture to ensure employee well-being and productivity.',
+            departmentId: 'DEPT-1',
+            title: 'Ready for Award - E2E Test',
+            justification: 'A test requisition fully populated with vendor quotes and committee scores, ready for the Procurement Officer to finalize the award.',
             status: 'Scoring_Complete',
-            urgency: 'Medium',
-            totalPrice: 11500,
-            createdAt: new Date('2024-05-10T09:00:00Z'),
-            updatedAt: new Date('2024-05-25T14:00:00Z'),
-            deadline: new Date('2024-05-20T17:00:00Z'),
-            scoringDeadline: new Date('2024-05-25T17:00:00Z'),
+            urgency: 'High',
+            totalPrice: 50000,
+            createdAt: new Date('2024-07-01T09:00:00Z'),
+            updatedAt: new Date('2024-07-15T14:00:00Z'),
+            deadline: new Date('2024-07-08T17:00:00Z'),
+            scoringDeadline: new Date('2024-07-15T17:00:00Z'),
             items: [
-                { id: 'ITEM-FURN-1', name: 'Ergonomic Office Chair', quantity: 10, unitPrice: 450, description: 'High-back, adjustable lumbar support, and armrests' },
-                { id: 'ITEM-FURN-2', name: 'Standing Desk (Electric)', quantity: 10, unitPrice: 700, description: 'Dual motor, memory presets, 140x70cm top' }
-            ],
-            customQuestions: [
-                { id: 'CQ-FURN-1', questionText: 'What is the warranty period for the chairs?', questionType: 'text', isRequired: true },
-                { id: 'CQ-FURN-2', questionText: 'Do you offer bulk assembly services?', questionType: 'boolean', isRequired: true },
+                { id: 'ITEM-RFA-1', name: 'Professional 4K Camera', quantity: 5, unitPrice: 5000, description: 'Camera for the new video production studio.' },
+                { id: 'ITEM-RFA-2', name: 'High-Speed Video Editing Workstation', quantity: 5, unitPrice: 5000, description: 'Workstation for editing 4K video footage.' }
             ],
             evaluationCriteria: {
                 financialWeight: 40,
                 technicalWeight: 60,
-                financialCriteria: [{ id: 'fc-1', name: 'Price per Unit', weight: 100 }],
+                financialCriteria: [{ id: 'fc-main', name: 'Overall Cost Effectiveness', weight: 100 }],
                 technicalCriteria: [
-                    { id: 'tc-1', name: 'Product Durability', weight: 50 },
-                    { id: 'tc-2', name: 'Warranty Period', weight: 50 }
-                ],
+                    { id: 'tc-main-1', name: 'Feature Set & Performance', weight: 70 },
+                    { id: 'tc-main-2', name: 'Support & Warranty', weight: 30 }
+                ]
             },
             financialCommitteeMemberIds: ['9'], // Fiona
             technicalCommitteeMemberIds: ['10'], // George
-            committeeName: 'Office Furnishing Evaluation Committee',
-            committeePurpose: 'To select the best value ergonomic furniture for the new marketing office.',
+            committeeName: 'Studio Equipment Committee',
+            committeePurpose: 'To evaluate and recommend the best video production equipment.',
             quotations: [],
         },
         {
@@ -255,66 +251,68 @@ const seedData: AppData = {
 
     quotations: [
         {
-            id: 'QUO-FURN-001',
-            transactionId: 'REQ-E2E-AWARD-TEST',
-            requisitionId: 'REQ-E2E-AWARD-TEST',
+            id: 'QUO-RFA-001',
+            transactionId: 'REQ-READY-FOR-AWARD-01',
+            requisitionId: 'REQ-READY-FOR-AWARD-01',
             vendorId: 'VENDOR-001',
             vendorName: 'Apple Inc.',
-            totalPrice: 12500,
-            deliveryDate: new Date('2024-06-10T00:00:00Z'),
-            createdAt: new Date('2024-05-15T10:00:00Z'),
-            updatedAt: new Date('2024-05-15T10:00:00Z'),
+            totalPrice: 48000,
+            deliveryDate: new Date('2024-07-25T00:00:00Z'),
+            createdAt: new Date('2024-07-03T10:00:00Z'),
+            updatedAt: new Date('2024-07-03T10:00:00Z'),
             status: 'Submitted',
-            notes: 'Premium materials, 10 year warranty.',
             items: [
-                { id: 'QI-FURN-1A', requisitionItemId: 'ITEM-FURN-1', name: 'Herman Miller Aeron', quantity: 10, unitPrice: 500, leadTimeDays: 14, brandDetails: 'Herman Miller', imageUrl: 'https://picsum.photos/seed/chair1/400/300' },
-                { id: 'QI-FURN-2A', requisitionItemId: 'ITEM-FURN-2', name: 'Fully Jarvis Standing Desk', quantity: 10, unitPrice: 750, leadTimeDays: 20, brandDetails: 'Fully', imageUrl: 'https://picsum.photos/seed/desk1/400/300' }
+                { id: 'QI-RFA-1A', requisitionItemId: 'ITEM-RFA-1', name: 'Blackmagic Cinema Camera 4K', quantity: 5, unitPrice: 4600, leadTimeDays: 12, brandDetails: 'Blackmagic', imageUrl: '#' },
+                { id: 'QI-RFA-2A', requisitionItemId: 'ITEM-RFA-2', name: 'Apple Mac Studio M2 Max', quantity: 5, unitPrice: 5000, leadTimeDays: 10, brandDetails: 'Apple', imageUrl: '#' }
             ],
-            answers: [
-                { questionId: 'CQ-FURN-1', answer: 'We offer a 12-year warranty on the Aeron chairs.' },
-                { questionId: 'CQ-FURN-2', answer: 'true' }
-            ],
+            scores: [
+                { // Fiona's score
+                    scorerId: '9', finalScore: 90.00, submittedAt: new Date('2024-07-10T10:00:00Z'), committeeComment: "Vendor A has a competitive price, slightly higher but within acceptable range.",
+                    itemScores: [
+                        { quoteItemId: 'QI-RFA-1A', finalScore: 90, scores: [{ type: 'FINANCIAL', criterionId: 'fc-main', score: 90, comment: 'Good price for the camera.' }] },
+                        { quoteItemId: 'QI-RFA-2A', finalScore: 90, scores: [{ type: 'FINANCIAL', criterionId: 'fc-main', score: 90, comment: 'Workstation price is as expected.' }] }
+                    ]
+                },
+                { // George's score
+                    scorerId: '10', finalScore: 94.00, submittedAt: new Date('2024-07-11T11:00:00Z'), committeeComment: "Vendor A offers superior technical specifications, especially on the workstation.",
+                    itemScores: [
+                        { quoteItemId: 'QI-RFA-1A', finalScore: 92, scores: [{ type: 'TECHNICAL', criterionId: 'tc-main-1', score: 95, comment: 'Excellent camera sensor.' }, { type: 'TECHNICAL', criterionId: 'tc-main-2', score: 85, comment: 'Standard warranty.' }] },
+                        { quoteItemId: 'QI-RFA-2A', finalScore: 96, scores: [{ type: 'TECHNICAL', criterionId: 'tc-main-1', score: 98, comment: 'Top-tier performance.' }, { type: 'TECHNICAL', criterionId: 'tc-main-2', score: 90, comment: 'Good AppleCare support.' }] }
+                    ]
+                }
+            ]
         },
         {
-            id: 'QUO-FURN-002',
-            transactionId: 'REQ-E2E-AWARD-TEST',
-            requisitionId: 'REQ-E2E-AWARD-TEST',
+            id: 'QUO-RFA-002',
+            transactionId: 'REQ-READY-FOR-AWARD-01',
+            requisitionId: 'REQ-READY-FOR-AWARD-01',
             vendorId: 'VENDOR-002',
             vendorName: 'Dell Technologies',
-            totalPrice: 11000,
-            deliveryDate: new Date('2024-06-15T00:00:00Z'),
-            createdAt: new Date('2024-05-16T11:00:00Z'),
-            updatedAt: new Date('2024-05-16T11:00:00Z'),
-            status: 'Submitted',
-            notes: 'Best value proposition.',
-            items: [
-                { id: 'QI-FURN-1B', requisitionItemId: 'ITEM-FURN-1', name: 'Steelcase Series 2', quantity: 10, unitPrice: 420, leadTimeDays: 10, brandDetails: 'Steelcase', imageUrl: 'https://picsum.photos/seed/chair2/400/300' },
-                { id: 'QI-FURN-2B', requisitionItemId: 'ITEM-FURN-2', name: 'Uplift V2 Standing Desk', quantity: 10, unitPrice: 680, leadTimeDays: 15, brandDetails: 'Uplift Desk', imageUrl: 'https://picsum.photos/seed/desk2/400/300' }
-            ],
-            answers: [
-                { questionId: 'CQ-FURN-1', answer: '5-year warranty on all parts.' },
-                { questionId: 'CQ-FURN-2', answer: 'false' }
-            ],
-        },
-        {
-            id: 'QUO-FURN-003',
-            transactionId: 'REQ-E2E-AWARD-TEST',
-            requisitionId: 'REQ-E2E-AWARD-TEST',
-            vendorId: 'VENDOR-004',
-            vendorName: 'HP Inc.',
-            totalPrice: 11800,
-            deliveryDate: new Date('2024-06-20T00:00:00Z'),
-            createdAt: new Date('2024-05-17T14:00:00Z'),
-            updatedAt: new Date('2024-05-17T14:00:00Z'),
+            totalPrice: 45000,
+            deliveryDate: new Date('2024-07-28T00:00:00Z'),
+            createdAt: new Date('2024-07-04T11:00:00Z'),
+            updatedAt: new Date('2024-07-04T11:00:00Z'),
             status: 'Submitted',
             items: [
-                { id: 'QI-FURN-1C', requisitionItemId: 'ITEM-FURN-1', name: 'Haworth Fern', quantity: 10, unitPrice: 480, leadTimeDays: 12, brandDetails: 'Haworth', imageUrl: 'https://picsum.photos/seed/chair3/400/300' },
-                { id: 'QI-FURN-2C', requisitionItemId: 'ITEM-FURN-2', name: 'Vari Electric Standing Desk', quantity: 10, unitPrice: 700, leadTimeDays: 18, brandDetails: 'Vari', imageUrl: 'https://picsum.photos/seed/desk3/400/300' }
+                { id: 'QI-RFA-1B', requisitionItemId: 'ITEM-RFA-1', name: 'Sony FX30', quantity: 5, unitPrice: 4200, leadTimeDays: 15, brandDetails: 'Sony', imageUrl: '#' },
+                { id: 'QI-RFA-2B', requisitionItemId: 'ITEM-RFA-2', name: 'Dell Precision Tower', quantity: 5, unitPrice: 4800, leadTimeDays: 14, brandDetails: 'Dell', imageUrl: '#' }
             ],
-            answers: [
-                { questionId: 'CQ-FURN-1', answer: '8-year warranty.' },
-                { questionId: 'CQ-FURN-2', answer: 'true' }
-            ],
+            scores: [
+                { // Fiona's score
+                    scorerId: '9', finalScore: 98.00, submittedAt: new Date('2024-07-10T10:05:00Z'), committeeComment: "Vendor B has an excellent price point, offering the best financial value.",
+                    itemScores: [
+                        { quoteItemId: 'QI-RFA-1B', finalScore: 98, scores: [{ type: 'FINANCIAL', criterionId: 'fc-main', score: 98, comment: 'Very aggressive pricing on the camera.' }] },
+                        { quoteItemId: 'QI-RFA-2B', finalScore: 98, scores: [{ type: 'FINANCIAL', criterionId: 'fc-main', score: 98, comment: 'Great value on the workstation.' }] }
+                    ]
+                },
+                { // George's score
+                    scorerId: '10', finalScore: 86.80, submittedAt: new Date('2024-07-11T11:05:00Z'), committeeComment: "Vendor B's technical offering is adequate but not as strong as the competition.",
+                    itemScores: [
+                        { quoteItemId: 'QI-RFA-1B', finalScore: 88, scores: [{ type: 'TECHNICAL', criterionId: 'tc-main-1', score: 90, comment: 'Good camera, but lacks some pro features.' }, { type: 'TECHNICAL', criterionId: 'tc-main-2', score: 85, comment: 'Standard warranty.' }] },
+                        { quoteItemId: 'QI-RFA-2B', finalScore: 85, scores: [{ type: 'TECHNICAL', criterionId: 'tc-main-1', score: 85, comment: 'Solid performance, but not top of the line.' }, { type: 'TECHNICAL', criterionId: 'tc-main-2', score: 85, comment: 'Standard Dell support.' }] }
+                    ]
+                }
+            ]
         },
         // Quotes for SPLIT STATE test case
         { id: 'QUO-SPLIT-001', transactionId: 'REQ-E2E-SPLIT-STATE', requisitionId: 'REQ-E2E-SPLIT-STATE', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', totalPrice: 9200, status: 'Partially_Awarded', createdAt: new Date('2024-06-05T10:00:00Z'), deliveryDate: new Date('2024-06-25T00:00:00Z'), items: [ { id: 'QI-SPLIT-1A', requisitionItemId: 'ITEM-SPLIT-1', name: 'Apple Studio Display', quantity: 20, unitPrice: 300, leadTimeDays: 10, brandDetails: 'Apple', imageUrl: '#' }, { id: 'QI-SPLIT-2A', requisitionItemId: 'ITEM-SPLIT-2', name: 'Logitech MX Mechanical', quantity: 20, unitPrice: 160, leadTimeDays: 5, brandDetails: 'Logitech', imageUrl: '#' } ] },
@@ -377,4 +375,5 @@ const seedData: AppData = {
 };
 
     
+
 
