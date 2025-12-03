@@ -79,82 +79,72 @@ async function main() {
   await prisma.setting.upsert({
     where: { key: 'rfqSenderSetting' },
     update: {
-        value: {
-            type: 'all'
-        }
+        value: JSON.stringify({ type: 'all' })
     },
     create: {
       key: 'rfqSenderSetting',
-      value: {
-        type: 'all' // or 'specific'
-        // userId: 'some-user-id' // if type is 'specific'
-      }
+      value: JSON.stringify({ type: 'all' })
     }
   });
 
   await prisma.setting.upsert({
     where: { key: 'requisitionCreatorSetting' },
     update: {
-        value: {
-            type: 'all_users'
-        }
+        value: JSON.stringify({ type: 'all_users' })
     },
     create: {
       key: 'requisitionCreatorSetting',
-      value: {
-        type: 'all_users' // or 'specific_roles'
-        // allowedRoles: ['Requester', 'Procurement_Officer'] // if type is 'specific_roles'
-      }
+      value: JSON.stringify({ type: 'all_users' })
     }
   });
 
   await prisma.setting.upsert({
       where: { key: 'committeeConfig' },
       update: {
-        value: {
+        value: JSON.stringify({
             A: { min: 200001, max: 1000000 },
             B: { min: 10001, max: 200000 }
-        }
+        })
       },
       create: {
           key: 'committeeConfig',
-          value: {
+          value: JSON.stringify({
               A: { min: 200001, max: 1000000 },
               B: { min: 10001, max: 200000 }
-          }
+          })
       }
   });
 
   await prisma.setting.upsert({
     where: { key: 'rolePermissions' },
     update: {
-        value: rolePermissions,
+        value: JSON.stringify(rolePermissions),
     },
     create: {
         key: 'rolePermissions',
-        value: rolePermissions,
+        value: JSON.stringify(rolePermissions),
     }
   });
 
   await prisma.setting.upsert({
     where: { key: 'rfqQuorum' },
     update: {
-        value: 3,
+        value: '3',
     },
     create: {
         key: 'rfqQuorum',
-        value: 3,
+        value: '3',
     }
   });
 
   await prisma.setting.upsert({
     where: { key: 'committeeQuorum' },
     update: {
-        value: 2,
+        value: '2',
     },
     create: {
         key: 'committeeQuorum',
-        value: 2,
+        value: '2',
     }
   });
 
@@ -183,13 +173,16 @@ async function main() {
     await prisma.approvalStep.deleteMany({ where: { thresholdId: createdThreshold.id }});
 
     for (let i = 0; i < tier.steps.length; i++) {
-      await prisma.approvalStep.create({
-        data: {
-          threshold: { connect: { id: createdThreshold.id } },
-          role: { connect: { name: tier.steps[i].role } },
-          order: i,
-        },
-      });
+        const role = await prisma.role.findUnique({ where: { name: tier.steps[i].role } });
+        if (role) {
+            await prisma.approvalStep.create({
+                data: {
+                    threshold: { connect: { id: createdThreshold.id } },
+                    role: { connect: { id: role.id } },
+                    order: i,
+                },
+            });
+        }
     }
   }
   console.log('Seeded approval matrix.');
@@ -352,6 +345,8 @@ async function main() {
               deadline: reqData.deadline ? new Date(reqData.deadline) : undefined,
               scoringDeadline: reqData.scoringDeadline ? new Date(reqData.scoringDeadline) : undefined,
               awardResponseDeadline: reqData.awardResponseDeadline ? new Date(reqData.awardResponseDeadline) : undefined,
+              allowedVendorIds: [],
+              awardedQuoteItemIds: [],
           }
       });
 
@@ -375,7 +370,7 @@ async function main() {
           for (const question of customQuestions) {
               await prisma.customQuestion.upsert({
                   where: { id: question.id },
-                  update: { ...question },
+                  update: { ...question, options: question.options || [] },
                   create: {
                       ...question,
                       questionType: question.questionType.replace(/-/g, '_') as any,

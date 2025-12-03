@@ -70,8 +70,8 @@ export async function GET(request: Request) {
                     { deadline: { gt: new Date() } },
                     {
                         OR: [
-                          { allowedVendorIds: null }, // 'all' vendors
-                          { allowedVendorIds: { contains: userPayload.vendorId } },
+                          { allowedVendorIds: { has: userPayload.vendorId } },
+                          { allowedVendorIds: { isEmpty: true } },
                         ],
                     },
                     {
@@ -308,7 +308,7 @@ export async function PATCH(
                     questionText: q.questionText,
                     questionType: q.questionType.replace(/-/g, '_'),
                     isRequired: q.isRequired,
-                    options: (q.options || []).join(','),
+                    options: q.options || [],
                 })),
             },
         };
@@ -558,9 +558,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
     }
 
-    const creatorSettingStr = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
-    if (creatorSettingStr) {
-      const setting = JSON.parse(creatorSettingStr.value);
+    const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
+    if (creatorSetting && creatorSetting.value) {
+      const setting = JSON.parse(creatorSetting.value);
       if (setting && setting.type === 'specific_roles') {
           const userRoles = actor.roles.map(r => r.name);
           const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
@@ -605,7 +605,7 @@ export async function POST(request: Request) {
                         questionText: q.questionText,
                         questionType: q.questionType.replace(/-/g, '_'),
                         isRequired: q.isRequired,
-                        options: (q.options || []).join(','),
+                        options: q.options || [],
                     }))
                 },
                 evaluationCriteria: body.evaluationCriteria ? {

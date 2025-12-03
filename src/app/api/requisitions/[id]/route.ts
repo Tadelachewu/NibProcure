@@ -48,8 +48,14 @@ export async function GET(
     const formatted = {
         ...requisition,
         requesterName: requisition.requester.name || 'Unknown',
-        financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
+        financialCommitteeMemberIds: requisition.financialCommitteeMemberIds.map(m => m.id),
         technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
+        rfqSettings: requisition.rfqSettings ? JSON.parse(requisition.rfqSettings as string) : {},
+        awardedQuoteItemIds: requisition.awardedQuoteItemIds,
+        items: requisition.items.map(item => ({
+            ...item,
+            perItemAwardDetails: item.perItemAwardDetails ? JSON.parse(item.perItemAwardDetails as string) : [],
+        }))
     };
 
     return NextResponse.json(formatted);
@@ -111,7 +117,7 @@ export async function DELETE(
   } catch (error) {
      console.error('Failed to delete requisition:', error);
      if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
