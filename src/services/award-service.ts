@@ -4,6 +4,25 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { User, UserRole, PerItemAwardDetail, QuoteItem } from '@/lib/types';
 
+
+/**
+ * Maps a role name to its corresponding pending status. This is crucial for generating valid status enums.
+ * @param roleName The name of the role from the database (e.g., "Committee_B_Member").
+ * @returns The correct RequisitionStatus enum string (e.g., "Pending_Committee_B_Review").
+ */
+function getStatusForRole(roleName: string): string {
+    const roleToStatusMap: Record<string, string> = {
+        'Committee_A_Member': 'Pending_Committee_A_Recommendation',
+        'Committee_B_Member': 'Pending_Committee_B_Review',
+        'Manager_Procurement_Division': 'Pending_Managerial_Approval',
+        'Director_Supply_Chain_and_Property_Management': 'Pending_Director_Approval',
+        'VP_Resources_and_Facilities': 'Pending_VP_Approval',
+        'President': 'Pending_President_Approval',
+    };
+    return roleToStatusMap[roleName] || `Pending_${roleName}`; // Fallback, though direct mapping is preferred
+}
+
+
 /**
  * Finds the correct next approval step for a given requisition based on its current status and value.
  * @param tx - Prisma transaction client.
@@ -42,7 +61,7 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
     
     const currentStepIndex = relevantTier.steps.findIndex(step => {
         // Find the step that corresponds to the requisition's CURRENT status.
-        return `Pending_${step.role.name}` === requisition.status;
+        return getStatusForRole(step.role.name) === requisition.status;
     });
 
     let nextStepIndex = currentStepIndex + 1;
@@ -57,16 +76,14 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         const nextStep = relevantTier.steps[nextStepIndex];
         const nextRoleName = nextStep.role.name;
         
-        // Dynamically create the pending status. This is the core fix.
-        const nextStatus = `Pending_${nextRoleName}`;
+        // **FIXED LOGIC**: Use the helper function to get the correct, valid status name.
+        const nextStatus = getStatusForRole(nextRoleName);
         
         // Find a user for the next step. Committee roles don't get a specific approver ID.
         let nextApproverId: string | null = null;
         if (!nextRoleName.includes('Committee')) {
             const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: nextRoleName } } }});
             if (!approverUser) {
-                // If a specific approver role is not found (e.g. "President"), we should not throw an error, but rather log a warning.
-                // In a real system, there should be robust error handling or fallback mechanisms.
                 console.warn(`Could not find a user for the role: ${nextRoleName.replace(/_/g, ' ')}. The approval will be unassigned.`);
             } else {
                  nextApproverId = approverUser.id;
@@ -126,7 +143,7 @@ export async function getPreviousApprovalStep(tx: Prisma.TransactionClient, requ
     }
     
     const currentStepIndex = relevantTier.steps.findIndex(step => 
-        `Pending_${step.role.name}` === requisition.status
+        getStatusForRole(step.role.name) === requisition.status
     );
 
     if (currentStepIndex <= 0) {
@@ -140,7 +157,7 @@ export async function getPreviousApprovalStep(tx: Prisma.TransactionClient, requ
     
     const previousStep = relevantTier.steps[currentStepIndex - 1];
     const previousRoleName = previousStep.role.name;
-    const previousStatus = `Pending_${previousRoleName}`;
+    const previousStatus = getStatusForRole(previousRoleName);
     
     let previousApproverId: string | null = null;
     if (!previousRoleName.includes('Committee')) {
