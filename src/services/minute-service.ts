@@ -78,7 +78,6 @@ export async function constructMinuteData(
     // This is the JSON object that will be stored.
     const minuteJson: Prisma.JsonObject = {
         minuteReference,
-        rfqNumber: requisition.id,
         meetingDate: new Date().toISOString(),
         participants,
         procurementSummary,
@@ -102,7 +101,6 @@ export async function constructMinuteData(
  * @returns The newly created minute object.
  */
 export async function generateAndSaveMinute(tx: any, requisition: any, quotations: any[], winningVendorIds: string[], actor: any) {
-    // We use a new prisma client instance here because this function is not part of a transaction context.
     const minuteJsonData = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
 
     const createdMinute = await tx.minute.create({
