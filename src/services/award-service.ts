@@ -406,10 +406,11 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         let newTotalValue = 0;
         for (const item of updatedRequisition.items) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-             // Only include items that are now the primary award candidates.
-             const winningAward = details.find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
-             if (winningAward) {
-                 newTotalValue += winningAward.unitPrice * item.quantity;
+             // **FIX**: Only include the value of items newly moved to 'Pending_Award'.
+             // Exclude 'Accepted' items that are already paid or being processed.
+             const newlyPendingAward = details.find(d => d.status === 'Pending_Award');
+             if (newlyPendingAward) {
+                 newTotalValue += newlyPendingAward.unitPrice * item.quantity;
              }
         }
         
