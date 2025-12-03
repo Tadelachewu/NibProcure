@@ -104,16 +104,11 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        const allRoles = await prisma.role.findMany({ select: { name: true } });
-        const allPendingStatuses = allRoles.map(role => `Pending_${role.name}`);
-
-        const baseRfqLifecycleStatuses = [
-            'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
-            'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
-            'PO_Created', 'Fulfilled', 'Closed'
+        // Corrected: Use a static, valid list of statuses from the RequisitionStatus enum
+        const rfqLifecycleStatuses = [
+            'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved', 'PO_Created', 'Fulfilled', 'Closed',
+            'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review', 'Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval'
         ];
-        
-        const rfqLifecycleStatuses = [...baseRfqLifecycleStatuses, ...allPendingStatuses];
 
         const userRoles = userPayload?.roles.map(r => r.name) || [];
 
@@ -351,15 +346,14 @@ export async function PATCH(
 
     // This is a high-level award approval/rejection
     else if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
-        const userRoles = (user.roles as any[]).map(r => r.name);
-        console.log(`[PATCH /api/requisitions] Handling award action by user with roles: ${userRoles.join(', ')}`);
+        console.log(`[PATCH /api/requisitions] Handling award action by user with roles: ${(user.roles as any[]).map(r => r.name).join(', ')}`);
         
         let isAuthorizedToAct = false;
         if (requisition.currentApproverId === userId) {
             isAuthorizedToAct = true;
         } else {
              const requiredRoleForStatus = requisition.status.replace('Pending_', '');
-             if (userRoles.includes(requiredRoleForStatus) || userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+             if ((user.roles as any[]).some(r => r.name === requiredRoleForStatus || r.name === 'Admin' || r.name === 'Procurement_Officer')) {
                 isAuthorizedToAct = true;
              }
         }
@@ -460,7 +454,7 @@ export async function PATCH(
     // This is the initial departmental approval
     else if (requisition.status === 'Pending_Approval') {
         console.log(`[PATCH /api/requisitions] Handling departmental approval for Req ID: ${id}`);
-        if (requisition.currentApproverId !== userId && !user.roles.some(r => r.name === 'Admin')) {
+        if (requisition.currentApproverId !== userId && !(user.roles as any[]).some(r => r.name === 'Admin')) {
             return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
         }
         if (newStatus === 'Rejected') {
