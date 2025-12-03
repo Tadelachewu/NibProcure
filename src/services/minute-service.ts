@@ -108,7 +108,10 @@ export async function constructMinuteData(
         auditMetadata,
     };
     
-    return minuteJson;
+    return {
+        procurementSummary: procurementDetails,
+        minuteData: minuteJson,
+    };
 }
 
 /**
@@ -121,7 +124,8 @@ export async function constructMinuteData(
  * @returns The newly created minute object.
  */
 export async function generateAndSaveMinute(tx: any, requisition: any, quotations: any[], winningVendorIds: string[], actor: any) {
-    const minuteJsonData = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
+    // Correctly get the structured data from constructMinuteData
+    const { procurementSummary, minuteData } = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
 
     const createdMinute = await tx.minute.create({
         data: {
@@ -129,7 +133,7 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
             author: { connect: { id: actor.id } },
             decision: 'APPROVED',
             decisionBody: 'Award Finalization Committee',
-            justification: (minuteJsonData as any).awardRecommendation.justification,
+            justification: (minuteData as any).awardRecommendation.justification,
             attendees: {
                 connect: [
                     ...requisition.financialCommitteeMembers.map((m: any) => ({ id: m.id })),
@@ -137,7 +141,9 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
                     { id: actor.id },
                 ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
             },
-            minuteData: minuteJsonData,
+            // Assign the two separate JSON fields as expected by the schema
+            procurementSummary: procurementSummary as any,
+            minuteData: minuteData,
         },
     });
 
