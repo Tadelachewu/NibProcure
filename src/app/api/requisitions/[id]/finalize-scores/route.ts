@@ -18,7 +18,7 @@ export async function POST(
         const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue, minuteType, minuteFilePath } = body;
         console.log(`[FINALIZE-SCORES] Action by User ID: ${userId}, Strategy: ${awardStrategy}, Total Value: ${totalAwardValue}`);
 
-        const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
+        const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
