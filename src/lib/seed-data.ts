@@ -141,7 +141,53 @@ const seedData: AppData = {
             committeeName: 'Office Furnishing Evaluation Committee',
             committeePurpose: 'To select the best value ergonomic furniture for the new marketing office.',
             quotations: [],
-        }
+        },
+        {
+            id: 'REQ-E2E-SPLIT-STATE',
+            transactionId: 'REQ-E2E-SPLIT-STATE',
+            requesterId: '1',
+            departmentId: 'DEPT-3',
+            title: 'Split Award & Decline Test Case',
+            justification: 'A requisition designed to test the per-item award workflow where one vendor accepts and another declines.',
+            status: 'Award_Declined',
+            urgency: 'Medium',
+            totalPrice: 16000,
+            createdAt: new Date('2024-06-01T10:00:00Z'),
+            updatedAt: new Date('2024-06-20T10:00:00Z'),
+            deadline: new Date('2024-06-10T17:00:00Z'),
+            scoringDeadline: new Date('2024-06-15T17:00:00Z'),
+            awardResponseDeadline: new Date('2024-06-25T17:00:00Z'),
+            rfqSettings: {
+                awardStrategy: 'item'
+            },
+            items: [
+                {
+                    id: 'ITEM-SPLIT-1',
+                    name: 'High-Refresh Rate Monitor',
+                    quantity: 20,
+                    unitPrice: 300,
+                    description: '27-inch, 1440p, 144Hz+',
+                    perItemAwardDetails: [
+                        { rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', quotationId: 'QUO-SPLIT-002', quoteItemId: 'QI-SPLIT-1B', proposedItemName: 'Dell 27 Monitor', unitPrice: 280, score: 92, status: 'Accepted' },
+                        { rank: 2, vendorId: 'VENDOR-004', vendorName: 'HP Inc.', quotationId: 'QUO-SPLIT-003', quoteItemId: 'QI-SPLIT-1C', proposedItemName: 'HP Omen 27', unitPrice: 290, score: 88, status: 'Standby' }
+                    ]
+                },
+                {
+                    id: 'ITEM-SPLIT-2',
+                    name: 'Mechanical Keyboard',
+                    quantity: 20,
+                    unitPrice: 150,
+                    description: 'Full-size, backlit, tactile switches',
+                    perItemAwardDetails: [
+                        { rank: 1, vendorId: 'VENDOR-004', vendorName: 'HP Inc.', quotationId: 'QUO-SPLIT-003', quoteItemId: 'QI-SPLIT-2C', proposedItemName: 'HP HyperX Alloy', unitPrice: 140, score: 95, status: 'Declined' },
+                        { rank: 2, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', quotationId: 'QUO-SPLIT-001', quoteItemId: 'QI-SPLIT-2A', proposedItemName: 'Logitech MX Mechanical', unitPrice: 160, score: 91, status: 'Standby' }
+                    ]
+                }
+            ],
+            financialCommitteeMemberIds: ['9'],
+            technicalCommitteeMemberIds: ['10'],
+            quotations: [],
+        },
     ],
 
     auditLogs: [
@@ -210,9 +256,27 @@ const seedData: AppData = {
                 { questionId: 'CQ-FURN-1', answer: '8-year warranty.' },
                 { questionId: 'CQ-FURN-2', answer: 'true' }
             ],
+        },
+        // Quotes for SPLIT STATE test case
+        { id: 'QUO-SPLIT-001', transactionId: 'REQ-E2E-SPLIT-STATE', requisitionId: 'REQ-E2E-SPLIT-STATE', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', totalPrice: 9200, status: 'Partially_Awarded', items: [ { id: 'QI-SPLIT-1A', requisitionItemId: 'ITEM-SPLIT-1', name: 'Apple Studio Display', quantity: 20, unitPrice: 300, leadTimeDays: 10, brandDetails: 'Apple', imageUrl: '#' }, { id: 'QI-SPLIT-2A', requisitionItemId: 'ITEM-SPLIT-2', name: 'Logitech MX Mechanical', quantity: 20, unitPrice: 160, leadTimeDays: 5, brandDetails: 'Logitech', imageUrl: '#' } ] },
+        { id: 'QUO-SPLIT-002', transactionId: 'REQ-E2E-SPLIT-STATE', requisitionId: 'REQ-E2E-SPLIT-STATE', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', totalPrice: 8600, status: 'Accepted', items: [ { id: 'QI-SPLIT-1B', requisitionItemId: 'ITEM-SPLIT-1', name: 'Dell 27 Monitor', quantity: 20, unitPrice: 280, leadTimeDays: 7, brandDetails: 'Dell', imageUrl: '#' }, { id: 'QI-SPLIT-2B', requisitionItemId: 'ITEM-SPLIT-2', name: 'Dell Alienware Keyboard', quantity: 20, unitPrice: 150, leadTimeDays: 10, brandDetails: 'Dell', imageUrl: '#' } ] },
+        { id: 'QUO-SPLIT-003', transactionId: 'REQ-E2E-SPLIT-STATE', requisitionId: 'REQ-E2E-SPLIT-STATE', vendorId: 'VENDOR-004', vendorName: 'HP Inc.', totalPrice: 8800, status: 'Declined', items: [ { id: 'QI-SPLIT-1C', requisitionItemId: 'ITEM-SPLIT-1', name: 'HP Omen 27', quantity: 20, unitPrice: 290, leadTimeDays: 12, brandDetails: 'HP', imageUrl: '#' }, { id: 'QI-SPLIT-2C', requisitionItemId: 'ITEM-SPLIT-2', name: 'HP HyperX Alloy', quantity: 20, unitPrice: 140, leadTimeDays: 8, brandDetails: 'HP', imageUrl: '#' } ] },
+    ],
+    purchaseOrders: [
+        {
+            id: 'PO-SPLIT-001',
+            transactionId: 'REQ-E2E-SPLIT-STATE',
+            requisitionId: 'REQ-E2E-SPLIT-STATE',
+            requisitionTitle: 'Split Award & Decline Test Case',
+            vendor: { id: 'VENDOR-002', name: 'Dell Technologies' } as any,
+            totalAmount: 5600, // 20 * 280
+            status: 'Issued',
+            createdAt: new Date('2024-06-18T10:00:00Z'),
+            items: [
+                { id: 'POI-SPLIT-1', requisitionItemId: 'ITEM-SPLIT-1', name: 'Dell 27 Monitor', quantity: 20, unitPrice: 280, totalPrice: 5600, receivedQuantity: 0 }
+            ]
         }
     ],
-    purchaseOrders: [],
     goodsReceipts: [],
     invoices: [],
     users: [
