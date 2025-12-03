@@ -64,6 +64,7 @@ export async function constructMinuteData(
 
     const evaluationSummary = quotations.map(q => ({
         vendorName: q.vendorName,
+        totalPrice: q.totalPrice,
         isDisqualified: q.status === 'Failed',
         disqualificationReason: q.status === 'Failed' ? 'Did not meet minimum requirements.' : null,
         finalScore: q.finalAverageScore,
@@ -126,9 +127,9 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
         data: {
             requisition: { connect: { id: requisition.id } },
             author: { connect: { id: actor.id } },
-            decision: 'APPROVED', // This minute is generated on the pre-approval step
+            decision: 'APPROVED',
             decisionBody: 'Award Finalization Committee',
-            justification: minuteJsonData.awardRecommendation.justification,
+            justification: (minuteJsonData as any).awardRecommendation.justification,
             attendees: {
                 connect: [
                     ...requisition.financialCommitteeMembers.map((m: any) => ({ id: m.id })),
@@ -136,7 +137,6 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
                     { id: actor.id },
                 ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
             },
-            // Store the entire structured JSON object
             minuteData: minuteJsonData,
         },
     });
