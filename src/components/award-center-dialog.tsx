@@ -10,11 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, TrophyIcon } from 'lucide-react';
+import { CalendarIcon, TrophyIcon, Upload, FileText } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
 import { PurchaseRequisition, Quotation } from '@/lib/types';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { useToast } from '@/hooks/use-toast';
 
 
 export const AwardCenterDialog = ({
@@ -25,11 +27,14 @@ export const AwardCenterDialog = ({
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system' | 'manual', minuteFilePath?: string) => void;
     onClose: () => void;
 }) => {
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
     const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
+    const [minuteType, setMinuteType] = useState<'system' | 'manual'>('system');
+    const [minuteFile, setMinuteFile] = useState<File | null>(null);
+    const { toast } = useToast();
 
     const awardResponseDeadline = useMemo(() => {
         if (!awardResponseDeadlineDate) return undefined;
@@ -69,8 +74,33 @@ export const AwardCenterDialog = ({
         };
     }, [eligibleQuotes]);
 
+    const handleFileUpload = async (file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('directory', 'minutes');
+        
+        try {
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || 'File upload failed');
+            }
+            return result.path;
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Upload Failed',
+                description: error instanceof Error ? error.message : 'Could not upload minute file.',
+            });
+            return null;
+        }
+    };
 
-    const handleConfirmAward = () => {
+
+    const handleConfirmAward = async () => {
         let awards: { [vendorId: string]: { vendorName: string, items: { requisitionItemId: string, quoteItemId: string }[] } } = {};
         
         if (overallWinner?.vendorId) {
@@ -80,7 +110,18 @@ export const AwardCenterDialog = ({
             };
         }
 
-        onFinalize('all', awards, awardResponseDeadline);
+        let minuteFilePath: string | undefined;
+        if (minuteType === 'manual') {
+            if (!minuteFile) {
+                toast({ variant: 'destructive', title: 'File Missing', description: 'Please select a minute file to upload.' });
+                return;
+            }
+            const uploadedPath = await handleFileUpload(minuteFile);
+            if (!uploadedPath) return; // Error toast will be shown by handleFileUpload
+            minuteFilePath = uploadedPath;
+        }
+
+        onFinalize('all', awards, awardResponseDeadline, minuteType, minuteFilePath);
         onClose();
     }
 
@@ -105,7 +146,33 @@ export const AwardCenterDialog = ({
                 </CardContent>
             </Card>
 
-             <div className="pt-4 space-y-2">
+            <div className="space-y-4 pt-4 border-t">
+                <Label className="text-base font-semibold">Procurement Minute</Label>
+                <RadioGroup value={minuteType} onValueChange={(value: 'system' | 'manual') => setMinuteType(value)} className="grid grid-cols-2 gap-4">
+                    <div>
+                        <RadioGroupItem value="system" id="minute-system" className="peer sr-only" />
+                        <Label htmlFor="minute-system" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                            <FileText className="mb-3 h-6 w-6" />
+                            System Generated
+                        </Label>
+                    </div>
+                     <div>
+                        <RadioGroupItem value="manual" id="minute-manual" className="peer sr-only" />
+                        <Label htmlFor="minute-manual" className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary">
+                            <Upload className="mb-3 h-6 w-6" />
+                            Upload Manual Minute
+                        </Label>
+                    </div>
+                </RadioGroup>
+                 {minuteType === 'manual' && (
+                    <div className="pt-2">
+                        <Label htmlFor="manual-minute-file">Upload Minute Document (PDF)</Label>
+                        <Input id="manual-minute-file" type="file" accept=".pdf" onChange={(e) => setMinuteFile(e.target.files?.[0] || null)} />
+                    </div>
+                 )}
+            </div>
+
+             <div className="pt-4 space-y-2 border-t">
                 <Label>Vendor Response Deadline (Optional)</Label>
                 <div className="flex gap-2">
                     <Popover>
