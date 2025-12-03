@@ -258,13 +258,11 @@ export async function handleAwardRejection(
         });
         
         if (itemsUpdated > 0) {
-            // Check if another approval is already in progress before changing the main status
-            const otherItems = requisition.items.filter((i: any) => i.id !== itemToUpdate.id);
-            const anotherApprovalIsPending = otherItems.some((i: any) => (i.perItemAwardDetails as any[])?.some(d => d.status === 'Pending_Award')) || requisition.status.startsWith('Pending_');
-
-            if (!anotherApprovalIsPending) {
-                await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
-            }
+            // **MODIFIED LOGIC START**
+            // Always set status to Award_Declined to reflect the latest event.
+            // The UI will be responsible for allowing other approvals to continue.
+            await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
+            // **MODIFIED LOGIC END**
             
             await tx.auditLog.create({ 
                 data: { 
@@ -412,11 +410,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             if (pendingAward) {
                 return acc + (pendingAward.unitPrice * item.quantity);
             }
-            // IMPORTANT: Do NOT include already accepted/paid items in the new approval value
-            // const acceptedAward = details.find(d => d.status === 'Accepted');
-            // if (acceptedAward) {
-            //      return acc + (acceptedAward.unitPrice * item.quantity);
-            // }
             return acc;
         }, 0);
         

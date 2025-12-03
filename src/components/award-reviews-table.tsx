@@ -223,12 +223,15 @@ export function AwardReviewsTable() {
                   
                    let isActionable = false;
                    if (user && req.status) {
-                        const userRoles = user.roles as UserRole[];
-                        // Case 1: Directly assigned to the user
+                        const userRoles = (user.roles as any[]).map(r => r.name) as UserRole[];
+
+                        // Case 1: Directly assigned to the user, regardless of main status
                         if (req.currentApproverId === user.id) {
                             isActionable = true;
                         } 
-                        // Case 2: Assigned to a committee role the user has
+                        // Case 2: Assigned to a committee role the user has.
+                        // This should still work even if the main status is Award_Declined,
+                        // as long as the approval step is still pending for this user's committee.
                         else if (req.status.startsWith('Pending_')) {
                             const requiredRoleForStatus = req.status.replace('Pending_', '') as UserRole;
                              if (userRoles.includes(requiredRoleForStatus)) {
