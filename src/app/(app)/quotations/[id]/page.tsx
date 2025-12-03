@@ -2323,7 +2323,7 @@ export default function QuotationDetailsPage() {
 
   const isAwarded = useMemo(() => {
     if (!requisition || !requisition.status) return false;
-    const awardProcessStatuses = ['PostApproved', 'Awarded', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled'];
+    const awardProcessStatuses = ['PostApproved', 'Awarded', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled', 'Partially_Closed'];
     return awardProcessStatuses.includes(requisition.status) || requisition.status.startsWith('Pending_');
   }, [requisition]);
 
@@ -2348,7 +2348,7 @@ export default function QuotationDetailsPage() {
     const completeStatuses = ['Fulfilled', 'Closed'];
     if (completeStatuses.includes(requisition.status)) return 'completed';
 
-    const finalizeStatuses = ['PO_Created'];
+    const finalizeStatuses = ['PO_Created', 'Partially_Closed'];
     if (finalizeStatuses.includes(requisition.status) || isAccepted) return 'finalize';
 
     const awardStatuses = ['Awarded', 'PostApproved', 'Award_Declined'];
@@ -3233,7 +3233,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
         setIsSubmitting(true);
         try {
-            const response = await fetch(`/api/requisitions/restart-item-rfq`, {
+            const response = await fetch(`/api/requisitions/[id]/restart-item-rfq`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -3396,5 +3396,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
