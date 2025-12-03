@@ -79,84 +79,50 @@ async function main() {
   // Seed Settings
   await prisma.setting.upsert({
     where: { key: 'rfqSenderSetting' },
-    update: {
-        value: {
-            type: 'all'
-        }
-    },
+    update: { value: JSON.stringify({ type: 'all' }) },
     create: {
       key: 'rfqSenderSetting',
-      value: {
-        type: 'all' // or 'specific'
-        // userId: 'some-user-id' // if type is 'specific'
-      }
+      value: JSON.stringify({ type: 'all' }) // or 'specific'
     }
   });
 
   await prisma.setting.upsert({
     where: { key: 'requisitionCreatorSetting' },
-    update: {
-        value: {
-            type: 'all_users'
-        }
-    },
+    update: { value: JSON.stringify({ type: 'all_users' }) },
     create: {
       key: 'requisitionCreatorSetting',
-      value: {
-        type: 'all_users' // or 'specific_roles'
-        // allowedRoles: ['Requester', 'Procurement_Officer'] // if type is 'specific_roles'
-      }
+      value: JSON.stringify({ type: 'all_users' }) // or 'specific_roles'
     }
   });
 
   await prisma.setting.upsert({
       where: { key: 'committeeConfig' },
-      update: {
-        value: {
-            A: { min: 200001, max: 1000000 },
-            B: { min: 10001, max: 200000 }
-        }
-      },
+      update: { value: JSON.stringify({ A: { min: 200001, max: 1000000 }, B: { min: 10001, max: 200000 } }) },
       create: {
           key: 'committeeConfig',
-          value: {
-              A: { min: 200001, max: 1000000 },
-              B: { min: 10001, max: 200000 }
-          }
+          value: JSON.stringify({ A: { min: 200001, max: 1000000 }, B: { min: 10001, max: 200000 } })
       }
   });
 
   await prisma.setting.upsert({
     where: { key: 'rolePermissions' },
-    update: {
-        value: rolePermissions,
-    },
+    update: { value: JSON.stringify(rolePermissions) },
     create: {
         key: 'rolePermissions',
-        value: rolePermissions,
+        value: JSON.stringify(rolePermissions),
     }
   });
 
   await prisma.setting.upsert({
     where: { key: 'rfqQuorum' },
-    update: {
-        value: 3,
-    },
-    create: {
-        key: 'rfqQuorum',
-        value: 3,
-    }
+    update: { value: '3' },
+    create: { key: 'rfqQuorum', value: '3' }
   });
 
   await prisma.setting.upsert({
     where: { key: 'committeeQuorum' },
-    update: {
-        value: 2,
-    },
-    create: {
-        key: 'committeeQuorum',
-        value: 2,
-    }
+    update: { value: '2' },
+    create: { key: 'committeeQuorum', value: '2' }
   });
 
   console.log('Seeded settings.');
@@ -284,7 +250,7 @@ async function main() {
           email: vendor.email,
           phone: vendor.phone,
           address: vendor.address,
-          kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
+          kycStatus: vendor.kycStatus.replace(/ /g, '_'),
           userId: createdUser.id,
       },
       create: {
@@ -294,7 +260,7 @@ async function main() {
           email: vendor.email,
           phone: vendor.phone,
           address: vendor.address,
-          kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
+          kycStatus: vendor.kycStatus.replace(/ /g, '_'),
           userId: createdUser.id,
       },
     });
@@ -341,9 +307,12 @@ async function main() {
           update: {},
           create: {
               ...reqData,
-              status: reqData.status.replace(/ /g, '_') as any,
+              status: reqData.status.replace(/ /g, '_'),
               urgency: reqData.urgency || 'Low',
               totalPrice: items.reduce((acc, item) => acc + (item.unitPrice || 0) * item.quantity, 0),
+              rfqSettings: JSON.stringify(reqData.rfqSettings) || null,
+              allowedVendorIds: (reqData.allowedVendorIds || []).join(','),
+              awardedQuoteItemIds: (reqData.awardedQuoteItemIds || []).join(','),
               requester: { connect: { id: requesterId } },
               approver: approverId ? { connect: { id: approverId } } : undefined,
               currentApprover: currentApproverId ? { connect: { id: currentApproverId } } : undefined,
@@ -361,11 +330,12 @@ async function main() {
           for (const item of items) {
               await prisma.requisitionItem.upsert({
                   where: { id: item.id },
-                  update: { ...item },
+                  update: { ...item, perItemAwardDetails: JSON.stringify(item.perItemAwardDetails || []) },
                   create: {
                       ...item,
                       unitPrice: item.unitPrice || 0,
-                      requisitionId: createdRequisition.id
+                      requisitionId: createdRequisition.id,
+                      perItemAwardDetails: JSON.stringify(item.perItemAwardDetails || []),
                   }
               });
           }
@@ -376,11 +346,11 @@ async function main() {
           for (const question of customQuestions) {
               await prisma.customQuestion.upsert({
                   where: { id: question.id },
-                  update: { ...question },
+                  update: { ...question, options: (question.options || []).join(',') },
                   create: {
                       ...question,
-                      questionType: question.questionType.replace(/-/g, '_') as any,
-                      options: question.options || [],
+                      questionType: question.questionType.replace(/-/g, '_'),
+                      options: (question.options || []).join(','),
                       requisitionId: createdRequisition.id,
                   }
               });
@@ -421,7 +391,7 @@ async function main() {
            update: {},
            create: {
                ...quoteData,
-               status: quoteData.status.replace(/_/g, '_') as any,
+               status: quoteData.status.replace(/_/g, '_'),
                deliveryDate: new Date(quoteData.deliveryDate),
                createdAt: new Date(quoteData.createdAt),
                vendor: { connect: { id: vendorId } },
@@ -509,7 +479,7 @@ async function main() {
             update: {},
             create: {
                 ...poData,
-                status: poData.status.replace(/ /g, '_') as any,
+                status: poData.status.replace(/ /g, '_'),
                 createdAt: new Date(poData.createdAt),
                 vendorId: vendor.id,
                 requisitionId: po.requisitionId,
@@ -537,7 +507,7 @@ async function main() {
             update: {},
             create: {
                 ...invoiceData,
-                status: invoiceData.status.replace(/_/g, '_') as any,
+                status: invoiceData.status.replace(/_/g, '_'),
                 invoiceDate: new Date(invoiceData.invoiceDate),
                 paymentDate: invoiceData.paymentDate ? new Date(invoiceData.paymentDate) : undefined,
             }
@@ -572,7 +542,7 @@ async function main() {
                     create: items.map(item => ({
                         poItemId: item.poItemId,
                         quantityReceived: item.quantityReceived,
-                        condition: item.condition.replace(/ /g, '_') as any,
+                        condition: item.condition.replace(/ /g, '_'),
                         notes: item.notes,
                     }))
                 }
@@ -614,6 +584,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-    
-
