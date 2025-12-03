@@ -259,7 +259,9 @@ export async function handleAwardRejection(
         
         if (itemsUpdated > 0) {
             // Check if another approval is already in progress before changing the main status
-            const anotherApprovalIsPending = requisition.status.startsWith('Pending_');
+            const otherItems = requisition.items.filter((i: any) => i.id !== itemToUpdate.id);
+            const anotherApprovalIsPending = otherItems.some((i: any) => (i.perItemAwardDetails as any[])?.some(d => d.status === 'Pending_Award')) || requisition.status.startsWith('Pending_');
+
             if (!anotherApprovalIsPending) {
                 await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
             }
@@ -377,7 +379,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                 
                 const updatedDetails = currentDetails.map(d => {
                     if (d.quoteItemId === bidToPromote.quoteItemId) {
-                        newTotalValue += bidToPromote.unitPrice * item.quantity; // Add to total value
                         return { ...d, status: 'Pending_Award' as const };
                     }
                     // Mark the just-declined bid as failed so it's not picked again
@@ -402,6 +403,22 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                 });
             }
         }
+        
+        // After finding all items to promote, calculate the new total value for approval
+        const allItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisition.id } });
+        newTotalValue = allItems.reduce((acc, item) => {
+            const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
+            const pendingAward = details.find(d => d.status === 'Pending_Award');
+            if (pendingAward) {
+                return acc + (pendingAward.unitPrice * item.quantity);
+            }
+            // IMPORTANT: Do NOT include already accepted/paid items in the new approval value
+            // const acceptedAward = details.find(d => d.status === 'Accepted');
+            // if (acceptedAward) {
+            //      return acc + (acceptedAward.unitPrice * item.quantity);
+            // }
+            return acc;
+        }, 0);
         
         if (promotedCount === 0) {
             return { message: 'No eligible standby vendors were found for promotion. Please review the awards.' };
