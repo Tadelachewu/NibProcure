@@ -1,9 +1,10 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 
 
 export async function POST(
@@ -28,9 +29,33 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
-    if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Committee' && user.role !== 'Admin')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const user = await prisma.user.findUnique({where: {id: userId}, include: { roles: true }});
+    if (!user) {
+        return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
+    }
+    
+    // Correct Authorization Logic
+    const rfqSenderSettingStr = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    const userRoles = (user.roles as any[]).map(r => r.name);
+    
+    if (rfqSenderSettingStr?.value && typeof rfqSenderSettingStr.value === 'string') {
+        try {
+            const rfqSenderSetting = JSON.parse(rfqSenderSettingStr.value);
+            if (rfqSenderSetting.type === 'specific') {
+                isAuthorized = rfqSenderSetting.userId === userId;
+            } else { // 'all' case
+                isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+            }
+        } catch(e) {
+            console.error("Failed to parse rfqSenderSetting", e);
+            // Default to a safe permission if setting is corrupt
+            isAuthorized = userRoles.includes('Admin');
+        }
+    }
+
+    if (!isAuthorized) {
+        return NextResponse.json({ error: 'Unauthorized to assign committees based on system settings.' }, { status: 403 });
     }
     
     // Start a transaction to ensure atomicity
@@ -42,7 +67,7 @@ export async function POST(
             committeeName,
             committeePurpose,
             scoringDeadline: scoringDeadline ? new Date(scoringDeadline) : undefined,
-            rfqSettings: rfqSettings || {},
+            rfqSettings: JSON.stringify(rfqSettings || {}),
             financialCommitteeMembers: {
             set: financialCommitteeMemberIds.map((id: string) => ({ id }))
             },
@@ -71,11 +96,11 @@ export async function POST(
         }
         
         // Members to be added
-        const membersToAdd = Array.from(newAllMemberIds).filter(memberId => !existingMemberIds.has(memberId));
+        const membersToAdd = Array.from(newAllMemberIds).filter(memberId => !existingMemberIds.has(memberId as string));
         if (membersToAdd.length > 0) {
             await tx.committeeAssignment.createMany({
                 data: membersToAdd.map(memberId => ({
-                    userId: memberId,
+                    userId: memberId as string,
                     requisitionId: id,
                     scoresSubmitted: false,
                 })),

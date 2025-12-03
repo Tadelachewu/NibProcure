@@ -152,23 +152,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const settingsData = await settingsRes.json();
         setSettings(settingsData);
         
+        const safeParse = (value: any, defaultValue: any) => {
+            if (!value || typeof value !== 'string') return defaultValue;
+            try {
+                return JSON.parse(value);
+            } catch {
+                return defaultValue;
+            }
+        };
+
         const rfqSetting = settingsData.find((s:any) => s.key === 'rfqSenderSetting');
-        if (rfqSetting) setRfqSenderSetting(JSON.parse(rfqSetting.value));
+        if (rfqSetting) setRfqSenderSetting(safeParse(rfqSetting.value, { type: 'all' }));
         
         const requisitionCreatorSetting = settingsData.find((s: any) => s.key === 'requisitionCreatorSetting');
-        if (requisitionCreatorSetting) setRequisitionCreatorSetting(JSON.parse(requisitionCreatorSetting.value));
+        if (requisitionCreatorSetting) setRequisitionCreatorSetting(safeParse(requisitionCreatorSetting.value, { type: 'all_users' }));
 
         const committeeConf = settingsData.find((s:any) => s.key === 'committeeConfig');
-        if (committeeConf) setCommitteeConfig(JSON.parse(committeeConf.value));
+        if (committeeConf) setCommitteeConfig(safeParse(committeeConf.value, {}));
         
         const rolePerms = settingsData.find((s:any) => s.key === 'rolePermissions');
-        if (rolePerms) setRolePermissions(JSON.parse(rolePerms.value));
+        if (rolePerms) setRolePermissions(safeParse(rolePerms.value, defaultRolePermissions));
         
         const rfqQuorumSetting = settingsData.find((s:any) => s.key === 'rfqQuorum');
-        if (rfqQuorumSetting) setRfqQuorum(Number(rfqQuorumSetting.value));
+        if (rfqQuorumSetting) setRfqQuorum(Number(rfqQuorumSetting.value) || 3);
         
         const committeeQuorumSetting = settingsData.find((s:any) => s.key === 'committeeQuorum');
-        if (committeeQuorumSetting) setCommitteeQuorum(Number(committeeQuorumSetting.value));
+        if (committeeQuorumSetting) setCommitteeQuorum(Number(committeeQuorumSetting.value) || 3);
       }
       
       const approvalMatrixRes = await fetch('/api/settings/approval-matrix');

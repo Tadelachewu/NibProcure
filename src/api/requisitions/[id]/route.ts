@@ -1,9 +1,10 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
 
 export async function GET(
@@ -26,6 +27,17 @@ export async function GET(
         financialCommitteeMembers: { select: { id: true, name: true, email: true } },
         technicalCommitteeMembers: { select: { id: true, name: true, email: true } },
         requester: true,
+        quotations: { // Include quotations to show award details
+            include: {
+                items: true,
+            }
+        },
+        purchaseOrders: { // Include POs to link to them
+            select: {
+                id: true,
+                vendor: { select: { name: true }}
+            }
+        }
       }
     });
 
@@ -33,13 +45,28 @@ export async function GET(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
     
+    // Helper to safely parse JSON strings
+    const safeJsonParse = (jsonString: string | null, defaultValue: any = {}) => {
+      if (!jsonString) return defaultValue;
+      try {
+        return JSON.parse(jsonString);
+      } catch (e) {
+        return defaultValue;
+      }
+    };
+
     // Formatting data to match client-side expectations
     const formatted = {
         ...requisition,
-        status: requisition.status.replace(/_/g, ' '),
         requesterName: requisition.requester.name || 'Unknown',
         financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
         technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
+        rfqSettings: safeJsonParse(requisition.rfqSettings, {}),
+        awardedQuoteItemIds: requisition.awardedQuoteItemIds,
+        items: requisition.items.map(item => ({
+            ...item,
+            perItemAwardDetails: safeJsonParse(item.perItemAwardDetails, []),
+        }))
     };
 
     return NextResponse.json(formatted);
@@ -57,22 +84,20 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
-    const body = await request.json();
-    const { userId } = body;
-
-    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
 
+    const { id } = params;
+    
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
 
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    if (requisition.requesterId !== userId) {
+    if (requisition.requesterId !== actor.id) {
       return NextResponse.json({ error: 'You are not authorized to delete this requisition.' }, { status: 403 });
     }
 
@@ -90,7 +115,7 @@ export async function DELETE(
 
     await prisma.auditLog.create({
         data: {
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'DELETE_REQUISITION',
             entity: 'Requisition',
@@ -103,7 +128,7 @@ export async function DELETE(
   } catch (error) {
      console.error('Failed to delete requisition:', error);
      if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
