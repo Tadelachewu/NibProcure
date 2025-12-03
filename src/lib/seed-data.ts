@@ -20,6 +20,10 @@ export function getInitialData(): AppData {
   // Link quotations to their requisitions
   initialData.requisitions.forEach(req => {
     req.quotations = initialData.quotations.filter(q => q.requisitionId === req.id);
+    // Ensure status is correctly formatted
+    if (req.status) {
+        req.status = (req.status as string).replace(/ /g, '_') as any;
+    }
   });
   
   return initialData;
