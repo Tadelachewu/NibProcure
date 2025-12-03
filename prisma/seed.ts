@@ -416,6 +416,7 @@ async function main() {
            update: {},
            create: {
                ...quoteData,
+               transactionId: requisition.transactionId,
                status: quoteData.status.replace(/_/g, '_') as any,
                deliveryDate: new Date(quoteData.deliveryDate),
                createdAt: new Date(quoteData.createdAt),
@@ -570,5 +571,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-    
