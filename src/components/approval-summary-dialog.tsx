@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { AlertCircle, CheckCircle, FileText, MessageSquare, User, Trophy, Crown, Medal, Building, Users2, ShoppingCart, ListChecks, DollarSign, Award, ThumbsUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
+import Image from 'next/image';
 
 interface ApprovalSummaryDialogProps {
   requisition: PurchaseRequisition;
@@ -55,6 +56,33 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
   }
 
   const minute: any = requisition.minutes?.[0];
+  // Access the nested JSON data
+  const minuteData = minute?.minuteData as any;
+
+  if (minute && minute.filePath && !minuteData) {
+    return (
+       <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="max-w-md">
+           <DialogHeader>
+                <DialogTitle>View Uploaded Minute</DialogTitle>
+                <DialogDescription>
+                    This award was finalized with a manually uploaded minute.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 text-center">
+                <FileText className="h-16 w-16 mx-auto text-muted-foreground" />
+                <p className="mt-4 font-semibold">A manual minute was uploaded for this decision.</p>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={onClose}>Close</Button>
+                <Button asChild>
+                    <a href={minute.filePath} target="_blank" rel="noopener noreferrer">View Document</a>
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -74,17 +102,17 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                     </TabsList>
                     <TabsContent value="minutes" className="mt-4 flex-1 overflow-hidden">
                         <ScrollArea className="h-full pr-4">
-                            {minute ? (
+                            {minuteData ? (
                                 <div className="space-y-6 text-sm">
                                     <div className="text-center">
                                         <h2 className="text-xl font-bold">PROCUREMENT MINUTE</h2>
-                                        <p className="text-muted-foreground">{minute.minuteReference}</p>
-                                        <p className="text-xs text-muted-foreground">Date: {format(new Date(minute.meetingDate), 'PPP')}</p>
+                                        <p className="text-muted-foreground">{minuteData.minuteReference}</p>
+                                        <p className="text-xs text-muted-foreground">Date: {format(new Date(minuteData.meetingDate), 'PPP')}</p>
                                     </div>
 
                                     <MinuteSection title="1. Participants">
                                         <div className="flex flex-wrap gap-x-6 gap-y-2">
-                                            {minute.participants.map((p: any) => (
+                                            {minuteData.participants.map((p: any) => (
                                                 <div key={p.name}><span className="font-semibold">{p.name}</span>, <span className="text-muted-foreground">{p.role}</span></div>
                                             ))}
                                         </div>
@@ -92,14 +120,14 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
 
                                     <MinuteSection title="2. Procurement Details">
                                         <MinuteSubSection title="2.1. Subject">
-                                            <p>Award recommendation for RFQ#: <span className="font-mono">{minute.procurementSummary.requisitionId}</span> - {minute.procurementSummary.title}</p>
+                                            <p>Award recommendation for RFQ#: <span className="font-mono">{minuteData.procurementDetails.requisitionId}</span> - {minuteData.procurementDetails.title}</p>
                                         </MinuteSubSection>
                                         <MinuteSubSection title="2.2. Method">
-                                            <p>{minute.procurementSummary.procurementMethod}</p>
+                                            <p>{minuteData.procurementDetails.procurementMethod}</p>
                                         </MinuteSubSection>
                                         <MinuteSubSection title="2.3. Items Requested">
                                             <ul className="list-disc list-inside space-y-1">
-                                                {minute.procurementSummary.items.map((item: any) => (
+                                                {minuteData.procurementDetails.itemsRequested.map((item: any) => (
                                                     <li key={item.name}>{item.name} (Quantity: {item.quantity})</li>
                                                 ))}
                                             </ul>
@@ -108,8 +136,8 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
 
                                     <MinuteSection title="3. Bidding Summary">
                                         <div className="grid grid-cols-2 gap-4">
-                                            <Card className="p-4"><p className="text-muted-foreground text-xs">Vendors Invited</p><p className="font-bold text-2xl">{minute.bidders.vendorsInvited}</p></Card>
-                                            <Card className="p-4"><p className="text-muted-foreground text-xs">Submissions Received</p><p className="font-bold text-2xl">{minute.bidders.vendorsSubmitted}</p></Card>
+                                            <Card className="p-4"><p className="text-muted-foreground text-xs">Vendors Invited</p><p className="font-bold text-2xl">{minuteData.bidders.vendorsInvited}</p></Card>
+                                            <Card className="p-4"><p className="text-muted-foreground text-xs">Submissions Received</p><p className="font-bold text-2xl">{minuteData.bidders.vendorsSubmitted}</p></Card>
                                         </div>
                                     </MinuteSection>
 
@@ -117,10 +145,10 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                         <Table>
                                              <TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead className="text-right">Final Score</TableHead><TableHead className="text-right">Total Price</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                                              <TableBody>
-                                                 {minute.evaluationSummary.map((evaluation: any) => (
+                                                 {minuteData.evaluationSummary.map((evaluation: any) => (
                                                      <TableRow key={evaluation.vendorName}>
                                                          <TableCell className="font-semibold">{evaluation.vendorName}</TableCell>
-                                                         <TableCell className="text-right font-mono">{evaluation.finalScore.toFixed(2)}</TableCell>
+                                                         <TableCell className="text-right font-mono">{evaluation.finalScore?.toFixed(2)}</TableCell>
                                                          <TableCell className="text-right font-mono">{evaluation.totalPrice.toLocaleString()} ETB</TableCell>
                                                          <TableCell>{evaluation.isDisqualified ? 'Disqualified' : `Rank ${evaluation.rank}`}</TableCell>
                                                      </TableRow>
@@ -133,24 +161,24 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                          <MinuteSubSection title="5.1. System Recommendation">
                                             <Alert>
                                                 <Award className="h-4 w-4" />
-                                                <AlertTitle>Winner(s): {minute.systemAnalysis.winner}</AlertTitle>
+                                                <AlertTitle>Winner(s): {minuteData.systemAnalysis.winner}</AlertTitle>
                                                 <AlertDescription>
-                                                    <p>Strategy: <span className="font-semibold">{minute.systemAnalysis.awardStrategy}</span></p>
-                                                    <p>{minute.systemAnalysis.result}</p>
+                                                    <p>Strategy: <span className="font-semibold">{minuteData.systemAnalysis.awardStrategy}</span></p>
+                                                    <p>{minuteData.systemAnalysis.result}</p>
                                                 </AlertDescription>
                                             </Alert>
                                         </MinuteSubSection>
                                         <MinuteSubSection title="5.2. Committee Decision">
-                                            <p className="italic">"{minute.awardRecommendation.justification}"</p>
+                                            <p className="italic">"{minuteData.awardRecommendation.justification}"</p>
                                         </MinuteSubSection>
                                     </MinuteSection>
 
                                     <MinuteSection title="6. Conclusion">
-                                        <p className="italic">{minute.conclusion}</p>
+                                        <p className="italic">{minuteData.conclusion}</p>
                                     </MinuteSection>
 
                                     <div className="text-xs text-muted-foreground text-center pt-4 border-t">
-                                        Minute generated by {minute.auditMetadata.generatedBy} on {format(new Date(minute.auditMetadata.generationTimestamp), 'PPpp')} (v{minute.auditMetadata.logicVersion})
+                                        Minute generated by {minuteData.auditMetadata.generatedBy} on {format(new Date(minuteData.auditMetadata.generationTimestamp), 'PPpp')} (v{minuteData.auditMetadata.logicVersion})
                                     </div>
                                 </div>
                             ) : (

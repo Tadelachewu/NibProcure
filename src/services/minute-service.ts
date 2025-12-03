@@ -2,7 +2,7 @@
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
-import { PurchaseRequisition, Quotation } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 
 /**
  * Constructs a detailed, formal procurement minute object for database storage,
@@ -12,7 +12,7 @@ import { PurchaseRequisition, Quotation } from '@/lib/types';
  * @param quotations - An array of all quotations for the requisition.
  * @param winningVendorIds - An array of IDs for the winning vendors.
  * @param actor - The user finalizing the award.
- * @returns A structured set of objects for the minute record.
+ * @returns A single, comprehensive JSON object representing the entire minute.
  */
 export async function constructMinuteData(
     prisma: PrismaClient,
@@ -61,7 +61,7 @@ export async function constructMinuteData(
             })),
         })),
     };
-
+    
     const evaluationSummary = quotations.map(q => ({
         vendorName: q.vendorName,
         totalPrice: q.totalPrice,
@@ -97,22 +97,18 @@ export async function constructMinuteData(
         changeHistory: [],
     };
     
-    const minuteData: Prisma.JsonObject = {
+    // Return a single object
+    return {
         minuteReference,
         meetingDate: new Date().toISOString(),
         participants,
         procurementDetails,
         bidders,
-    };
-    
-    return {
-        procurementSummary: procurementDetails,
-        evaluationSummary: evaluationSummary,
+        evaluationSummary,
         systemAnalysis,
         awardRecommendation,
         conclusion,
         auditMetadata,
-        minuteData,
     };
 }
 
@@ -145,13 +141,7 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
                         { id: actor.id },
                     ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
                 },
-                // Set default/empty values for required JSON fields
-                procurementSummary: {},
-                evaluationSummary: [],
-                systemAnalysis: {},
-                awardRecommendation: {},
-                conclusion: "See attached document.",
-                auditMetadata: { uploadedBy: actor.name, uploadTimestamp: new Date().toISOString() },
+                // Set a default empty object for the main JSON field
                 minuteData: { manualUpload: true, path: filePath }
             }
         });
@@ -159,15 +149,7 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
     }
     
     // If no file, generate the full minute data
-    const { 
-        procurementSummary, 
-        evaluationSummary, 
-        systemAnalysis,
-        awardRecommendation,
-        conclusion,
-        auditMetadata,
-        minuteData 
-    } = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
+    const fullMinuteData = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
 
     const createdMinute = await tx.minute.create({
         data: {
@@ -175,7 +157,9 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
             author: { connect: { id: actor.id } },
             decision: 'APPROVED',
             decisionBody: 'Award Finalization Committee',
-            justification: (awardRecommendation as any).justification,
+            justification: (fullMinuteData.awardRecommendation as any).justification,
+            minuteReference: fullMinuteData.minuteReference,
+            meetingDate: fullMinuteData.meetingDate,
             attendees: {
                 connect: [
                     ...requisition.financialCommitteeMembers.map((m: any) => ({ id: m.id })),
@@ -183,14 +167,8 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
                     { id: actor.id },
                 ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
             },
-            // Assign all the required top-level JSON fields
-            procurementSummary: procurementSummary as any,
-            evaluationSummary: evaluationSummary as any,
-            systemAnalysis: systemAnalysis as any,
-            awardRecommendation: awardRecommendation as any,
-            conclusion: conclusion,
-            auditMetadata: auditMetadata,
-            minuteData: minuteData,
+            // Assign the entire structured object to the single 'minuteData' JSON field
+            minuteData: fullMinuteData as any,
         },
     });
 
