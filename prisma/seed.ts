@@ -371,11 +371,11 @@ async function main() {
           for (const question of customQuestions) {
               await prisma.customQuestion.upsert({
                   where: { id: question.id },
-                  update: { ...question, options: question.options || [] },
+                  update: { ...question, options: JSON.stringify(question.options || []) },
                   create: {
                       ...question,
                       questionType: question.questionType.replace(/-/g, '_') as any,
-                      options: question.options || [],
+                      options: JSON.stringify(question.options || []),
                       requisitionId: createdRequisition.id,
                   }
               });
@@ -570,3 +570,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    
