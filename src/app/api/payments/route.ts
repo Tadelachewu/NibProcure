@@ -67,8 +67,8 @@ export async function POST(
                         
                         if (hasAcceptedAward) {
                              const acceptedPO = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
-                             // If the PO exists, check if any of its invoices are paid. This is the crucial check.
-                             const isPaid = acceptedPO ? acceptedPO.invoices.some(inv => inv.status === 'Paid') : false;
+                             // If the PO exists, check if ALL of its invoices are paid. An item is only complete if its PO is fully paid.
+                             const isPaid = acceptedPO ? acceptedPO.invoices.every(inv => inv.status === 'Paid') : false;
                              return isPaid;
                         }
                         
