@@ -28,17 +28,22 @@ export async function POST(
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    const rfqSenderSettingStr = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
     const userRoles = (user.roles as any[]).map(r => r.name);
 
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userId?: string };
-
-        if (setting.type === 'specific') {
-            isAuthorized = setting.userId === userId;
-        } else { // 'all' case
-            isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+    if (rfqSenderSettingStr?.value) {
+        try {
+            const setting = JSON.parse(rfqSenderSettingStr.value as string);
+            if (setting.type === 'specific') {
+                isAuthorized = setting.userId === userId;
+            } else { // 'all' case
+                isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+            }
+        } catch (e) {
+            console.error("Failed to parse rfqSenderSetting", e);
+            // Default to a safe permission if setting is corrupt, e.g., only Admin
+            isAuthorized = userRoles.includes('Admin');
         }
     }
 
