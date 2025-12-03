@@ -54,12 +54,15 @@ export async function POST(
             });
             
             if (requisition) {
-                const isPerItem = (requisition.rfqSettings as any)?.awardStrategy === 'item';
-                
                 const allItemsFinished = requisition.items.every(item => {
                     const awardDetails = (item.perItemAwardDetails as any[] | undefined) || [];
-                    const hasTerminalStatus = awardDetails.some(d => ['Failed_to_Award', 'Declined', 'Restarted'].includes(d.status));
+                    
+                    // If no awards were ever made for this item (e.g. it wasn't part of the final award), it is considered "finished" for this check.
+                    if (awardDetails.length === 0) {
+                        return true;
+                    }
 
+                    const hasTerminalStatus = awardDetails.some(d => ['Failed_to_Award', 'Declined', 'Restarted'].includes(d.status));
                     if (hasTerminalStatus) {
                         return true; // This item is finished because it failed or was restarted.
                     }
@@ -74,23 +77,18 @@ export async function POST(
                         const allInvoicesForPO = itemPO.invoices;
                         if (allInvoicesForPO.length === 0) return false; // Must have an invoice to be considered paid.
 
+                        // The current invoice being paid might not be in the database yet, so we check against its ID.
                         return allInvoicesForPO.every(inv => inv.status === 'Paid' || inv.id === updatedInvoice.id);
                     }
                     
-                    // If an item has no award details, or no accepted/terminal status, it's not "finished".
-                    return awardDetails.length === 0;
+                    // If an item has award details, but none are in a terminal or accepted state, it's not finished.
+                    return false;
                 });
                 
                 if (allItemsFinished) {
                     await tx.purchaseRequisition.update({
                         where: { id: requisition.id },
                         data: { status: 'Closed' }
-                    });
-                } else {
-                    // If at least one item is paid, but not all are finished, we mark it as partially closed.
-                     await tx.purchaseRequisition.update({
-                        where: { id: requisition.id },
-                        data: { status: 'Partially_Closed' }
                     });
                 }
             }
