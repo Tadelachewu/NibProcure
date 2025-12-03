@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -16,7 +15,7 @@ export async function POST(
     console.log(`[FINALIZE-SCORES] Received request for requisition: ${requisitionId}`);
     try {
         const body = await request.json();
-        const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue } = body;
+        const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue, minuteType, minuteFilePath } = body;
         console.log(`[FINALIZE-SCORES] Action by User ID: ${userId}, Strategy: ${awardStrategy}, Total Value: ${totalAwardValue}`);
 
         const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
@@ -223,7 +222,7 @@ export async function POST(
             }
 
             console.log('[FINALIZE-SCORES] Generating procurement minute...');
-            await generateAndSaveMinute(tx, requisition, allQuotes, Array.from(winningVendorIds), user);
+            await generateAndSaveMinute(tx, requisition, allQuotes, Array.from(winningVendorIds), user, minuteType === 'manual' ? minuteFilePath : undefined);
             console.log('[FINALIZE-SCORES] Minute generated and saved.');
 
 
