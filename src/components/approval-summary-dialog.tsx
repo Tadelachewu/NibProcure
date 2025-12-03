@@ -182,16 +182,24 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
   );
 
   const MinutesTabContent = () => {
-    if (minute && minute.filePath && (!minuteData || minuteData.manualUpload)) {
-        return (
-            <div className="py-4 text-center">
-                <FileText className="h-16 w-16 mx-auto text-muted-foreground" />
-                <p className="mt-4 font-semibold">A manual minute was uploaded for this decision.</p>
-                 <Button asChild className="mt-4">
-                    <a href={minute.filePath} target="_blank" rel="noopener noreferrer">View Document</a>
-                </Button>
-            </div>
-        )
+    if (!minute) {
+      return (
+        <div className="text-center h-full flex items-center justify-center text-muted-foreground">
+          <p>No formal minute was generated for this award stage.</p>
+        </div>
+      );
+    }
+    
+    if (minute.filePath && (!minuteData || minuteData.manualUpload)) {
+      return (
+        <div className="py-4 text-center">
+          <FileText className="h-16 w-16 mx-auto text-muted-foreground" />
+          <p className="mt-4 font-semibold">A manual minute was uploaded for this decision.</p>
+          <Button asChild className="mt-4">
+            <a href={minute.filePath} target="_blank" rel="noopener noreferrer">View Document</a>
+          </Button>
+        </div>
+      );
     }
 
     return (
