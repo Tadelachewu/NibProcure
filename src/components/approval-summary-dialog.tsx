@@ -56,10 +56,9 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
   }
 
   const minute: any = requisition.minutes?.[0];
-  // Access the nested JSON data
   const minuteData = minute?.minuteData as any;
 
-  if (minute && minute.filePath && !minuteData) {
+  if (minute && minute.filePath && (!minuteData || minuteData.manualUpload)) {
     return (
        <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-md">

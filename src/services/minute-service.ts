@@ -148,7 +148,6 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
         return createdMinute;
     }
     
-    // If no file, generate the full minute data
     const fullMinuteData = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
 
     const createdMinute = await tx.minute.create({
@@ -167,7 +166,6 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
                     { id: actor.id },
                 ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
             },
-            // Assign the entire structured object to the single 'minuteData' JSON field
             minuteData: fullMinuteData as any,
         },
     });
