@@ -117,12 +117,12 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                         <Table>
                                              <TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead className="text-right">Final Score</TableHead><TableHead className="text-right">Total Price</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                                              <TableBody>
-                                                 {minute.evaluationSummary.map((eval: any) => (
-                                                     <TableRow key={eval.vendorName}>
-                                                         <TableCell className="font-semibold">{eval.vendorName}</TableCell>
-                                                         <TableCell className="text-right font-mono">{eval.finalScore.toFixed(2)}</TableCell>
-                                                         <TableCell className="text-right font-mono">{eval.totalPrice.toLocaleString()} ETB</TableCell>
-                                                         <TableCell>{eval.isDisqualified ? 'Disqualified' : `Rank ${eval.rank}`}</TableCell>
+                                                 {minute.evaluationSummary.map((evaluation: any) => (
+                                                     <TableRow key={evaluation.vendorName}>
+                                                         <TableCell className="font-semibold">{evaluation.vendorName}</TableCell>
+                                                         <TableCell className="text-right font-mono">{evaluation.finalScore.toFixed(2)}</TableCell>
+                                                         <TableCell className="text-right font-mono">{evaluation.totalPrice.toLocaleString()} ETB</TableCell>
+                                                         <TableCell>{evaluation.isDisqualified ? 'Disqualified' : `Rank ${evaluation.rank}`}</TableCell>
                                                      </TableRow>
                                                  ))}
                                              </TableBody>
