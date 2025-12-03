@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const forVendor = searchParams.get('forVendor');
   const approverId = searchParams.get('approverId');
   const forQuoting = searchParams.get('forQuoting');
-  const forAwardReview = searchParams.get('forAwardReview');
+  const forAwardReview = searchParams.get('forReview');
 
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.split(' ')[1];
@@ -109,7 +109,7 @@ export async function GET(request: Request) {
         const baseRfqLifecycleStatuses = [
             'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
             'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
-            'PO_Created', 'Fulfilled', 'Closed'
+            'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed'
         ];
         
         const rfqLifecycleStatuses = [...baseRfqLifecycleStatuses, ...allPendingStatuses];
