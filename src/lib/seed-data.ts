@@ -105,6 +105,46 @@ const seedData: AppData = {
             financialCommitteeMemberIds: ['9'],
             technicalCommitteeMemberIds: ['10'],
         },
+        // New, detailed requisition for "Award by Best Item" testing
+        {
+            id: 'REQ-BEST-ITEM',
+            requesterId: '1', // Alice
+            title: 'IT Infrastructure Upgrade 2024',
+            department: 'IT',
+            departmentId: 'DEPT-3',
+            items: [
+                { id: 'ITEM-CPU-01', name: 'High-Performance CPUs', quantity: 50, unitPrice: 450, description: 'CPUs for server upgrades, minimum 16 cores.' },
+                { id: 'ITEM-SSD-01', name: 'Bulk NVMe SSD Storage', quantity: 100, unitPrice: 120, description: '1TB NVMe SSDs for enterprise workstations.' }
+            ],
+            totalPrice: 34500, // (50 * 450) + (100 * 120)
+            justification: 'Urgent upgrade required for aging server and workstation hardware to improve performance and reliability across the organization.',
+            status: 'Scoring_Complete',
+            urgency: 'High',
+            createdAt: new Date('2024-07-20T09:00:00Z'),
+            updatedAt: new Date('2024-07-28T14:00:00Z'),
+            deadline: new Date('2024-07-25T17:00:00Z'),
+            scoringDeadline: new Date('2024-07-28T17:00:00Z'),
+            customQuestions: [
+                { id: 'CQ-1', questionText: 'Do all proposed items come with a minimum 3-year enterprise warranty?', questionType: 'boolean', isRequired: true },
+                { id: 'CQ-2', questionText: 'What is the estimated delivery timeframe upon PO issuance?', questionType: 'text', isRequired: true },
+            ],
+            evaluationCriteria: {
+                financialWeight: 40,
+                technicalWeight: 60,
+                financialCriteria: [
+                    { id: 'FC-1', name: 'Unit Price Competitiveness', weight: 80 },
+                    { id: 'FC-2', name: 'Bulk Discount Offered', weight: 20 },
+                ],
+                technicalCriteria: [
+                    { id: 'TC-1', name: 'Performance Benchmarks', weight: 50 },
+                    { id: 'TC-2', name: 'Warranty and Support Terms', weight: 30 },
+                    { id: 'TC-3', name: 'Lead Time / Availability', weight: 20 },
+                ]
+            },
+            financialCommitteeMemberIds: ['9'], // Fiona
+            technicalCommitteeMemberIds: ['10'], // George
+            quotations: [],
+        }
     ],
 
     auditLogs: [
@@ -112,7 +152,100 @@ const seedData: AppData = {
     ],
 
     quotations: [
-        // Empty as the linked requisitions were removed
+        // --- Quotes for REQ-BEST-ITEM ---
+        // VENDOR-001 (Apple) - Good on CPU, okay on SSD
+        {
+            id: 'QUO-BI-01',
+            requisitionId: 'REQ-BEST-ITEM',
+            vendorId: 'VENDOR-001',
+            vendorName: 'Apple Inc.',
+            totalPrice: 35000,
+            deliveryDate: new Date('2024-08-15T00:00:00Z'),
+            createdAt: new Date('2024-07-22T10:00:00Z'),
+            status: 'Submitted',
+            items: [
+                { id: 'QI-BI-A1', requisitionItemId: 'ITEM-CPU-01', name: 'M3 Max Chip', quantity: 50, unitPrice: 460, leadTimeDays: 14, brandDetails: 'Apple Silicon' },
+                { id: 'QI-BI-A2', requisitionItemId: 'ITEM-SSD-01', name: 'Apple Branded 1TB SSD', quantity: 100, unitPrice: 120, leadTimeDays: 10, brandDetails: 'Apple' },
+            ],
+            answers: [
+                { questionId: 'CQ-1', answer: 'true' },
+                { questionId: 'CQ-2', answer: '10-14 business days.' },
+            ],
+            scores: [
+                // Fiona's Score (Financial)
+                { id: 'SCORE-F1', scorerId: '9', finalScore: 85, committeeComment: "Prices are slightly high, but acceptable.", itemScores: [
+                    { id: 'IS-F1A1', quoteItemId: 'QI-BI-A1', finalScore: 80, scores: [{ id: 'S-F1A1-1', type: 'FINANCIAL', financialCriterionId: 'FC-1', score: 80, comment: 'CPU price is high.'}, { id: 'S-F1A1-2', type: 'FINANCIAL', financialCriterionId: 'FC-2', score: 80, comment: 'No explicit bulk discount mentioned.'}] },
+                    { id: 'IS-F1A2', quoteItemId: 'QI-BI-A2', finalScore: 90, scores: [{ id: 'S-F1A2-1', type: 'FINANCIAL', financialCriterionId: 'FC-1', score: 90, comment: 'SSD price is competitive.'}, { id: 'S-F1A2-2', type: 'FINANCIAL', financialCriterionId: 'FC-2', score: 90, comment: 'Standard pricing.'}] },
+                ]},
+                // George's Score (Technical)
+                { id: 'SCORE-G1', scorerId: '10', finalScore: 95, committeeComment: "Excellent performance and warranty terms.", itemScores: [
+                    { id: 'IS-G1A1', quoteItemId: 'QI-BI-A1', finalScore: 98, scores: [{ id: 'S-G1A1-1', type: 'TECHNICAL', technicalCriterionId: 'TC-1', score: 100, comment: 'Top-tier performance.'}, { id: 'S-G1A1-2', type: 'TECHNICAL', technicalCriterionId: 'TC-2', score: 100, comment: 'Excellent AppleCare support.'}, { id: 'S-G1A1-3', type: 'TECHNICAL', technicalCriterionId: 'TC-3', score: 90, comment: 'Slightly longer lead time.'}] },
+                    { id: 'IS-G1A2', quoteItemId: 'QI-BI-A2', finalScore: 92, scores: [{ id: 'S-G1A2-1', type: 'TECHNICAL', technicalCriterionId: 'TC-1', score: 90, comment: 'Good performance.'}, { id: 'S-G1A2-2', type: 'TECHNICAL', technicalCriterionId: 'TC-2', score: 100, comment: 'Great warranty.'}, { id: 'S-G1A2-3', type: 'TECHNICAL', technicalCriterionId: 'TC-3', score: 90, comment: 'Good availability.'}] },
+                ]}
+            ]
+        },
+        // VENDOR-002 (Dell) - Okay on CPU, good on SSD
+        {
+            id: 'QUO-BI-02',
+            requisitionId: 'REQ-BEST-ITEM',
+            vendorId: 'VENDOR-002',
+            vendorName: 'Dell Technologies',
+            totalPrice: 33250,
+            deliveryDate: new Date('2024-08-12T00:00:00Z'),
+            createdAt: new Date('2024-07-23T11:00:00Z'),
+            status: 'Submitted',
+            items: [
+                { id: 'QI-BI-B1', requisitionItemId: 'ITEM-CPU-01', name: 'Intel Xeon W-2295', quantity: 50, unitPrice: 455, leadTimeDays: 12, brandDetails: 'Intel' },
+                { id: 'QI-BI-B2', requisitionItemId: 'ITEM-SSD-01', name: 'Dell Ultra-Speed 1TB NVMe', quantity: 100, unitPrice: 110, leadTimeDays: 7, brandDetails: 'Dell/Samsung' },
+            ],
+            answers: [
+                { questionId: 'CQ-1', answer: 'true' },
+                { questionId: 'CQ-2', answer: '7-12 business days.' },
+            ],
+            scores: [
+                 // Fiona's Score (Financial)
+                { id: 'SCORE-F2', scorerId: '9', finalScore: 95, committeeComment: "Very competitive pricing, especially on SSDs.", itemScores: [
+                    { id: 'IS-F2B1', quoteItemId: 'QI-BI-B1', finalScore: 90, scores: [{ id: 'S-F2B1-1', type: 'FINANCIAL', financialCriterionId: 'FC-1', score: 90, comment: 'CPU price is average.'}, { id: 'S-F2B1-2', type: 'FINANCIAL', financialCriterionId: 'FC-2', score: 90, comment: 'Good bulk offer.'}] },
+                    { id: 'IS-F2B2', quoteItemId: 'QI-BI-B2', finalScore: 100, scores: [{ id: 'S-F2B2-1', type: 'FINANCIAL', financialCriterionId: 'FC-1', score: 100, comment: 'Excellent SSD price.'}, { id: 'S-F2B2-2', type: 'FINANCIAL', financialCriterionId: 'FC-2', score: 100, comment: 'Great discount.'}] },
+                ]},
+                // George's Score (Technical)
+                { id: 'SCORE-G2', scorerId: '10', finalScore: 88, committeeComment: "Solid, reliable hardware.", itemScores: [
+                    { id: 'IS-G2B1', quoteItemId: 'QI-BI-B1', finalScore: 85, scores: [{ id: 'S-G2B1-1', type: 'TECHNICAL', technicalCriterionId: 'TC-1', score: 85, comment: 'Good server performance.'}, { id: 'S-G2B1-2', type: 'TECHNICAL', technicalCriterionId: 'TC-2', score: 90, comment: 'Dell ProSupport is solid.'}, { id: 'S-G2B1-3', type: 'TECHNICAL', technicalCriterionId: 'TC-3', score: 80, comment: 'Acceptable lead time.'}] },
+                    { id: 'IS-G2B2', quoteItemId: 'QI-BI-B2', finalScore: 91, scores: [{ id: 'S-G2B2-1', type: 'TECHNICAL', technicalCriterionId: 'TC-1', score: 90, comment: 'Fast SSDs.'}, { id: 'S-G2B2-2', type: 'TECHNICAL', technicalCriterionId: 'TC-2', score: 90, comment: 'Standard warranty.'}, { id: 'S-G2B2-3', type: 'TECHNICAL', technicalCriterionId: 'TC-3', score: 95, comment: 'Very fast shipping.'}] },
+                ]}
+            ]
+        },
+        // VENDOR-004 (HP) - Standby / Third option
+        {
+            id: 'QUO-BI-03',
+            requisitionId: 'REQ-BEST-ITEM',
+            vendorId: 'VENDOR-004',
+            vendorName: 'HP Inc.',
+            totalPrice: 34000,
+            deliveryDate: new Date('2024-08-20T00:00:00Z'),
+            createdAt: new Date('2024-07-24T14:00:00Z'),
+            status: 'Submitted',
+            items: [
+                { id: 'QI-BI-C1', requisitionItemId: 'ITEM-CPU-01', name: 'AMD Ryzen Threadripper PRO', quantity: 50, unitPrice: 470, leadTimeDays: 20, brandDetails: 'AMD' },
+                { id: 'QI-BI-C2', requisitionItemId: 'ITEM-SSD-01', name: 'HP Z Turbo Drive', quantity: 100, unitPrice: 115, leadTimeDays: 15, brandDetails: 'HP/WD' },
+            ],
+            answers: [
+                { questionId: 'CQ-1', answer: 'true' },
+                { questionId: 'CQ-2', answer: '15-20 business days.' },
+            ],
+            scores: [
+                 // Fiona's Score (Financial)
+                { id: 'SCORE-F3', scorerId: '9', finalScore: 80, committeeComment: "Pricing is not as competitive.", itemScores: [
+                    { id: 'IS-F3C1', quoteItemId: 'QI-BI-C1', finalScore: 75, scores: [{ id: 'S-F3C1-1', type: 'FINANCIAL', financialCriterionId: 'FC-1', score: 70, comment: 'Highest price for CPU.'}, { id: 'S-F3C1-2', type: 'FINANCIAL', financialCriterionId: 'FC-2', score: 80, comment: 'Some discount applied.'}] },
+                    { id: 'IS-F3C2', quoteItemId: 'QI-BI-C2', finalScore: 85, scores: [{ id: 'S-F3C2-1', type: 'FINANCIAL', financialCriterionId: 'FC-1', score: 85, comment: 'Decent SSD price.'}, { id: 'S-F3C2-2', type: 'FINANCIAL', financialCriterionId: 'FC-2', score: 85, comment: 'Standard bulk pricing.'}] },
+                ]},
+                // George's Score (Technical)
+                { id: 'SCORE-G3', scorerId: '10', finalScore: 82, committeeComment: "Good workstation parts, but longer lead times.", itemScores: [
+                    { id: 'IS-G3C1', quoteItemId: 'QI-BI-C1', finalScore: 88, scores: [{ id: 'S-G3C1-1', type: 'TECHNICAL', technicalCriterionId: 'TC-1', score: 95, comment: 'Excellent multi-core performance.'}, { id: 'S-G3C1-2', type: 'TECHNICAL', technicalCriterionId: 'TC-2', score: 80, comment: 'Standard HP warranty.'}, { id: 'S-G3C1-3', type: 'TECHNICAL', technicalCriterionId: 'TC-3', score: 70, comment: 'Long lead time.'}] },
+                    { id: 'IS-G3C2', quoteItemId: 'QI-BI-C2', finalScore: 76, scores: [{ id: 'S-G3C2-1', type: 'TECHNICAL', technicalCriterionId: 'TC-1', score: 80, comment: 'Solid SSD performance.'}, { id: 'S-G3C2-2', type: 'TECHNICAL', technicalCriterionId: 'TC-2', score: 80, comment: 'Standard warranty.'}, { id: 'S-G3C2-3', type: 'TECHNICAL', technicalCriterionId: 'TC-3', score: 70, comment: 'Slow shipping.'}] },
+                ]}
+            ]
+        }
     ],
     purchaseOrders: [],
     goodsReceipts: [],
