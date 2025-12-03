@@ -56,6 +56,7 @@ export type RequisitionStatus =
   | 'Award_Declined' // The winning vendor has declined the award
   | 'PostApproved' // All hierarchical reviews complete, ready for vendor notification
   | 'PO_Created'
+  | 'Partially_Closed' // Some items paid, others pending
   | 'Fulfilled'
   | 'Closed'
   | 'Pending_Committee_B_Review'
@@ -78,6 +79,7 @@ export type PerItemAwardDetail = {
   proposedItemName: string;
   unitPrice: number;
   status: PerItemAwardStatus;
+  score: number;
 }
 
 export type RequisitionItem = {
@@ -428,3 +430,4 @@ export interface ApprovalThreshold {
     max: number | null; // null for infinity
     steps: ApprovalStep[];
 }
+```

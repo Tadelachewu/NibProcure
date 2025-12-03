@@ -1,6 +1,7 @@
+
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -21,7 +22,7 @@ import { PurchaseRequisition, PerItemAwardDetail } from '@/lib/types';
 import { format, isPast } from 'date-fns';
 import { Badge } from './ui/badge';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FileX2, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FileX2, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 
 const PAGE_SIZE = 10;
@@ -82,22 +83,23 @@ export function RequisitionsForQuotingTable() {
         return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
     }
     
-    // --- Award by Best Item Strategy Logic ---
+    if (req.status === 'Partially_Closed') {
+        return <Badge variant="default" className="bg-sky-600">Partially Closed</Badge>;
+    }
+
     if (awardStrategy === 'item') {
         const hasAcceptedItem = req.items.some(item => 
             (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Accepted')
         );
-        if (hasAcceptedItem) {
+        if (hasAcceptedItem && req.status !== 'Partially_Closed') {
              return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
         }
     }
     
-    // --- Single Vendor Award Strategy Logic ---
     if (awardStrategy === 'all' && req.status === 'PO_Created') {
         return <Badge variant="default">PO Created</Badge>;
     }
 
-    // --- Action-Required Statuses ---
     if (req.status === 'Award_Declined') {
         return <Badge variant="destructive" className="animate-pulse">Award Declined - Action Required</Badge>;
     }
@@ -105,22 +107,18 @@ export function RequisitionsForQuotingTable() {
         return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
     }
 
-    // --- Pending Review Statuses ---
     if (req.status.startsWith('Pending_')) {
       return <Badge variant="outline" className="border-amber-500 text-amber-600">{req.status.replace(/_/g, ' ')}</Badge>;
     }
 
-    // --- Pre-Bidding Status ---
     if (req.status === 'PreApproved') {
         return <Badge variant="default" className="bg-blue-500 text-white">Ready for RFQ</Badge>;
     }
     
-    // --- Active Bidding ---
     if (req.status === 'Accepting_Quotes' && !deadlinePassed) {
         return <Badge variant="outline">Accepting Quotes ({quoteCount} submitted)</Badge>;
     }
     
-    // --- Post-Bidding Deadline Logic ---
     if (deadlinePassed) {
         if (req.status === 'Accepting_Quotes') {
              if (quoteCount === 0) {
@@ -156,7 +154,6 @@ export function RequisitionsForQuotingTable() {
         return <Badge variant="secondary">Scoring in Progress</Badge>;
     }
     
-    // Default fallback badge
     return <Badge variant="outline">{req.status.replace(/_/g, ' ')}</Badge>;
   }
 
@@ -241,3 +238,4 @@ export function RequisitionsForQuotingTable() {
     </Card>
   );
 }
+```
