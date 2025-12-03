@@ -16,23 +16,37 @@ export async function GET(request: Request) {
     const userRoles = actor.roles as UserRole[];
     const userId = actor.id;
 
+    // --- Start of Corrected Where Clause ---
     const orConditions: any[] = [
         { currentApproverId: userId },
-        { reviews: { some: { reviewerId: userId } } }
+    ];
+    
+    const validPendingStatuses = [
+        'Pending_Approval',
+        'Pending_Committee_A_Recommendation', 
+        'Pending_Committee_B_Review',
+        'Pending_Managerial_Approval', 
+        'Pending_Director_Approval',
+        'Pending_VP_Approval', 
+        'Pending_President_Approval'
     ];
 
+    // If the user has a specific approval role, find requisitions with that status.
     userRoles.forEach(roleName => {
-        orConditions.push({ status: `Pending_${roleName}` });
+        const pendingStatus = `Pending_${roleName}`;
+        if (validPendingStatuses.includes(pendingStatus)) {
+            orConditions.push({ status: pendingStatus });
+        }
     });
     
+    // Admins and Procurement Officers can see a broader range for oversight.
     if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-        const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
-        const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
-        orConditions.push({ status: { in: allPossiblePendingStatuses } });
-        orConditions.push({ status: 'PostApproved' });
+         orConditions.push({ status: { in: validPendingStatuses } });
+         orConditions.push({ status: 'PostApproved' });
     }
     
     const whereClause = { OR: orConditions };
+    // --- End of Corrected Where Clause ---
     
     const requisitions = await prisma.purchaseRequisition.findMany({
       where: whereClause,
