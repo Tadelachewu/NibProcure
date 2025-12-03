@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -69,8 +70,8 @@ export async function GET(request: Request) {
                     { deadline: { gt: new Date() } },
                     {
                         OR: [
-                        { allowedVendorIds: { isEmpty: true } },
-                        { allowedVendorIds: { has: userPayload.vendorId } },
+                          { allowedVendorIds: null }, // 'all' vendors
+                          { allowedVendorIds: { contains: userPayload.vendorId } },
                         ],
                     },
                     {
@@ -94,9 +95,7 @@ export async function GET(request: Request) {
             {
                 items: {
                   some: {
-                    perItemAwardDetails: {
-                      array_contains: [{vendorId: userPayload.vendorId}],
-                    },
+                    perItemAwardDetails: { contains: `"vendorId":"${userPayload.vendorId}"` },
                   },
                 },
             }
@@ -309,7 +308,7 @@ export async function PATCH(
                     questionText: q.questionText,
                     questionType: q.questionType.replace(/-/g, '_'),
                     isRequired: q.isRequired,
-                    options: q.options || [],
+                    options: (q.options || []).join(','),
                 })),
             },
         };
@@ -368,16 +367,12 @@ export async function PATCH(
             return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
         }
         
-        // --- START SAFEGUARD ---
-        // Before proceeding, check if the underlying award has been declined by the vendor.
-        const hasBeenDeclined = requisition.quotations.some(q => q.status === 'Declined');
-        const hasItemBeenDeclined = requisition.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
+        const hasBeenDeclined = requisition.items.some(item => (item.perItemAwardDetails as string | undefined)?.includes('"status":"Declined"'));
 
-        if (hasBeenDeclined || hasItemBeenDeclined) {
+        if (hasBeenDeclined) {
             console.error(`[PATCH /api/requisitions] Aborting approval: Award for Req ${id} was declined by the vendor.`);
             return NextResponse.json({ error: 'Cannot approve. The award was declined by the vendor. Please refresh to see the latest status.'}, { status: 409 }); // 409 Conflict
         }
-        // --- END SAFEGUARD ---
         
         console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
         const transactionResult = await prisma.$transaction(async (tx) => {
@@ -411,6 +406,7 @@ export async function PATCH(
                         decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
                         decisionBody: requisition.status.replace(/_/g, ' '),
                         justification: minute.justification,
+                        attendeeIds: minute.attendeeIds.join(','),
                         attendees: {
                             connect: minute.attendeeIds.map((id: string) => ({ id }))
                         }
@@ -562,19 +558,17 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
     }
 
-    // --- Start Server-Side Validation ---
-    const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
-    if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
-        const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
-        if (setting.type === 'specific_roles') {
-            const userRoles = actor.roles.map(r => r.name);
-            const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
-            if (!canCreate) {
-                return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
-            }
-        }
+    const creatorSettingStr = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
+    if (creatorSettingStr) {
+      const setting = JSON.parse(creatorSettingStr.value);
+      if (setting && setting.type === 'specific_roles') {
+          const userRoles = actor.roles.map(r => r.name);
+          const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
+          if (!canCreate) {
+              return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
+          }
+      }
     }
-    // --- End Server-Side Validation ---
 
     const totalPrice = body.items.reduce((acc: number, item: any) => {
         const price = item.unitPrice || 0;
@@ -597,6 +591,7 @@ export async function POST(request: Request) {
                 justification: body.justification,
                 status: 'Draft',
                 totalPrice: totalPrice,
+                rfqSettings: JSON.stringify(body.rfqSettings || {}),
                 items: {
                     create: body.items.map((item: any) => ({
                         name: item.name,
@@ -610,7 +605,7 @@ export async function POST(request: Request) {
                         questionText: q.questionText,
                         questionType: q.questionType.replace(/-/g, '_'),
                         isRequired: q.isRequired,
-                        options: q.options || [],
+                        options: (q.options || []).join(','),
                     }))
                 },
                 evaluationCriteria: body.evaluationCriteria ? {

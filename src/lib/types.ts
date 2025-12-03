@@ -59,12 +59,13 @@ export type RequisitionStatus =
   | 'Partially_Closed' // Some items paid, others pending
   | 'Fulfilled'
   | 'Closed'
-  | 'Pending_Committee_B_Review'
   | 'Pending_Committee_A_Recommendation'
+  | 'Pending_Committee_B_Review'
   | 'Pending_Managerial_Approval'
   | 'Pending_Director_Approval'
   | 'Pending_VP_Approval'
-  | 'Pending_President_Approval';
+  | 'Pending_President_Approval'
+  | 'Partially_Awarded';
 
 export type Urgency = 'Low' | 'Medium' | 'High' | 'Critical';
 
@@ -178,8 +179,8 @@ export type PurchaseRequisition = {
   negotiationNotes?: string;
   purchaseOrderId?: string;
   purchaseOrders?: { id: string, vendor: { name: string } }[];
-  allowedVendorIds: string[];
-  awardedQuoteItemIds: string[];
+  allowedVendorIds: string; // Comma-separated
+  awardedQuoteItemIds: string; // Comma-separated
   customQuestions?: CustomQuestion[];
   deadline?: Date;
   scoringDeadline?: Date;
@@ -430,4 +431,3 @@ export interface ApprovalThreshold {
     max: number | null; // null for infinity
     steps: ApprovalStep[];
 }
-```

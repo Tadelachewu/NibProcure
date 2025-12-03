@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
@@ -152,16 +153,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSettings(settingsData);
         
         const rfqSetting = settingsData.find((s:any) => s.key === 'rfqSenderSetting');
-        if (rfqSetting) setRfqSenderSetting(rfqSetting.value);
+        if (rfqSetting) setRfqSenderSetting(JSON.parse(rfqSetting.value));
         
         const requisitionCreatorSetting = settingsData.find((s: any) => s.key === 'requisitionCreatorSetting');
-        if (requisitionCreatorSetting) setRequisitionCreatorSetting(requisitionCreatorSetting.value);
+        if (requisitionCreatorSetting) setRequisitionCreatorSetting(JSON.parse(requisitionCreatorSetting.value));
 
         const committeeConf = settingsData.find((s:any) => s.key === 'committeeConfig');
-        if (committeeConf) setCommitteeConfig(committeeConf.value);
+        if (committeeConf) setCommitteeConfig(JSON.parse(committeeConf.value));
         
         const rolePerms = settingsData.find((s:any) => s.key === 'rolePermissions');
-        if (rolePerms) setRolePermissions(rolePerms.value);
+        if (rolePerms) setRolePermissions(JSON.parse(rolePerms.value));
         
         const rfqQuorumSetting = settingsData.find((s:any) => s.key === 'rfqQuorum');
         if (rfqQuorumSetting) setRfqQuorum(Number(rfqQuorumSetting.value));
@@ -273,7 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const response = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key, value }),
+            body: JSON.stringify({ key, value: JSON.stringify(value) }),
         });
         if (!response.ok) throw new Error('Failed to save setting');
         await fetchAllSettings();
