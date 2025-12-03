@@ -25,13 +25,13 @@ export async function POST(
         
         const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
         let isAuthorized = false;
-        const userRoles = (user.roles as any[]).map(r => r.name) as UserRole[];
+        if (rfqSenderSetting?.value) {
+            const setting = JSON.parse(rfqSenderSetting.value as string) as { type: string, userId?: string };
+            const userRoles = (user.roles as any[]).map(r => r.name) as UserRole[];
 
-        if (userRoles.includes('Admin')) {
-            isAuthorized = true;
-        } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-            const setting = rfqSenderSetting.value as { type: string, userId?: string };
-            if (setting.type === 'specific') {
+            if (userRoles.includes('Admin')) {
+                isAuthorized = true;
+            } else if (setting.type === 'specific') {
                 isAuthorized = setting.userId === userId;
             } else { // 'all' case
                 isAuthorized = userRoles.includes('Procurement_Officer');
@@ -215,7 +215,7 @@ export async function POST(
                     await tx.requisitionItem.update({
                         where: { id: reqItem.id },
                         data: {
-                            perItemAwardDetails: rankedProposals as any
+                            perItemAwardDetails: JSON.stringify(rankedProposals)
                         }
                     });
                 }
@@ -237,11 +237,11 @@ export async function POST(
                     currentApproverId: nextApproverId,
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
                     totalPrice: finalAwardValue,
-                    awardedQuoteItemIds: finalAwardedItemIds,
-                    rfqSettings: {
-                        ...(requisition?.rfqSettings as any),
+                    awardedQuoteItemIds: finalAwardedItemIds.join(','),
+                    rfqSettings: JSON.stringify({
+                        ...(requisition?.rfqSettings ? JSON.parse(requisition.rfqSettings) : {}),
                         awardStrategy: awardStrategy,
-                    }
+                    })
                 }
             });
 

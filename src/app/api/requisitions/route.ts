@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -70,8 +69,8 @@ export async function GET(request: Request) {
                     { deadline: { gt: new Date() } },
                     {
                         OR: [
-                        { allowedVendorIds: { isEmpty: true } },
-                        { allowedVendorIds: { has: userPayload.vendorId } },
+                        { allowedVendorIds: null },
+                        { allowedVendorIds: { contains: userPayload.vendorId } },
                         ],
                     },
                     {
@@ -96,7 +95,7 @@ export async function GET(request: Request) {
                 items: {
                   some: {
                     perItemAwardDetails: {
-                      array_contains: [{vendorId: userPayload.vendorId}],
+                      contains: `"vendorId":"${userPayload.vendorId}"`,
                     },
                   },
                 },
@@ -223,12 +222,21 @@ export async function GET(request: Request) {
       }
     });
 
-    const formattedRequisitions = requisitions.map(req => ({
-        ...req,
-        requesterName: req.requester?.name || 'Unknown',
-        department: req.department?.name || 'N/A',
-        auditTrail: logsByTransaction.get(req.transactionId!) || [],
-    }));
+    const formattedRequisitions = requisitions.map(req => {
+        const parsedItems = req.items.map(item => ({
+            ...item,
+            perItemAwardDetails: item.perItemAwardDetails ? JSON.parse(item.perItemAwardDetails) : []
+        }));
+
+        return {
+            ...req,
+            items: parsedItems,
+            rfqSettings: req.rfqSettings ? JSON.parse(req.rfqSettings) : {},
+            requesterName: req.requester?.name || 'Unknown',
+            department: req.department?.name || 'N/A',
+            auditTrail: logsByTransaction.get(req.transactionId!) || [],
+        };
+    });
     
     return NextResponse.json(formattedRequisitions);
   } catch (error) {
@@ -306,7 +314,7 @@ export async function PATCH(
                     questionText: q.questionText,
                     questionType: q.questionType.replace(/-/g, '_'),
                     isRequired: q.isRequired,
-                    options: q.options || [],
+                    options: q.options ? q.options.join(',') : null,
                 })),
             },
         };
@@ -364,16 +372,15 @@ export async function PATCH(
             return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
         }
         
-        // --- START SAFEGUARD ---
-        // Before proceeding, check if the underlying award has been declined by the vendor.
-        const hasBeenDeclined = requisition.quotations.some(q => q.status === 'Declined');
-        const hasItemBeenDeclined = requisition.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
+        const hasItemBeenDeclined = requisition.items.some(item => 
+            item.perItemAwardDetails && 
+            (JSON.parse(item.perItemAwardDetails) as any[]).some(d => d.status === 'Declined')
+        );
 
-        if (hasBeenDeclined || hasItemBeenDeclined) {
+        if (hasItemBeenDeclined) {
             console.error(`[PATCH /api/requisitions] Aborting approval: Award for Req ${id} was declined by the vendor.`);
             return NextResponse.json({ error: 'Cannot approve. The award was declined by the vendor. Please refresh to see the latest status.'}, { status: 409 }); // 409 Conflict
         }
-        // --- END SAFEGUARD ---
         
         console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
         const transactionResult = await prisma.$transaction(async (tx) => {
@@ -557,10 +564,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
     }
 
-    // --- Start Server-Side Validation ---
-    const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
-    if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
-        const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
+    const creatorSettingString = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
+    if (creatorSettingString?.value) {
+        const setting = JSON.parse(creatorSettingString.value);
         if (setting.type === 'specific_roles') {
             const userRoles = actor.roles.map(r => r.name);
             const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
@@ -569,7 +575,6 @@ export async function POST(request: Request) {
             }
         }
     }
-    // --- End Server-Side Validation ---
 
     const totalPrice = body.items.reduce((acc: number, item: any) => {
         const price = item.unitPrice || 0;
@@ -605,7 +610,7 @@ export async function POST(request: Request) {
                         questionText: q.questionText,
                         questionType: q.questionType.replace(/-/g, '_'),
                         isRequired: q.isRequired,
-                        options: q.options || [],
+                        options: q.options ? q.options.join(',') : null,
                     }))
                 },
                 evaluationCriteria: body.evaluationCriteria ? {
@@ -721,5 +726,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
