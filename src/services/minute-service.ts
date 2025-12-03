@@ -1,19 +1,19 @@
 
 'use server';
 
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PurchaseRequisition, Quotation } from '@/lib/types';
 
 /**
- * Constructs a detailed procurement minute object.
+ * Constructs a detailed procurement minute object for database storage.
  * @param prisma - The Prisma client instance.
  * @param requisition - The full requisition object with related data.
  * @param quotations - An array of all quotations for the requisition.
  * @param winningVendorIds - An array of IDs for the winning vendors.
  * @param actor - The user finalizing the award.
- * @returns A structured minute object.
+ * @returns A structured minute object ready to be saved.
  */
-export async function constructMinute(
+export async function constructMinuteData(
     prisma: PrismaClient,
     requisition: any,
     quotations: any[],
@@ -57,7 +57,7 @@ export async function constructMinute(
         winningVendors: winningQuotes.map(q => q.vendorName),
         justification: `Awarded based on the '${awardStrategy === 'item' ? 'Best Offer Per Item' : 'Award All to Single Vendor'}' strategy, selecting the highest-scoring qualified bids.`,
         totalAwardAmount: requisition.totalPrice,
-        deliveryTerms: `As per vendors' proposals, typically ${winningQuotes.map(q => q.items.reduce((max, i) => Math.max(max, i.leadTimeDays), 0) + ' days').join(', ')}.`,
+        deliveryTerms: `As per vendors' proposals, typically ${winningQuotes.map(q => q.items.reduce((max: number, i: any) => Math.max(max, i.leadTimeDays), 0) + ' days').join(', ')}.`,
     };
     
     const systemAnalysis = {
@@ -74,11 +74,12 @@ export async function constructMinute(
         logicVersion: '1.0.0',
         changeHistory: [],
     };
-
-    return {
+    
+    // This is the JSON object that will be stored.
+    const minuteJson: Prisma.JsonObject = {
         minuteReference,
         rfqNumber: requisition.id,
-        meetingDate: new Date(),
+        meetingDate: new Date().toISOString(),
         participants,
         procurementSummary,
         evaluationSummary,
@@ -87,6 +88,8 @@ export async function constructMinute(
         conclusion: 'The committee recommends proceeding with the award as detailed above, subject to final approvals as per the procurement policy.',
         auditMetadata,
     };
+    
+    return minuteJson;
 }
 
 /**
@@ -99,13 +102,24 @@ export async function constructMinute(
  * @returns The newly created minute object.
  */
 export async function generateAndSaveMinute(tx: any, requisition: any, quotations: any[], winningVendorIds: string[], actor: any) {
-    const minuteData = await constructMinute(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
+    // We use a new prisma client instance here because this function is not part of a transaction context.
+    const minuteJsonData = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
 
     const createdMinute = await tx.minute.create({
         data: {
             requisition: { connect: { id: requisition.id } },
             author: { connect: { id: actor.id } },
-            ...minuteData,
+            decision: 'APPROVED',
+            decisionBody: 'Award Finalization Committee',
+            justification: minuteJsonData.awardRecommendation.justification,
+            attendees: {
+                connect: [
+                    ...requisition.financialCommitteeMembers.map((m: any) => ({ id: m.id })),
+                    ...requisition.technicalCommitteeMembers.map((m: any) => ({ id: m.id })),
+                    { id: actor.id },
+                ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
+            },
+            ...minuteJsonData, // Spread the JSON data here
         },
     });
 
