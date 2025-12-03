@@ -18,7 +18,7 @@ import {
   CardDescription,
 } from './ui/card';
 import { Button } from './ui/button';
-import { PurchaseRequisition, User } from '@/lib/types';
+import { PurchaseRequisition, User, UserRole } from '@/lib/types';
 import { format } from 'date-fns';
 import {
   Check,
@@ -220,7 +220,22 @@ export function AwardReviewsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
-                  const isActionable = req.currentApproverId === user?.id;
+                  
+                   let isActionable = false;
+                   if (user && req.status) {
+                        const userRoles = user.roles as UserRole[];
+                        // Case 1: Directly assigned to the user
+                        if (req.currentApproverId === user.id) {
+                            isActionable = true;
+                        } 
+                        // Case 2: Assigned to a committee role the user has
+                        else if (req.status.startsWith('Pending_')) {
+                            const requiredRoleForStatus = req.status.replace('Pending_', '') as UserRole;
+                             if (userRoles.includes(requiredRoleForStatus)) {
+                                isActionable = true;
+                            }
+                        }
+                   }
                   
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');
