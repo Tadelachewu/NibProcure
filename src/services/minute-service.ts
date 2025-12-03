@@ -67,8 +67,8 @@ export async function constructMinuteData(
         totalPrice: q.totalPrice,
         isDisqualified: q.status === 'Failed',
         disqualificationReason: q.status === 'Failed' ? 'Did not meet minimum requirements.' : null,
-        finalScore: q.finalAverageScore,
-        rank: q.rank,
+        finalScore: q.finalAverageScore || null,
+        rank: q.rank || null,
     })).sort((a,b) => (a.rank || 99) - (b.rank || 99));
     
     const winningQuotes = quotations.filter(q => winningVendorIds.includes(q.vendorId));
@@ -97,26 +97,22 @@ export async function constructMinuteData(
         changeHistory: [],
     };
     
-    const minuteJson: Prisma.JsonObject = {
+    const minuteData: Prisma.JsonObject = {
         minuteReference,
         meetingDate: new Date().toISOString(),
         participants,
-        procurementDetails, // Keep for JSON blob
+        procurementDetails,
         bidders,
-        evaluationSummary: evaluationSummary.map(e => ({...e, finalScore: e.finalScore || null, rank: e.rank || null})), // Ensure nulls
-        systemAnalysis,
-        awardRecommendation,
-        conclusion,
-        auditMetadata,
     };
     
     return {
         procurementSummary: procurementDetails,
-        evaluationSummary: evaluationSummary.map(e => ({...e, finalScore: e.finalScore || null, rank: e.rank || null})),
+        evaluationSummary: evaluationSummary,
         systemAnalysis,
         awardRecommendation,
         conclusion,
-        minuteData: minuteJson,
+        auditMetadata,
+        minuteData,
     };
 }
 
@@ -130,13 +126,46 @@ export async function constructMinuteData(
  * @param actor - The user finalizing the award.
  * @returns The newly created minute object.
  */
-export async function generateAndSaveMinute(tx: any, requisition: any, quotations: any[], winningVendorIds: string[], actor: any) {
+export async function generateAndSaveMinute(tx: any, requisition: any, quotations: any[], winningVendorIds: string[], actor: any, filePath?: string) {
+    
+    if (filePath) {
+        // If a file is uploaded, create a minimal minute record
+        const createdMinute = await tx.minute.create({
+            data: {
+                requisition: { connect: { id: requisition.id } },
+                author: { connect: { id: actor.id } },
+                decision: 'APPROVED', // Assume approval if a minute is being finalized
+                decisionBody: 'Award Finalization Committee',
+                justification: 'Manual minute uploaded by procurement officer.',
+                filePath: filePath,
+                attendees: {
+                    connect: [
+                        ...requisition.financialCommitteeMembers.map((m: any) => ({ id: m.id })),
+                        ...requisition.technicalCommitteeMembers.map((m: any) => ({ id: m.id })),
+                        { id: actor.id },
+                    ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
+                },
+                // Set default/empty values for required JSON fields
+                procurementSummary: {},
+                evaluationSummary: [],
+                systemAnalysis: {},
+                awardRecommendation: {},
+                conclusion: "See attached document.",
+                auditMetadata: { uploadedBy: actor.name, uploadTimestamp: new Date().toISOString() },
+                minuteData: { manualUpload: true, path: filePath }
+            }
+        });
+        return createdMinute;
+    }
+    
+    // If no file, generate the full minute data
     const { 
         procurementSummary, 
         evaluationSummary, 
         systemAnalysis,
         awardRecommendation,
         conclusion,
+        auditMetadata,
         minuteData 
     } = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
 
@@ -146,7 +175,7 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
             author: { connect: { id: actor.id } },
             decision: 'APPROVED',
             decisionBody: 'Award Finalization Committee',
-            justification: (minuteData as any).awardRecommendation.justification,
+            justification: (awardRecommendation as any).justification,
             attendees: {
                 connect: [
                     ...requisition.financialCommitteeMembers.map((m: any) => ({ id: m.id })),
@@ -154,11 +183,13 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
                     { id: actor.id },
                 ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
             },
+            // Assign all the required top-level JSON fields
             procurementSummary: procurementSummary as any,
             evaluationSummary: evaluationSummary as any,
             systemAnalysis: systemAnalysis as any,
             awardRecommendation: awardRecommendation as any,
             conclusion: conclusion,
+            auditMetadata: auditMetadata,
             minuteData: minuteData,
         },
     });
