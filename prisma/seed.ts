@@ -345,8 +345,8 @@ async function main() {
               deadline: reqData.deadline ? new Date(reqData.deadline) : undefined,
               scoringDeadline: reqData.scoringDeadline ? new Date(reqData.scoringDeadline) : undefined,
               awardResponseDeadline: reqData.awardResponseDeadline ? new Date(reqData.awardResponseDeadline) : undefined,
-              allowedVendorIds: [],
-              awardedQuoteItemIds: [],
+              allowedVendorIds: '',
+              awardedQuoteItemIds: '',
           }
       });
 
