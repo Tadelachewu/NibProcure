@@ -258,7 +258,12 @@ export async function handleAwardRejection(
         });
         
         if (itemsUpdated > 0) {
-            await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
+            // Check if another approval is already in progress before changing the main status
+            const anotherApprovalIsPending = requisition.status.startsWith('Pending_');
+            if (!anotherApprovalIsPending) {
+                await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
+            }
+            
             await tx.auditLog.create({ 
                 data: { 
                     timestamp: new Date(), 
@@ -351,6 +356,8 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             throw new Error("Could not find any items with a 'Declined' status to trigger a promotion.");
         }
 
+        let newTotalValue = 0;
+
         for (const item of itemsNeedingPromotion) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             
@@ -370,6 +377,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                 
                 const updatedDetails = currentDetails.map(d => {
                     if (d.quoteItemId === bidToPromote.quoteItemId) {
+                        newTotalValue += bidToPromote.unitPrice * item.quantity; // Add to total value
                         return { ...d, status: 'Pending_Award' as const };
                     }
                     // Mark the just-declined bid as failed so it's not picked again
@@ -399,29 +407,14 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             return { message: 'No eligible standby vendors were found for promotion. Please review the awards.' };
         }
         
-        // After all promotions, refetch the state to calculate new total and get next approval step.
-        const updatedRequisition = await tx.purchaseRequisition.findUnique({ where: {id: requisitionId}, include: { items: true }});
-        if (!updatedRequisition) throw new Error("Could not refetch requisition for value calculation.");
-
-        let newTotalValue = 0;
-        for (const item of updatedRequisition.items) {
-             const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-             // **FIX**: Only include the value of items newly moved to 'Pending_Award'.
-             // Exclude 'Accepted' items that are already paid or being processed.
-             const newlyPendingAward = details.find(d => d.status === 'Pending_Award');
-             if (newlyPendingAward) {
-                 newTotalValue += newlyPendingAward.unitPrice * item.quantity;
-             }
-        }
-        
-        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...updatedRequisition, totalPrice: newTotalValue }, actor);
+        const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: newTotalValue }, actor);
 
         await tx.purchaseRequisition.update({
             where: { id: requisitionId },
             data: {
                 status: nextStatus as any,
                 currentApproverId: nextApproverId,
-                totalPrice: newTotalValue,
+                totalPrice: newTotalValue, // Set the new, correct total price
             }
         });
         
@@ -507,5 +500,3 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
-
-    

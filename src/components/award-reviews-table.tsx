@@ -220,7 +220,7 @@ export function AwardReviewsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
-                  const isActionable = req.isActionable ?? false;
+                  const isActionable = req.currentApproverId === user?.id;
 
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');
