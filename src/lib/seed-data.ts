@@ -188,6 +188,65 @@ const seedData: AppData = {
             technicalCommitteeMemberIds: ['10'],
             quotations: [],
         },
+        {
+            id: 'REQ-E2E-ITEM-AWARD-LOW',
+            transactionId: 'REQ-E2E-ITEM-AWARD-LOW',
+            requesterId: '1',
+            departmentId: 'DEPT-1',
+            title: 'Per-Item Award (Low Value)',
+            justification: 'Test case for a low-value, per-item award requiring only Managerial Approval.',
+            status: 'Pending_Managerial_Approval',
+            urgency: 'Low',
+            totalPrice: 9500, // This is the final calculated award value
+            currentApproverId: '15', // Manager, Procurement Division
+            createdAt: new Date('2024-07-01T10:00:00Z'),
+            updatedAt: new Date('2024-07-16T10:00:00Z'),
+            deadline: new Date('2024-07-05T17:00:00Z'),
+            scoringDeadline: new Date('2024-07-10T17:00:00Z'),
+            rfqSettings: { awardStrategy: 'item' },
+            items: [
+                {
+                    id: 'ITEM-LOW-1', name: 'USB-C Docking Station', quantity: 5, unitPrice: 1000,
+                    perItemAwardDetails: [{ rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', quotationId: 'QUO-LOW-002', quoteItemId: 'QI-LOW-1B', proposedItemName: 'Dell Dock WD19S', unitPrice: 900, score: 95, status: 'Pending_Award' }]
+                },
+                {
+                    id: 'ITEM-LOW-2', name: '4K Webcam', quantity: 5, unitPrice: 1000,
+                    perItemAwardDetails: [{ rank: 1, vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', quotationId: 'QUO-LOW-001', quoteItemId: 'QI-LOW-2A', proposedItemName: 'Logitech Brio 4K', unitPrice: 1000, score: 93, status: 'Pending_Award' }]
+                }
+            ],
+            financialCommitteeMemberIds: ['9'],
+            technicalCommitteeMemberIds: ['10'],
+            quotations: [],
+        },
+        {
+            id: 'REQ-E2E-ITEM-AWARD-MID',
+            transactionId: 'REQ-E2E-ITEM-AWARD-MID',
+            requesterId: '1',
+            departmentId: 'DEPT-2',
+            title: 'Per-Item Award (Mid Value)',
+            justification: 'Test case for a mid-value, per-item award requiring Committee B and further hierarchical review.',
+            status: 'Pending_Committee_B_Review',
+            urgency: 'Medium',
+            totalPrice: 55000, // Final calculated award value
+            createdAt: new Date('2024-07-02T11:00:00Z'),
+            updatedAt: new Date('2024-07-18T11:00:00Z'),
+            deadline: new Date('2024-07-08T17:00:00Z'),
+            scoringDeadline: new Date('2024-07-15T17:00:00Z'),
+            rfqSettings: { awardStrategy: 'item' },
+            items: [
+                {
+                    id: 'ITEM-MID-1', name: '34-inch Ultrawide Monitor', quantity: 10, unitPrice: 3000,
+                    perItemAwardDetails: [{ rank: 1, vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', quotationId: 'QUO-MID-002', quoteItemId: 'QI-MID-1B', proposedItemName: 'Dell UltraSharp 34', unitPrice: 2800, score: 94, status: 'Pending_Award' }]
+                },
+                {
+                    id: 'ITEM-MID-2', name: 'Color Laser Printer', quantity: 5, unitPrice: 5400,
+                    perItemAwardDetails: [{ rank: 1, vendorId: 'VENDOR-004', vendorName: 'HP Inc.', quotationId: 'QUO-MID-003', quoteItemId: 'QI-MID-2C', proposedItemName: 'HP Color LaserJet Pro', unitPrice: 5400, score: 91, status: 'Pending_Award' }]
+                }
+            ],
+            financialCommitteeMemberIds: ['9'],
+            technicalCommitteeMemberIds: ['10'],
+            quotations: [],
+        },
     ],
 
     auditLogs: [
@@ -261,6 +320,13 @@ const seedData: AppData = {
         { id: 'QUO-SPLIT-001', transactionId: 'REQ-E2E-SPLIT-STATE', requisitionId: 'REQ-E2E-SPLIT-STATE', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', totalPrice: 9200, status: 'Partially_Awarded', items: [ { id: 'QI-SPLIT-1A', requisitionItemId: 'ITEM-SPLIT-1', name: 'Apple Studio Display', quantity: 20, unitPrice: 300, leadTimeDays: 10, brandDetails: 'Apple', imageUrl: '#' }, { id: 'QI-SPLIT-2A', requisitionItemId: 'ITEM-SPLIT-2', name: 'Logitech MX Mechanical', quantity: 20, unitPrice: 160, leadTimeDays: 5, brandDetails: 'Logitech', imageUrl: '#' } ] },
         { id: 'QUO-SPLIT-002', transactionId: 'REQ-E2E-SPLIT-STATE', requisitionId: 'REQ-E2E-SPLIT-STATE', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', totalPrice: 8600, status: 'Accepted', items: [ { id: 'QI-SPLIT-1B', requisitionItemId: 'ITEM-SPLIT-1', name: 'Dell 27 Monitor', quantity: 20, unitPrice: 280, leadTimeDays: 7, brandDetails: 'Dell', imageUrl: '#' }, { id: 'QI-SPLIT-2B', requisitionItemId: 'ITEM-SPLIT-2', name: 'Dell Alienware Keyboard', quantity: 20, unitPrice: 150, leadTimeDays: 10, brandDetails: 'Dell', imageUrl: '#' } ] },
         { id: 'QUO-SPLIT-003', transactionId: 'REQ-E2E-SPLIT-STATE', requisitionId: 'REQ-E2E-SPLIT-STATE', vendorId: 'VENDOR-004', vendorName: 'HP Inc.', totalPrice: 8800, status: 'Declined', items: [ { id: 'QI-SPLIT-1C', requisitionItemId: 'ITEM-SPLIT-1', name: 'HP Omen 27', quantity: 20, unitPrice: 290, leadTimeDays: 12, brandDetails: 'HP', imageUrl: '#' }, { id: 'QI-SPLIT-2C', requisitionItemId: 'ITEM-SPLIT-2', name: 'HP HyperX Alloy', quantity: 20, unitPrice: 140, leadTimeDays: 8, brandDetails: 'HP', imageUrl: '#' } ] },
+        // Quotes for LOW VALUE per-item award
+        { id: 'QUO-LOW-001', transactionId: 'REQ-E2E-ITEM-AWARD-LOW', requisitionId: 'REQ-E2E-ITEM-AWARD-LOW', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', totalPrice: 10000, status: 'Submitted', items: [{ id: 'QI-LOW-2A', requisitionItemId: 'ITEM-LOW-2', name: 'Logitech Brio 4K', quantity: 5, unitPrice: 1000, leadTimeDays: 3, brandDetails: 'Logitech', imageUrl: '#' }] },
+        { id: 'QUO-LOW-002', transactionId: 'REQ-E2E-ITEM-AWARD-LOW', requisitionId: 'REQ-E2E-ITEM-AWARD-LOW', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', totalPrice: 9000, status: 'Submitted', items: [{ id: 'QI-LOW-1B', requisitionItemId: 'ITEM-LOW-1', name: 'Dell Dock WD19S', quantity: 5, unitPrice: 900, leadTimeDays: 5, brandDetails: 'Dell', imageUrl: '#' }] },
+        // Quotes for MID VALUE per-item award
+        { id: 'QUO-MID-001', transactionId: 'REQ-E2E-ITEM-AWARD-MID', requisitionId: 'REQ-E2E-ITEM-AWARD-MID', vendorId: 'VENDOR-001', vendorName: 'Apple Inc.', totalPrice: 60000, status: 'Submitted', items: [{ id: 'QI-MID-1A', requisitionItemId: 'ITEM-MID-1', name: 'Apple Studio Display', quantity: 10, unitPrice: 6000, leadTimeDays: 20, brandDetails: 'Apple', imageUrl: '#' }] },
+        { id: 'QUO-MID-002', transactionId: 'REQ-E2E-ITEM-AWARD-MID', requisitionId: 'REQ-E2E-ITEM-AWARD-MID', vendorId: 'VENDOR-002', vendorName: 'Dell Technologies', totalPrice: 28000, status: 'Submitted', items: [{ id: 'QI-MID-1B', requisitionItemId: 'ITEM-MID-1', name: 'Dell UltraSharp 34', quantity: 10, unitPrice: 2800, leadTimeDays: 10, brandDetails: 'Dell', imageUrl: '#' }] },
+        { id: 'QUO-MID-003', transactionId: 'REQ-E2E-ITEM-AWARD-MID', requisitionId: 'REQ-E2E-ITEM-AWARD-MID', vendorId: 'VENDOR-004', vendorName: 'HP Inc.', totalPrice: 54000, status: 'Submitted', items: [{ id: 'QI-MID-2C', requisitionItemId: 'ITEM-MID-2', name: 'HP Color LaserJet Pro', quantity: 5, unitPrice: 5400, leadTimeDays: 15, brandDetails: 'HP', imageUrl: '#' }] },
     ],
     purchaseOrders: [
         {
