@@ -221,24 +221,23 @@ export function AwardReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   
-                   let isActionable = false;
-                   if (user && req.status) {
+                  // This is the corrected logic
+                  let isActionable = false;
+                  if (user && req.status) {
                         const userRoles = (user.roles as any[]).map(r => r.name) as UserRole[];
-
-                        // Case 1: Directly assigned to the user, regardless of main status
+                        
+                        // Case 1: Directly assigned to the user for hierarchical approval.
                         if (req.currentApproverId === user.id) {
                             isActionable = true;
                         } 
-                        // Case 2: Assigned to a committee role the user has.
-                        // This should still work even if the main status is Award_Declined,
-                        // as long as the approval step is still pending for this user's committee.
+                        // Case 2: User is part of a committee whose turn it is.
                         else if (req.status.startsWith('Pending_')) {
                             const requiredRoleForStatus = req.status.replace('Pending_', '') as UserRole;
-                             if (userRoles.includes(requiredRoleForStatus)) {
+                            if (userRoles.includes(requiredRoleForStatus)) {
                                 isActionable = true;
                             }
                         }
-                   }
+                  }
                   
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');
