@@ -3,9 +3,10 @@
 
 import { NextResponse } from 'next/server';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { User, UserRole, PerItemAwardDetail } from '@/lib/types';
+import { UserRole, PerItemAwardDetail } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format } from 'date-fns';
+import { getActorFromToken } from '@/lib/auth';
 
 const prisma = new PrismaClient();
 
@@ -13,31 +14,20 @@ export async function POST(
   request: Request
 ) {
   try {
-    const body = await request.json();
-    const { originalRequisitionId, itemIds, vendorIds, newDeadline, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({ where: { id: actorUserId }, include: { roles: true } });
+    const actor = await getActorFromToken(request);
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
     
     // --- Authorization Check ---
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    let isAuthorized = false;
-    const userRoles = (actor.roles as any[]).map(r => r.name);
-
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userId?: string };
-        if (setting.type === 'specific') {
-            isAuthorized = setting.userId === actorUserId;
-        } else { // 'all' case
-            isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
-        }
-    }
-    
+    const userRoles = actor.roles as UserRole[];
+    const isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { originalRequisitionId, itemIds, vendorIds, newDeadline } = body;
 
     if (!originalRequisitionId || !itemIds || itemIds.length === 0 || !vendorIds || vendorIds.length === 0 || !newDeadline) {
       return NextResponse.json({ error: 'Missing required parameters: originalRequisitionId, itemIds, vendorIds, and newDeadline.' }, { status: 400 });
@@ -129,6 +119,44 @@ export async function POST(
                 });
             }
         }
+
+        // --- Start of New Logic: Check if original requisition can be closed ---
+        const updatedOriginalReq = await tx.purchaseRequisition.findUnique({
+            where: { id: originalRequisitionId },
+            include: { 
+                items: true,
+                purchaseOrders: { include: { invoices: true }}
+            }
+        });
+
+        if (updatedOriginalReq) {
+            const allItemsAreTerminal = updatedOriginalReq.items.every(item => {
+                const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                if (details.length === 0) return true; // Not part of an award, considered terminal.
+                
+                const hasBeenRestarted = details.some(d => d.status === 'Restarted');
+                if(hasBeenRestarted) return true;
+
+                const acceptedAward = details.find(d => d.status === 'Accepted');
+                if (acceptedAward) {
+                    const po = updatedOriginalReq.purchaseOrders.find(p => p.items.some(poi => poi.requisitionItemId === item.id));
+                    return po?.invoices.some(inv => inv.status === 'Paid') || false;
+                }
+
+                // If an award failed and was not restarted, it's also terminal.
+                if(details.some(d => d.status === 'Failed_to_Award')) return true;
+
+                return false;
+            });
+            
+            if (allItemsAreTerminal) {
+                await tx.purchaseRequisition.update({
+                    where: { id: originalRequisitionId },
+                    data: { status: 'Closed' }
+                });
+            }
+        }
+        // --- End of New Logic ---
 
         await tx.auditLog.create({
             data: {
