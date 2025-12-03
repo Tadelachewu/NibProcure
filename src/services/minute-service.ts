@@ -12,7 +12,7 @@ import { PurchaseRequisition, Quotation } from '@/lib/types';
  * @param quotations - An array of all quotations for the requisition.
  * @param winningVendorIds - An array of IDs for the winning vendors.
  * @param actor - The user finalizing the award.
- * @returns A structured minute object ready for database storage.
+ * @returns A structured set of objects for the minute record.
  */
 export async function constructMinuteData(
     prisma: PrismaClient,
@@ -99,10 +99,10 @@ export async function constructMinuteData(
         minuteReference,
         meetingDate: new Date().toISOString(),
         participants,
-        procurementDetails,
+        procurementDetails, // Kept inside for the full document view
         bidders,
-        evaluationSummary,
-        systemAnalysis,
+        evaluationSummary, // Kept inside for the full document view
+        systemAnalysis, // Kept inside for the full document view
         awardRecommendation,
         conclusion: 'The committee recommends proceeding with the award as detailed above, subject to final approvals as per the procurement policy.',
         auditMetadata,
@@ -111,6 +111,7 @@ export async function constructMinuteData(
     return {
         procurementSummary: procurementDetails,
         evaluationSummary: evaluationSummary,
+        systemAnalysis: systemAnalysis,
         minuteData: minuteJson,
     };
 }
@@ -125,8 +126,7 @@ export async function constructMinuteData(
  * @returns The newly created minute object.
  */
 export async function generateAndSaveMinute(tx: any, requisition: any, quotations: any[], winningVendorIds: string[], actor: any) {
-    // Correctly get the structured data from constructMinuteData
-    const { procurementSummary, evaluationSummary, minuteData } = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
+    const { procurementSummary, evaluationSummary, systemAnalysis, minuteData } = await constructMinuteData(new PrismaClient(), requisition, quotations, winningVendorIds, actor);
 
     const createdMinute = await tx.minute.create({
         data: {
@@ -144,6 +144,7 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
             },
             procurementSummary: procurementSummary as any,
             evaluationSummary: evaluationSummary as any,
+            systemAnalysis: systemAnalysis as any,
             minuteData: minuteData,
         },
     });
