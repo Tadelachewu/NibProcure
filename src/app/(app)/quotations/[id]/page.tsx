@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Card,
@@ -993,7 +993,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
 
 
     const handleSendRFQ = async () => {
-        if (!user || !deadline) return;
+        if (!user || !deadline || !requisition) return;
 
         if (isBefore(deadline, new Date())) {
             toast({
@@ -3356,16 +3356,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
     
 
-
-
-
-
-    
-
-
-
-    
-
     
 
 
@@ -3398,3 +3388,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
 
+
+
+    
