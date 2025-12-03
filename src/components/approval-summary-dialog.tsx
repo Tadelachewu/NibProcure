@@ -1,7 +1,7 @@
 
 'use client';
 
-import { AuditLog as AuditLogType, Minute, PurchaseRequisition, Quotation } from '@/lib/types';
+import { AuditLog as AuditLogType, Minute, PurchaseRequisition } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -17,10 +17,9 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { AlertCircle, CheckCircle, FileText, MessageSquare, User, Trophy, Crown, Medal } from 'lucide-react';
+import { AlertCircle, CheckCircle, FileText, MessageSquare, User, Trophy, Crown, Medal, Building, Users2, ShoppingCart, ListChecks, DollarSign, Award, ThumbsUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
-
 
 interface ApprovalSummaryDialogProps {
   requisition: PurchaseRequisition;
@@ -28,38 +27,23 @@ interface ApprovalSummaryDialogProps {
   onClose: () => void;
 }
 
+const MinuteSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
+    <div className="space-y-2">
+        <h4 className="font-semibold text-lg text-primary">{title}</h4>
+        <div className="pl-4 border-l-2 border-border/70 space-y-4">{children}</div>
+    </div>
+);
+
+const MinuteSubSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
+    <div>
+        <h5 className="font-medium text-base mb-2">{title}</h5>
+        {children}
+    </div>
+);
+
+
 export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: ApprovalSummaryDialogProps) {
   if (!requisition) return null;
-
-  const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
-
-  const sortedQuotes = requisition.quotations?.sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)) || [];
-  
-  const declinedQuote = sortedQuotes.find(q => q.status === 'Declined');
-  const isPromotedStandby = !!declinedQuote;
-  
-  const winner = sortedQuotes.find(q => q.status === 'Pending_Award' || q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Partially_Awarded');
-  
-  const topThree = sortedQuotes.slice(0, 3);
-  
-  let winningVendors: {id: string, name: string}[] = [];
-
-  if(isPerItemStrategy) {
-    const uniqueVendorIds = new Set<string>();
-    requisition.items.forEach(item => {
-        const award = (item.perItemAwardDetails || []).find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
-        if(award) {
-            uniqueVendorIds.add(award.vendorId);
-        }
-    });
-    const allQuotes = requisition.quotations || [];
-    winningVendors = allQuotes
-      .filter(q => uniqueVendorIds.has(q.vendorId))
-      .map(q => ({ id: q.vendorId, name: q.vendorName }));
-  } else if (winner) {
-    winningVendors = [{ id: winner.vendorId, name: winner.vendorName }];
-  }
-
 
   const getRankIcon = (rank?: number) => {
     switch(rank) {
@@ -70,6 +54,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
     }
   }
 
+  const minute: any = requisition.minutes?.[0]?.minuteData;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -77,143 +62,102 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
             <DialogHeader>
                 <DialogTitle>Approval Summary: {requisition.id}</DialogTitle>
                 <DialogDescription>
-                    {isPromotedStandby 
-                        ? `Executive brief for the promoted standby award on: ` 
-                        : `Executive brief for the award recommendation on: `
-                    }
-                    <span className="font-semibold">{requisition.title}</span>
+                    Executive brief for the award recommendation on:
+                    <span className="font-semibold"> {requisition.title}</span>
                 </DialogDescription>
             </DialogHeader>
              <div className="flex-1 overflow-hidden flex flex-col">
-                <Tabs defaultValue="summary" className="flex-1 flex flex-col min-h-0">
+                <Tabs defaultValue="minutes" className="flex-1 flex flex-col min-h-0">
                     <TabsList>
-                        <TabsTrigger value="summary">Summary</TabsTrigger>
+                        <TabsTrigger value="minutes">Official Minute</TabsTrigger>
                         <TabsTrigger value="history">Workflow History</TabsTrigger>
-                        <TabsTrigger value="minutes">Minutes</TabsTrigger>
                     </TabsList>
-                    <TabsContent value="summary" className="mt-4 flex-1 overflow-hidden">
+                    <TabsContent value="minutes" className="mt-4 flex-1 overflow-hidden">
                         <ScrollArea className="h-full pr-4">
-                            <div className="space-y-4 py-4">
-                                {isPromotedStandby && (
-                                    <Alert variant="destructive">
-                                        <AlertCircle className="h-4 w-4" />
-                                        <AlertTitle>Promoted Standby Vendor</AlertTitle>
-                                        <AlertDescription>
-                                            The original winning vendor has declined the award. This recommendation is for the next vendor(s) in line.
-                                        </AlertDescription>
-                                    </Alert>
-                                )}
-                                {/* Financial Impact */}
-                                <div className="space-y-2">
-                                    <h4 className="font-semibold text-lg">Financial Overview</h4>
-                                    <div className="p-4 bg-muted/50 rounded-md grid grid-cols-2 gap-4">
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Total Award Value</p>
-                                            <p className="text-2xl font-bold">{requisition.totalPrice.toLocaleString()} ETB</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">
-                                                {isPerItemStrategy ? 'Winning Vendors' : 'Recommended Winning Vendor'}
-                                            </p>
-                                            <div className="text-lg font-semibold">
-                                                {winningVendors.length > 0 ? winningVendors.map(v => v.name).join(', ') : 'N/A'}
-                                            </div>
-                                        </div>
+                            {minute ? (
+                                <div className="space-y-6 text-sm">
+                                    <div className="text-center">
+                                        <h2 className="text-xl font-bold">PROCUREMENT MINUTE</h2>
+                                        <p className="text-muted-foreground">{minute.minuteReference}</p>
+                                        <p className="text-xs text-muted-foreground">Date: {format(new Date(minute.meetingDate), 'PPP')}</p>
                                     </div>
-                                </div>
-                                <Separator />
-                                
-                                {isPerItemStrategy ? (
-                                    <div>
-                                        <h4 className="font-semibold text-lg mb-2">Award by Best Item Breakdown</h4>
-                                        <div className="border rounded-md">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Requested Item</TableHead>
-                                                        <TableHead>Winning Vendor</TableHead>
-                                                        <TableHead>Proposed Item & Price</TableHead>
-                                                        <TableHead>Total</TableHead>
-                                                        <TableHead>Status</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {requisition.items.map(item => {
-                                                        const award = (item.perItemAwardDetails || []).find(d => d.status === 'Pending_Award' || d.status === 'Accepted');
-                                                        return (
-                                                            <TableRow key={item.id}>
-                                                                <TableCell className="font-medium">{item.name}</TableCell>
-                                                                <TableCell>{award?.vendorName || 'N/A'}</TableCell>
-                                                                <TableCell>
-                                                                    {award ? (
-                                                                        <>
-                                                                            <p>{award.proposedItemName}</p>
-                                                                            <p className="text-xs text-muted-foreground font-mono">@{award.unitPrice.toLocaleString()} ETB</p>
-                                                                        </>
-                                                                    ) : 'N/A'}
-                                                                </TableCell>
-                                                                <TableCell className="font-semibold">
-                                                                    {award ? (award.unitPrice * item.quantity).toLocaleString() : 'N/A'} ETB
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    {award ? <Badge>{award.status.replace(/_/g, ' ')}</Badge> : <Badge variant="outline">N/A</Badge>}
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        )
-                                                    })}
-                                                </TableBody>
-                                            </Table>
+                                    
+                                    <MinuteSection title="1. Participants">
+                                        <div className="flex flex-wrap gap-x-6 gap-y-2">
+                                            {minute.participants.map((p: any) => (
+                                                <div key={p.name}><span className="font-semibold">{p.name}</span>, <span className="text-muted-foreground">{p.role}</span></div>
+                                            ))}
                                         </div>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <h4 className="font-semibold text-lg mb-2">Vendor Comparison</h4>
-                                        <div className="border rounded-md">
+                                    </MinuteSection>
+
+                                    <MinuteSection title="2. Procurement Details">
+                                        <MinuteSubSection title="2.1. Subject">
+                                            <p>Award recommendation for RFQ#: <span className="font-mono">{minute.procurementDetails.requisitionId}</span> - {minute.procurementDetails.title}</p>
+                                        </MinuteSubSection>
+                                        <MinuteSubSection title="2.2. Method">
+                                            <p>{minute.procurementDetails.procurementMethod}</p>
+                                        </MinuteSubSection>
+                                        <MinuteSubSection title="2.3. Items Requested">
+                                            <ul className="list-disc list-inside space-y-1">
+                                                {minute.procurementDetails.items.map((item: any) => (
+                                                    <li key={item.name}>{item.name} (Quantity: {item.quantity})</li>
+                                                ))}
+                                            </ul>
+                                        </MinuteSubSection>
+                                    </MinuteSection>
+
+                                    <MinuteSection title="3. Bidding Summary">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <Card className="p-4"><p className="text-muted-foreground text-xs">Vendors Invited</p><p className="font-bold text-2xl">{minute.bidders.vendorsInvited}</p></Card>
+                                            <Card className="p-4"><p className="text-muted-foreground text-xs">Submissions Received</p><p className="font-bold text-2xl">{minute.bidders.vendorsSubmitted}</p></Card>
+                                        </div>
+                                    </MinuteSection>
+
+                                    <MinuteSection title="4. Evaluation Summary">
                                         <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>Rank</TableHead>
-                                                    <TableHead>Vendor</TableHead>
-                                                    <TableHead className="text-right">Final Score</TableHead>
-                                                    <TableHead className="text-right">Total Price</TableHead>
-                                                    <TableHead>Status</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {topThree.length > 0 ? (
-                                                    topThree.map((quote) => (
-                                                    <TableRow key={quote.id} className={quote.id === winner?.id ? 'bg-green-500/10' : ''}>
-                                                        <TableCell className="font-bold flex items-center gap-1">{getRankIcon(quote.rank)} {quote.rank || 'N/A'}</TableCell>
-                                                        <TableCell>{quote.vendorName}</TableCell>
-                                                        <TableCell className="text-right font-mono">{quote.finalAverageScore?.toFixed(2) || 'N/A'}</TableCell>
-                                                        <TableCell className="text-right font-mono">{quote.totalPrice.toLocaleString()} ETB</TableCell>
-                                                        <TableCell><Badge variant={quote.status === 'Declined' ? 'destructive' : 'outline'}>{quote.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                                    </TableRow>
-                                                    ))
-                                                ) : (
-                                                    <TableRow>
-                                                        <TableCell colSpan={5} className="text-center h-24">No quotations found.</TableCell>
-                                                    </TableRow>
-                                                )}
-                                            </TableBody>
+                                             <TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead className="text-right">Final Score</TableHead><TableHead className="text-right">Total Price</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                             <TableBody>
+                                                 {minute.evaluationSummary.map((eval: any) => (
+                                                     <TableRow key={eval.vendorName}>
+                                                         <TableCell className="font-semibold">{eval.vendorName}</TableCell>
+                                                         <TableCell className="text-right font-mono">{eval.finalScore.toFixed(2)}</TableCell>
+                                                         <TableCell className="text-right font-mono">{eval.totalPrice.toLocaleString()} ETB</TableCell>
+                                                         <TableCell>{eval.isDisqualified ? 'Disqualified' : `Rank ${eval.rank}`}</TableCell>
+                                                     </TableRow>
+                                                 ))}
+                                             </TableBody>
                                         </Table>
-                                        </div>
+                                    </MinuteSection>
+                                    
+                                     <MinuteSection title="5. System Analysis & Award Recommendation">
+                                         <MinuteSubSection title="5.1. System Recommendation">
+                                            <Alert>
+                                                <Award className="h-4 w-4" />
+                                                <AlertTitle>Winner(s): {minute.systemAnalysis.winner}</AlertTitle>
+                                                <AlertDescription>
+                                                    <p>Strategy: <span className="font-semibold">{minute.systemAnalysis.awardStrategy}</span></p>
+                                                    <p>{minute.systemAnalysis.result}</p>
+                                                </AlertDescription>
+                                            </Alert>
+                                        </MinuteSubSection>
+                                        <MinuteSubSection title="5.2. Committee Decision">
+                                            <p className="italic">"{minute.awardRecommendation.justification}"</p>
+                                        </MinuteSubSection>
+                                    </MinuteSection>
+
+                                    <MinuteSection title="6. Conclusion">
+                                        <p className="italic">{minute.conclusion}</p>
+                                    </MinuteSection>
+                                    
+                                    <div className="text-xs text-muted-foreground text-center pt-4 border-t">
+                                        Minute generated by {minute.auditMetadata.generatedBy} on {format(new Date(minute.auditMetadata.generationTimestamp), 'PPpp')} (v{minute.auditMetadata.logicVersion})
                                     </div>
-                                )}
-
-                                <Separator />
-                                {/* Requisition Snapshot */}
-                                <div className="space-y-4">
-                                    <h4 className="font-semibold text-lg">Original Request Details</h4>
-                                     <ScrollArea className="h-48 rounded-md border p-3">
-                                        <div>
-                                            <p className="font-medium mb-1">Business Justification</p>
-                                            <p className="text-sm text-muted-foreground">{requisition.justification}</p>
-                                        </div>
-                                    </ScrollArea>
                                 </div>
-
-                            </div>
+                            ) : (
+                                <div className="text-center h-full flex items-center justify-center text-muted-foreground">
+                                    <p>No formal minute was generated for this award stage.</p>
+                                </div>
+                            )}
                         </ScrollArea>
                     </TabsContent>
                     <TabsContent value="history" className="mt-4 flex-1 overflow-hidden">
@@ -258,35 +202,6 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                     </Alert>
                                 )}
                             </div>
-                        </ScrollArea>
-                    </TabsContent>
-                    <TabsContent value="minutes" className="mt-4 flex-1 overflow-hidden">
-                        <ScrollArea className="h-full pr-4">
-                            {requisition.minutes && requisition.minutes.length > 0 ? (
-                                <div className="space-y-4 py-4">
-                                {requisition.minutes.map(minute => (
-                                    <Card key={minute.id}>
-                                        <CardHeader>
-                                            <CardTitle className="flex justify-between items-center text-base">
-                                                <span>Minute: {minute.decisionBody}</span>
-                                                <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
-                                            </CardTitle>
-                                            <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <h4 className="font-semibold text-sm">Justification</h4>
-                                            <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50 mt-1">{minute.justification}</p>
-                                            <h4 className="font-semibold text-sm mt-4">Attendees</h4>
-                                            <div className="flex flex-wrap gap-2 mt-2">
-                                                {minute.attendees.map(attendee => <Badge key={attendee.id} variant="outline">{attendee.name}</Badge>)}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                                </div>
-                            ): (
-                                <div className="text-center h-48 flex items-center justify-center text-muted-foreground">No meeting minutes found for this requisition.</div>
-                            )}
                         </ScrollArea>
                     </TabsContent>
                 </Tabs>

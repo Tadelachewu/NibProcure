@@ -5,13 +5,14 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { PurchaseRequisition, Quotation } from '@/lib/types';
 
 /**
- * Constructs a detailed procurement minute object for database storage.
+ * Constructs a detailed, formal procurement minute object for database storage,
+ * adhering to a banking document standard.
  * @param prisma - The Prisma client instance.
  * @param requisition - The full requisition object with related data.
  * @param quotations - An array of all quotations for the requisition.
  * @param winningVendorIds - An array of IDs for the winning vendors.
  * @param actor - The user finalizing the award.
- * @returns A structured minute object ready to be saved.
+ * @returns A structured minute object ready for database storage.
  */
 export async function constructMinuteData(
     prisma: PrismaClient,
@@ -27,29 +28,47 @@ export async function constructMinuteData(
         ...requisition.financialCommitteeMembers,
         ...requisition.technicalCommitteeMembers,
         actor
-    ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i) // Unique participants
-     .map(p => ({ name: p.name, role: (p.roles as any[]).map(r => r.name).join(', ') }));
+    ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
+     .map(p => ({ name: p.name, role: (p.roles as any[]).map(r => r.name.replace(/_/g, ' ')).join(', ') }));
 
-    const procurementSummary = {
+    const procurementDetails = {
+        requisitionId: requisition.id,
         title: requisition.title,
-        method: 'Competitive Bidding',
-        invitedVendors: requisition.allowedVendorIds?.length === 0 ? 'All Verified' : `${requisition.allowedVendorIds?.length} selected`,
-        submittedVendors: quotations.length,
-        items: requisition.items.map((item: any) => ({
+        procurementMethod: 'Competitive Bidding',
+        itemsRequested: requisition.items.map((item: any) => ({
             name: item.name,
             quantity: item.quantity,
-            description: item.description,
+            description: item.description || 'N/A',
+        })),
+    };
+
+    const invitedVendorCount = requisition.allowedVendorIds?.length === 0
+        ? (await prisma.vendor.count({ where: { kycStatus: 'Verified' } }))
+        : requisition.allowedVendorIds?.length;
+
+    const bidders = {
+        vendorsInvited: invitedVendorCount,
+        vendorsSubmitted: quotations.length,
+        submissions: quotations.map(q => ({
+            vendorName: q.vendorName,
+            totalQuotedPrice: q.totalPrice,
+            items: q.items.map((item: any) => ({
+                requestedItem: requisition.items.find((i: any) => i.id === item.requisitionItemId)?.name || 'Unknown',
+                proposedItem: item.name,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                totalPrice: item.quantity * item.unitPrice,
+            })),
         })),
     };
 
     const evaluationSummary = quotations.map(q => ({
         vendorName: q.vendorName,
-        totalPrice: q.totalPrice,
-        finalScore: q.finalAverageScore,
-        rank: q.rank,
         isDisqualified: q.status === 'Failed',
         disqualificationReason: q.status === 'Failed' ? 'Did not meet minimum requirements.' : null,
-    }));
+        finalScore: q.finalAverageScore,
+        rank: q.rank,
+    })).sort((a,b) => (a.rank || 99) - (b.rank || 99));
     
     const winningQuotes = quotations.filter(q => winningVendorIds.includes(q.vendorId));
 
@@ -61,7 +80,7 @@ export async function constructMinuteData(
     };
     
     const systemAnalysis = {
-        awardStrategy,
+        awardStrategy: awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor',
         result: awardStrategy === 'item' 
             ? 'Each item awarded to the vendor with the highest score for that specific item.'
             : `All items awarded to the single vendor with the highest overall average score.`,
@@ -75,12 +94,12 @@ export async function constructMinuteData(
         changeHistory: [],
     };
     
-    // This is the JSON object that will be stored.
     const minuteJson: Prisma.JsonObject = {
         minuteReference,
         meetingDate: new Date().toISOString(),
         participants,
-        procurementSummary,
+        procurementDetails,
+        bidders,
         evaluationSummary,
         systemAnalysis,
         awardRecommendation,
@@ -117,15 +136,8 @@ export async function generateAndSaveMinute(tx: any, requisition: any, quotation
                     { id: actor.id },
                 ].filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i)
             },
-            // Spread the JSON data here, ensuring it matches the schema
-            minuteReference: minuteJsonData.minuteReference,
-            meetingDate: minuteJsonData.meetingDate,
-            procurementSummary: minuteJsonData.procurementSummary,
-            evaluationSummary: minuteJsonData.evaluationSummary,
-            systemAnalysis: minuteJsonData.systemAnalysis,
-            awardRecommendation: minuteJsonData.awardRecommendation,
-            conclusion: minuteJsonData.conclusion,
-            auditMetadata: minuteJsonData.auditMetadata,
+            // Store the entire structured JSON object
+            minuteData: minuteJsonData,
         },
     });
 
