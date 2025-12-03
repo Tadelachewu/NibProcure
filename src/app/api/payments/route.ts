@@ -81,7 +81,7 @@ export async function POST(
                     return awardDetails.length === 0;
                 });
                 
-                if (allItenmsFinished) {
+                if (allItemsFinished) {
                     await tx.purchaseRequisition.update({
                         where: { id: requisition.id },
                         data: { status: 'Closed' }
@@ -120,4 +120,3 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-```
