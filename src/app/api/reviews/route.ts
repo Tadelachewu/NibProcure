@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -22,16 +24,27 @@ export async function GET(request: Request) {
     // Build the query conditions
     const orConditions: any[] = [];
 
-    // Condition 1: Items currently pending this user's action
+    // --- START: NEW VISIBILITY LOGIC ---
+
+    // Admins and Procurement Officers can see everything in the review pipeline
+    if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+         const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
+         const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
+         orConditions.push({ status: { in: allPossiblePendingStatuses } });
+         orConditions.push({ status: 'PostApproved' }); // Also see items ready for notification
+    }
+
+    // All users can see items specifically assigned to them.
     orConditions.push({ currentApproverId: userId });
+
+    // Users can see items assigned to their committee roles.
     userRoles.forEach(role => {
-        // This finds items pending a committee the user is part of
         if (role.includes('Committee')) {
              orConditions.push({ status: `Pending_${role}` });
         }
     });
 
-    // Condition 2: (New) Items this user has already actioned on.
+    // If requested, include items the user has already actioned on.
     if (includeActioned) {
         orConditions.push({
             reviews: {
@@ -41,9 +54,12 @@ export async function GET(request: Request) {
             }
         });
     }
+    // --- END: NEW VISIBILITY LOGIC ---
+
 
     const requisitionsForUser = await prisma.purchaseRequisition.findMany({
         where: { OR: orConditions },
+        distinct: ['id'], // Ensure we only get each requisition once
         include: { 
             items: true, 
             reviews: {
@@ -100,8 +116,10 @@ export async function GET(request: Request) {
                 select: {
                     decision: true
                 }
-            }
-      },
+            },
+            approver: true, // Include the approver details
+            currentApprover: true, // Include the current approver
+        },
       orderBy: {
         createdAt: 'desc',
       },
