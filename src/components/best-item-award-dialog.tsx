@@ -10,7 +10,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '.
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, HelpCircle, Trophy, Crown, Medal, Upload, Users } from 'lucide-react';
+import { CalendarIcon, HelpCircle, Trophy, Crown, Medal, Upload } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -20,7 +20,6 @@ import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
 import { useAuth } from '@/contexts/auth-context';
-import { Checkbox } from './ui/checkbox';
 
 const ItemBreakdownDialog = ({ itemWinners }: { itemWinners: any[] }) => {
     
@@ -97,7 +96,7 @@ export const BestItemAwardDialog = ({
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system_generated' | 'uploaded_document', minuteDocumentUrl?: string, minuteJustification?: string, attendeeIds?: string[]) => void;
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system_generated' | 'uploaded_document', minuteDocumentUrl?: string, minuteJustification?: string) => void;
     isOpen: boolean;
     onClose: () => void;
 }) => {
@@ -109,7 +108,6 @@ export const BestItemAwardDialog = ({
     const [minuteType, setMinuteType] = useState<'system_generated' | 'uploaded_document'>('system_generated');
     const [minuteFile, setMinuteFile] = useState<File | null>(null);
     const [minuteJustification, setMinuteJustification] = useState('');
-    const [attendeeIds, setAttendeeIds] = useState<string[]>([]);
 
     const awardResponseDeadline = useMemo(() => {
         if (!awardResponseDeadlineDate) return undefined;
@@ -226,7 +224,7 @@ export const BestItemAwardDialog = ({
             }
         });
 
-        onFinalize('item', awards, awardResponseDeadline, minuteType, minuteDocumentUrl, minuteJustification, attendeeIds);
+        onFinalize('item', awards, awardResponseDeadline, minuteType, minuteDocumentUrl, minuteJustification);
         onClose();
     }
 
@@ -323,23 +321,6 @@ export const BestItemAwardDialog = ({
                                 <Input id="minute-file-item" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
                             </div>
                         )}
-                        <div className="pl-2 space-y-2">
-                            <Label>Attendees (Optional)</Label>
-                            <ScrollArea className="h-32 border rounded-md p-2">
-                                {allUsers.filter(u => u.role !== 'Vendor').map(user => (
-                                    <div key={user.id} className="flex items-center space-x-2 p-1">
-                                        <Checkbox 
-                                            id={`attendee-item-${user.id}`} 
-                                            checked={attendeeIds.includes(user.id)}
-                                            onCheckedChange={(checked) => {
-                                                setAttendeeIds(prev => checked ? [...prev, user.id] : prev.filter(id => id !== user.id));
-                                            }}
-                                        />
-                                        <Label htmlFor={`attendee-item-${user.id}`} className="font-normal">{user.name}</Label>
-                                    </div>
-                                ))}
-                            </ScrollArea>
-                        </div>
                     </div>
 
                     <div className="text-right text-xl font-bold">

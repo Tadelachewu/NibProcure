@@ -66,7 +66,7 @@ export async function POST(
     console.log(`[FINALIZE-SCORES] Received request for requisition: ${requisitionId}`);
     try {
         const body = await request.json();
-        const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue, minuteType, minuteDocumentUrl, minuteJustification, attendeeIds } = body;
+        const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue, minuteType, minuteDocumentUrl, minuteJustification } = body;
         console.log(`[FINALIZE-SCORES] Action by User ID: ${userId}, Strategy: ${awardStrategy}, Total Value: ${totalAwardValue}, Minute Type: ${minuteType}`);
 
         const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
@@ -226,7 +226,7 @@ export async function POST(
                     justification: finalJustification,
                     type: minuteType || 'system_generated',
                     documentUrl: minuteDocumentUrl,
-                    attendees: { connect: (attendeeIds || []).map((id: string) => ({ id })) }
+                    attendees: { connect: [] }
                 }
             });
 

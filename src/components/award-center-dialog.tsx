@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, TrophyIcon, Upload, Users } from 'lucide-react';
+import { CalendarIcon, TrophyIcon, Upload } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -17,9 +17,8 @@ import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
-import { Checkbox } from './ui/checkbox';
-import { ScrollArea } from './ui/scroll-area';
 import { useAuth } from '@/contexts/auth-context';
+import { ScrollArea } from './ui/scroll-area';
 
 
 export const AwardCenterDialog = ({
@@ -30,7 +29,7 @@ export const AwardCenterDialog = ({
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system_generated' | 'uploaded_document', minuteDocumentUrl?: string, minuteJustification?: string, attendeeIds?: string[]) => void;
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system_generated' | 'uploaded_document', minuteDocumentUrl?: string, minuteJustification?: string) => void;
     onClose: () => void;
 }) => {
     const { toast } = useToast();
@@ -40,7 +39,6 @@ export const AwardCenterDialog = ({
     const [minuteType, setMinuteType] = useState<'system_generated' | 'uploaded_document'>('system_generated');
     const [minuteFile, setMinuteFile] = useState<File | null>(null);
     const [minuteJustification, setMinuteJustification] = useState('');
-    const [attendeeIds, setAttendeeIds] = useState<string[]>([]);
 
     const awardResponseDeadline = useMemo(() => {
         if (!awardResponseDeadlineDate) return undefined;
@@ -116,7 +114,7 @@ export const AwardCenterDialog = ({
             };
         }
 
-        onFinalize('all', awards, awardResponseDeadline, minuteType, minuteDocumentUrl, minuteJustification, attendeeIds);
+        onFinalize('all', awards, awardResponseDeadline, minuteType, minuteDocumentUrl, minuteJustification);
         onClose();
     }
 
@@ -198,23 +196,6 @@ export const AwardCenterDialog = ({
                                 <Input id="minute-file" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
                             </div>
                         )}
-                         <div className="pl-2 space-y-2">
-                            <Label>Attendees (Optional)</Label>
-                            <ScrollArea className="h-32 border rounded-md p-2">
-                                {allUsers.filter(u => u.role !== 'Vendor').map(user => (
-                                    <div key={user.id} className="flex items-center space-x-2 p-1">
-                                        <Checkbox 
-                                            id={`attendee-${user.id}`}
-                                            checked={attendeeIds.includes(user.id)}
-                                            onCheckedChange={(checked) => {
-                                                setAttendeeIds(prev => checked ? [...prev, user.id] : prev.filter(id => id !== user.id));
-                                            }}
-                                        />
-                                        <Label htmlFor={`attendee-${user.id}`} className="font-normal">{user.name}</Label>
-                                    </div>
-                                ))}
-                            </ScrollArea>
-                        </div>
                     </div>
                 </div>
             </ScrollArea>
