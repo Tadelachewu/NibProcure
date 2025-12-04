@@ -6,78 +6,6 @@ import { prisma } from '@/lib/prisma';
 import { User, UserRole, PerItemAwardDetail, QuoteItem, Quotation } from '@/lib/types';
 import { getNextApprovalStep } from '@/services/award-service';
 
-function generateAwardJustificationReport(
-    requisition: any,
-    awards: any,
-    awardStrategy: 'all' | 'item',
-    totalAwardValue: number
-): string {
-    let report = `## Award Justification Report\n\n`;
-    report += `**Requisition ID:** ${requisition.id}\n`;
-    report += `**Title:** ${requisition.title}\n`;
-    report += `**Final Award Value:** ${totalAwardValue.toLocaleString('en-US', { style: 'currency', currency: 'ETB' })}\n`;
-    report += `**Award Strategy:** ${awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}\n\n`;
-    report += `---
-
-`;
-
-    report += `### Vendor Bids & Final Scores
-`;
-    const sortedQuotes = [...requisition.quotations].sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
-
-    report += `| Rank | Vendor Name | Final Score | Total Quoted Price |
-`;
-    report += `|:----:|:------------|:-----------:|-------------------:|
-`;
-    sortedQuotes.forEach((q: any, index: number) => {
-        report += `| ${index + 1} | ${q.vendorName} | **${(q.finalAverageScore || 0).toFixed(2)}** | ${q.totalPrice.toLocaleString('en-US', { style: 'currency', currency: 'ETB' })} |
-`;
-    });
-    report += `
----
-
-`;
-
-    if (awardStrategy === 'all') {
-        const winnerVendorId = Object.keys(awards)[0];
-        const winnerData = awards[winnerVendorId];
-        report += `### Decision: Award All to Single Vendor
-
-`;
-        if (winnerData) {
-            report += `Based on the highest overall average score of **${(sortedQuotes[0].finalAverageScore || 0).toFixed(2)}**, the award is recommended for **${winnerData.vendorName}**.
-`;
-        } else {
-            report += 'No winner could be determined based on the provided data.
-';
-        }
-    } else { // Per Item
-        report += `### Decision: Award by Best Offer (Per Item)
-
-`;
-        Object.keys(awards).forEach(reqItemId => {
-            const reqItem = requisition.items.find((i: any) => i.id === reqItemId);
-            // The `awards` object for per-item now contains `rankedBids`.
-            const winnerBid = awards[reqItemId]?.rankedBids[0];
-            if (reqItem && winnerBid) {
-                const vendor = requisition.quotations.find((q:any) => q.id === winnerBid.quotationId)?.vendorName;
-                report += `- **Item:** ${reqItem.name}
-`;
-                report += `  - **Winner:** **${vendor}** (Proposal: "${winnerBid.proposedItemName}")
-`;
-                report += `  - **Justification:** This vendor achieved the highest score for this specific item with **${winnerBid.score.toFixed(2)}** points.
-
-`;
-            }
-        });
-    }
-
-    report += `---
-
-**Conclusion:** The award recommendation is finalized based on the systematic evaluation of vendor proposals against the pre-defined criteria and the selected '${awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}' award strategy.`;
-    return report;
-}
-
 
 export async function POST(
   request: Request,
@@ -87,8 +15,8 @@ export async function POST(
     console.log(`[FINALIZE-SCORES] Received request for requisition: ${requisitionId}`);
     try {
         const body = await request.json();
-        const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue, minuteDocumentUrl, minuteJustification } = body;
-        console.log(`[FINALIZE-SCORES] Action by User ID: ${userId}, Strategy: ${awardStrategy}, Total Value: ${totalAwardValue}`);
+        const { userId, awards, awardStrategy, awardResponseDeadline, minuteDocumentUrl, minuteJustification } = body;
+        console.log(`[FINALIZE-SCORES] Action by User ID: ${userId}, Strategy: ${awardStrategy}`);
 
         const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
         if (!user) {
@@ -139,8 +67,32 @@ export async function POST(
             if (allQuotes.length === 0) {
                 throw new Error("No quotes found to process for this requisition.");
             }
+            
+            let totalAwardValue = 0;
+            if(awardStrategy === 'all') {
+                const winnerVendorId = Object.keys(awards)[0];
+                const winnerQuote = allQuotes.find(q => q.vendorId === winnerVendorId);
+                if (winnerQuote) {
+                    totalAwardValue = winnerQuote.totalPrice;
+                }
+            } else {
+                 const quoteItemsById: { [key: string]: { price: number; quantity: number } } = {};
+                 allQuotes.forEach(q => {
+                    q.items.forEach(i => {
+                        quoteItemsById[i.id] = { price: i.unitPrice, quantity: i.quantity };
+                    });
+                });
 
-            // This is the dynamic value based on the current award set.
+                totalAwardValue = Object.values(awards).flatMap((a: any) => a.rankedBids)
+                    .filter((bid: any, index: number) => index === 0) // Only take the winner of each item
+                    .reduce((sum, item: any) => {
+                        const quoteItem = quoteItemsById[item.quoteItemId];
+                        const reqItem = requisition.items.find(i => i.id === item.reqItemId);
+                        return sum + (quoteItem && reqItem ? quoteItem.price * reqItem.quantity : 0);
+                    }, 0);
+            }
+            
+
             const dynamicAwardValue = totalAwardValue;
 
             if (awardStrategy === 'all') {
@@ -234,7 +186,6 @@ export async function POST(
                     justification: minuteJustification || 'Official minute document uploaded.',
                     type: 'uploaded_document',
                     documentUrl: minuteDocumentUrl,
-                    attendees: { connect: [] }
                 }
             });
 
