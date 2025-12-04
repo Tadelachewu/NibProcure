@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
-import { UserRole } from '@/lib/types';
+import { UserRole, PerItemAwardDetail } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,64 +16,101 @@ export async function GET(request: Request) {
     const userRoles = actor.roles as UserRole[];
     const userId = actor.id;
 
-    const orConditions: any[] = [
-        { currentApproverId: userId },
-        { reviews: { some: { reviewerId: userId } } }
-    ];
-
-    userRoles.forEach(roleName => {
-        orConditions.push({ status: `Pending_${roleName}` });
-    });
-    
-    if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-        const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
-        const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
-        orConditions.push({ status: { in: allPossiblePendingStatuses } });
-        orConditions.push({ status: 'PostApproved' });
-    }
-    
-    const whereClause = { OR: orConditions };
-    
-    const requisitions = await prisma.purchaseRequisition.findMany({
-      where: whereClause,
-      include: {
-        requester: { select: { name: true } },
-        items: {
-          select: {
-            id: true,
-            name: true,
-            quantity: true,
-            perItemAwardDetails: true,
-          }
+    // --- Start of Enhanced Fetching Logic ---
+    const allRequisitions = await prisma.purchaseRequisition.findMany({
+        where: {
+            OR: [
+                { currentApproverId: userId },
+                { status: { in: userRoles.map(r => `Pending_${r}`) } },
+                 // Also fetch if an item is pending this user's review, even if main status changed
+                {
+                    AND: [
+                        { status: 'Award_Declined' },
+                        {
+                            OR: [
+                                { currentApproverId: userId },
+                                { status: { in: userRoles.map(r => `Pending_${r}`) } },
+                            ]
+                        }
+                    ]
+                }
+            ]
         },
-        quotations: {
-            include: {
-                items: true,
-                scores: {
-                    include: {
-                        scorer: true,
-                        itemScores: {
-                            include: {
-                                scores: true,
+        include: { items: true, reviews: true }
+    });
+
+    const requisitionsForUser = allRequisitions.filter(req => {
+        // Direct assignment always grants access
+        if (req.currentApproverId === userId) {
+            return true;
+        }
+
+        // Admins and Procurement Officers can see everything in review
+        if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+            const reviewStatuses = [
+                'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review',
+                'Pending_Managerial_Approval', 'Pending_Director_Approval',
+                'Pending_VP_Approval', 'Pending_President_Approval', 'PostApproved', 'Award_Declined'
+            ];
+            return reviewStatuses.includes(req.status);
+        }
+
+        // Check if user has the role required by the current main status
+        if (req.status.startsWith('Pending_')) {
+            const requiredRole = req.status.replace('Pending_', '');
+            if (userRoles.includes(requiredRole as UserRole)) {
+                return true;
+            }
+        }
+
+        return false;
+    });
+    // --- End of Enhanced Fetching Logic ---
+
+    const requisitionIds = requisitionsForUser.map(r => r.id);
+
+    // Fetch full data for the filtered requisitions
+    const detailedRequisitions = await prisma.purchaseRequisition.findMany({
+        where: { id: { in: requisitionIds } },
+        include: {
+            requester: { select: { name: true } },
+            items: {
+            select: {
+                id: true,
+                name: true,
+                quantity: true,
+                perItemAwardDetails: true,
+            }
+            },
+            quotations: {
+                include: {
+                    items: true,
+                    scores: {
+                        include: {
+                            scorer: true,
+                            itemScores: {
+                                include: {
+                                    scores: true,
+                                },
                             },
                         },
                     },
-                },
+                }
+            },
+            minutes: {
+            include: {
+                author: true,
+                attendees: true
             }
-        },
-        minutes: {
-          include: {
-            author: true,
-            attendees: true
-          }
-        }
+            }
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    const transactionIds = requisitions.map(r => r.transactionId).filter(Boolean) as string[];
+
+    const transactionIds = detailedRequisitions.map(r => r.transactionId).filter(Boolean) as string[];
     const auditLogs = await prisma.auditLog.findMany({
       where: {
         transactionId: { in: transactionIds }
@@ -107,16 +144,14 @@ export async function GET(request: Request) {
       return acc;
     }, {} as Record<string, any[]>);
 
-    const requisitionsWithDetails = requisitions.map(req => {
+    const requisitionsWithDetails = detailedRequisitions.map(req => {
       let isActionable = false;
-      if (req.status.startsWith('Pending_')) {
-        if (req.currentApproverId === userId) {
+      if (req.currentApproverId === userId) {
+        isActionable = true;
+      } else if (req.status.startsWith('Pending_')) {
+        const requiredRole = req.status.replace('Pending_', '');
+        if (userRoles.includes(requiredRole as UserRole)) {
           isActionable = true;
-        } else {
-          const requiredRole = req.status.replace('Pending_', '');
-          if (userRoles.includes(requiredRole as UserRole)) {
-            isActionable = true;
-          }
         }
       }
       

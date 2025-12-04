@@ -292,15 +292,18 @@ export async function handleAwardRejection(
             } 
         });
 
+        // Always set the status to Award_Declined to reflect the latest event.
+        // The UI will handle allowing other actions to continue.
+        await tx.purchaseRequisition.update({
+            where: { id: requisition.id },
+            data: { status: 'Award_Declined' }
+        });
+        
         const hasStandby = await tx.quotation.count({
             where: { requisitionId: requisition.id, status: 'Standby' }
         });
 
         if (hasStandby > 0) {
-            await tx.purchaseRequisition.update({
-                where: { id: requisition.id },
-                data: { status: 'Award_Declined' }
-            });
             return { message: 'Award declined. A standby vendor is available for promotion.' };
         } else {
              await tx.auditLog.create({ 

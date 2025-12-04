@@ -221,19 +221,8 @@ export function AwardReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   
-                  // New isActionable logic
-                  let isActionable = false;
-                  if (user && req.status) {
-                      const userRoles = (user.roles as any[]).map(r => r.name);
-                      if (req.currentApproverId === user.id) {
-                          isActionable = true;
-                      } else if (req.status.startsWith('Pending_')) {
-                          const requiredRoleForStatus = req.status.replace('Pending_', '');
-                          if (userRoles.includes(requiredRoleForStatus)) {
-                            isActionable = true;
-                          }
-                      }
-                  }
+                  // The `isActionable` flag is now passed directly from the API.
+                  const isActionable = req.isActionable;
 
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');
