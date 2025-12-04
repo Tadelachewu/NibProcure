@@ -1,6 +1,4 @@
 
-'use server';
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -26,16 +24,16 @@ export async function GET(request: Request) {
       { status: { in: userRoles.map(r => `Pending_${r}`) } },
     ];
     
-    // If the user is an Admin or PO, add the condition to see all pending reviews
+    // If a user is an Admin or Procurement Officer, they should see all pending reviews
     if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
         const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
         const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
         orConditions.push({
             status: { in: allPossiblePendingStatuses }
         });
+        // Also show items ready for notification
         orConditions.push({ status: 'PostApproved' });
     }
-
 
     const requisitionsForUser = await prisma.purchaseRequisition.findMany({
         where: {
