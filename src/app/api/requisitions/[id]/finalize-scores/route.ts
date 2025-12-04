@@ -1,10 +1,9 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User, UserRole, PerItemAwardDetail, QuoteItem } from '@/lib/types';
+import { User, UserRole, PerItemAwardDetail, QuoteItem, Quotation } from '@/lib/types';
 import { getNextApprovalStep } from '@/services/award-service';
 
 function generateAwardJustificationReport(
@@ -13,39 +12,48 @@ function generateAwardJustificationReport(
     awardStrategy: 'all' | 'item',
     totalAwardValue: number
 ): string {
-    let report = `## Award Justification Report\n`;
+    let report = `## Award Justification Report\n\n`;
     report += `**Requisition ID:** ${requisition.id}\n`;
     report += `**Title:** ${requisition.title}\n`;
-    report += `**Final Award Value:** ${totalAwardValue.toLocaleString()} ETB\n`;
+    report += `**Final Award Value:** ${totalAwardValue.toLocaleString('en-US', { style: 'currency', currency: 'ETB' })}\n`;
     report += `**Award Strategy:** ${awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}\n\n`;
+    report += `---\n\n`;
 
-    report += `### Vendor Scoring Summary\n`;
+    report += `### Vendor Bids & Final Scores\n`;
     const sortedQuotes = [...requisition.quotations].sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
+    
+    report += `| Rank | Vendor Name | Final Score | Total Quoted Price |\n`;
+    report += `|:----:|:------------|:-----------:|-------------------:|\n`;
     sortedQuotes.forEach((q: any, index: number) => {
-        report += `${index + 1}. **${q.vendorName}**: Final Score: **${(q.finalAverageScore || 0).toFixed(2)}**, Total Price: ${q.totalPrice.toLocaleString()} ETB\n`;
+        report += `| ${index + 1} | ${q.vendorName} | **${(q.finalAverageScore || 0).toFixed(2)}** | ${q.totalPrice.toLocaleString('en-US', { style: 'currency', currency: 'ETB' })} |\n`;
     });
-    report += `\n`;
+    report += `\n---\n\n`;
 
     if (awardStrategy === 'all') {
         const winnerVendorId = Object.keys(awards)[0];
         const winnerData = awards[winnerVendorId];
-        report += `### Decision: Award All to Single Vendor\n`;
-        report += `Based on the highest overall average score, the award is recommended for **${winnerData.vendorName}**.\n`;
+        report += `### Decision: Award All to Single Vendor\n\n`;
+        if (winnerData) {
+            report += `Based on the highest overall average score of **${(sortedQuotes[0].finalAverageScore || 0).toFixed(2)}**, the award is recommended for **${winnerData.vendorName}**.\n`;
+        } else {
+            report += 'No winner could be determined based on the provided data.\n';
+        }
     } else { // Per Item
-        report += `### Decision: Award by Best Offer (Per Item)\n`;
+        report += `### Decision: Award by Best Offer (Per Item)\n\n`;
         Object.keys(awards).forEach(reqItemId => {
             const reqItem = requisition.items.find((i: any) => i.id === reqItemId);
-            const winnerBid = awards[reqItemId].rankedBids[0]; // Assuming the first item is the winner for that req item
+            // The `awards` object for per-item now contains `rankedBids`.
+            const winnerBid = awards[reqItemId]?.rankedBids[0];
             if (reqItem && winnerBid) {
                 const vendor = requisition.quotations.find((q:any) => q.id === winnerBid.quotationId)?.vendorName;
                 report += `- **Item:** ${reqItem.name}\n`;
-                report += `  - **Winner:** ${vendor} (Proposal: "${winnerBid.proposedItemName}")\n`;
-                report += `  - **Reason:** Highest score for this item (${winnerBid.score.toFixed(2)} pts).\n`;
+                report += `  - **Winner:** **${vendor}** (Proposal: "${winnerBid.proposedItemName}")\n`;
+                report += `  - **Justification:** This vendor achieved the highest score for this specific item with **${winnerBid.score.toFixed(2)}** points.\n\n`;
             }
         });
     }
 
-    report += `\n**Conclusion:** The award recommendation is finalized based on the systematic evaluation of vendor proposals against the pre-defined criteria and the selected '${awardStrategy}' award strategy.`;
+    report += `---\n\n**Conclusion:** The award recommendation is finalized based on the systematic evaluation of vendor proposals against the pre-defined criteria and the selected '${awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}' award strategy.`;
     return report;
 }
 
@@ -195,9 +203,14 @@ export async function POST(
                 }
             });
             
-            let finalJustification = minuteJustification || '';
+            let finalJustification = minuteJustification;
             if (minuteType === 'system_generated') {
-                 finalJustification = generateAwardJustificationReport(requisition, awards, awardStrategy, dynamicAwardValue);
+                 finalJustification = generateAwardJustificationReport(
+                    { ...requisition, quotations: allQuotes }, 
+                    awards, 
+                    awardStrategy, 
+                    dynamicAwardValue
+                 );
             }
 
 
