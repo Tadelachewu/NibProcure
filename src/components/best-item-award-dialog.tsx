@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -19,6 +18,7 @@ import { PurchaseRequisition, Quotation, QuoteItem } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
+import { Textarea } from './ui/textarea';
 
 const ItemBreakdownDialog = ({ itemWinners }: { itemWinners: any[] }) => {
     
@@ -95,7 +95,7 @@ export const BestItemAwardDialog = ({
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system_generated' | 'uploaded_document', minuteDocumentUrl?: string) => void;
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system_generated' | 'uploaded_document', minuteDocumentUrl?: string, minuteJustification?: string, attendeeIds?: string[]) => void;
     isOpen: boolean;
     onClose: () => void;
 }) => {
@@ -105,6 +105,7 @@ export const BestItemAwardDialog = ({
     const [isBreakdownOpen, setBreakdownOpen] = useState(false);
     const [minuteType, setMinuteType] = useState<'system_generated' | 'uploaded_document'>('system_generated');
     const [minuteFile, setMinuteFile] = useState<File | null>(null);
+    const [minuteJustification, setMinuteJustification] = useState('');
 
     const awardResponseDeadline = useMemo(() => {
         if (!awardResponseDeadlineDate) return undefined;
@@ -155,6 +156,7 @@ export const BestItemAwardDialog = ({
                     vendorId: quote.vendorId,
                     vendorName: quote.vendorName,
                     quoteItemId: bestProposalForItem.id,
+                    quotationId: quote.id,
                     proposedItemName: bestProposalForItem.name,
                     unitPrice: bestProposalForItem.unitPrice,
                     score: bestItemScore
@@ -194,6 +196,10 @@ export const BestItemAwardDialog = ({
                 toast({ variant: 'destructive', title: 'Error', description: 'Please upload an official minute document.' });
                 return;
             }
+             if (!minuteJustification.trim()) {
+                toast({ variant: 'destructive', title: 'Error', description: 'A justification/summary is required for uploaded minutes.' });
+                return;
+            }
             try {
                 const formData = new FormData();
                 formData.append('file', minuteFile);
@@ -208,18 +214,15 @@ export const BestItemAwardDialog = ({
             }
         }
         
-        let awards: { [vendorId: string]: { vendorName: string, items: { requisitionItemId: string, quoteItemId: string }[] } } = {};
+        let awards: { [reqItemId: string]: { rankedBids: any[] } } = {};
         
         itemWinners.forEach(item => {
             if (item.winner) {
-                if (!awards[item.winner.vendorId]) {
-                    awards[item.winner.vendorId] = { vendorName: item.winner.vendorName, items: [] };
-                }
-                awards[item.winner.vendorId].items.push({ requisitionItemId: item.requisitionItemId, quoteItemId: item.winner.quoteItemId });
+                awards[item.requisitionItemId] = { rankedBids: item.rankedBids };
             }
         });
 
-        onFinalize('item', awards, awardResponseDeadline, minuteType, minuteDocumentUrl);
+        onFinalize('item', awards, awardResponseDeadline, minuteType, minuteDocumentUrl, minuteJustification);
         onClose();
     }
 
@@ -308,6 +311,8 @@ export const BestItemAwardDialog = ({
                     </RadioGroup>
                     {minuteType === 'uploaded_document' && (
                         <div className="pl-2 space-y-2">
+                            <Label htmlFor="minute-justification-item">Justification / Summary</Label>
+                            <Textarea id="minute-justification-item" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
                             <Label htmlFor="minute-file-item">Official Minute Document (PDF)</Label>
                             <Input id="minute-file-item" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
                         </div>

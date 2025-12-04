@@ -224,7 +224,7 @@ export async function POST(
                     decision: 'APPROVED', // This is an approval to move forward
                     decisionBody: 'Award Finalization',
                     justification: finalJustification,
-                    type: minuteType,
+                    type: minuteType || 'system_generated',
                     documentUrl: minuteDocumentUrl,
                     attendees: { connect: (attendeeIds || []).map((id: string) => ({ id })) }
                 }

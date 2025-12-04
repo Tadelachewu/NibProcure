@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -17,6 +16,7 @@ import { format, setHours, setMinutes } from 'date-fns';
 import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
+import { Textarea } from './ui/textarea';
 
 
 export const AwardCenterDialog = ({
@@ -27,7 +27,7 @@ export const AwardCenterDialog = ({
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system_generated' | 'uploaded_document', minuteDocumentUrl?: string) => void;
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system_generated' | 'uploaded_document', minuteDocumentUrl?: string, minuteJustification?: string, attendeeIds?: string[]) => void;
     onClose: () => void;
 }) => {
     const { toast } = useToast();
@@ -35,6 +35,7 @@ export const AwardCenterDialog = ({
     const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
     const [minuteType, setMinuteType] = useState<'system_generated' | 'uploaded_document'>('system_generated');
     const [minuteFile, setMinuteFile] = useState<File | null>(null);
+    const [minuteJustification, setMinuteJustification] = useState('');
 
     const awardResponseDeadline = useMemo(() => {
         if (!awardResponseDeadlineDate) return undefined;
@@ -83,6 +84,10 @@ export const AwardCenterDialog = ({
                 toast({ variant: 'destructive', title: 'Error', description: 'Please upload an official minute document.' });
                 return;
             }
+             if (!minuteJustification.trim()) {
+                toast({ variant: 'destructive', title: 'Error', description: 'A justification/summary is required for uploaded minutes.' });
+                return;
+            }
             try {
                 const formData = new FormData();
                 formData.append('file', minuteFile);
@@ -106,7 +111,7 @@ export const AwardCenterDialog = ({
             };
         }
 
-        onFinalize('all', awards, awardResponseDeadline, minuteType, minuteDocumentUrl);
+        onFinalize('all', awards, awardResponseDeadline, minuteType, minuteDocumentUrl, minuteJustification);
         onClose();
     }
 
@@ -180,6 +185,8 @@ export const AwardCenterDialog = ({
                 </RadioGroup>
                 {minuteType === 'uploaded_document' && (
                     <div className="pl-2 space-y-2">
+                         <Label htmlFor="minute-justification">Justification / Summary</Label>
+                         <Textarea id="minute-justification" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
                          <Label htmlFor="minute-file">Official Minute Document (PDF)</Label>
                          <Input id="minute-file" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
                     </div>
