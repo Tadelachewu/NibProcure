@@ -296,18 +296,22 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                             <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
                                         </CardHeader>
                                         <CardContent>
-                                            <p className="text-sm text-muted-foreground mb-2">{minute.justification}</p>
                                             {minute.documentUrl ? (
-                                                <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
-                                                    <Button variant="outline" className="w-full">
-                                                        <Download className="mr-2 h-4 w-4" />
-                                                        Download Official Minute Document
-                                                    </Button>
-                                                </a>
-                                            ) : <p className="text-sm text-destructive">Document URL is missing.</p>}
-                                                {minute.signatures && minute.signatures.length > 0 && (
-                                                    <SignaturesList signatures={minute.signatures} />
-                                                )}
+                                                <>
+                                                    <p className="text-sm text-muted-foreground mb-2">{minute.justification}</p>
+                                                    <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
+                                                        <Button variant="outline" className="w-full">
+                                                            <Download className="mr-2 h-4 w-4" />
+                                                            Download Official Minute Document
+                                                        </Button>
+                                                    </a>
+                                                </>
+                                            ) : (
+                                                 <p className="text-sm text-destructive">Document URL is missing for this minute.</p>
+                                            )}
+                                            {minute.signatures && minute.signatures.length > 0 && (
+                                                <SignaturesList signatures={minute.signatures} />
+                                            )}
                                         </CardContent>
                                     </Card>
                                 ))}
