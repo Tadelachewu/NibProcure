@@ -258,17 +258,8 @@ export async function handleAwardRejection(
         });
         
         if (itemsUpdated > 0) {
-            const stillPendingApprovals = await tx.purchaseRequisition.count({
-                where: {
-                    id: requisition.id,
-                    status: { startsWith: 'Pending_' }
-                }
-            });
-
-            // Only change main status if no other approval is in flight
-            if(stillPendingApprovals === 0) {
-                await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
-            }
+            // Set main status to Award_Declined immediately.
+            await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
 
             await tx.auditLog.create({ 
                 data: { 
@@ -518,5 +509,3 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
-
-    

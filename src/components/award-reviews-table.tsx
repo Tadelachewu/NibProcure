@@ -221,6 +221,7 @@ export function AwardReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   
+                  // New isActionable logic
                   let isActionable = false;
                   if (user && req.status) {
                       const userRoles = (user.roles as any[]).map(r => r.name);
@@ -347,7 +348,7 @@ export function AwardReviewsTable() {
       </Dialog>
     </Card>
     {selectedRequisition && (
-        <ApprovalSummaryDialog 
+        <ApprovalSummaryDialog
             requisition={selectedRequisition} 
             isOpen={isDetailsDialogOpen} 
             onClose={() => setDetailsDialogOpen(false)} 
