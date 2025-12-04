@@ -226,7 +226,6 @@ export function AwardReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   
-                  const isActionable = req.isActionable;
                   const actionTaken = req.actionTaken;
 
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
@@ -270,7 +269,7 @@ export function AwardReviewsTable() {
                                 variant={actionTaken === 'APPROVED' ? 'default' : 'outline'}
                                 size="sm" 
                                 onClick={() => handleAction(req, 'approve')} 
-                                disabled={!isActionable || isLoadingAction}
+                                disabled={!req.isActionable || isLoadingAction}
                               >
                                 {isLoadingAction && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4" />} 
                                 Approve
@@ -279,7 +278,7 @@ export function AwardReviewsTable() {
                                 variant={actionTaken === 'REJECTED' ? 'destructive' : 'destructive'} 
                                 size="sm" 
                                 onClick={() => handleAction(req, 'reject')} 
-                                disabled={!isActionable || isLoadingAction}
+                                disabled={!req.isActionable || isLoadingAction}
                                 className={actionTaken === 'REJECTED' ? '' : 'bg-opacity-50'}
                             >
                                 {isLoadingAction && actionType === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className="mr-2 h-4 w-4" />} 
