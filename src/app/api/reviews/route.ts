@@ -17,12 +17,15 @@ export async function GET(request: Request) {
     const userId = actor.id;
 
     // --- Start of Enhanced Fetching Logic ---
-    const allRequisitions = await prisma.purchaseRequisition.findMany({
+    const requisitionsForUser = await prisma.purchaseRequisition.findMany({
         where: {
             OR: [
+                // The user is the direct current approver.
                 { currentApproverId: userId },
+                // The status matches a committee role the user has.
                 { status: { in: userRoles.map(r => `Pending_${r}`) } },
-                 // Also fetch if an item is pending this user's review, even if main status changed
+                 // The status might have changed (e.g. to Award_Declined), but the user
+                 // is STILL the assigned approver. This is the key fix.
                 {
                     AND: [
                         { status: 'Award_Declined' },
@@ -37,33 +40,6 @@ export async function GET(request: Request) {
             ]
         },
         include: { items: true, reviews: true }
-    });
-
-    const requisitionsForUser = allRequisitions.filter(req => {
-        // Direct assignment always grants access
-        if (req.currentApproverId === userId) {
-            return true;
-        }
-
-        // Admins and Procurement Officers can see everything in review
-        if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-            const reviewStatuses = [
-                'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review',
-                'Pending_Managerial_Approval', 'Pending_Director_Approval',
-                'Pending_VP_Approval', 'Pending_President_Approval', 'PostApproved', 'Award_Declined'
-            ];
-            return reviewStatuses.includes(req.status);
-        }
-
-        // Check if user has the role required by the current main status
-        if (req.status.startsWith('Pending_')) {
-            const requiredRole = req.status.replace('Pending_', '');
-            if (userRoles.includes(requiredRole as UserRole)) {
-                return true;
-            }
-        }
-
-        return false;
     });
     // --- End of Enhanced Fetching Logic ---
 
@@ -153,6 +129,11 @@ export async function GET(request: Request) {
         if (userRoles.includes(requiredRole as UserRole)) {
           isActionable = true;
         }
+      } else if (req.status === 'Award_Declined') {
+        // Even if status is declined, check if this user is still the pending approver.
+         if (req.currentApproverId === userId) {
+            isActionable = true;
+         }
       }
       
       return {
