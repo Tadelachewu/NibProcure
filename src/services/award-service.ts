@@ -258,7 +258,18 @@ export async function handleAwardRejection(
         });
         
         if (itemsUpdated > 0) {
-            await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
+            const stillPendingApprovals = await tx.purchaseRequisition.count({
+                where: {
+                    id: requisition.id,
+                    status: { startsWith: 'Pending_' }
+                }
+            });
+
+            // Only change main status if no other approval is in flight
+            if(stillPendingApprovals === 0) {
+                await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
+            }
+
             await tx.auditLog.create({ 
                 data: { 
                     timestamp: new Date(), 
@@ -406,7 +417,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         let newTotalValue = 0;
         for (const item of updatedRequisition.items) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-             // **FIX**: Only include the value of items newly moved to 'Pending_Award'.
+             // Only include the value of items newly moved to 'Pending_Award'.
              // Exclude 'Accepted' items that are already paid or being processed.
              const newlyPendingAward = details.find(d => d.status === 'Pending_Award');
              if (newlyPendingAward) {
