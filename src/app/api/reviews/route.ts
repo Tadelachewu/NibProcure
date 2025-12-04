@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -24,17 +23,19 @@ export async function GET(request: Request) {
                 { currentApproverId: userId },
                 // The status matches a committee role the user has.
                 { status: { in: userRoles.map(r => `Pending_${r}`) } },
-                 // The status might have changed (e.g. to Award_Declined), but the user
-                 // is STILL the assigned approver. This is the key fix.
+                 // The status might have changed (e.g. to Award_Declined or Partially_Closed), but the user
+                 // is STILL the assigned approver for an item that is pending.
                 {
                     AND: [
-                        { status: 'Award_Declined' },
-                        {
-                            OR: [
-                                { currentApproverId: userId },
-                                { status: { in: userRoles.map(r => `Pending_${r}`) } },
-                            ]
-                        }
+                        { status: { in: ['Award_Declined', 'Partially_Closed'] } },
+                        { currentApproverId: userId }
+                    ]
+                },
+                // Admins/Procurement Officers can see all requisitions in any pending review state for oversight.
+                {
+                    AND: [
+                        { roles: { some: { name: { in: ['Admin', 'Procurement_Officer'] } } } },
+                        { status: { startsWith: 'Pending_' } }
                     ]
                 }
             ]
@@ -129,11 +130,6 @@ export async function GET(request: Request) {
         if (userRoles.includes(requiredRole as UserRole)) {
           isActionable = true;
         }
-      } else if (req.status === 'Award_Declined') {
-        // Even if status is declined, check if this user is still the pending approver.
-         if (req.currentApproverId === userId) {
-            isActionable = true;
-         }
       }
       
       return {

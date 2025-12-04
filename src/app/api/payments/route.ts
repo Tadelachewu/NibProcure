@@ -1,4 +1,3 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -54,78 +53,66 @@ export async function POST(
             });
             
             if (requisition) {
-                const isPerItem = (requisition.rfqSettings as any)?.awardStrategy === 'item';
-                let isFullyComplete = false;
+                // Before changing status, check if another part of the workflow is active.
+                const isAnyItemStillInReview = requisition.status.startsWith('Pending_');
 
-                if (isPerItem) {
-                    // Per-Item Logic: The ENTIRE requisition is complete only when EVERY item has reached a final, resolved state.
-                    const allItemsFinished = requisition.items.every(item => {
-                        const awardDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-                        
-                        // If an item never went to award, it's considered "finished" for this check.
-                        if (awardDetails.length === 0) {
-                            return true;
-                        }
-
-                        // An item is considered resolved if it has been restarted.
-                        if (awardDetails.some(d => d.status === 'Restarted')) {
-                            return true;
-                        }
-
-                        // An item is resolved if its award was accepted AND its invoice has now been paid.
-                        const acceptedAward = awardDetails.find(d => d.status === 'Accepted');
-                        if (acceptedAward) {
-                            const itemPO = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
-                            if (!itemPO) return false;
-                            
-                            // Check if ALL invoices related to this specific PO are paid.
-                            const allInvoicesForPO = itemPO.invoices;
-                            if (allInvoicesForPO.length === 0) return false;
-
-                            return allInvoicesForPO.every(inv => inv.status === 'Paid' || inv.id === updatedInvoice.id);
-                        }
-
-                        // An item is resolved if it failed to award and there are no more standbys.
-                         const hasFailedAward = awardDetails.some(d => d.status === 'Failed_to_Award');
-                         const hasStandby = awardDetails.some(d => d.status === 'Standby');
-                         if(hasFailedAward && !hasStandby) {
-                             return true;
-                         }
-                        
-                        // If an item has award details, but none of the above terminal conditions are met, it's not finished.
-                        return false;
-                    });
-                    
-                    isFullyComplete = allItemsFinished;
-
+                if (isAnyItemStillInReview) {
+                    // Do not change the main requisition status. Let the review process continue.
+                    console.log(`[PAYMENT] Payment for invoice ${invoiceId} processed, but requisition ${requisition.id} is still in review (${requisition.status}). Status will not be changed.`);
                 } else {
-                    // Single-Vendor Logic: All POs for this requisition must be in a terminal state, and all invoices paid.
-                    const allPOsForRequisition = await tx.purchaseOrder.findMany({
-                        where: { requisitionId: requisition.id },
-                        include: { invoices: true }
-                    });
-                    
-                    const allPOsClosed = allPOsForRequisition.length > 0 && allPOsForRequisition.every(po => 
-                        ['Delivered', 'Closed', 'Cancelled'].includes(po.status)
-                    );
+                    const isPerItem = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+                    let isFullyComplete = false;
 
-                    const allInvoicesPaid = allPOsForRequisition.length > 0 && allPOsForRequisition.flatMap(po => po.invoices).every(inv => {
-                        return inv.status === 'Paid' || inv.id === updatedInvoice.id;
-                    });
+                    if (isPerItem) {
+                        isFullyComplete = requisition.items.every(item => {
+                            const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                            if (details.length === 0) return true; // Not part of an award, so it's "complete" in this context.
 
-                    isFullyComplete = allPOsClosed && allInvoicesPaid;
-                }
+                            const acceptedAward = details.find(d => d.status === 'Accepted');
+                            if (acceptedAward) {
+                                const po = requisition.purchaseOrders.find(p => p.items.some(pi => pi.requisitionItemId === item.id));
+                                return po?.invoices.every(inv => inv.status === 'Paid' || inv.id === updatedInvoice.id) || false;
+                            }
+                            
+                            // It's also complete if it failed and has no more standby options, or was restarted.
+                            const hasStandby = details.some(d => d.status === 'Standby');
+                            const hasFailed = details.some(d => d.status === 'Failed_to_Award' || d.status === 'Declined');
+                            const hasBeenRestarted = details.some(d => d.status === 'Restarted');
+                            
+                            if (hasBeenRestarted) return true;
+                            if (hasFailed && !hasStandby) return true;
 
-                if (isFullyComplete) {
-                    await tx.purchaseRequisition.update({
-                        where: { id: requisition.id },
-                        data: { status: 'Closed' }
-                    });
-                } else if (isPerItem) {
-                    await tx.purchaseRequisition.update({
-                        where: { id: requisition.id },
-                        data: { status: 'Partially_Closed' }
-                    });
+                            return false;
+                        });
+
+                    } else { // Single-Vendor Logic
+                        const allPOsForRequisition = await tx.purchaseOrder.findMany({
+                            where: { requisitionId: requisition.id },
+                            include: { invoices: true }
+                        });
+                        
+                        const allPOsClosed = allPOsForRequisition.length > 0 && allPOsForRequisition.every(po => 
+                            ['Delivered', 'Closed', 'Cancelled'].includes(po.status)
+                        );
+
+                        const allInvoicesPaid = allPOsForRequisition.length > 0 && allPOsForRequisition.flatMap(po => po.invoices).every(inv => {
+                            return inv.status === 'Paid' || inv.id === updatedInvoice.id;
+                        });
+
+                        isFullyComplete = allPOsClosed && allInvoicesPaid;
+                    }
+
+                    if (isFullyComplete) {
+                        await tx.purchaseRequisition.update({
+                            where: { id: requisition.id },
+                            data: { status: 'Closed' }
+                        });
+                    } else if (isPerItem) {
+                        await tx.purchaseRequisition.update({
+                            where: { id: requisition.id },
+                            data: { status: 'Partially_Closed' }
+                        });
+                    }
                 }
             }
         }
