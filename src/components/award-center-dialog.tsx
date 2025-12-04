@@ -14,10 +14,8 @@ import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
 import { PurchaseRequisition, Quotation } from '@/lib/types';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
-import { useAuth } from '@/contexts/auth-context';
 import { ScrollArea } from './ui/scroll-area';
 
 
@@ -29,11 +27,10 @@ export const AwardCenterDialog = ({
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system_generated' | 'uploaded_document', minuteDocumentUrl?: string, minuteJustification?: string) => void;
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteDocumentUrl?: string, minuteJustification?: string) => void;
     onClose: () => void;
 }) => {
     const { toast } = useToast();
-    const { allUsers } = useAuth();
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
     const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
     const [minuteFile, setMinuteFile] = useState<File | null>(null);
@@ -111,7 +108,7 @@ export const AwardCenterDialog = ({
             };
         }
 
-        onFinalize('all', awards, awardResponseDeadline, 'uploaded_document', minuteDocumentUrl, minuteJustification);
+        onFinalize('all', awards, awardResponseDeadline, minuteDocumentUrl, minuteJustification);
         onClose();
     }
 

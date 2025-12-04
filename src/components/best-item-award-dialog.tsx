@@ -16,10 +16,8 @@ import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
 import { PurchaseRequisition, Quotation, QuoteItem } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
-import { useAuth } from '@/contexts/auth-context';
 
 const ItemBreakdownDialog = ({ itemWinners }: { itemWinners: any[] }) => {
     
@@ -96,12 +94,11 @@ export const BestItemAwardDialog = ({
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
-    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteType?: 'system_generated' | 'uploaded_document', minuteDocumentUrl?: string, minuteJustification?: string) => void;
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteDocumentUrl?: string, minuteJustification?: string) => void;
     isOpen: boolean;
     onClose: () => void;
 }) => {
     const { toast } = useToast();
-    const { allUsers } = useAuth();
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
     const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
     const [isBreakdownOpen, setBreakdownOpen] = useState(false);
@@ -222,7 +219,7 @@ export const BestItemAwardDialog = ({
             }
         });
 
-        onFinalize('item', awards, awardResponseDeadline, 'uploaded_document', minuteDocumentUrl, minuteJustification);
+        onFinalize('item', awards, awardResponseDeadline, minuteDocumentUrl, minuteJustification);
         onClose();
     }
 
