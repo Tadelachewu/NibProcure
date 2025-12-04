@@ -83,7 +83,9 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                         </p>
                         <time className="text-muted-foreground">{format(new Date(sig.signedAt), 'PPp')}</time>
                     </div>
-                    <p className="italic text-muted-foreground mt-1 pl-1 border-l-2">"{sig.comment}"</p>
+                    {sig.comment && (
+                        <p className="italic text-muted-foreground mt-1 pl-1 border-l-2">"{sig.comment}"</p>
+                    )}
                 </div>
             ))}
         </div>
@@ -285,7 +287,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                             {requisition.minutes && requisition.minutes.length > 0 ? (
                                 <div className="space-y-4 py-4">
                                 {requisition.minutes.map(minute => {
-                                    if (minute.type === 'uploaded_document' && minute.documentUrl) {
+                                    if (minute.type === 'uploaded_document') {
                                         return (
                                             <Card key={minute.id}>
                                                 <CardHeader>
@@ -296,12 +298,15 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                                     <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
                                                 </CardHeader>
                                                 <CardContent>
-                                                    <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
-                                                        <Button variant="outline" className="w-full">
-                                                            <Download className="mr-2 h-4 w-4" />
-                                                            Download Official Minute Document
-                                                        </Button>
-                                                    </a>
+                                                    <p className="text-sm text-muted-foreground mb-2">{minute.justification}</p>
+                                                    {minute.documentUrl ? (
+                                                        <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
+                                                            <Button variant="outline" className="w-full">
+                                                                <Download className="mr-2 h-4 w-4" />
+                                                                Download Official Minute Document
+                                                            </Button>
+                                                        </a>
+                                                    ) : <p className="text-sm text-destructive">Document URL is missing.</p>}
                                                      {minute.signatures && minute.signatures.length > 0 && (
                                                          <SignaturesList signatures={minute.signatures} />
                                                      )}
