@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { DocumentRecord, User, Vendor, Minute } from '@/lib/types';
+import { DocumentRecord, User, Vendor, Minute, AuditLog } from '@/lib/types';
 
 // Helper function to find user/vendor names efficiently
 const createNameFinder = (users: User[], vendors: Vendor[]) => {
@@ -137,7 +137,7 @@ export async function GET() {
             // The logs are already sorted by timestamp descending from the initial query
             return {
                 ...record,
-                auditTrail: relatedLogs,
+                auditTrail: relatedLogs as AuditLog[],
             };
         });
 

@@ -142,7 +142,6 @@ export type Minute = {
     decision: MinuteDecision;
     decisionBody: string; // e.g., "Committee A", "VP Resources"
     justification: string;
-    attendeeIds: string[];
     attendees: User[];
     createdAt: Date;
     type: MinuteType;
@@ -198,6 +197,7 @@ export type PurchaseRequisition = {
       [key: string]: any;
   };
   minutes?: Minute[];
+  auditTrail?: AuditLog[];
 };
 
 export type AuditLog = {
@@ -210,6 +210,7 @@ export type AuditLog = {
   entity: string; // e.g., 'Requisition', 'PurchaseOrder'
   entityId: string;
   details: string;
+  approverComment?: string;
 };
 
 export type KycStatus = 'Pending' | 'Verified' | 'Rejected';
