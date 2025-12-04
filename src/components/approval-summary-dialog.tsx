@@ -310,7 +310,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                             </CardHeader>
                                             <CardContent>
                                                 <h4 className="font-semibold text-sm">Justification</h4>
-                                                <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50 mt-1">{minute.justification}</p>
+                                                <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50 mt-1 whitespace-pre-wrap">{minute.justification}</p>
                                                 <h4 className="font-semibold text-sm mt-4">Attendees</h4>
                                                 <div className="flex flex-wrap gap-2 mt-2">
                                                     {minute.attendees.map(attendee => <Badge key={attendee.id} variant="outline">{attendee.name}</Badge>)}
