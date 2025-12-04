@@ -36,22 +36,22 @@ export async function GET(request: Request) {
         const userRoles = userPayload.roles.map(r => r.name);
         const userId = userPayload.id;
         
-        const orConditions = [];
+        const orConditions: any[] = [
+            // The user is the direct current approver.
+            { currentApproverId: userId },
+            // The status matches a committee role the user has.
+            { status: { in: userRoles.map(r => `Pending_${r}`) } },
+        ];
 
-        // Can see if they are the direct current approver
-        orConditions.push({ currentApproverId: userId });
-
-        // Can see if they are part of a committee whose turn it is
-        userRoles.forEach(roleName => {
-            orConditions.push({ status: `Pending_${roleName}` });
-        });
-        
-        // Admins and Procurement Officers can see all reviews for better oversight
+        // If a user is an Admin or Procurement Officer, they should see all pending reviews
         if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-             const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
-             const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
-             orConditions.push({ status: { in: allPossiblePendingStatuses } });
-             orConditions.push({ status: 'PostApproved' });
+            const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
+            const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
+            orConditions.push({ status: { in: allPossiblePendingStatuses } });
+            // Also show items ready for notification and those declined/partially closed
+            orConditions.push({ status: 'PostApproved' });
+            orConditions.push({ status: 'Award_Declined' });
+            orConditions.push({ status: 'Partially_Closed' });
         }
         
         whereClause.OR = orConditions;
@@ -413,7 +413,9 @@ export async function PATCH(
                         justification: minute.justification,
                         attendees: {
                             connect: minute.attendeeIds.map((id: string) => ({ id }))
-                        }
+                        },
+                        type: minute.documentUrl ? 'uploaded_document' : 'system_generated',
+                        documentUrl: minute.documentUrl
                     }
                 });
                 auditDetails += ` Minute recorded.`;
