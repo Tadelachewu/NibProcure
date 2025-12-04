@@ -226,7 +226,7 @@ export const BestItemAwardDialog = ({
 
     return (
         <>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Award by Best Offer (Per Item)</DialogTitle>
                     <DialogDescription>
@@ -234,81 +234,83 @@ export const BestItemAwardDialog = ({
                     </DialogDescription>
                 </DialogHeader>
                 
-                <div className="space-y-6 py-4">
-                    <Card>
-                        <CardContent className="pt-6">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Item</TableHead>
-                                        <TableHead>Recommended Winner</TableHead>
-                                        <TableHead className="text-right">Winning Score</TableHead>
-                                        <TableHead className="text-right">Winning Price</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {itemWinners.map(item => (
-                                        <TableRow key={item.requisitionItemId}>
-                                            <TableCell className="font-medium">{item.name}</TableCell>
-                                            <TableCell>{item.winner?.vendorName || 'N/A'}</TableCell>
-                                            <TableCell className="text-right font-mono">{item.winner ? item.winner.score.toFixed(2) : 'N/A'}</TableCell>
-                                            <TableCell className="text-right font-mono">{item.winner ? `${(item.winner.unitPrice * item.quantity).toLocaleString()} ETB` : 'N/A'}</TableCell>
+                <ScrollArea className="flex-1 -mx-6 px-6">
+                    <div className="space-y-6 py-4">
+                        <Card>
+                            <CardContent className="pt-6">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Item</TableHead>
+                                            <TableHead>Recommended Winner</TableHead>
+                                            <TableHead className="text-right">Winning Score</TableHead>
+                                            <TableHead className="text-right">Winning Price</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {itemWinners.map(item => (
+                                            <TableRow key={item.requisitionItemId}>
+                                                <TableCell className="font-medium">{item.name}</TableCell>
+                                                <TableCell>{item.winner?.vendorName || 'N/A'}</TableCell>
+                                                <TableCell className="text-right font-mono">{item.winner ? item.winner.score.toFixed(2) : 'N/A'}</TableCell>
+                                                <TableCell className="text-right font-mono">{item.winner ? `${(item.winner.unitPrice * item.quantity).toLocaleString()} ETB` : 'N/A'}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
 
-                    <div className="space-y-2">
-                        <Label>Vendor Response Deadline (Optional)</Label>
-                        <div className="flex gap-2">
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn(
-                                        "flex-1 justify-start text-left font-normal",
-                                        !awardResponseDeadlineDate && "text-muted-foreground"
-                                        )}
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                        mode="single"
-                                        selected={awardResponseDeadlineDate}
-                                        onSelect={setAwardResponseDeadlineDate}
-                                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
-                                        initialFocus
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                            <Input 
-                                type="time" 
-                                className="w-32"
-                                value={awardResponseDeadlineTime}
-                                onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
-                            />
+                        <div className="space-y-2">
+                            <Label>Vendor Response Deadline (Optional)</Label>
+                            <div className="flex gap-2">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                            "flex-1 justify-start text-left font-normal",
+                                            !awardResponseDeadlineDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                            mode="single"
+                                            selected={awardResponseDeadlineDate}
+                                            onSelect={setAwardResponseDeadlineDate}
+                                            disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                                <Input 
+                                    type="time" 
+                                    className="w-32"
+                                    value={awardResponseDeadlineTime}
+                                    onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <Label>Minute Recording</Label>
+                            <div className="p-4 border rounded-lg space-y-2">
+                                <Label htmlFor="minute-justification-item">Justification / Summary</Label>
+                                <Textarea id="minute-justification-item" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
+                                <Label htmlFor="minute-file-item">Official Minute Document (PDF)</Label>
+                                <Input id="minute-file-item" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
+                            </div>
+                        </div>
+
+                        <div className="text-right text-xl font-bold">
+                            Total Award Value: {totalAwardValue.toLocaleString()} ETB
                         </div>
                     </div>
-
-                    <div className="space-y-4">
-                        <Label>Minute Recording</Label>
-                        <div className="p-4 border rounded-lg space-y-2">
-                            <Label htmlFor="minute-justification-item">Justification / Summary</Label>
-                            <Textarea id="minute-justification-item" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
-                            <Label htmlFor="minute-file-item">Official Minute Document (PDF)</Label>
-                            <Input id="minute-file-item" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
-                        </div>
-                    </div>
-
-                    <div className="text-right text-xl font-bold">
-                        Total Award Value: {totalAwardValue.toLocaleString()} ETB
-                    </div>
-                </div>
+                </ScrollArea>
 
                 <DialogFooter className="pt-4 border-t">
                     <Button variant="outline" onClick={() => setBreakdownOpen(true)}>
