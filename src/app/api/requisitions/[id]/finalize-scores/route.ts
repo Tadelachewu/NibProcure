@@ -21,7 +21,7 @@ function generateAwardJustificationReport(
 
     report += `### Vendor Scoring Summary\n`;
     const sortedQuotes = [...requisition.quotations].sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
-    sortedQuotes.forEach((q, index) => {
+    sortedQuotes.forEach((q: any, index: number) => {
         report += `${index + 1}. **${q.vendorName}**: Final Score: **${(q.finalAverageScore || 0).toFixed(2)}**, Total Price: ${q.totalPrice.toLocaleString()} ETB\n`;
     });
     report += `\n`;
@@ -35,7 +35,7 @@ function generateAwardJustificationReport(
         report += `### Decision: Award by Best Offer (Per Item)\n`;
         Object.keys(awards).forEach(reqItemId => {
             const reqItem = requisition.items.find((i: any) => i.id === reqItemId);
-            const winnerBid = awards[reqItemId].items[0]; // Assuming the first item is the winner for that req item
+            const winnerBid = awards[reqItemId].rankedBids[0]; // Assuming the first item is the winner for that req item
             if (reqItem && winnerBid) {
                 const vendor = requisition.quotations.find((q:any) => q.id === winnerBid.quotationId)?.vendorName;
                 report += `- **Item:** ${reqItem.name}\n`;
@@ -195,7 +195,7 @@ export async function POST(
                 }
             });
             
-            let finalJustification = minuteJustification;
+            let finalJustification = minuteJustification || '';
             if (minuteType === 'system_generated') {
                  finalJustification = generateAwardJustificationReport(requisition, awards, awardStrategy, dynamicAwardValue);
             }
