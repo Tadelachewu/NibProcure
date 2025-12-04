@@ -10,7 +10,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '.
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, HelpCircle, Trophy, Crown, Medal, Upload } from 'lucide-react';
+import { CalendarIcon, HelpCircle, Trophy, Crown, Medal, Upload, Users } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -19,6 +19,8 @@ import { ScrollArea } from './ui/scroll-area';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
+import { useAuth } from '@/contexts/auth-context';
+import { Checkbox } from './ui/checkbox';
 
 const ItemBreakdownDialog = ({ itemWinners }: { itemWinners: any[] }) => {
     
@@ -100,12 +102,14 @@ export const BestItemAwardDialog = ({
     onClose: () => void;
 }) => {
     const { toast } = useToast();
+    const { allUsers } = useAuth();
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
     const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
     const [isBreakdownOpen, setBreakdownOpen] = useState(false);
     const [minuteType, setMinuteType] = useState<'system_generated' | 'uploaded_document'>('system_generated');
     const [minuteFile, setMinuteFile] = useState<File | null>(null);
     const [minuteJustification, setMinuteJustification] = useState('');
+    const [attendeeIds, setAttendeeIds] = useState<string[]>([]);
 
     const awardResponseDeadline = useMemo(() => {
         if (!awardResponseDeadlineDate) return undefined;
@@ -222,14 +226,14 @@ export const BestItemAwardDialog = ({
             }
         });
 
-        onFinalize('item', awards, awardResponseDeadline, minuteType, minuteDocumentUrl, minuteJustification);
+        onFinalize('item', awards, awardResponseDeadline, minuteType, minuteDocumentUrl, minuteJustification, attendeeIds);
         onClose();
     }
 
 
     return (
         <>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Award by Best Offer (Per Item)</DialogTitle>
                     <DialogDescription>
@@ -237,93 +241,114 @@ export const BestItemAwardDialog = ({
                     </DialogDescription>
                 </DialogHeader>
                 
-                <Card>
-                    <CardContent className="pt-6">
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Item</TableHead>
-                                    <TableHead>Recommended Winner</TableHead>
-                                    <TableHead className="text-right">Winning Score</TableHead>
-                                    <TableHead className="text-right">Winning Price</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {itemWinners.map(item => (
-                                    <TableRow key={item.requisitionItemId}>
-                                        <TableCell className="font-medium">{item.name}</TableCell>
-                                        <TableCell>{item.winner?.vendorName || 'N/A'}</TableCell>
-                                        <TableCell className="text-right font-mono">{item.winner ? item.winner.score.toFixed(2) : 'N/A'}</TableCell>
-                                        <TableCell className="text-right font-mono">{item.winner ? `${(item.winner.unitPrice * item.quantity).toLocaleString()} ETB` : 'N/A'}</TableCell>
+                <ScrollArea className="flex-1 pr-6 -mr-6">
+                <div className="space-y-6">
+                    <Card>
+                        <CardContent className="pt-6">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Item</TableHead>
+                                        <TableHead>Recommended Winner</TableHead>
+                                        <TableHead className="text-right">Winning Score</TableHead>
+                                        <TableHead className="text-right">Winning Price</TableHead>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                                </TableHeader>
+                                <TableBody>
+                                    {itemWinners.map(item => (
+                                        <TableRow key={item.requisitionItemId}>
+                                            <TableCell className="font-medium">{item.name}</TableCell>
+                                            <TableCell>{item.winner?.vendorName || 'N/A'}</TableCell>
+                                            <TableCell className="text-right font-mono">{item.winner ? item.winner.score.toFixed(2) : 'N/A'}</TableCell>
+                                            <TableCell className="text-right font-mono">{item.winner ? `${(item.winner.unitPrice * item.quantity).toLocaleString()} ETB` : 'N/A'}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
 
-                <div className="pt-4 space-y-2">
-                    <Label>Vendor Response Deadline (Optional)</Label>
-                    <div className="flex gap-2">
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                    "flex-1 justify-start text-left font-normal",
-                                    !awardResponseDeadlineDate && "text-muted-foreground"
-                                    )}
-                                >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                    mode="single"
-                                    selected={awardResponseDeadlineDate}
-                                    onSelect={setAwardResponseDeadlineDate}
-                                    disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
-                                    initialFocus
-                                />
-                            </PopoverContent>
-                        </Popover>
-                        <Input 
-                            type="time" 
-                            className="w-32"
-                            value={awardResponseDeadlineTime}
-                            onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
-                        />
+                    <div className="space-y-2">
+                        <Label>Vendor Response Deadline (Optional)</Label>
+                        <div className="flex gap-2">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant={"outline"}
+                                        className={cn(
+                                        "flex-1 justify-start text-left font-normal",
+                                        !awardResponseDeadlineDate && "text-muted-foreground"
+                                        )}
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                        mode="single"
+                                        selected={awardResponseDeadlineDate}
+                                        onSelect={setAwardResponseDeadlineDate}
+                                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                                        initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            <Input 
+                                type="time" 
+                                className="w-32"
+                                value={awardResponseDeadlineTime}
+                                onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <Label>Minute Recording Method</Label>
+                        <RadioGroup value={minuteType} onValueChange={setMinuteType as any} className="flex gap-4">
+                            <Label htmlFor="minute-system-item" className="flex items-center gap-2 p-4 border rounded-md has-[:checked]:bg-muted has-[:checked]:border-primary flex-1 cursor-pointer">
+                                <RadioGroupItem value="system_generated" id="minute-system-item" />
+                                System-Generated
+                            </Label>
+                            <Label htmlFor="minute-upload-item" className="flex items-center gap-2 p-4 border rounded-md has-[:checked]:bg-muted has-[:checked]:border-primary flex-1 cursor-pointer">
+                                <RadioGroupItem value="uploaded_document" id="minute-upload-item" />
+                                Upload Document
+                            </Label>
+                        </RadioGroup>
+                        {minuteType === 'uploaded_document' && (
+                            <div className="pl-2 space-y-2">
+                                <Label htmlFor="minute-justification-item">Justification / Summary</Label>
+                                <Textarea id="minute-justification-item" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
+                                <Label htmlFor="minute-file-item">Official Minute Document (PDF)</Label>
+                                <Input id="minute-file-item" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
+                            </div>
+                        )}
+                        <div className="pl-2 space-y-2">
+                            <Label>Attendees (Optional)</Label>
+                            <ScrollArea className="h-32 border rounded-md p-2">
+                                {allUsers.filter(u => u.role !== 'Vendor').map(user => (
+                                    <div key={user.id} className="flex items-center space-x-2 p-1">
+                                        <Checkbox 
+                                            id={`attendee-item-${user.id}`} 
+                                            checked={attendeeIds.includes(user.id)}
+                                            onCheckedChange={(checked) => {
+                                                setAttendeeIds(prev => checked ? [...prev, user.id] : prev.filter(id => id !== user.id));
+                                            }}
+                                        />
+                                        <Label htmlFor={`attendee-item-${user.id}`} className="font-normal">{user.name}</Label>
+                                    </div>
+                                ))}
+                            </ScrollArea>
+                        </div>
+                    </div>
+
+                    <div className="text-right text-xl font-bold">
+                        Total Award Value: {totalAwardValue.toLocaleString()} ETB
                     </div>
                 </div>
+                </ScrollArea>
 
-                 <div className="pt-4 space-y-4">
-                    <Label>Minute Recording Method</Label>
-                    <RadioGroup value={minuteType} onValueChange={setMinuteType as any} className="flex gap-4">
-                        <Label htmlFor="minute-system-item" className="flex items-center gap-2 p-4 border rounded-md has-[:checked]:bg-muted has-[:checked]:border-primary flex-1 cursor-pointer">
-                            <RadioGroupItem value="system_generated" id="minute-system-item" />
-                            System-Generated
-                        </Label>
-                        <Label htmlFor="minute-upload-item" className="flex items-center gap-2 p-4 border rounded-md has-[:checked]:bg-muted has-[:checked]:border-primary flex-1 cursor-pointer">
-                            <RadioGroupItem value="uploaded_document" id="minute-upload-item" />
-                            Upload Document
-                        </Label>
-                    </RadioGroup>
-                    {minuteType === 'uploaded_document' && (
-                        <div className="pl-2 space-y-2">
-                            <Label htmlFor="minute-justification-item">Justification / Summary</Label>
-                            <Textarea id="minute-justification-item" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
-                            <Label htmlFor="minute-file-item">Official Minute Document (PDF)</Label>
-                            <Input id="minute-file-item" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
-                        </div>
-                    )}
-                </div>
-
-                <div className="text-right text-xl font-bold">
-                    Total Award Value: {totalAwardValue.toLocaleString()} ETB
-                </div>
-
-                <DialogFooter>
+                <DialogFooter className="pt-4 border-t">
                     <Button variant="outline" onClick={() => setBreakdownOpen(true)}>
                         <HelpCircle className="mr-2 h-4 w-4" /> Show Calculation
                     </Button>

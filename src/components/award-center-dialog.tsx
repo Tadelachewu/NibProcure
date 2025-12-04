@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, TrophyIcon, Upload } from 'lucide-react';
+import { CalendarIcon, TrophyIcon, Upload, Users } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -17,6 +17,9 @@ import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
+import { Checkbox } from './ui/checkbox';
+import { ScrollArea } from './ui/scroll-area';
+import { useAuth } from '@/contexts/auth-context';
 
 
 export const AwardCenterDialog = ({
@@ -31,11 +34,13 @@ export const AwardCenterDialog = ({
     onClose: () => void;
 }) => {
     const { toast } = useToast();
+    const { allUsers } = useAuth();
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
     const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
     const [minuteType, setMinuteType] = useState<'system_generated' | 'uploaded_document'>('system_generated');
     const [minuteFile, setMinuteFile] = useState<File | null>(null);
     const [minuteJustification, setMinuteJustification] = useState('');
+    const [attendeeIds, setAttendeeIds] = useState<string[]>([]);
 
     const awardResponseDeadline = useMemo(() => {
         if (!awardResponseDeadlineDate) return undefined;
@@ -111,89 +116,110 @@ export const AwardCenterDialog = ({
             };
         }
 
-        onFinalize('all', awards, awardResponseDeadline, minuteType, minuteDocumentUrl, minuteJustification);
+        onFinalize('all', awards, awardResponseDeadline, minuteType, minuteDocumentUrl, minuteJustification, attendeeIds);
         onClose();
     }
 
 
     return (
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl h-[90vh] flex flex-col">
             <DialogHeader>
                 <DialogTitle>Award to Single Best Vendor</DialogTitle>
                 <DialogDescription>Review the recommended winner and finalize the award for requisition {requisition.id}.</DialogDescription>
             </DialogHeader>
             
-            <Card>
-                <CardHeader>
-                    <CardTitle>Best Overall Vendor</CardTitle>
-                    <CardDescription>This strategy awards all items to the single vendor with the highest average score across all scored items.</CardDescription>
-                </CardHeader>
-                <CardContent className="text-center p-8">
-                    <TrophyIcon className="h-12 w-12 text-amber-400 mx-auto mb-4"/>
-                    <p className="text-muted-foreground">Recommended Overall Winner:</p>
-                    <p className="text-2xl font-bold">{overallWinner?.vendorName || 'N/A'}</p>
-                    <p className="font-mono text-primary">{overallWinner?.score > 0 ? `${overallWinner.score.toFixed(2)} average score` : 'N/A'}</p>
-                </CardContent>
-            </Card>
+            <ScrollArea className="flex-1 pr-6 -mr-6">
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Best Overall Vendor</CardTitle>
+                            <CardDescription>This strategy awards all items to the single vendor with the highest average score across all scored items.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-center p-8">
+                            <TrophyIcon className="h-12 w-12 text-amber-400 mx-auto mb-4"/>
+                            <p className="text-muted-foreground">Recommended Overall Winner:</p>
+                            <p className="text-2xl font-bold">{overallWinner?.vendorName || 'N/A'}</p>
+                            <p className="font-mono text-primary">{overallWinner?.score > 0 ? `${overallWinner.score.toFixed(2)} average score` : 'N/A'}</p>
+                        </CardContent>
+                    </Card>
 
-             <div className="pt-4 space-y-2">
-                <Label>Vendor Response Deadline (Optional)</Label>
-                <div className="flex gap-2">
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button
-                                variant={"outline"}
-                                className={cn(
-                                "flex-1 justify-start text-left font-normal",
-                                !awardResponseDeadlineDate && "text-muted-foreground"
-                                )}
-                            >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                            <Calendar
-                                mode="single"
-                                selected={awardResponseDeadlineDate}
-                                onSelect={setAwardResponseDeadlineDate}
-                                disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
-                                initialFocus
+                    <div className="space-y-2">
+                        <Label>Vendor Response Deadline (Optional)</Label>
+                        <div className="flex gap-2">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant={"outline"}
+                                        className={cn(
+                                        "flex-1 justify-start text-left font-normal",
+                                        !awardResponseDeadlineDate && "text-muted-foreground"
+                                        )}
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                        mode="single"
+                                        selected={awardResponseDeadlineDate}
+                                        onSelect={setAwardResponseDeadlineDate}
+                                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                                        initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                            <Input 
+                                type="time" 
+                                className="w-32"
+                                value={awardResponseDeadlineTime}
+                                onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
                             />
-                        </PopoverContent>
-                    </Popover>
-                     <Input 
-                        type="time" 
-                        className="w-32"
-                        value={awardResponseDeadlineTime}
-                        onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
-                    />
-                </div>
-            </div>
-
-            <div className="pt-4 space-y-4">
-                <Label>Minute Recording Method</Label>
-                <RadioGroup value={minuteType} onValueChange={setMinuteType as any} className="flex gap-4">
-                    <Label htmlFor="minute-system" className="flex items-center gap-2 p-4 border rounded-md has-[:checked]:bg-muted has-[:checked]:border-primary flex-1 cursor-pointer">
-                        <RadioGroupItem value="system_generated" id="minute-system" />
-                        System-Generated
-                    </Label>
-                    <Label htmlFor="minute-upload" className="flex items-center gap-2 p-4 border rounded-md has-[:checked]:bg-muted has-[:checked]:border-primary flex-1 cursor-pointer">
-                        <RadioGroupItem value="uploaded_document" id="minute-upload" />
-                        Upload Document
-                    </Label>
-                </RadioGroup>
-                {minuteType === 'uploaded_document' && (
-                    <div className="pl-2 space-y-2">
-                         <Label htmlFor="minute-justification">Justification / Summary</Label>
-                         <Textarea id="minute-justification" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
-                         <Label htmlFor="minute-file">Official Minute Document (PDF)</Label>
-                         <Input id="minute-file" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
+                        </div>
                     </div>
-                )}
-            </div>
 
-            <DialogFooter>
+                    <div className="space-y-4">
+                        <Label>Minute Recording Method</Label>
+                        <RadioGroup value={minuteType} onValueChange={setMinuteType as any} className="flex gap-4">
+                            <Label htmlFor="minute-system" className="flex items-center gap-2 p-4 border rounded-md has-[:checked]:bg-muted has-[:checked]:border-primary flex-1 cursor-pointer">
+                                <RadioGroupItem value="system_generated" id="minute-system" />
+                                System-Generated
+                            </Label>
+                            <Label htmlFor="minute-upload" className="flex items-center gap-2 p-4 border rounded-md has-[:checked]:bg-muted has-[:checked]:border-primary flex-1 cursor-pointer">
+                                <RadioGroupItem value="uploaded_document" id="minute-upload" />
+                                Upload Document
+                            </Label>
+                        </RadioGroup>
+                        {minuteType === 'uploaded_document' && (
+                            <div className="pl-2 space-y-2">
+                                <Label htmlFor="minute-justification">Justification / Summary</Label>
+                                <Textarea id="minute-justification" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
+                                <Label htmlFor="minute-file">Official Minute Document (PDF)</Label>
+                                <Input id="minute-file" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
+                            </div>
+                        )}
+                         <div className="pl-2 space-y-2">
+                            <Label>Attendees (Optional)</Label>
+                            <ScrollArea className="h-32 border rounded-md p-2">
+                                {allUsers.filter(u => u.role !== 'Vendor').map(user => (
+                                    <div key={user.id} className="flex items-center space-x-2 p-1">
+                                        <Checkbox 
+                                            id={`attendee-${user.id}`}
+                                            checked={attendeeIds.includes(user.id)}
+                                            onCheckedChange={(checked) => {
+                                                setAttendeeIds(prev => checked ? [...prev, user.id] : prev.filter(id => id !== user.id));
+                                            }}
+                                        />
+                                        <Label htmlFor={`attendee-${user.id}`} className="font-normal">{user.name}</Label>
+                                    </div>
+                                ))}
+                            </ScrollArea>
+                        </div>
+                    </div>
+                </div>
+            </ScrollArea>
+
+            <DialogFooter className="pt-4 border-t">
                 <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
                 <AlertDialog>
                     <AlertDialogTrigger asChild><Button disabled={!overallWinner}>Finalize &amp; Send Award</Button></AlertDialogTrigger>
