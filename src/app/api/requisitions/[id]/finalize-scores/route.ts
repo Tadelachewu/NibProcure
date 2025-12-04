@@ -21,7 +21,7 @@ function generateAwardJustificationReport(
 
     report += `### Vendor Bids & Final Scores\n`;
     const sortedQuotes = [...requisition.quotations].sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
-    
+
     report += `| Rank | Vendor Name | Final Score | Total Quoted Price |\n`;
     report += `|:----:|:------------|:-----------:|-------------------:|\n`;
     sortedQuotes.forEach((q: any, index: number) => {
@@ -73,7 +73,7 @@ export async function POST(
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
-        
+
         const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
         let isAuthorized = false;
         const userRoles = (user.roles as any[]).map(r => r.name) as UserRole[];
@@ -94,23 +94,23 @@ export async function POST(
             console.error(`[FINALIZE-SCORES] User ${userId} is not authorized.`);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
-        
+
         console.log('[FINALIZE-SCORES] Starting transaction...');
         const result = await prisma.$transaction(async (tx) => {
-            
-            const requisition = await tx.purchaseRequisition.findUnique({ 
-                where: { id: requisitionId }, 
-                include: { 
-                    items: true, 
+
+            const requisition = await tx.purchaseRequisition.findUnique({
+                where: { id: requisitionId },
+                include: {
+                    items: true,
                     evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } },
-                    quotations: { include: { scores: true }} 
-                } 
+                    quotations: { include: { scores: true }}
+                }
             });
             if (!requisition) {
                 throw new Error("Requisition not found.");
             }
 
-            const allQuotes = await tx.quotation.findMany({ 
+            const allQuotes = await tx.quotation.findMany({
                 where: { requisitionId: requisitionId },
                 include: { items: true, scores: { include: { itemScores: {include: {scores: true}} } } },
             });
@@ -118,7 +118,7 @@ export async function POST(
             if (allQuotes.length === 0) {
                 throw new Error("No quotes found to process for this requisition.");
             }
-            
+
             // This is the dynamic value based on the current award set.
             const dynamicAwardValue = totalAwardValue;
 
@@ -126,16 +126,16 @@ export async function POST(
                 console.log('[FINALIZE-SCORES] Calculating for "Award All to Single Vendor" strategy.');
                 const winningVendorId = Object.keys(awards)[0];
                 const winningQuote = allQuotes.find(q => q.vendorId === winningVendorId);
-                
+
                 if (!winningQuote) throw new Error("Winning vendor's quote not found.");
 
                 const otherQuotes = allQuotes.filter(q => q.vendorId !== winningVendorId);
-                
+
                 // Rank and update status for all quotes
                 await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
-                
+
                 const sortedOthers = otherQuotes.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
-                
+
                 for (let i = 0; i < sortedOthers.length; i++) {
                     const quote = sortedOthers[i];
                     const rank = i < 2 ? (i + 2) as 2 | 3 : null;
@@ -147,7 +147,7 @@ export async function POST(
                         }
                     });
                 }
-                
+
                 // Award all items to the winner
                 const itemIdsToAward = winningQuote.items.map(i => i.id);
                 await tx.purchaseRequisition.update({
@@ -157,7 +157,7 @@ export async function POST(
 
             } else if (awardStrategy === 'item') {
                 console.log('[FINALIZE-SCORES] Calculating for "Best Offer (Per Item)" strategy.');
-                
+
                 const allItemsWithAwards = requisition.items.map(item => {
                     const bids = awards[item.id]?.rankedBids;
                     if (!bids || bids.length === 0) {
@@ -202,13 +202,13 @@ export async function POST(
                     }
                 }
             });
-            
+
             let finalJustification: string;
             if (minuteType === 'system_generated') {
                  finalJustification = generateAwardJustificationReport(
-                    { ...requisition, quotations: allQuotes }, 
-                    awards, 
-                    awardStrategy, 
+                    { ...requisition, quotations: allQuotes },
+                    awards,
+                    awardStrategy,
                     dynamicAwardValue
                  );
             } else {
@@ -244,13 +244,13 @@ export async function POST(
                 }
             });
             console.log('[FINALIZE-SCORES] Audit log created.');
-            
+
             return updatedRequisition;
         }, {
             maxWait: 15000,
             timeout: 30000,
         });
-        
+
         console.log('[FINALIZE-SCORES] Transaction complete. Sending response.');
         return NextResponse.json({ message: 'Award process finalized and routed for review.', requisition: result });
 
