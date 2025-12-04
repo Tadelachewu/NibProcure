@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { PerItemAwardDetail, PerItemAwardStatus, User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format, differenceInMinutes } from 'date-fns';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -14,32 +15,34 @@ export async function POST(
   const requisitionId = params.id;
   console.log(`[NOTIFY-VENDOR] Received request for requisition: ${requisitionId}`);
   try {
-    const body = await request.json();
-    const { userId, awardResponseDeadline } = body;
-    console.log(`[NOTIFY-VENDOR] Action by User ID: ${userId}, Award Response Deadline: ${awardResponseDeadline}`);
-
-    const user: User | null = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!user) {
-      console.error(`[NOTIFY-VENDOR] User ${userId} not found.`);
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
 
+    const body = await request.json();
+    const { awardResponseDeadline } = body;
+    console.log(`[NOTIFY-VENDOR] Action by User ID: ${actor.id}, Award Response Deadline: ${awardResponseDeadline}`);
+
+    
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    const userRoles = (user.roles as any[]).map(r => r.name);
+    const userRoles = actor.roles as UserRole[];
 
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+    if (userRoles.includes('Admin')) {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
         if (setting.type === 'specific') {
-            isAuthorized = setting.userId === userId;
+            isAuthorized = setting.userId === actor.id;
         } else { // 'all' case
-            isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+            isAuthorized = userRoles.includes('Procurement_Officer');
         }
     }
 
 
     if (!isAuthorized) {
-        console.error(`[NOTIFY-VENDOR] User ${userId} is not authorized to notify vendors.`);
+        console.error(`[NOTIFY-VENDOR] User ${actor.id} is not authorized to notify vendors.`);
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -187,7 +190,7 @@ export async function POST(
         await tx.auditLog.create({
             data: {
                 transactionId: requisition.transactionId,
-                user: { connect: { id: userId } },
+                user: { connect: { id: actor.id } },
                 timestamp: new Date(),
                 action: 'NOTIFY_VENDOR',
                 entity: 'Requisition',

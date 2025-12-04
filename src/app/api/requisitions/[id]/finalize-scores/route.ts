@@ -64,154 +64,74 @@ export async function POST(
                 throw new Error("No quotes found to process for this requisition.");
             }
             
-            let finalAwardValue = 0;
-            let finalAwardedItemIds: string[] = [];
+            // This is the dynamic value based on the current award set.
+            const dynamicAwardValue = totalAwardValue;
 
             if (awardStrategy === 'all') {
                 console.log('[FINALIZE-SCORES] Calculating for "Award All to Single Vendor" strategy.');
-                const vendorScores: { [vendorId: string]: { totalScore: number; count: number; championBids: QuoteItem[] } } = {};
-
-                for (const quote of allQuotes) {
-                    vendorScores[quote.vendorId] = { totalScore: 0, count: 0, championBids: [] };
-                    
-                    for (const reqItem of requisition.items) {
-                        const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
-                        if (proposalsForItem.length === 0) continue;
-
-                        let bestProposalScore = -1;
-                        let championBid: QuoteItem | null = null;
-                        
-                        for (const proposal of proposalsForItem) {
-                            let currentProposalScore = 0;
-                            let scorerCount = 0;
-                            for (const scoreSet of quote.scores) {
-                                const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                                if (itemScore) {
-                                    currentProposalScore += itemScore.finalScore;
-                                    scorerCount++;
-                                }
-                            }
-                            const avgScore = scorerCount > 0 ? currentProposalScore / scorerCount : 0;
-                            if (avgScore > bestProposalScore) {
-                                bestProposalScore = avgScore;
-                                championBid = proposal;
-                            }
-                        }
-                        
-                        if (championBid) {
-                            vendorScores[quote.vendorId].totalScore += bestProposalScore;
-                            vendorScores[quote.vendorId].count++;
-                            vendorScores[quote.vendorId].championBids.push(championBid);
-                        }
-                    }
-                }
-
-                const rankedVendors = Object.entries(vendorScores)
-                    .map(([vendorId, data]) => ({
-                        vendorId,
-                        avgScore: data.count > 0 ? data.totalScore / data.count : 0,
-                        championBids: data.championBids
-                    }))
-                    .sort((a, b) => b.avgScore - a.avgScore);
+                const winningVendorId = Object.keys(awards)[0];
+                const winningQuote = allQuotes.find(q => q.vendorId === winningVendorId);
                 
-                console.log('[FINALIZE-SCORES] Ranked vendors:', rankedVendors.map(v => ({vendor: v.vendorId, score: v.avgScore})));
+                if (!winningQuote) throw new Error("Winning vendor's quote not found.");
 
-                if (rankedVendors.length === 0) throw new Error("Could not determine a winning vendor.");
-
-                const winner = rankedVendors[0];
-                const winningQuote = allQuotes.find(q => q.vendorId === winner.vendorId);
-                if (!winningQuote) throw new Error("Winning quote not found in database.");
-                console.log(`[FINALIZE-SCORES] Winner is ${winningQuote.vendorName} with score ${winner.avgScore.toFixed(2)}`);
-
-                finalAwardValue = winner.championBids.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-                finalAwardedItemIds = winner.championBids.map(item => item.id);
-                console.log(`[FINALIZE-SCORES] Final award value for winner: ${finalAwardValue}`);
+                const otherQuotes = allQuotes.filter(q => q.vendorId !== winningVendorId);
                 
+                // Rank and update status for all quotes
                 await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
-                console.log(`[FINALIZE-SCORES] Updated winning quote ${winningQuote.id} to Pending_Award.`);
                 
-                const otherQuotes = rankedVendors.slice(1);
-                for (let i = 0; i < otherQuotes.length; i++) {
-                    const quoteData = otherQuotes[i];
-                    const quoteToUpdate = allQuotes.find(q => q.vendorId === quoteData.vendorId);
-                    if (quoteToUpdate) {
-                        const rank = i < 2 ? (i + 2) as 2 | 3 : null;
-                        await tx.quotation.update({
-                            where: { id: quoteToUpdate.id },
-                            data: {
-                                status: i < 2 ? 'Standby' : 'Rejected',
-                                rank: rank,
-                            }
-                        });
-                        console.log(`[FINALIZE-SCORES] Updated quote ${quoteToUpdate.id} to ${i<2 ? 'Standby' : 'Rejected'} with rank ${rank}.`);
-                    }
+                const sortedOthers = otherQuotes.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
+                
+                for (let i = 0; i < sortedOthers.length; i++) {
+                    const quote = sortedOthers[i];
+                    const rank = i < 2 ? (i + 2) as 2 | 3 : null;
+                    await tx.quotation.update({
+                        where: { id: quote.id },
+                        data: {
+                            status: i < 2 ? 'Standby' : 'Rejected',
+                            rank: rank
+                        }
+                    });
                 }
+                
+                // Award all items to the winner
+                const itemIdsToAward = winningQuote.items.map(i => i.id);
+                await tx.purchaseRequisition.update({
+                    where: { id: requisitionId },
+                    data: { awardedQuoteItemIds: itemIdsToAward }
+                });
 
             } else if (awardStrategy === 'item') {
                 console.log('[FINALIZE-SCORES] Calculating for "Best Offer (Per Item)" strategy.');
-                finalAwardValue = totalAwardValue;
-                console.log(`[FINALIZE-SCORES] Received total award value: ${finalAwardValue}`);
-
-                for (const reqItem of requisition.items) {
-                    const championBids: any[] = [];
-
-                    for (const quote of allQuotes) {
-                        const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
-                        if (proposalsForItem.length === 0) continue;
-
-                        let bestProposalForVendor: any = null;
-                        let highestScore = -1;
-
-                        proposalsForItem.forEach(proposal => {
-                            let totalItemScore = 0;
-                            let scoreCount = 0;
-                            quote.scores?.forEach(scoreSet => {
-                                const itemScore = scoreSet.itemScores?.find(s => s.quoteItemId === proposal.id);
-                                if (itemScore) {
-                                    totalItemScore += itemScore.finalScore;
-                                    scoreCount++;
-                                }
-                            });
-                            const averageScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                            if (averageScore > highestScore) {
-                                highestScore = averageScore;
-                                bestProposalForVendor = {
-                                    vendorId: quote.vendorId,
-                                    vendorName: quote.vendorName,
-                                    quotationId: quote.id,
-                                    quoteItemId: proposal.id,
-                                    proposedItemName: proposal.name,
-                                    unitPrice: proposal.unitPrice,
-                                    score: averageScore
-                                };
-                            }
-                        });
-                        if (bestProposalForVendor) {
-                            championBids.push(bestProposalForVendor);
-                        }
+                
+                const allItemsWithAwards = requisition.items.map(item => {
+                    const bids = awards[item.id]?.rankedBids;
+                    if (!bids || bids.length === 0) {
+                        return { ...item, perItemAwardDetails: [] };
                     }
-                    
-                    championBids.sort((a, b) => b.score - a.score);
-
-                    const rankedProposals = championBids.slice(0, 3).map((p, index) => ({
-                        ...p,
-                        rank: index + 1, 
+                    const perItemAwardDetails = bids.slice(0, 3).map((bid: any, index: number) => ({
+                        rank: index + 1,
+                        vendorId: bid.vendorId,
+                        vendorName: bid.vendorName,
+                        quotationId: bid.quotationId,
+                        quoteItemId: bid.quoteItemId,
+                        proposedItemName: bid.proposedItemName,
+                        unitPrice: bid.unitPrice,
+                        score: bid.score,
                         status: (index === 0) ? 'Pending_Award' : 'Standby'
                     }));
-                    
-                    console.log(`[FINALIZE-SCORES] For item ${reqItem.name}, ranked champion bids:`, rankedProposals.map(p => ({vendor: p.vendorName, rank: p.rank, status: p.status})));
+                    return { ...item, perItemAwardDetails };
+                });
 
+                for (const item of allItemsWithAwards) {
                     await tx.requisitionItem.update({
-                        where: { id: reqItem.id },
-                        data: {
-                            perItemAwardDetails: rankedProposals as any
-                        }
+                        where: { id: item.id },
+                        data: { perItemAwardDetails: (item.perItemAwardDetails as any) || [] }
                     });
                 }
             }
 
             console.log('[FINALIZE-SCORES] Getting next approval step...');
-            const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: finalAwardValue }, user);
+            const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: dynamicAwardValue }, user);
             console.log(`[FINALIZE-SCORES] Next Step: Status=${nextStatus}, ApproverID=${nextApproverId}`);
 
             const updatedRequisition = await tx.purchaseRequisition.update({
@@ -220,8 +140,7 @@ export async function POST(
                     status: nextStatus as any,
                     currentApproverId: nextApproverId,
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
-                    totalPrice: finalAwardValue,
-                    awardedQuoteItemIds: finalAwardedItemIds,
+                    totalPrice: dynamicAwardValue, // Set the dynamic total price
                     rfqSettings: {
                         ...(requisition?.rfqSettings as any),
                         awardStrategy: awardStrategy,
