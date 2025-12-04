@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -2571,6 +2572,8 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
 
 
 
+
+    
 export default function QuotationDetailsPage() {
   const router = useRouter();
   const params = useParams();
@@ -2836,58 +2839,60 @@ export default function QuotationDetailsPage() {
   }, [id, user, fetchRequisitionAndQuotes]);
   
 
-  const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
-        if (!user || !requisition || !quotations) return;
-        
-        let totalAwardValue = 0;
-        if(awardStrategy === 'all') {
-            const winnerData = awards[Object.keys(awards)[0]];
-            const winnerQuote = quotations.find(q => q.vendorId === Object.keys(awards)[0]);
-            
-            if (winnerQuote && winnerData) {
-                totalAwardValue = winnerData.items.reduce((sum: number, item: any) => {
-                    const quoteItem = winnerQuote.items.find(i => i.id === item.quoteItemId);
-                    return sum + (quoteItem ? quoteItem.unitPrice * quoteItem.quantity : 0);
-                }, 0);
-            }
-        } else {
-            const quoteItemsById: { [key: string]: { price: number; quantity: number } } = {};
-            quotations.forEach(q => {
-                q.items.forEach(i => {
-                    quoteItemsById[i.id] = { price: i.unitPrice, quantity: i.quantity };
-                });
-            });
-
-            totalAwardValue = Object.values(awards).flatMap((a: any) => a.items)
-                .reduce((sum, item: any) => {
-                    const quoteItem = quoteItemsById[item.quoteItemId];
-                    return sum + (quoteItem ? quoteItem.price * quoteItem.quantity : 0);
-                }, 0);
-        }
-
-        setIsFinalizing(true);
-        try {
-             const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, totalAwardValue }),
-            });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to finalize scores.');
-            }
-            toast({ title: 'Success', description: 'Scores have been finalized and awards are being routed for final review.' });
-            fetchRequisitionAndQuotes();
-        } catch(error) {
-             toast({
-                variant: 'destructive',
-                title: 'Error',
-                description: error instanceof Error ? error.message : 'An unknown error occurred.',
-            });
-        } finally {
-            setIsFinalizing(false);
-        }
+  const handleFinalizeScores = async (
+    awardStrategy: 'all' | 'item', 
+    awards: any, 
+    awardResponseDeadline?: Date,
+    minuteDocumentUrl?: string,
+    minuteJustification?: string
+) => {
+    if (!user || !requisition || !quotations) return;
+    
+    // This calculation is now duplicated, but it's important for security that the server calculates the final value.
+    // The client-side calculation is for UI display only.
+    const allQuoteItems: Record<string, { price: number; quantity: number }> = {};
+    quotations.forEach(q => q.items.forEach(i => { allQuoteItems[i.id] = { price: i.unitPrice, quantity: i.quantity }; }));
+    
+    let totalAwardValue = 0;
+    if (awardStrategy === 'all') {
+      const winnerVendorId = Object.keys(awards)[0];
+      const winnerQuote = quotations.find(q => q.vendorId === winnerVendorId);
+      if (winnerQuote) totalAwardValue = winnerQuote.totalPrice;
+    } else {
+      totalAwardValue = Object.values(awards).flatMap((a: any) => a.rankedBids)
+        .filter((bid: any, index: number) => index === 0)
+        .reduce((sum, item: any) => {
+          const quoteItem = allQuoteItems[item.quoteItemId];
+          const reqItem = requisition.items.find(i => i.id === item.reqItemId);
+          return sum + (quoteItem && reqItem ? quoteItem.price * reqItem.quantity : 0);
+        }, 0);
     }
+    
+    setIsFinalizing(true);
+    try {
+         const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, totalAwardValue, minuteDocumentUrl, minuteJustification }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to finalize scores.');
+        }
+        toast({ title: 'Success', description: 'Scores have been finalized and awards are being routed for final review.' });
+        fetchRequisitionAndQuotes();
+    } catch(error) {
+         toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: error instanceof Error ? error.message : 'An unknown error occurred.',
+        });
+    } finally {
+        setIsFinalizing(false);
+        setSingleAwardCenterOpen(false);
+        setBestItemAwardCenterOpen(false);
+    }
+}
 
     const handleAwardChange = async () => {
         if (!user || !id || !requisition) return;
@@ -3348,7 +3353,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     const finalNewDeadline = useMemo(() => {
         if (!newDeadlineDate) return undefined;
-        const [hours, minutes] = deadlineTime.split(':').map(Number);
+        const [hours, minutes] = newDeadlineTime.split(':').map(Number);
         return setMinutes(setHours(newDeadlineDate, hours), minutes);
     }, [newDeadlineDate, newDeadlineTime]);
 
