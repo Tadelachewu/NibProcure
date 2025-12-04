@@ -1,3 +1,6 @@
+
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -15,34 +18,31 @@ export async function GET(request: Request) {
     const userRoles = actor.roles as UserRole[];
     const userId = actor.id;
 
-    // --- Start of Enhanced Fetching Logic ---
+    // Build the main query conditions
+    const orConditions: any[] = [
+      // The user is the direct current approver.
+      { currentApproverId: userId },
+      // The status matches a committee role the user has.
+      { status: { in: userRoles.map(r => `Pending_${r}`) } },
+    ];
+    
+    // If the user is an Admin or PO, add the condition to see all pending reviews
+    if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+        const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
+        const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
+        orConditions.push({
+            status: { in: allPossiblePendingStatuses }
+        });
+        orConditions.push({ status: 'PostApproved' });
+    }
+
+
     const requisitionsForUser = await prisma.purchaseRequisition.findMany({
         where: {
-            OR: [
-                // The user is the direct current approver.
-                { currentApproverId: userId },
-                // The status matches a committee role the user has.
-                { status: { in: userRoles.map(r => `Pending_${r}`) } },
-                 // The status might have changed (e.g. to Award_Declined or Partially_Closed), but the user
-                 // is STILL the assigned approver for an item that is pending.
-                {
-                    AND: [
-                        { status: { in: ['Award_Declined', 'Partially_Closed'] } },
-                        { currentApproverId: userId }
-                    ]
-                },
-                // Admins/Procurement Officers can see all requisitions in any pending review state for oversight.
-                {
-                    AND: [
-                        { roles: { some: { name: { in: ['Admin', 'Procurement_Officer'] } } } },
-                        { status: { startsWith: 'Pending_' } }
-                    ]
-                }
-            ]
+            OR: orConditions
         },
         include: { items: true, reviews: true }
     });
-    // --- End of Enhanced Fetching Logic ---
 
     const requisitionIds = requisitionsForUser.map(r => r.id);
 
@@ -128,6 +128,7 @@ export async function GET(request: Request) {
       } else if (req.status.startsWith('Pending_')) {
         const requiredRole = req.status.replace('Pending_', '');
         if (userRoles.includes(requiredRole as UserRole)) {
+          // This is a committee-level approval, so it's actionable if the user is part of that committee.
           isActionable = true;
         }
       }
