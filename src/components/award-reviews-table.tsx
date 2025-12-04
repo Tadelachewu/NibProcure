@@ -55,8 +55,13 @@ import Link from 'next/link';
 
 const PAGE_SIZE = 10;
 
+type RequisitionWithAction = PurchaseRequisition & {
+    isActionable?: boolean;
+    actionTaken?: 'APPROVED' | 'REJECTED' | null;
+}
+
 export function AwardReviewsTable() {
-  const [requisitions, setRequisitions] = useState<(PurchaseRequisition & { isActionable?: boolean })[]>([]);
+  const [requisitions, setRequisitions] = useState<RequisitionWithAction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, token } = useAuth();
@@ -95,12 +100,12 @@ export function AwardReviewsTable() {
     }
     try {
       setLoading(true);
-      const response = await fetch(`/api/reviews`, {
+      const response = await fetch(`/api/reviews?includeActionedFor=${user.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for award review');
       
-      const data: (PurchaseRequisition & { isActionable?: boolean })[] = await response.json();
+      const data: RequisitionWithAction[] = await response.json();
       setRequisitions(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
@@ -221,8 +226,8 @@ export function AwardReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   
-                  // The `isActionable` flag is now passed directly from the API.
                   const isActionable = req.isActionable;
+                  const actionTaken = req.actionTaken;
 
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');
@@ -261,11 +266,22 @@ export function AwardReviewsTable() {
                                       <Eye className="mr-2 h-4 w-4" /> Review Bids
                                   </Link>
                               </Button>
-                              <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={!isActionable || isLoadingAction}>
+                              <Button 
+                                variant={actionTaken === 'APPROVED' ? 'default' : 'outline'}
+                                size="sm" 
+                                onClick={() => handleAction(req, 'approve')} 
+                                disabled={!isActionable || isLoadingAction}
+                              >
                                 {isLoadingAction && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4" />} 
                                 Approve
                             </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={!isActionable || isLoadingAction}>
+                            <Button 
+                                variant={actionTaken === 'REJECTED' ? 'destructive' : 'destructive'} 
+                                size="sm" 
+                                onClick={() => handleAction(req, 'reject')} 
+                                disabled={!isActionable || isLoadingAction}
+                                className={actionTaken === 'REJECTED' ? '' : 'bg-opacity-50'}
+                            >
                                 {isLoadingAction && actionType === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className="mr-2 h-4 w-4" />} 
                                 Reject
                             </Button>

@@ -13,35 +13,49 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
     
+    const { searchParams } = new URL(request.url);
+    const includeActioned = searchParams.has('includeActionedFor');
+    
     const userRoles = actor.roles as UserRole[];
     const userId = actor.id;
 
-    // --- Start of Enhanced Fetching Logic ---
-    const requisitionsForUser = await prisma.purchaseRequisition.findMany({
-        where: {
-            OR: [
-                // The user is the direct current approver.
-                { currentApproverId: userId },
-                // The status matches a committee role the user has.
-                { status: { in: userRoles.map(r => `Pending_${r}`) } },
-                 // The status might have changed (e.g. to Award_Declined), but the user
-                 // is STILL the assigned approver. This is the key fix.
-                {
-                    AND: [
-                        { status: 'Award_Declined' },
-                        {
-                            OR: [
-                                { currentApproverId: userId },
-                                { status: { in: userRoles.map(r => `Pending_${r}`) } },
-                            ]
-                        }
-                    ]
-                }
-            ]
-        },
-        include: { items: true, reviews: true }
+    // Build the query conditions
+    const orConditions: any[] = [];
+
+    // Condition 1: Items currently pending this user's action
+    orConditions.push({ currentApproverId: userId });
+    userRoles.forEach(role => {
+        // This finds items pending a committee the user is part of
+        if (role.includes('Committee')) {
+             orConditions.push({ status: `Pending_${role}` });
+        }
     });
-    // --- End of Enhanced Fetching Logic ---
+
+    // Condition 2: (New) Items this user has already actioned on.
+    if (includeActioned) {
+        orConditions.push({
+            reviews: {
+                some: {
+                    reviewerId: userId
+                }
+            }
+        });
+    }
+
+    const requisitionsForUser = await prisma.purchaseRequisition.findMany({
+        where: { OR: orConditions },
+        include: { 
+            items: true, 
+            reviews: {
+                where: {
+                    reviewerId: userId
+                },
+                select: {
+                    decision: true
+                }
+            } 
+        }
+    });
 
     const requisitionIds = requisitionsForUser.map(r => r.id);
 
@@ -78,6 +92,14 @@ export async function GET(request: Request) {
                 author: true,
                 attendees: true
             }
+            },
+            reviews: {
+                where: {
+                    reviewerId: userId,
+                },
+                select: {
+                    decision: true
+                }
             }
       },
       orderBy: {
@@ -122,23 +144,23 @@ export async function GET(request: Request) {
 
     const requisitionsWithDetails = detailedRequisitions.map(req => {
       let isActionable = false;
-      if (req.currentApproverId === userId) {
-        isActionable = true;
-      } else if (req.status.startsWith('Pending_')) {
-        const requiredRole = req.status.replace('Pending_', '');
-        if (userRoles.includes(requiredRole as UserRole)) {
-          isActionable = true;
-        }
-      } else if (req.status === 'Award_Declined') {
-        // Even if status is declined, check if this user is still the pending approver.
-         if (req.currentApproverId === userId) {
+      const hasBeenActioned = req.reviews.length > 0;
+
+      if (!hasBeenActioned) {
+          if (req.currentApproverId === userId) {
             isActionable = true;
-         }
+          } else if (req.status.startsWith('Pending_')) {
+            const requiredRole = req.status.replace('Pending_', '');
+            if (userRoles.includes(requiredRole as UserRole)) {
+              isActionable = true;
+            }
+          }
       }
       
       return {
         ...req,
         isActionable,
+        actionTaken: hasBeenActioned ? req.reviews[0].decision : null,
         auditTrail: logsByTransaction[req.transactionId!] || []
       };
     });
