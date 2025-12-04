@@ -58,35 +58,41 @@ export async function POST(
                 let isFullyComplete = false;
 
                 if (isPerItem) {
-                    // Per-Item Logic: The ENTIRE requisition is complete only when EVERY item has reached a final state.
+                    // Per-Item Logic: The ENTIRE requisition is complete only when EVERY item has reached a final, resolved state.
                     const allItemsFinished = requisition.items.every(item => {
-                        const awardDetails = (item.perItemAwardDetails as any[] | undefined) || [];
+                        const awardDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                         
-                        // If no awards were ever made for this item (e.g. it wasn't part of the final award), it is considered "finished" for this check.
+                        // If an item never went to award, it's considered "finished" for this check.
                         if (awardDetails.length === 0) {
                             return true;
                         }
 
-                        const hasTerminalStatus = awardDetails.some(d => ['Failed_to_Award', 'Declined', 'Restarted'].includes(d.status));
-                        if (hasTerminalStatus) {
-                            return true; // This item is finished because it failed or was restarted.
+                        // An item is considered resolved if it has been restarted.
+                        if (awardDetails.some(d => d.status === 'Restarted')) {
+                            return true;
                         }
 
+                        // An item is resolved if its award was accepted AND its invoice has now been paid.
                         const acceptedAward = awardDetails.find(d => d.status === 'Accepted');
                         if (acceptedAward) {
-                            // Find the PO associated with this accepted item
                             const itemPO = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
-                            if (!itemPO) return false; // If there's an accepted award, there must be a PO.
+                            if (!itemPO) return false;
                             
-                            // All invoices for this specific PO must be paid.
+                            // Check if ALL invoices related to this specific PO are paid.
                             const allInvoicesForPO = itemPO.invoices;
-                            if (allInvoicesForPO.length === 0) return false; // Must have an invoice to be considered paid.
+                            if (allInvoicesForPO.length === 0) return false;
 
-                            // The current invoice being paid might not be in the database yet, so we check against its ID.
                             return allInvoicesForPO.every(inv => inv.status === 'Paid' || inv.id === updatedInvoice.id);
                         }
+
+                        // An item is resolved if it failed to award and there are no more standbys.
+                         const hasFailedAward = awardDetails.some(d => d.status === 'Failed_to_Award');
+                         const hasStandby = awardDetails.some(d => d.status === 'Standby');
+                         if(hasFailedAward && !hasStandby) {
+                             return true;
+                         }
                         
-                        // If an item has award details, but none are in a terminal or accepted state, it's not finished.
+                        // If an item has award details, but none of the above terminal conditions are met, it's not finished.
                         return false;
                     });
                     
@@ -111,16 +117,12 @@ export async function POST(
                 }
 
                 if (isFullyComplete) {
-                     // Check if a partial status was already set. If not, set it. Otherwise, set to Closed.
-                    const nextStatus = requisition.status === 'Partially_Closed' ? 'Closed' : 
-                                       isFullyComplete ? 'Closed' : 'Partially_Closed';
                     await tx.purchaseRequisition.update({
                         where: { id: requisition.id },
-                        data: { status: nextStatus }
+                        data: { status: 'Closed' }
                     });
                 } else if (isPerItem) {
-                    // If not fully complete, but at least one item is now paid, we can set the status to Partially_Closed
-                     await tx.purchaseRequisition.update({
+                    await tx.purchaseRequisition.update({
                         where: { id: requisition.id },
                         data: { status: 'Partially_Closed' }
                     });
