@@ -203,7 +203,7 @@ export async function POST(
                 }
             });
             
-            let finalJustification = minuteJustification;
+            let finalJustification: string;
             if (minuteType === 'system_generated') {
                  finalJustification = generateAwardJustificationReport(
                     { ...requisition, quotations: allQuotes }, 
@@ -211,6 +211,8 @@ export async function POST(
                     awardStrategy, 
                     dynamicAwardValue
                  );
+            } else {
+                finalJustification = minuteJustification || 'Official minute document uploaded.';
             }
 
 
