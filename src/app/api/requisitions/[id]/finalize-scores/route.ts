@@ -18,6 +18,10 @@ export async function POST(
         const { userId, awards, awardStrategy, awardResponseDeadline, minuteDocumentUrl, minuteJustification } = body;
         console.log(`[FINALIZE-SCORES] Action by User ID: ${userId}, Strategy: ${awardStrategy}`);
 
+        if (!minuteDocumentUrl) {
+            return NextResponse.json({ error: "The official minute document is required to proceed." }, { status: 400 });
+        }
+
         const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -104,7 +108,6 @@ export async function POST(
 
                 const otherQuotes = allQuotes.filter(q => q.vendorId !== winningVendorId);
 
-                // Rank and update status for all quotes
                 await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
 
                 const sortedOthers = otherQuotes.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
@@ -120,8 +123,6 @@ export async function POST(
                         }
                     });
                 }
-
-                // Award all items to the winner
                 const itemIdsToAward = winningQuote.items.map(i => i.id);
                 await tx.purchaseRequisition.update({
                     where: { id: requisitionId },
@@ -168,7 +169,7 @@ export async function POST(
                     status: nextStatus as any,
                     currentApproverId: nextApproverId,
                     awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : undefined,
-                    totalPrice: dynamicAwardValue, // Set the dynamic total price
+                    totalPrice: dynamicAwardValue,
                     rfqSettings: {
                         ...(requisition?.rfqSettings as any),
                         awardStrategy: awardStrategy,
@@ -176,14 +177,13 @@ export async function POST(
                 }
             });
 
-            // Create the initial minute for this decision
             await tx.minute.create({
                 data: {
                     requisition: { connect: { id: requisitionId } },
                     author: { connect: { id: userId } },
-                    decision: 'APPROVED', // This is an approval to move forward
+                    decision: 'APPROVED',
                     decisionBody: 'Award Finalization',
-                    justification: minuteJustification || 'Official minute document uploaded.',
+                    justification: minuteJustification || 'Official minute document for award finalization.',
                     type: 'uploaded_document',
                     documentUrl: minuteDocumentUrl,
                 }
