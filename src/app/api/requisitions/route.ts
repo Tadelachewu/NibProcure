@@ -250,7 +250,7 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    const { id, status, userId, comment, minute } = body;
+    const { id, status, userId, comment } = body;
     console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${userId}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
@@ -408,8 +408,9 @@ export async function PATCH(
                 data: dataToUpdate,
             });
             
-            if (minute && requisition.minutes && requisition.minutes.length > 0) {
-              const latestMinute = requisition.minutes[0];
+            // Find the most recent minute, which should be the one created during finalization.
+            const latestMinute = requisition.minutes[0];
+            if (latestMinute) {
               await tx.signature.create({
                 data: {
                   minute: { connect: { id: latestMinute.id } },
@@ -422,25 +423,6 @@ export async function PATCH(
               });
               auditDetails += ` Signature added to minute ${latestMinute.id}.`;
             }
-
-            await tx.review.upsert({
-                where: {
-                    requisitionId_reviewerId: {
-                        requisitionId: id,
-                        reviewerId: userId,
-                    }
-                },
-                update: {
-                    decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
-                    comment: comment,
-                },
-                create: {
-                    requisition: { connect: { id: id } },
-                    reviewer: { connect: { id: userId } },
-                    decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
-                    comment: comment,
-                }
-            });
 
             await tx.auditLog.create({
                 data: {
@@ -481,25 +463,6 @@ export async function PATCH(
         }
         dataToUpdate.approver = { connect: { id: userId } };
         
-        await prisma.review.upsert({
-            where: {
-                requisitionId_reviewerId: {
-                    requisitionId: id,
-                    reviewerId: userId,
-                }
-            },
-            update: {
-                decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
-                comment,
-            },
-            create: {
-                requisition: { connect: { id } },
-                reviewer: { connect: { id: userId } },
-                decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
-                comment,
-            }
-        });
-
     // This handles a requester submitting a draft
     } else if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
         console.log(`[PATCH /api/requisitions] Handling draft submission for Req ID: ${id}`);
@@ -728,4 +691,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-

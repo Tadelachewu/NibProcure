@@ -93,35 +93,37 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
   );
 
   const renderMinute = (minute: Minute) => {
-    return (
-      <Card key={minute.id}>
-        <CardHeader>
-          <CardTitle className="flex justify-between items-center text-base">
-            <span>Official Minute: {minute.decisionBody}</span>
-            <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
-          </CardTitle>
-          <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {minute.documentUrl ? (
-            <>
-              <p className="text-sm text-muted-foreground mb-2">{minute.justification}</p>
-              <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" className="w-full">
-                  <Download className="mr-2 h-4 w-4" />
-                  Download Official Minute Document
-                </Button>
-              </a>
-            </>
-          ) : (
-             <p className="text-sm text-destructive">Document URL is missing for this minute.</p>
-          )}
-          {minute.signatures && minute.signatures.length > 0 && (
-            <SignaturesList signatures={minute.signatures} />
-          )}
-        </CardContent>
-      </Card>
-    );
+    // Correctly handle the rendering based on the minute type
+    if (minute.type === 'uploaded_document') {
+        return (
+            <Card key={minute.id}>
+                <CardHeader>
+                    <CardTitle className="flex justify-between items-center text-base">
+                        <span>Official Minute: {minute.decisionBody}</span>
+                        <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
+                    </CardTitle>
+                    <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {minute.documentUrl ? (
+                         <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
+                            <Button variant="outline" className="w-full">
+                                <Download className="mr-2 h-4 w-4" />
+                                Download Official Minute Document
+                            </Button>
+                        </a>
+                    ) : (
+                        <p className="text-sm text-destructive">Document URL is missing for this minute.</p>
+                    )}
+                    {minute.signatures && minute.signatures.length > 0 && (
+                        <SignaturesList signatures={minute.signatures} />
+                    )}
+                </CardContent>
+            </Card>
+        );
+    }
+    // Return null or some placeholder if the type is not 'uploaded_document'
+    return null;
   }
 
 
