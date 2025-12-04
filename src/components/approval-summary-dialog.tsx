@@ -34,14 +34,14 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
   const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
   const sortedQuotes = requisition.quotations?.sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)) || [];
-  
+
   const declinedQuote = sortedQuotes.find(q => q.status === 'Declined');
   const isPromotedStandby = !!declinedQuote;
-  
+
   const winner = sortedQuotes.find(q => q.status === 'Pending_Award' || q.status === 'Awarded' || q.status === 'Accepted' || q.status === 'Partially_Awarded');
-  
+
   const topThree = sortedQuotes.slice(0, 3);
-  
+
   let winningVendors: {id: string, name: string}[] = [];
 
   if(isPerItemStrategy) {
@@ -78,7 +78,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                 <div key={sig.id} className="text-xs p-2 border rounded-md bg-muted/50">
                     <div className="flex justify-between items-center">
                          <p className="flex items-center gap-1">
-                            <Badge variant={sig.decision === 'APPROVED' ? 'default' : 'destructive'} className="text-xs">{sig.decision}</Badge> 
+                            <Badge variant={sig.decision === 'APPROVED' ? 'default' : 'destructive'} className="text-xs">{sig.decision}</Badge>
                             by <span className="font-semibold">{sig.signerName}</span> ({sig.signerRole})
                         </p>
                         <time className="text-muted-foreground">{format(new Date(sig.signedAt), 'PPp')}</time>
@@ -99,8 +99,8 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
             <DialogHeader>
                 <DialogTitle>Approval Summary: {requisition.id}</DialogTitle>
                 <DialogDescription>
-                    {isPromotedStandby 
-                        ? `Executive brief for the promoted standby award on: ` 
+                    {isPromotedStandby
+                        ? `Executive brief for the promoted standby award on: `
                         : `Executive brief for the award recommendation on: `
                     }
                     <span className="font-semibold">{requisition.title}</span>
@@ -144,7 +144,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                     </div>
                                 </div>
                                 <Separator />
-                                
+
                                 {isPerItemStrategy ? (
                                     <div>
                                         <h4 className="font-semibold text-lg mb-2">Award by Best Item Breakdown</h4>
@@ -246,7 +246,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                      const commentMatch = log.details.match(/with comment: "([^"]+)"/i) || log.details.match(/Reason: "([^"]+)"/i);
                                      const comment = commentMatch ? commentMatch[1] : null;
                                      const mainDetail = log.details.split(/ with comment:| Reason:/)[0];
-                                    
+
                                     return (
                                     <div key={log.id} className="relative mb-8">
                                         <div className="absolute -left-3 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border-2 border-primary">
