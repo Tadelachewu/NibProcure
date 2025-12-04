@@ -286,54 +286,31 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                         <ScrollArea className="h-full pr-4">
                             {requisition.minutes && requisition.minutes.length > 0 ? (
                                 <div className="space-y-4 py-4">
-                                {requisition.minutes.map(minute => {
-                                    if (minute.type === 'uploaded_document') {
-                                        return (
-                                            <Card key={minute.id}>
-                                                <CardHeader>
-                                                    <CardTitle className="flex justify-between items-center text-base">
-                                                        <span>Official Minute: {minute.decisionBody}</span>
-                                                        <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
-                                                    </CardTitle>
-                                                    <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
-                                                </CardHeader>
-                                                <CardContent>
-                                                    <p className="text-sm text-muted-foreground mb-2">{minute.justification}</p>
-                                                    {minute.documentUrl ? (
-                                                        <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
-                                                            <Button variant="outline" className="w-full">
-                                                                <Download className="mr-2 h-4 w-4" />
-                                                                Download Official Minute Document
-                                                            </Button>
-                                                        </a>
-                                                    ) : <p className="text-sm text-destructive">Document URL is missing.</p>}
-                                                     {minute.signatures && minute.signatures.length > 0 && (
-                                                         <SignaturesList signatures={minute.signatures} />
-                                                     )}
-                                                </CardContent>
-                                            </Card>
-                                        )
-                                    } else { // System-generated
-                                        return (
-                                            <Card key={minute.id}>
-                                                <CardHeader>
-                                                    <CardTitle className="flex justify-between items-center text-base">
-                                                        <span>System-Generated Minute: {minute.decisionBody}</span>
-                                                        <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
-                                                    </CardTitle>
-                                                    <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
-                                                </CardHeader>
-                                                <CardContent>
-                                                    <h4 className="font-semibold text-sm">Justification Report</h4>
-                                                    <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50 mt-1 whitespace-pre-wrap">{minute.justification}</p>
-                                                     {minute.signatures && minute.signatures.length > 0 && (
-                                                         <SignaturesList signatures={minute.signatures} />
-                                                     )}
-                                                </CardContent>
-                                            </Card>
-                                        );
-                                    }
-                                })}
+                                {requisition.minutes.map(minute => (
+                                    <Card key={minute.id}>
+                                        <CardHeader>
+                                            <CardTitle className="flex justify-between items-center text-base">
+                                                <span>Official Minute: {minute.decisionBody}</span>
+                                                <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
+                                            </CardTitle>
+                                            <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <p className="text-sm text-muted-foreground mb-2">{minute.justification}</p>
+                                            {minute.documentUrl ? (
+                                                <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
+                                                    <Button variant="outline" className="w-full">
+                                                        <Download className="mr-2 h-4 w-4" />
+                                                        Download Official Minute Document
+                                                    </Button>
+                                                </a>
+                                            ) : <p className="text-sm text-destructive">Document URL is missing.</p>}
+                                                {minute.signatures && minute.signatures.length > 0 && (
+                                                    <SignaturesList signatures={minute.signatures} />
+                                                )}
+                                        </CardContent>
+                                    </Card>
+                                ))}
                                 </div>
                             ): (
                                 <div className="text-center h-48 flex items-center justify-center text-muted-foreground">No meeting minutes found for this requisition.</div>

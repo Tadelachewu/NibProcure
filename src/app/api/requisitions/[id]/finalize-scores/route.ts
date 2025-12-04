@@ -17,43 +17,64 @@ function generateAwardJustificationReport(
     report += `**Title:** ${requisition.title}\n`;
     report += `**Final Award Value:** ${totalAwardValue.toLocaleString('en-US', { style: 'currency', currency: 'ETB' })}\n`;
     report += `**Award Strategy:** ${awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}\n\n`;
-    report += `---\n\n`;
+    report += `---
 
-    report += `### Vendor Bids & Final Scores\n`;
+`;
+
+    report += `### Vendor Bids & Final Scores
+`;
     const sortedQuotes = [...requisition.quotations].sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
 
-    report += `| Rank | Vendor Name | Final Score | Total Quoted Price |\n`;
-    report += `|:----:|:------------|:-----------:|-------------------:|\n`;
+    report += `| Rank | Vendor Name | Final Score | Total Quoted Price |
+`;
+    report += `|:----:|:------------|:-----------:|-------------------:|
+`;
     sortedQuotes.forEach((q: any, index: number) => {
-        report += `| ${index + 1} | ${q.vendorName} | **${(q.finalAverageScore || 0).toFixed(2)}** | ${q.totalPrice.toLocaleString('en-US', { style: 'currency', currency: 'ETB' })} |\n`;
+        report += `| ${index + 1} | ${q.vendorName} | **${(q.finalAverageScore || 0).toFixed(2)}** | ${q.totalPrice.toLocaleString('en-US', { style: 'currency', currency: 'ETB' })} |
+`;
     });
-    report += `\n---\n\n`;
+    report += `
+---
+
+`;
 
     if (awardStrategy === 'all') {
         const winnerVendorId = Object.keys(awards)[0];
         const winnerData = awards[winnerVendorId];
-        report += `### Decision: Award All to Single Vendor\n\n`;
+        report += `### Decision: Award All to Single Vendor
+
+`;
         if (winnerData) {
-            report += `Based on the highest overall average score of **${(sortedQuotes[0].finalAverageScore || 0).toFixed(2)}**, the award is recommended for **${winnerData.vendorName}**.\n`;
+            report += `Based on the highest overall average score of **${(sortedQuotes[0].finalAverageScore || 0).toFixed(2)}**, the award is recommended for **${winnerData.vendorName}**.
+`;
         } else {
-            report += 'No winner could be determined based on the provided data.\n';
+            report += 'No winner could be determined based on the provided data.
+';
         }
     } else { // Per Item
-        report += `### Decision: Award by Best Offer (Per Item)\n\n`;
+        report += `### Decision: Award by Best Offer (Per Item)
+
+`;
         Object.keys(awards).forEach(reqItemId => {
             const reqItem = requisition.items.find((i: any) => i.id === reqItemId);
             // The `awards` object for per-item now contains `rankedBids`.
             const winnerBid = awards[reqItemId]?.rankedBids[0];
             if (reqItem && winnerBid) {
                 const vendor = requisition.quotations.find((q:any) => q.id === winnerBid.quotationId)?.vendorName;
-                report += `- **Item:** ${reqItem.name}\n`;
-                report += `  - **Winner:** **${vendor}** (Proposal: "${winnerBid.proposedItemName}")\n`;
-                report += `  - **Justification:** This vendor achieved the highest score for this specific item with **${winnerBid.score.toFixed(2)}** points.\n\n`;
+                report += `- **Item:** ${reqItem.name}
+`;
+                report += `  - **Winner:** **${vendor}** (Proposal: "${winnerBid.proposedItemName}")
+`;
+                report += `  - **Justification:** This vendor achieved the highest score for this specific item with **${winnerBid.score.toFixed(2)}** points.
+
+`;
             }
         });
     }
 
-    report += `---\n\n**Conclusion:** The award recommendation is finalized based on the systematic evaluation of vendor proposals against the pre-defined criteria and the selected '${awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}' award strategy.`;
+    report += `---
+
+**Conclusion:** The award recommendation is finalized based on the systematic evaluation of vendor proposals against the pre-defined criteria and the selected '${awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}' award strategy.`;
     return report;
 }
 
@@ -66,8 +87,8 @@ export async function POST(
     console.log(`[FINALIZE-SCORES] Received request for requisition: ${requisitionId}`);
     try {
         const body = await request.json();
-        const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue, minuteType, minuteDocumentUrl, minuteJustification } = body;
-        console.log(`[FINALIZE-SCORES] Action by User ID: ${userId}, Strategy: ${awardStrategy}, Total Value: ${totalAwardValue}, Minute Type: ${minuteType}`);
+        const { userId, awards, awardStrategy, awardResponseDeadline, totalAwardValue, minuteDocumentUrl, minuteJustification } = body;
+        console.log(`[FINALIZE-SCORES] Action by User ID: ${userId}, Strategy: ${awardStrategy}, Total Value: ${totalAwardValue}`);
 
         const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
         if (!user) {
@@ -203,19 +224,6 @@ export async function POST(
                 }
             });
 
-            let finalJustification: string;
-            if (minuteType === 'system_generated') {
-                 finalJustification = generateAwardJustificationReport(
-                    { ...requisition, quotations: allQuotes },
-                    awards,
-                    awardStrategy,
-                    dynamicAwardValue
-                 );
-            } else {
-                finalJustification = minuteJustification || 'Official minute document uploaded.';
-            }
-
-
             // Create the initial minute for this decision
             await tx.minute.create({
                 data: {
@@ -223,8 +231,8 @@ export async function POST(
                     author: { connect: { id: userId } },
                     decision: 'APPROVED', // This is an approval to move forward
                     decisionBody: 'Award Finalization',
-                    justification: finalJustification,
-                    type: minuteType || 'system_generated',
+                    justification: minuteJustification || 'Official minute document uploaded.',
+                    type: 'uploaded_document',
                     documentUrl: minuteDocumentUrl,
                     attendees: { connect: [] }
                 }

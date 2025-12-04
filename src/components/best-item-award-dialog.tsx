@@ -105,7 +105,6 @@ export const BestItemAwardDialog = ({
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
     const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
     const [isBreakdownOpen, setBreakdownOpen] = useState(false);
-    const [minuteType, setMinuteType] = useState<'system_generated' | 'uploaded_document'>('system_generated');
     const [minuteFile, setMinuteFile] = useState<File | null>(null);
     const [minuteJustification, setMinuteJustification] = useState('');
 
@@ -193,27 +192,26 @@ export const BestItemAwardDialog = ({
     const handleConfirmAward = async () => {
         let minuteDocumentUrl: string | undefined = undefined;
 
-        if (minuteType === 'uploaded_document') {
-            if (!minuteFile) {
-                toast({ variant: 'destructive', title: 'Error', description: 'Please upload an official minute document.' });
-                return;
-            }
-             if (!minuteJustification.trim()) {
-                toast({ variant: 'destructive', title: 'Error', description: 'A justification/summary is required for uploaded minutes.' });
-                return;
-            }
-            try {
-                const formData = new FormData();
-                formData.append('file', minuteFile);
-                formData.append('directory', 'minutes');
-                const response = await fetch('/api/upload', { method: 'POST', body: formData });
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.error || 'File upload failed');
-                minuteDocumentUrl = result.path;
-            } catch (error) {
-                toast({ variant: 'destructive', title: 'Upload Failed', description: error instanceof Error ? error.message : 'Could not upload minute file.' });
-                return;
-            }
+        if (!minuteFile) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please upload an official minute document.' });
+            return;
+        }
+        if (!minuteJustification.trim()) {
+            toast({ variant: 'destructive', title: 'Error', description: 'A justification/summary is required for the minute.' });
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('file', minuteFile);
+            formData.append('directory', 'minutes');
+            const response = await fetch('/api/upload', { method: 'POST', body: formData });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'File upload failed');
+            minuteDocumentUrl = result.path;
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Upload Failed', description: error instanceof Error ? error.message : 'Could not upload minute file.' });
+            return;
         }
         
         let awards: { [reqItemId: string]: { rankedBids: any[] } } = {};
@@ -224,7 +222,7 @@ export const BestItemAwardDialog = ({
             }
         });
 
-        onFinalize('item', awards, awardResponseDeadline, minuteType, minuteDocumentUrl, minuteJustification);
+        onFinalize('item', awards, awardResponseDeadline, 'uploaded_document', minuteDocumentUrl, minuteJustification);
         onClose();
     }
 
@@ -302,25 +300,13 @@ export const BestItemAwardDialog = ({
                     </div>
 
                     <div className="space-y-4">
-                        <Label>Minute Recording Method</Label>
-                        <RadioGroup value={minuteType} onValueChange={setMinuteType as any} className="flex gap-4">
-                            <Label htmlFor="minute-system-item" className="flex items-center gap-2 p-4 border rounded-md has-[:checked]:bg-muted has-[:checked]:border-primary flex-1 cursor-pointer">
-                                <RadioGroupItem value="system_generated" id="minute-system-item" />
-                                System-Generated
-                            </Label>
-                            <Label htmlFor="minute-upload-item" className="flex items-center gap-2 p-4 border rounded-md has-[:checked]:bg-muted has-[:checked]:border-primary flex-1 cursor-pointer">
-                                <RadioGroupItem value="uploaded_document" id="minute-upload-item" />
-                                Upload Document
-                            </Label>
-                        </RadioGroup>
-                        {minuteType === 'uploaded_document' && (
-                            <div className="pl-2 space-y-2">
-                                <Label htmlFor="minute-justification-item">Justification / Summary</Label>
-                                <Textarea id="minute-justification-item" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
-                                <Label htmlFor="minute-file-item">Official Minute Document (PDF)</Label>
-                                <Input id="minute-file-item" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
-                            </div>
-                        )}
+                        <Label>Minute Recording</Label>
+                        <div className="p-4 border rounded-lg space-y-2">
+                            <Label htmlFor="minute-justification-item">Justification / Summary</Label>
+                            <Textarea id="minute-justification-item" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
+                            <Label htmlFor="minute-file-item">Official Minute Document (PDF)</Label>
+                            <Input id="minute-file-item" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
+                        </div>
                     </div>
 
                     <div className="text-right text-xl font-bold">
