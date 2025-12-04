@@ -114,73 +114,71 @@ export const AwardCenterDialog = ({
 
 
     return (
-        <DialogContent className="max-w-2xl h-[90vh] flex flex-col">
+        <DialogContent className="max-w-2xl">
             <DialogHeader>
                 <DialogTitle>Award to Single Best Vendor</DialogTitle>
                 <DialogDescription>Review the recommended winner and finalize the award for requisition {requisition.id}.</DialogDescription>
             </DialogHeader>
             
-            <ScrollArea className="flex-1 pr-6 -mr-6">
-                <div className="space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Best Overall Vendor</CardTitle>
-                            <CardDescription>This strategy awards all items to the single vendor with the highest average score across all scored items.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="text-center p-8">
-                            <TrophyIcon className="h-12 w-12 text-amber-400 mx-auto mb-4"/>
-                            <p className="text-muted-foreground">Recommended Overall Winner:</p>
-                            <p className="text-2xl font-bold">{overallWinner?.vendorName || 'N/A'}</p>
-                            <p className="font-mono text-primary">{overallWinner?.score > 0 ? `${overallWinner.score.toFixed(2)} average score` : 'N/A'}</p>
-                        </CardContent>
-                    </Card>
+            <div className="space-y-6 py-4">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Best Overall Vendor</CardTitle>
+                        <CardDescription>This strategy awards all items to the single vendor with the highest average score across all scored items.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-center p-8">
+                        <TrophyIcon className="h-12 w-12 text-amber-400 mx-auto mb-4"/>
+                        <p className="text-muted-foreground">Recommended Overall Winner:</p>
+                        <p className="text-2xl font-bold">{overallWinner?.vendorName || 'N/A'}</p>
+                        <p className="font-mono text-primary">{overallWinner?.score > 0 ? `${overallWinner.score.toFixed(2)} average score` : 'N/A'}</p>
+                    </CardContent>
+                </Card>
 
-                    <div className="space-y-2">
-                        <Label>Vendor Response Deadline (Optional)</Label>
-                        <div className="flex gap-2">
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn(
-                                        "flex-1 justify-start text-left font-normal",
-                                        !awardResponseDeadlineDate && "text-muted-foreground"
-                                        )}
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                        mode="single"
-                                        selected={awardResponseDeadlineDate}
-                                        onSelect={setAwardResponseDeadlineDate}
-                                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
-                                        initialFocus
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                            <Input 
-                                type="time" 
-                                className="w-32"
-                                value={awardResponseDeadlineTime}
-                                onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        <Label>Minute Recording</Label>
-                        <div className="p-4 border rounded-lg space-y-2">
-                            <Label htmlFor="minute-justification">Justification / Summary</Label>
-                            <Textarea id="minute-justification" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
-                            <Label htmlFor="minute-file">Official Minute Document (PDF)</Label>
-                            <Input id="minute-file" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
-                        </div>
+                <div className="space-y-2">
+                    <Label>Vendor Response Deadline (Optional)</Label>
+                    <div className="flex gap-2">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                    "flex-1 justify-start text-left font-normal",
+                                    !awardResponseDeadlineDate && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                    mode="single"
+                                    selected={awardResponseDeadlineDate}
+                                    onSelect={setAwardResponseDeadlineDate}
+                                    disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+                        <Input 
+                            type="time" 
+                            className="w-32"
+                            value={awardResponseDeadlineTime}
+                            onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
+                        />
                     </div>
                 </div>
-            </ScrollArea>
+
+                <div className="space-y-4">
+                    <Label>Minute Recording</Label>
+                    <div className="p-4 border rounded-lg space-y-2">
+                        <Label htmlFor="minute-justification">Justification / Summary</Label>
+                        <Textarea id="minute-justification" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
+                        <Label htmlFor="minute-file">Official Minute Document (PDF)</Label>
+                        <Input id="minute-file" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
+                    </div>
+                </div>
+            </div>
 
             <DialogFooter className="pt-4 border-t">
                 <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>

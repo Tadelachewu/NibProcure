@@ -93,59 +93,35 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
   );
 
   const renderMinute = (minute: Minute) => {
-    if (minute.type === 'uploaded_document') {
-        return (
-            <Card key={minute.id}>
-                <CardHeader>
-                    <CardTitle className="flex justify-between items-center text-base">
-                        <span>Official Minute: {minute.decisionBody}</span>
-                        <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
-                    </CardTitle>
-                    <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {minute.documentUrl ? (
-                        <>
-                            <p className="text-sm text-muted-foreground mb-2">{minute.justification}</p>
-                            <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
-                                <Button variant="outline" className="w-full">
-                                    <Download className="mr-2 h-4 w-4" />
-                                    Download Official Minute Document
-                                </Button>
-                            </a>
-                        </>
-                    ) : (
-                         <p className="text-sm text-destructive">Document URL is missing for this minute.</p>
-                    )}
-                    {minute.signatures && minute.signatures.length > 0 && (
-                        <SignaturesList signatures={minute.signatures} />
-                    )}
-                </CardContent>
-            </Card>
-        )
-    }
-
-    if (minute.type === 'system_generated') {
-         return (
-            <Card key={minute.id}>
-                <CardHeader>
-                    <CardTitle className="flex justify-between items-center text-base">
-                        <span>System-Generated Minute: {minute.decisionBody}</span>
-                        <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
-                    </CardTitle>
-                    <CardDescription>Generated on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-sm whitespace-pre-wrap font-mono bg-muted/50 p-3 rounded-md">{minute.justification}</p>
-                     {minute.signatures && minute.signatures.length > 0 && (
-                        <SignaturesList signatures={minute.signatures} />
-                    )}
-                </CardContent>
-            </Card>
-        )
-    }
-
-    return null;
+    return (
+      <Card key={minute.id}>
+        <CardHeader>
+          <CardTitle className="flex justify-between items-center text-base">
+            <span>Official Minute: {minute.decisionBody}</span>
+            <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
+          </CardTitle>
+          <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {minute.documentUrl ? (
+            <>
+              <p className="text-sm text-muted-foreground mb-2">{minute.justification}</p>
+              <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" className="w-full">
+                  <Download className="mr-2 h-4 w-4" />
+                  Download Official Minute Document
+                </Button>
+              </a>
+            </>
+          ) : (
+             <p className="text-sm text-destructive">Document URL is missing for this minute.</p>
+          )}
+          {minute.signatures && minute.signatures.length > 0 && (
+            <SignaturesList signatures={minute.signatures} />
+          )}
+        </CardContent>
+      </Card>
+    );
   }
 
 

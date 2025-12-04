@@ -226,7 +226,7 @@ export const BestItemAwardDialog = ({
 
     return (
         <>
-            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+            <DialogContent className="max-w-4xl">
                 <DialogHeader>
                     <DialogTitle>Award by Best Offer (Per Item)</DialogTitle>
                     <DialogDescription>
@@ -234,8 +234,7 @@ export const BestItemAwardDialog = ({
                     </DialogDescription>
                 </DialogHeader>
                 
-                <ScrollArea className="flex-1 pr-6 -mr-6">
-                <div className="space-y-6">
+                <div className="space-y-6 py-4">
                     <Card>
                         <CardContent className="pt-6">
                             <Table>
@@ -310,7 +309,6 @@ export const BestItemAwardDialog = ({
                         Total Award Value: {totalAwardValue.toLocaleString()} ETB
                     </div>
                 </div>
-                </ScrollArea>
 
                 <DialogFooter className="pt-4 border-t">
                     <Button variant="outline" onClick={() => setBreakdownOpen(true)}>
