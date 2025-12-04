@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -56,10 +58,9 @@ export async function GET(request: Request) {
 
 
     const requisitionsForUser = await prisma.purchaseRequisition.findMany({
-        where: { OR: orConditions },
+        where: { OR: orConditions.length > 0 ? orConditions : undefined },
         distinct: ['id'], // Ensure we only get each requisition once
         include: { 
-            items: true, 
             reviews: {
                 where: {
                     reviewerId: userId
