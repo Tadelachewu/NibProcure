@@ -123,6 +123,8 @@ export type Contract = {
 }
 
 export type Signature = {
+    id: string;
+    minuteId: string;
     signerId: string;
     signerName: string;
     signerRole: string;

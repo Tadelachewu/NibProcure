@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -188,7 +189,8 @@ export async function GET(request: Request) {
         minutes: {
           include: {
             author: true,
-            attendees: true
+            attendees: true,
+            signatures: true,
           }
         }
       },
@@ -264,7 +266,11 @@ export async function PATCH(
             department: true, 
             requester: true, 
             items: true, 
-            quotations: { include: { items: true, scores: { include: { itemScores: true } } } } 
+            quotations: { include: { items: true, scores: { include: { itemScores: true } } } },
+            minutes: {
+              orderBy: { createdAt: 'desc' },
+              take: 1
+            }
         }
     });
     if (!requisition) {
@@ -369,7 +375,6 @@ export async function PATCH(
         }
         
         // --- START SAFEGUARD ---
-        // Before proceeding, check if the underlying award has been declined by the vendor.
         const hasBeenDeclined = requisition.quotations.some(q => q.status === 'Declined');
         const hasItemBeenDeclined = requisition.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
 
@@ -403,26 +408,21 @@ export async function PATCH(
                 data: dataToUpdate,
             });
             
-            if (minute) {
-                await tx.minute.create({
-                    data: {
-                        requisition: { connect: { id: id } },
-                        author: { connect: { id: userId } },
-                        decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
-                        decisionBody: requisition.status.replace(/_/g, ' '),
-                        justification: minute.justification,
-                        attendees: {
-                            connect: minute.attendeeIds.map((id: string) => ({ id }))
-                        },
-                        type: minute.documentUrl ? 'uploaded_document' : 'system_generated',
-                        documentUrl: minute.documentUrl
-                    }
-                });
-                auditDetails += ` Minute recorded.`;
-                console.log(`[PATCH /api/requisitions] Minute recorded for Req ID: ${id}`);
+            if (minute && requisition.minutes && requisition.minutes.length > 0) {
+              const latestMinute = requisition.minutes[0];
+              await tx.signature.create({
+                data: {
+                  minute: { connect: { id: latestMinute.id } },
+                  signerId: userId,
+                  signerName: user.name,
+                  signerRole: (user.roles as any[]).map(r => r.name).join(', '),
+                  decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
+                  comment: comment,
+                }
+              });
+              auditDetails += ` Signature added to minute ${latestMinute.id}.`;
             }
 
-            // Use upsert to avoid unique constraint errors
             await tx.review.upsert({
                 where: {
                     requisitionId_reviewerId: {

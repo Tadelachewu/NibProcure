@@ -1,7 +1,7 @@
 
 'use client';
 
-import { AuditLog as AuditLogType, Minute, PurchaseRequisition, Quotation } from '@/lib/types';
+import { AuditLog as AuditLogType, Minute, PurchaseRequisition, Quotation, Signature } from '@/lib/types';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { AlertCircle, CheckCircle, FileText, MessageSquare, User, Trophy, Crown, Medal, Download } from 'lucide-react';
+import { AlertCircle, CheckCircle, FileText, MessageSquare, User, Trophy, Crown, Medal, Download, PenLine } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 
@@ -69,6 +69,26 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
       default: return null;
     }
   }
+
+  const SignaturesList = ({ signatures }: { signatures: Signature[] }) => (
+    <div className="mt-4">
+        <h4 className="font-semibold text-sm">Digital Signatures</h4>
+        <div className="mt-2 space-y-2">
+            {signatures.map(sig => (
+                <div key={sig.id} className="text-xs p-2 border rounded-md bg-muted/50">
+                    <div className="flex justify-between items-center">
+                         <p className="flex items-center gap-1">
+                            <Badge variant={sig.decision === 'APPROVED' ? 'default' : 'destructive'} className="text-xs">{sig.decision}</Badge> 
+                            by <span className="font-semibold">{sig.signerName}</span> ({sig.signerRole})
+                        </p>
+                        <time className="text-muted-foreground">{format(new Date(sig.signedAt), 'PPp')}</time>
+                    </div>
+                    <p className="italic text-muted-foreground mt-1 pl-1 border-l-2">"{sig.comment}"</p>
+                </div>
+            ))}
+        </div>
+    </div>
+  );
 
 
   return (
@@ -283,22 +303,12 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                                         </Button>
                                                     </a>
                                                      {minute.signatures && minute.signatures.length > 0 && (
-                                                        <div className="mt-4">
-                                                            <h4 className="font-semibold text-sm">Digital Signatures</h4>
-                                                             <div className="mt-2 space-y-2">
-                                                                {minute.signatures.map(sig => (
-                                                                     <div key={sig.signerId} className="text-xs p-2 border rounded-md bg-muted/50">
-                                                                        <p><span className="font-semibold">{sig.signerName} ({sig.signerRole})</span> {sig.decision.toLowerCase()} on {format(new Date(sig.signedAt), 'PPp')}</p>
-                                                                        <p className="italic text-muted-foreground mt-1">"{sig.comment}"</p>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
+                                                         <SignaturesList signatures={minute.signatures} />
                                                      )}
                                                 </CardContent>
                                             </Card>
                                         )
-                                    } else if (minute.type === 'system_generated') {
+                                    } else { // System-generated
                                         return (
                                             <Card key={minute.id}>
                                                 <CardHeader>
@@ -309,17 +319,15 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                                     <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
                                                 </CardHeader>
                                                 <CardContent>
-                                                    <h4 className="font-semibold text-sm">Justification</h4>
+                                                    <h4 className="font-semibold text-sm">Justification Report</h4>
                                                     <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50 mt-1 whitespace-pre-wrap">{minute.justification}</p>
-                                                    <h4 className="font-semibold text-sm mt-4">Attendees</h4>
-                                                    <div className="flex flex-wrap gap-2 mt-2">
-                                                        {minute.attendees.map(attendee => <Badge key={attendee.id} variant="outline">{attendee.name}</Badge>)}
-                                                    </div>
+                                                     {minute.signatures && minute.signatures.length > 0 && (
+                                                         <SignaturesList signatures={minute.signatures} />
+                                                     )}
                                                 </CardContent>
                                             </Card>
                                         );
                                     }
-                                    return null;
                                 })}
                                 </div>
                             ): (
