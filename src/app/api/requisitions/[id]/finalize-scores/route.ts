@@ -7,6 +7,49 @@ import { prisma } from '@/lib/prisma';
 import { User, UserRole, PerItemAwardDetail, QuoteItem } from '@/lib/types';
 import { getNextApprovalStep } from '@/services/award-service';
 
+function generateAwardJustificationReport(
+    requisition: any,
+    awards: any,
+    awardStrategy: 'all' | 'item',
+    totalAwardValue: number
+): string {
+    let report = `## Award Justification Report\n`;
+    report += `**Requisition ID:** ${requisition.id}\n`;
+    report += `**Title:** ${requisition.title}\n`;
+    report += `**Final Award Value:** ${totalAwardValue.toLocaleString()} ETB\n`;
+    report += `**Award Strategy:** ${awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}\n\n`;
+
+    report += `### Vendor Scoring Summary\n`;
+    const sortedQuotes = [...requisition.quotations].sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
+    sortedQuotes.forEach((q, index) => {
+        report += `${index + 1}. **${q.vendorName}**: Final Score: **${(q.finalAverageScore || 0).toFixed(2)}**, Total Price: ${q.totalPrice.toLocaleString()} ETB\n`;
+    });
+    report += `\n`;
+
+    if (awardStrategy === 'all') {
+        const winnerVendorId = Object.keys(awards)[0];
+        const winnerData = awards[winnerVendorId];
+        report += `### Decision: Award All to Single Vendor\n`;
+        report += `Based on the highest overall average score, the award is recommended for **${winnerData.vendorName}**.\n`;
+    } else { // Per Item
+        report += `### Decision: Award by Best Offer (Per Item)\n`;
+        Object.keys(awards).forEach(reqItemId => {
+            const reqItem = requisition.items.find((i: any) => i.id === reqItemId);
+            const winnerBid = awards[reqItemId].items[0]; // Assuming the first item is the winner for that req item
+            if (reqItem && winnerBid) {
+                const vendor = requisition.quotations.find((q:any) => q.id === winnerBid.quotationId)?.vendorName;
+                report += `- **Item:** ${reqItem.name}\n`;
+                report += `  - **Winner:** ${vendor} (Proposal: "${winnerBid.proposedItemName}")\n`;
+                report += `  - **Reason:** Highest score for this item (${winnerBid.score.toFixed(2)} pts).\n`;
+            }
+        });
+    }
+
+    report += `\n**Conclusion:** The award recommendation is finalized based on the systematic evaluation of vendor proposals against the pre-defined criteria and the selected '${awardStrategy}' award strategy.`;
+    return report;
+}
+
+
 export async function POST(
   request: Request,
   { params }: { params: { id:string } }
@@ -49,7 +92,11 @@ export async function POST(
             
             const requisition = await tx.purchaseRequisition.findUnique({ 
                 where: { id: requisitionId }, 
-                include: { items: true, evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } } } 
+                include: { 
+                    items: true, 
+                    evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } },
+                    quotations: { include: { scores: true }} 
+                } 
             });
             if (!requisition) {
                 throw new Error("Requisition not found.");
@@ -148,6 +195,12 @@ export async function POST(
                 }
             });
             
+            let finalJustification = minuteJustification;
+            if (minuteType === 'system_generated') {
+                 finalJustification = generateAwardJustificationReport(requisition, awards, awardStrategy, dynamicAwardValue);
+            }
+
+
             // Create the initial minute for this decision
             await tx.minute.create({
                 data: {
@@ -155,7 +208,7 @@ export async function POST(
                     author: { connect: { id: userId } },
                     decision: 'APPROVED', // This is an approval to move forward
                     decisionBody: 'Award Finalization',
-                    justification: minuteJustification || `Finalized award strategy as '${awardStrategy}'. Total value: ${dynamicAwardValue.toLocaleString()} ETB.`,
+                    justification: finalJustification,
                     type: minuteType,
                     documentUrl: minuteDocumentUrl,
                     attendees: { connect: (attendeeIds || []).map((id: string) => ({ id })) }
