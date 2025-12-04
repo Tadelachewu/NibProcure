@@ -2679,6 +2679,13 @@ export default function QuotationDetailsPage() {
   
   const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
   
+  const showAwardingCenter = (
+    requisition.status === 'Scoring_Complete' || 
+    requisition.status === 'Award_Declined' || 
+    requisition.status === 'Partially_Closed'
+  ) && isAuthorized;
+
+
   return (
     <div className="space-y-6">
        <div className="flex items-center justify-between">
@@ -2890,18 +2897,18 @@ export default function QuotationDetailsPage() {
           )
         )}
         
-        {(requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined') && isAuthorized && (
+        {showAwardingCenter && (
         <Card className="mt-6">
           <CardHeader>
             <CardTitle>Awarding Center</CardTitle>
             <CardDescription>
-              {requisition.status === 'Award_Declined'
-                ? 'An award was declined. You may now promote a standby vendor.'
+              {requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed'
+                ? 'An award was declined. You may now promote a standby vendor or restart the RFQ for the failed items.'
                 : 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
             </CardDescription>
           </CardHeader>
           <CardFooter className="gap-4">
-            {requisition.status === 'Award_Declined' ? (
+            {(requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') ? (
                 <AwardStandbyButton
                     requisition={requisition}
                     quotations={quotations}
@@ -3396,6 +3403,7 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
     
 
     
+
 
 
 

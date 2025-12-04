@@ -18,7 +18,8 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
     const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
     const canPromote = useMemo(() => {
-        if (requisition.status !== 'Award_Declined') {
+        const applicableStatuses = ['Award_Declined', 'Partially_Closed'];
+        if (!applicableStatuses.includes(requisition.status)) {
             return false;
         }
 
