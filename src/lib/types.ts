@@ -122,21 +122,17 @@ export type Contract = {
   createdAt: Date;
 }
 
-
-export type EvaluationCriterion = {
-  id: string;
-  name: string;
-  weight: number;
+export type Signature = {
+    signerId: string;
+    signerName: string;
+    signerRole: string;
+    decision: 'APPROVED' | 'REJECTED';
+    comment: string;
+    signedAt: Date;
 }
 
-export type EvaluationCriteria = {
-  financialWeight: number;
-  technicalWeight: number;
-  financialCriteria: EvaluationCriterion[];
-  technicalCriteria: EvaluationCriterion[];
-};
-
 export type MinuteDecision = 'APPROVED' | 'REJECTED' | 'REVISION';
+export type MinuteType = 'system_generated' | 'uploaded_document';
 
 export type Minute = {
     id: string;
@@ -149,6 +145,9 @@ export type Minute = {
     attendeeIds: string[];
     attendees: User[];
     createdAt: Date;
+    type: MinuteType;
+    documentUrl?: string;
+    signatures?: Signature[];
 }
 
 
@@ -251,6 +250,19 @@ export type QuoteAnswer = {
 }
 
 export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'Rejected' | 'Standby' | 'Invoice_Submitted' | 'Failed' | 'Accepted' | 'Declined' | 'Pending_Award';
+
+export type EvaluationCriterion = {
+  id: string;
+  name: string;
+  weight: number;
+}
+
+export type EvaluationCriteria = {
+  financialWeight: number;
+  technicalWeight: number;
+  financialCriteria: EvaluationCriterion[];
+  technicalCriteria: EvaluationCriterion[];
+};
 
 export type Score = {
   id: string;
@@ -430,4 +442,3 @@ export interface ApprovalThreshold {
     max: number | null; // null for infinity
     steps: ApprovalStep[];
 }
-```
