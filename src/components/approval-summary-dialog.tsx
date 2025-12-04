@@ -298,26 +298,28 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                                 </CardContent>
                                             </Card>
                                         )
+                                    } else if (minute.type === 'system_generated') {
+                                        return (
+                                            <Card key={minute.id}>
+                                                <CardHeader>
+                                                    <CardTitle className="flex justify-between items-center text-base">
+                                                        <span>System-Generated Minute: {minute.decisionBody}</span>
+                                                        <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
+                                                    </CardTitle>
+                                                    <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <h4 className="font-semibold text-sm">Justification</h4>
+                                                    <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50 mt-1 whitespace-pre-wrap">{minute.justification}</p>
+                                                    <h4 className="font-semibold text-sm mt-4">Attendees</h4>
+                                                    <div className="flex flex-wrap gap-2 mt-2">
+                                                        {minute.attendees.map(attendee => <Badge key={attendee.id} variant="outline">{attendee.name}</Badge>)}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        );
                                     }
-                                    return (
-                                        <Card key={minute.id}>
-                                            <CardHeader>
-                                                <CardTitle className="flex justify-between items-center text-base">
-                                                    <span>System-Generated Minute: {minute.decisionBody}</span>
-                                                    <Badge variant={minute.decision === 'APPROVED' ? 'default' : 'destructive'}>{minute.decision}</Badge>
-                                                </CardTitle>
-                                                <CardDescription>Recorded by {minute.author.name} on {format(new Date(minute.createdAt), 'PP')}</CardDescription>
-                                            </CardHeader>
-                                            <CardContent>
-                                                <h4 className="font-semibold text-sm">Justification</h4>
-                                                <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50 mt-1 whitespace-pre-wrap">{minute.justification}</p>
-                                                <h4 className="font-semibold text-sm mt-4">Attendees</h4>
-                                                <div className="flex flex-wrap gap-2 mt-2">
-                                                    {minute.attendees.map(attendee => <Badge key={attendee.id} variant="outline">{attendee.name}</Badge>)}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    );
+                                    return null;
                                 })}
                                 </div>
                             ): (
