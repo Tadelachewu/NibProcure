@@ -2548,6 +2548,8 @@ export default function QuotationDetailsPage() {
   const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
   const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
+  const [deadlineCheckPerformed, setDeadlineCheckPerformed] = useState(false);
+
 
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
@@ -2714,9 +2716,9 @@ export default function QuotationDetailsPage() {
   }, [quotesForDisplay, currentQuotesPage]);
 
 
-  const fetchRequisitionAndQuotes = useCallback(async (isTriggeredByDeadlineCheck = false) => {
+  const fetchRequisitionAndQuotes = useCallback(async () => {
     if (!id) return;
-    if (!isTriggeredByDeadlineCheck) setLoading(true);
+    setLoading(true);
 
     try {
         const [reqResponse, venResponse, quoResponse] = await Promise.all([
@@ -2775,7 +2777,7 @@ export default function QuotationDetailsPage() {
     } catch (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
     } finally {
-        if (!isTriggeredByDeadlineCheck) setLoading(false);
+        setLoading(false);
     }
   }, [id, toast]);
 
@@ -2786,7 +2788,7 @@ export default function QuotationDetailsPage() {
   }, [id, user, fetchRequisitionAndQuotes]);
   
   useEffect(() => {
-    if (!requisition || !user || !token) return;
+    if (!requisition || !user || !token || deadlineCheckPerformed) return;
 
     const checkAndDecline = async () => {
         let needsRefresh = false;
@@ -2798,10 +2800,8 @@ export default function QuotationDetailsPage() {
                  for (const item of requisition.items) {
                     const awardDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                     for (const detail of awardDetails) {
-                        // Find awarded items for any vendor (not just the current user)
                         if (detail.status === 'Awarded') {
                              needsRefresh = true;
-                             // We can't know the user ID of the vendor, so this call assumes the backend can infer it or doesn't need it for a system-triggered decline.
                              await fetch(`/api/quotations/${detail.quotationId}/respond`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -2813,7 +2813,7 @@ export default function QuotationDetailsPage() {
             } else { // Single vendor award
                  const awardedQuote = quotations.find(q => q.status === 'Awarded');
                  if (awardedQuote) {
-                     needsRefetch = true;
+                     needsRefresh = true;
                       await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -2823,14 +2823,16 @@ export default function QuotationDetailsPage() {
             }
         }
         
+        setDeadlineCheckPerformed(true);
+
         if (needsRefresh) {
             toast({ title: 'Deadline Expired', description: 'An awarded vendor failed to respond in time. The award has been automatically declined.' });
-            fetchRequisitionAndQuotes(true);
+            fetchRequisitionAndQuotes();
         }
     };
 
     checkAndDecline();
-  }, [requisition, quotations, user, token, toast, fetchRequisitionAndQuotes]);
+  }, [requisition, quotations, user, token, toast, fetchRequisitionAndQuotes, deadlineCheckPerformed]);
 
 
   const handleFinalizeScores = async (
