@@ -2525,7 +2525,7 @@ export default function QuotationDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const { user, allUsers, role, rolePermissions, rfqSenderSetting, committeeQuorum } = useAuth();
+  const { user, allUsers, role, rolePermissions, rfqSenderSetting, committeeQuorum, token } = useAuth();
   const id = params.id as string;
 
   const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
@@ -2716,7 +2716,7 @@ export default function QuotationDetailsPage() {
 
 
   const fetchRequisitionAndQuotes = useCallback(async () => {
-      if (!id) return;
+      if (!id || !user) return;
       setLoading(true);
       try {
           const [reqResponse, venResponse, quoResponse] = await Promise.all([
@@ -2767,7 +2767,42 @@ export default function QuotationDetailsPage() {
               // --- End of new frontend calculation logic ---
 
               setRequisition({...currentReq, quotations: quoData});
-              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+              const sortedQuotes = quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+              setQuotations(sortedQuotes);
+
+              // --- New Logic: Check for expired deadlines ---
+              let refreshNeeded = false;
+              for (const quote of sortedQuotes) {
+                const awardDetails = currentReq.items.flatMap((i: any) => i.perItemAwardDetails || []);
+                const isAwardedToThisVendor = awardDetails.some((d: any) => d.vendorId === quote.vendorId && d.status === 'Awarded');
+
+                if ((quote.status === 'Awarded' || isAwardedToThisVendor) && currentReq.awardResponseDeadline && isPast(new Date(currentReq.awardResponseDeadline))) {
+                    console.log(`Deadline missed for quote ${quote.id}. Triggering decline.`);
+                    toast({
+                        variant: 'destructive',
+                        title: 'Deadline Missed',
+                        description: `Vendor ${quote.vendorName} did not respond to the award for "${currentReq.title}" in time. It has been automatically declined.`
+                    });
+                    
+                    await fetch(`/api/quotations/${quote.id}/respond`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({
+                            userId: user.id, // The action is taken by the system, but on behalf of a logged-in user viewing the page.
+                            action: 'reject',
+                            rejectionReason: 'deadline is passed'
+                        })
+                    });
+                    refreshNeeded = true;
+                    break; // Stop after declining one to avoid race conditions. The page will reload and catch the next one if needed.
+                }
+              }
+              if (refreshNeeded) {
+                  fetchRequisitionAndQuotes(); // Re-fetch all data to get the latest state.
+                  return;
+              }
+
+
           } else {
               toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
           }
@@ -2777,7 +2812,7 @@ export default function QuotationDetailsPage() {
       } finally {
           setLoading(false);
       }
-  }, [id, toast]);
+  }, [id, toast, user, token]);
 
   useEffect(() => {
     if (id && user) {
@@ -3357,3 +3392,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
+

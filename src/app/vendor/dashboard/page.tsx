@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -97,7 +98,7 @@ export default function VendorDashboardPage() {
             const requisitionsData: PurchaseRequisition[] = await response.json();
             setAllRequisitions(requisitionsData);
             
-             // Check for expired deadlines on awarded quotes
+            // This client-side check is a backup. The primary check is now on the Quotations page.
             for (const req of requisitionsData) {
                 const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
                 if (vendorQuote && (vendorQuote.status === 'Awarded' || vendorQuote.status === 'Partially_Awarded') && req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline))) {
@@ -108,8 +109,7 @@ export default function VendorDashboardPage() {
                         description: `You did not respond to the award for "${req.title}" in time. It has been automatically declined.`
                     });
                     
-                    // Trigger the decline API call
-                     await fetch(`/api/quotations/${vendorQuote.id}/respond`, {
+                    await fetch(`/api/quotations/${vendorQuote.id}/respond`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({
@@ -118,9 +118,8 @@ export default function VendorDashboardPage() {
                             rejectionReason: 'deadline is passed'
                         })
                     });
-                    // After declining one, we'll just refetch everything to get the latest state.
-                    fetchAllData();
-                    return; // Exit the loop to avoid multiple fetches
+                    fetchAllData(); // Re-fetch to get the latest state after auto-decline
+                    return; 
                 }
             }
 
