@@ -27,7 +27,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import Image from 'next/image';
-import { Label } from '../ui/label';
+import { Label } from '@/components/ui/label';
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
