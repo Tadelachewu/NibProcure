@@ -139,6 +139,7 @@ export async function POST(
                 entity: 'Quotation',
                 entityId: quoteId,
                 details: `Submitted scores for quote from ${quoteToUpdate.vendorName}. Final Score: ${finalAverageScoreForThisScorer.toFixed(2)}.`,
+                transactionId: requisition.id,
             }
         });
 
