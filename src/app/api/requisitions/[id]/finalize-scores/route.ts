@@ -72,29 +72,27 @@ export async function POST(
                 throw new Error("No quotes found to process for this requisition.");
             }
             
+            // --- SERVER-SIDE VALUE CALCULATION ---
             let totalAwardValue = 0;
-            if(awardStrategy === 'all') {
-                const winnerVendorId = Object.keys(awards)[0];
-                const winnerQuote = allQuotes.find(q => q.vendorId === winnerVendorId);
+            if (awardStrategy === 'all') {
+                const winningVendorId = Object.keys(awards)[0];
+                const winnerQuote = allQuotes.find(q => q.vendorId === winningVendorId);
                 if (winnerQuote) {
                     totalAwardValue = winnerQuote.totalPrice;
                 }
-            } else {
-                 const quoteItemsById: { [key: string]: { price: number; quantity: number } } = {};
-                 allQuotes.forEach(q => {
-                    q.items.forEach(i => {
-                        quoteItemsById[i.id] = { price: i.unitPrice, quantity: i.quantity };
-                    });
+            } else if (awardStrategy === 'item') {
+                const winningQuoteItemIds = Object.values(awards).map((award: any) => award.rankedBids[0].quoteItemId);
+                
+                const winningQuoteItems = await tx.quoteItem.findMany({
+                    where: { id: { in: winningQuoteItemIds } },
+                    include: { requisitionItem: true }
                 });
 
-                totalAwardValue = Object.values(awards).flatMap((a: any) => a.rankedBids)
-                    .filter((bid: any, index: number) => index === 0) // Only take the winner of each item
-                    .reduce((sum, item: any) => {
-                        const quoteItem = quoteItemsById[item.quoteItemId];
-                        const reqItem = requisition.items.find(i => i.id === item.reqItemId);
-                        return sum + (quoteItem && reqItem ? quoteItem.price * reqItem.quantity : 0);
-                    }, 0);
+                totalAwardValue = winningQuoteItems.reduce((sum, item) => {
+                    return sum + (item.unitPrice * (item.requisitionItem?.quantity || 0));
+                }, 0);
             }
+            // --- END CALCULATION ---
             
 
             const dynamicAwardValue = totalAwardValue;
