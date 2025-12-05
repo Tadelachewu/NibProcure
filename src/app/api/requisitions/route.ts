@@ -357,30 +357,38 @@ export async function PATCH(
     }
 
     // This is a high-level award approval/rejection
-    else if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
-        const userRoles = (user.roles as any[]).map(r => r.name);
-        console.log(`[PATCH /api/requisitions] Handling award action by user with roles: ${userRoles.join(', ')}`);
+    else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') {
         
-        let isAuthorizedToAct = false;
-        if (requisition.currentApproverId === userId) {
-            isAuthorizedToAct = true;
-        } else {
-             const requiredRoleForStatus = requisition.status.replace('Pending_', '');
-             if (userRoles.includes(requiredRoleForStatus) || userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-                isAuthorizedToAct = true;
-             }
-        }
+        // This is a special case for per-item awards where the main status might be 'Award_Declined'
+        // but an individual item is being approved.
+        const isPerItemApprovalDuringDecline = (requisition.rfqSettings as any)?.awardStrategy === 'item' && 
+                                              (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') &&
+                                               newStatus === 'Approved';
 
-        if (!isAuthorizedToAct) {
-            console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
-            return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
+        if (!isPerItemApprovalDuringDecline && requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
+            // Standard award approval/rejection logic here
+            const userRoles = (user.roles as any[]).map(r => r.name);
+            let isAuthorizedToAct = false;
+            if (requisition.currentApproverId === userId) {
+                isAuthorizedToAct = true;
+            } else {
+                const requiredRoleForStatus = requisition.status.replace('Pending_', '');
+                if (userRoles.includes(requiredRoleForStatus) || userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+                    isAuthorizedToAct = true;
+                }
+            }
+
+            if (!isAuthorizedToAct) {
+                console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
+                return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
+            }
         }
         
         // --- START SAFEGUARD ---
         const hasBeenDeclined = requisition.quotations.some(q => q.status === 'Declined');
         const hasItemBeenDeclined = requisition.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
 
-        if (hasBeenDeclined || hasItemBeenDeclined) {
+        if ((hasBeenDeclined || hasItemBeenDeclined) && !isPerItemApprovalDuringDecline) {
             console.error(`[PATCH /api/requisitions] Aborting approval: Award for Req ${id} was declined by the vendor.`);
             return NextResponse.json({ error: 'Cannot approve. The award was declined by the vendor. Please refresh to see the latest status.'}, { status: 409 }); // 409 Conflict
         }
@@ -398,7 +406,10 @@ export async function PATCH(
                 auditAction = 'REJECT_AWARD_STEP';
             } else { // Approved
                 const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
-                dataToUpdate.status = nextStatus;
+                // IF it's a per-item approval during decline, we DON'T update the main status.
+                if (!isPerItemApprovalDuringDecline) {
+                   dataToUpdate.status = nextStatus;
+                }
                 dataToUpdate.currentApproverId = nextApproverId;
                 dataToUpdate.approverComment = comment; // Save approval comment
                 auditDetails = serviceAuditDetails;
@@ -430,7 +441,6 @@ export async function PATCH(
                 const pdfBytes = await fs.readFile(filePath);
                 const pdfDoc = await PDFDocument.load(pdfBytes);
                 const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-                const pages = pdfDoc.getPages();
                 const newPage = pdfDoc.addPage();
                 
                 const { width, height } = newPage.getSize();

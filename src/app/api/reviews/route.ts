@@ -31,8 +31,10 @@ export async function GET(request: Request) {
         orConditions.push({
             status: { in: allPossiblePendingStatuses }
         });
-        // Also show items ready for notification
+        // Also show items ready for notification and those declined/partially closed
         orConditions.push({ status: 'PostApproved' });
+        orConditions.push({ status: 'Award_Declined' });
+        orConditions.push({ status: 'Partially_Closed' });
     }
 
     const requisitionsForUser = await prisma.purchaseRequisition.findMany({
