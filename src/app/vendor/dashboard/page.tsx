@@ -20,6 +20,7 @@ import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Awa
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
 
 const OPEN_PAGE_SIZE = 9;
 const ACTIVE_PAGE_SIZE = 6;
@@ -51,6 +52,7 @@ const VendorStatusBadge = ({ status }: { status: RequisitionCardStatus }) => {
 export default function VendorDashboardPage() {
     const { token, user } = useAuth();
     const router = useRouter();
+    const { toast } = useToast();
     const [allRequisitions, setAllRequisitions] = useState<PurchaseRequisition[]>([]);
     const [vendor, setVendor] = useState<Vendor | null>(null);
     const [loading, setLoading] = useState(true);
@@ -94,13 +96,41 @@ export default function VendorDashboardPage() {
             }
             const requisitionsData: PurchaseRequisition[] = await response.json();
             setAllRequisitions(requisitionsData);
+            
+             // Check for expired deadlines on awarded quotes
+            for (const req of requisitionsData) {
+                const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
+                if (vendorQuote && (vendorQuote.status === 'Awarded' || vendorQuote.status === 'Partially_Awarded') && req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline))) {
+                    console.log(`Deadline missed for quote ${vendorQuote.id}. Triggering decline.`);
+                    toast({
+                        variant: 'destructive',
+                        title: 'Deadline Missed',
+                        description: `You did not respond to the award for "${req.title}" in time. It has been automatically declined.`
+                    });
+                    
+                    // Trigger the decline API call
+                     await fetch(`/api/quotations/${vendorQuote.id}/respond`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({
+                            userId: user.id,
+                            action: 'reject',
+                            rejectionReason: 'Vendor did not respond before the deadline.'
+                        })
+                    });
+                    // After declining one, we'll just refetch everything to get the latest state.
+                    fetchAllData();
+                    return; // Exit the loop to avoid multiple fetches
+                }
+            }
+
 
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
         } finally {
             setLoading(false);
         }
-    }, [token, user]);
+    }, [token, user, toast]);
 
     useEffect(() => {
         fetchAllData();
