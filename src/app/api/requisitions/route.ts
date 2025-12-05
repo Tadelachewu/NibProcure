@@ -407,7 +407,6 @@ export async function PATCH(
                 data: dataToUpdate,
             });
             
-            // Find the most recent minute, which should be the one created during finalization.
             const latestMinute = requisition.minutes[0];
             if (latestMinute) {
               await tx.signature.create({

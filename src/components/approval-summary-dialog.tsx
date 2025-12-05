@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { AlertCircle, CheckCircle, FileText, MessageSquare, User, Trophy, Crown, Medal, Download, PenLine } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
+import Link from 'next/link';
 
 
 interface ApprovalSummaryDialogProps {
@@ -93,7 +94,6 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
   );
 
   const renderMinute = (minute: Minute) => {
-    // Correctly handle the rendering based on the minute type
     if (minute.type === 'uploaded_document') {
         return (
             <Card key={minute.id}>
@@ -106,12 +106,12 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                 </CardHeader>
                 <CardContent>
                     {minute.documentUrl ? (
-                         <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
-                            <Button variant="outline" className="w-full">
+                         <Button asChild variant="outline" className="w-full">
+                            <a href={minute.documentUrl} target="_blank" rel="noopener noreferrer">
                                 <Download className="mr-2 h-4 w-4" />
                                 Download Official Minute Document
-                            </Button>
-                        </a>
+                            </a>
+                        </Button>
                     ) : (
                         <p className="text-sm text-destructive">Document URL is missing for this minute.</p>
                     )}
@@ -122,7 +122,6 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
             </Card>
         );
     }
-    // Return null or some placeholder if the type is not 'uploaded_document'
     return null;
   }
 
