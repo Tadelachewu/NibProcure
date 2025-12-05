@@ -6,8 +6,6 @@ import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 import { UserRole, PerItemAwardDetail } from '@/lib/types';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET(request: Request) {
   try {
     const actor = await getActorFromToken(request);
