@@ -9,6 +9,9 @@ import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { isPast } from 'date-fns';
 import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-service';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 
 export async function GET(request: Request) {
@@ -408,8 +411,8 @@ export async function PATCH(
             });
             
             const latestMinute = requisition.minutes[0];
-            if (latestMinute) {
-              await tx.signature.create({
+            if (latestMinute && latestMinute.documentUrl) {
+              const signatureRecord = await tx.signature.create({
                 data: {
                   minute: { connect: { id: latestMinute.id } },
                   signer: { connect: { id: userId } },
@@ -419,7 +422,43 @@ export async function PATCH(
                   comment: comment,
                 }
               });
-              auditDetails += ` Signature added to minute ${latestMinute.id}.`;
+              auditDetails += ` Signature recorded as ${signatureRecord.id}.`;
+              
+              // New: Append signature to the PDF
+              const filePath = path.join(process.cwd(), 'public', latestMinute.documentUrl);
+              try {
+                const pdfBytes = await fs.readFile(filePath);
+                const pdfDoc = await PDFDocument.load(pdfBytes);
+                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+                const pages = pdfDoc.getPages();
+                const newPage = pdfDoc.addPage();
+                
+                const { width, height } = newPage.getSize();
+                let y = height - 50;
+
+                const drawText = (text: string, size: number, options: { y: number, color?: any, font?: any }) => {
+                    newPage.drawText(text, { x: 50, y: options.y, size, font: options.font || font, color: options.color || rgb(0,0,0) });
+                    return options.y - (size * 1.5);
+                }
+
+                y = drawText(`Digital Signature Record`, 18, { y });
+                y -= 20;
+
+                y = drawText(`Decision: ${signatureRecord.decision}`, 14, { y, color: signatureRecord.decision === 'APPROVED' ? rgb(0.1, 0.5, 0.1) : rgb(0.7, 0, 0) });
+                y = drawText(`Signer: ${signatureRecord.signerName} (${signatureRecord.signerRole})`, 12, { y });
+                y = drawText(`Date: ${new Date(signatureRecord.signedAt).toLocaleString()}`, 12, { y });
+                y -= 10;
+                y = drawText(`Justification:`, 12, { y });
+                y = drawText(signatureRecord.comment || 'No comment provided.', 11, { y, font: await pdfDoc.embedFont(StandardFonts.HelveticaOblique) });
+
+                const modifiedPdfBytes = await pdfDoc.save();
+                await fs.writeFile(filePath, modifiedPdfBytes);
+                auditDetails += ` Signature appended to document.`;
+              } catch(e) {
+                  console.error("Failed to append signature to PDF:", e);
+                  // Don't fail the whole transaction, just log that it happened.
+                  auditDetails += ` (Failed to append signature to PDF).`;
+              }
             }
 
             await tx.auditLog.create({
@@ -519,38 +558,35 @@ export async function PATCH(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    
-    const actor = await prisma.user.findFirst({where: {id: body.requesterId}, include: { roles: true }});
+    const actor = await prisma.user.findUnique({
+      where: { id: body.requesterId },
+      include: { roles: true },
+    });
     if (!actor) {
-        return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
     }
-
-    // --- Start Server-Side Validation ---
     const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
     if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
-        const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
-        if (setting.type === 'specific_roles') {
-            const userRoles = actor.roles.map(r => r.name);
-            const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
-            if (!canCreate) {
-                return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
-            }
+      const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
+      if (setting.type === 'specific_roles') {
+        const userRoles = actor.roles.map(r => r.name);
+        const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
+        if (!canCreate) {
+          return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
         }
+      }
     }
-    // --- End Server-Side Validation ---
-
     const totalPrice = body.items.reduce((acc: number, item: any) => {
-        const price = item.unitPrice || 0;
-        const quantity = item.quantity || 0;
-        return acc + (price * quantity);
+      const price = item.unitPrice || 0;
+      const quantity = item.quantity || 0;
+      return acc + (price * quantity);
     }, 0);
-    
     const department = await prisma.department.findUnique({ where: { name: body.department } });
     if (!department) {
-        return NextResponse.json({ error: 'Department not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Department not found' }, { status: 404 });
     }
-
-    const newRequisition = await prisma.purchaseRequisition.create({
+    const transactionResult = await prisma.$transaction(async (tx) => {
+      const newRequisition = await tx.purchaseRequisition.create({
         data: {
           requester: { connect: { id: actor.id } },
           department: { connect: { id: department.id } },
@@ -588,22 +624,26 @@ export async function POST(request: Request) {
             }
           } : undefined,
         },
+      });
+      const finalRequisition = await tx.purchaseRequisition.update({
+        where: { id: newRequisition.id },
+        data: { transactionId: newRequisition.id },
         include: { items: true, customQuestions: true, evaluationCriteria: true }
       });
-      
-    await prisma.auditLog.create({
+      await tx.auditLog.create({
         data: {
-            transactionId: newRequisition.id,
-            user: { connect: { id: actor.id } },
-            timestamp: new Date(),
-            action: 'CREATE_REQUISITION',
-            entity: 'Requisition',
-            entityId: newRequisition.id,
-            details: `Created new requisition: "${newRequisition.title}".`,
+          transactionId: finalRequisition.id,
+          user: { connect: { id: actor.id } },
+          timestamp: new Date(),
+          action: 'CREATE_REQUISITION',
+          entity: 'Requisition',
+          entityId: finalRequisition.id,
+          details: `Created new requisition: "${finalRequisition.title}".`,
         }
+      });
+      return finalRequisition;
     });
-
-    return NextResponse.json(newRequisition, { status: 201 });
+    return NextResponse.json(transactionResult, { status: 201 });
   } catch (error) {
     console.error('Failed to create requisition:', error);
     if (error instanceof Error) {
@@ -679,5 +719,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
