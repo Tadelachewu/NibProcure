@@ -2795,32 +2795,12 @@ export default function QuotationDetailsPage() {
 ) => {
     if (!user || !requisition || !quotations) return;
     
-    // This calculation is now duplicated, but it's important for security that the server calculates the final value.
-    // The client-side calculation is for UI display only.
-    const allQuoteItems: Record<string, { price: number; quantity: number }> = {};
-    quotations.forEach(q => q.items.forEach(i => { allQuoteItems[i.id] = { price: i.unitPrice, quantity: i.quantity }; }));
-    
-    let totalAwardValue = 0;
-    if (awardStrategy === 'all') {
-      const winnerVendorId = Object.keys(awards)[0];
-      const winnerQuote = quotations.find(q => q.vendorId === winnerVendorId);
-      if (winnerQuote) totalAwardValue = winnerQuote.totalPrice;
-    } else {
-      totalAwardValue = Object.values(awards).flatMap((a: any) => a.rankedBids)
-        .filter((bid: any, index: number) => index === 0)
-        .reduce((sum, item: any) => {
-          const quoteItem = allQuoteItems[item.quoteItemId];
-          const reqItem = requisition.items.find(i => i.id === item.reqItemId);
-          return sum + (quoteItem && reqItem ? quoteItem.price * reqItem.quantity : 0);
-        }, 0);
-    }
-    
     setIsFinalizing(true);
     try {
          const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, totalAwardValue, minuteDocumentUrl, minuteJustification }),
+            body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, minuteDocumentUrl, minuteJustification }),
         });
         if (!response.ok) {
             const errorData = await response.json();
