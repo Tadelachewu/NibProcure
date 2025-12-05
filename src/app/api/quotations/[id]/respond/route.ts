@@ -15,7 +15,7 @@ export async function POST(
   console.log(`[RESPOND-AWARD] Received request for Quote ID: ${quoteId}`);
   try {
     const body = await request.json();
-    const { userId, action, quoteItemId } = body as { userId: string; action: 'accept' | 'reject'; quoteItemId?: string };
+    const { userId, action, quoteItemId, rejectionReason } = body as { userId: string; action: 'accept' | 'reject'; quoteItemId?: string, rejectionReason?: string };
     console.log(`[RESPOND-AWARD] Action: ${action} by User ID: ${userId}. Item-specific: ${!!quoteItemId}`);
 
     const user = await prisma.user.findUnique({
@@ -134,33 +134,6 @@ export async function POST(
             });
             console.log(`[RESPOND-AWARD] Created new Purchase Order: ${newPO.id}`);
             
-            // **MODIFIED LOGIC**: Check if ALL possible awards for this requisition have been actioned (accepted or declined/failed).
-            let allAwardsActioned = false;
-            const updatedRequisitionAfterPO = await tx.purchaseRequisition.findUnique({
-                where: { id: requisition.id },
-                include: { items: true, quotations: true }
-            });
-            if (!updatedRequisitionAfterPO) throw new Error("Could not refetch requisition to check completion status.");
-
-
-            if (isPerItemAward) {
-                 allAwardsActioned = !updatedRequisitionAfterPO.items.some(item =>
-                    (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Awarded' || d.status === 'Standby')
-                );
-            } else {
-                 allAwardsActioned = !updatedRequisitionAfterPO.quotations.some(q => q.status === 'Awarded' || q.status === 'Standby');
-            }
-
-            if (allAwardsActioned) {
-                 console.log(`[RESPOND-AWARD] All awards for Req ${requisition.id} have been actioned. Updating status to PO_Created.`);
-                 await tx.purchaseRequisition.update({
-                    where: { id: requisition.id },
-                    data: { status: 'PO_Created' }
-                });
-            } else {
-                console.log(`[RESPOND-AWARD] Not all awards for Req ${requisition.id} have been actioned yet. Status remains active.`);
-            }
-
             await tx.auditLog.create({
                 data: {
                     timestamp: new Date(),
@@ -176,6 +149,11 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
+            await tx.quotation.update({
+              where: { id: quoteId },
+              data: { rejectionReason: rejectionReason || 'No reason provided.' },
+            });
+            
             const declinedItemIds = quoteItemId
                 ? [quote.items.find(i => i.id === quoteItemId)?.requisitionItemId].filter(Boolean) as string[]
                 : requisition.items

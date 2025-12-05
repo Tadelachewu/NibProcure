@@ -2251,7 +2251,7 @@ const NotifyVendorDialog = ({
                             type="time"
                             className="w-32"
                             value={deadlineTime}
-                            onChange={(e) => setNewDeadlineTime(e.target.value)}
+                            onChange={(e) => setDeadlineTime(e.target.value)}
                         />
                     </div>
                 </div>

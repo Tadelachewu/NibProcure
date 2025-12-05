@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -28,6 +27,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import Image from 'next/image';
+import { Label } from '../ui/label';
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -672,6 +672,28 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
     );
 }
 
+const DeclineReasonDialog = ({ onConfirm }: { onConfirm: (reason: string) => void }) => {
+    const [reason, setReason] = useState('');
+    return (
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Confirm Award Decline</DialogTitle>
+                <DialogDescription>Please provide a reason for declining this award. This feedback is valuable to the procurement team.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+                <Label htmlFor="decline-reason">Reason for Declining</Label>
+                <Textarea id="decline-reason" value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g., Unable to meet delivery timeline, stock unavailable..." />
+            </div>
+            <DialogFooter>
+                 <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+                 <Button variant="destructive" onClick={() => onConfirm(reason)} disabled={!reason.trim()}>
+                    Confirm Decline
+                 </Button>
+            </DialogFooter>
+        </DialogContent>
+    );
+};
+
 export default function VendorRequisitionPage() {
     const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
     const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
@@ -680,6 +702,7 @@ export default function VendorRequisitionPage() {
     const [error, setError] = useState<string | null>(null);
     const [submittedQuote, setSubmittedQuote] = useState<Quotation | null>(null);
     const [isEditingQuote, setIsEditingQuote] = useState(false);
+    const [declineState, setDeclineState] = useState<{ isOpen: boolean, quoteItemId?: string }>({ isOpen: false });
 
     const params = useParams();
     const router = useRouter();
@@ -804,14 +827,14 @@ export default function VendorRequisitionPage() {
         fetchRequisitionData();
     }
     
-    const handleAwardResponse = async (action: 'accept' | 'reject', quoteItemId?: string) => {
+    const handleAwardResponse = async (action: 'accept' | 'reject', rejectionReason?: string, quoteItemId?: string) => {
         if (!submittedQuote || !user) return;
         setIsResponding(true);
         try {
             const response = await fetch(`/api/quotations/${submittedQuote.id}/respond`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, action, quoteItemId })
+                body: JSON.stringify({ userId: user.id, action, rejectionReason, quoteItemId })
             });
 
             const result = await response.json();
@@ -949,6 +972,13 @@ export default function VendorRequisitionPage() {
                 Back to Dashboard
             </Button>
             
+            <Dialog open={declineState.isOpen} onOpenChange={(open) => !open && setDeclineState({isOpen: false})}>
+                <DeclineReasonDialog onConfirm={(reason) => {
+                    handleAwardResponse('reject', reason, declineState.quoteItemId);
+                    setDeclineState({isOpen: false});
+                }} />
+            </Dialog>
+
             {hasPendingResponseItems && (
                  <Card>
                     <CardHeader>
@@ -976,10 +1006,10 @@ export default function VendorRequisitionPage() {
                                                     <p className="text-sm text-muted-foreground">Unit Price: {quoteItem?.unitPrice.toLocaleString()} ETB</p>
                                                 </div>
                                                 <div className="flex gap-2">
-                                                    <Button size="sm" onClick={() => handleAwardResponse('accept', quoteItem?.id)} disabled={isResponding || isResponseDeadlineExpired}>
+                                                    <Button size="sm" onClick={() => handleAwardResponse('accept', undefined, quoteItem?.id)} disabled={isResponding || isResponseDeadlineExpired}>
                                                         <ThumbsUp className="mr-2 h-4 w-4" /> Accept
                                                     </Button>
-                                                    <Button size="sm" variant="destructive" onClick={() => handleAwardResponse('reject', quoteItem?.id)} disabled={isResponding || isResponseDeadlineExpired}>
+                                                    <Button size="sm" variant="destructive" onClick={() => setDeclineState({isOpen: true, quoteItemId: quoteItem?.id})} disabled={isResponding || isResponseDeadlineExpired}>
                                                         <ThumbsDown className="mr-2 h-4 w-4" /> Decline
                                                     </Button>
                                                 </div>
@@ -993,7 +1023,7 @@ export default function VendorRequisitionPage() {
                                 <Button onClick={() => handleAwardResponse('accept')} disabled={isResponding || isResponseDeadlineExpired}>
                                     <ThumbsUp className="mr-2 h-4 w-4" /> Accept Full Award
                                 </Button>
-                                <Button variant="destructive" onClick={() => handleAwardResponse('reject')} disabled={isResponding || isResponseDeadlineExpired}>
+                                <Button variant="destructive" onClick={() => setDeclineState({ isOpen: true })} disabled={isResponding || isResponseDeadlineExpired}>
                                     <ThumbsDown className="mr-2 h-4 w-4" /> Decline Award
                                 </Button>
                             </div>
