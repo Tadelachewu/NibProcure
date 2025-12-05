@@ -8,9 +8,28 @@ import { getActorFromToken } from '@/lib/auth';
 export async function GET() {
   try {
     const invoices = await prisma.invoice.findMany({
+      include: {
+        purchaseOrder: {
+          include: {
+            receipts: true,
+          }
+        }
+      },
       orderBy: { invoiceDate: 'desc' },
     });
-    return NextResponse.json(invoices);
+
+    // Add a flag to invoices if any related GRN is disputed
+    const invoicesWithDisputeStatus = invoices.map(invoice => {
+      const isDisputed = invoice.purchaseOrder?.receipts?.some(receipt => receipt.status === 'Disputed') ?? false;
+      // We don't need to send the full PO details to the client for this list view
+      const { purchaseOrder, ...invoiceData } = invoice;
+      return {
+        ...invoiceData,
+        isDisputed,
+      }
+    });
+
+    return NextResponse.json(invoicesWithDisputeStatus);
   } catch (error) {
     console.error('Failed to fetch invoices:', error);
     return NextResponse.json({ error: 'Failed to fetch invoices' }, { status: 500 });

@@ -558,7 +558,7 @@ export function InvoicesPage() {
           const response = await fetch(`/api/invoices/${invoiceId}/status`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
-              body: JSON.stringify({ status, userId: user.id, reason }),
+              body: JSON.stringify({ status, reason }),
           });
           if (!response.ok) throw new Error(`Failed to mark invoice as ${status}.`);
           toast({ title: "Success", description: `Invoice has been marked as ${status}.`});
@@ -581,7 +581,7 @@ export function InvoicesPage() {
         const response = await fetch(`/api/payments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
-            body: JSON.stringify({ invoiceId, userId: user.id, paymentEvidenceUrl })
+            body: JSON.stringify({ invoiceId, paymentEvidenceUrl })
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -654,8 +654,9 @@ export function InvoicesPage() {
               {paginatedInvoices.length > 0 ? (
                 paginatedInvoices.map((invoice, index) => {
                   const matchResult = matchResults[invoice.id];
-                  const isActionDisabled = !matchResult || matchResult.status !== 'Matched';
+                  const isMatchOk = matchResult && matchResult.status === 'Matched';
                   const isActionLoading = activeAction === invoice.id;
+                  const isApproveDisabled = !isMatchOk || isActionLoading || invoice.isDisputed;
                   
                   return (
                   <TableRow key={invoice.id}>
@@ -667,10 +668,22 @@ export function InvoicesPage() {
                         <MatchingStatusBadge result={matchResult} onRefresh={fetchAllData} />
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
                         <Badge variant={getStatusVariant(invoice.status)}>{invoice.status.replace(/_/g, ' ')}</Badge>
                          {invoice.status === 'Paid' && invoice.paymentReference && (
                            <span className="text-xs text-muted-foreground">{invoice.paymentReference}</span>
+                         )}
+                         {invoice.isDisputed && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger>
+                                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>Cannot be paid: related goods receipt is disputed.</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                          )}
                       </div>
                     </TableCell>
@@ -679,14 +692,28 @@ export function InvoicesPage() {
                       <div className="flex gap-2">
                         {invoice.status === 'Pending' && (
                             <>
-                                <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => handleAction(invoice.id, 'Approved for Payment')}
-                                    disabled={isActionDisabled || isActionLoading}
-                                >
-                                {isActionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />} Approve
-                                </Button>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <div className="inline-block"> {/* Wrapper div for Tooltip with disabled button */}
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={() => handleAction(invoice.id, 'Approved for Payment')}
+                                                    disabled={isApproveDisabled}
+                                                >
+                                                {isActionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />} Approve
+                                                </Button>
+                                            </div>
+                                        </TooltipTrigger>
+                                        {isApproveDisabled && (
+                                            <TooltipContent>
+                                                <p>{invoice.isDisputed ? 'Cannot approve a disputed invoice.' : 'Invoice must be "Matched" to approve.'}</p>
+                                            </TooltipContent>
+                                        )}
+                                    </Tooltip>
+                                </TooltipProvider>
+
                                 <DisputeDialog onConfirm={(reason) => handleAction(invoice.id, 'Disputed', reason)} />
                             </>
                         )}
