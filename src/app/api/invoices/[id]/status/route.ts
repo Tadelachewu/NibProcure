@@ -19,8 +19,8 @@ export async function PATCH(
     const body = await request.json();
     const { status, reason } = body;
 
-    const validStatuses = ['Approved_for_Payment', 'Disputed'];
-    if (!validStatuses.includes(status.replace(/ /g, '_'))) {
+    const validStatuses = ['Approved for Payment', 'Disputed'];
+    if (!validStatuses.includes(status)) {
       return NextResponse.json({ error: 'Invalid status provided.' }, { status: 400 });
     }
     
@@ -64,7 +64,8 @@ export async function PATCH(
               action: 'UPDATE_INVOICE_STATUS',
               entity: 'Invoice',
               entityId: invoiceId,
-              details: `Updated invoice status from "${oldStatus}" to "${status}". ${reason ? `Reason: ${reason}` : ''}`.trim(),
+              details: `Updated invoice status from "${oldStatus.replace(/_/g, ' ')}" to "${status}". ${reason ? `Reason: ${reason}` : ''}`.trim(),
+              transactionId: updatedInvoice.transactionId,
           }
       });
       
