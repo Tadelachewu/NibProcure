@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
-import { UserRole, PerItemAwardDetail } from '@/lib/types';
+import { UserRole, PerItemAwardDetail, Minute } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +41,15 @@ export async function GET(request: Request) {
         where: {
             OR: orConditions
         },
-        include: { items: true, reviews: true }
+        include: { 
+          items: true, 
+          reviews: true,
+          minutes: {
+            include: {
+              signatures: true,
+            }
+          }
+        }
     });
 
     const requisitionIds = requisitionsForUser.map(r => r.id);
@@ -77,7 +85,8 @@ export async function GET(request: Request) {
             minutes: {
             include: {
                 author: true,
-                attendees: true
+                attendees: true,
+                signatures: true,
             }
             }
       },
@@ -123,14 +132,24 @@ export async function GET(request: Request) {
 
     const requisitionsWithDetails = detailedRequisitions.map(req => {
       let isActionable = false;
-      if (req.currentApproverId === userId) {
-        isActionable = true;
-      } else if (req.status.startsWith('Pending_')) {
-        const requiredRole = req.status.replace('Pending_', '');
-        if (userRoles.includes(requiredRole as UserRole)) {
-          // This is a committee-level approval, so it's actionable if the user is part of that committee.
-          isActionable = true;
-        }
+      const currentDecisionBody = req.status.replace(/_/g, ' ');
+
+      // Check if user has already signed a minute for this specific decision body/status
+      const hasAlreadyActed = req.minutes.some(minute => 
+        minute.decisionBody === currentDecisionBody &&
+        minute.signatures.some(sig => sig.signerId === userId)
+      );
+
+      if (!hasAlreadyActed) {
+          if (req.currentApproverId === userId) {
+            isActionable = true;
+          } else if (req.status.startsWith('Pending_')) {
+            const requiredRole = req.status.replace('Pending_', '');
+            if (userRoles.includes(requiredRole as UserRole)) {
+              // This is a committee-level approval, so it's actionable if the user is part of that committee.
+              isActionable = true;
+            }
+          }
       }
       
       return {
