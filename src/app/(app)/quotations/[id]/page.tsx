@@ -2793,6 +2793,7 @@ export default function QuotationDetailsPage() {
     const checkAndDecline = async () => {
         let needsRefresh = false;
         
+        // This check runs only once per page load.
         if (requisition.awardResponseDeadline && isPast(new Date(requisition.awardResponseDeadline))) {
             const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
             
@@ -2800,6 +2801,7 @@ export default function QuotationDetailsPage() {
                  for (const item of requisition.items) {
                     const awardDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                     for (const detail of awardDetails) {
+                        // Crucially, only act on items that are still in 'Awarded' state.
                         if (detail.status === 'Awarded') {
                              needsRefresh = true;
                              await fetch(`/api/quotations/${detail.quotationId}/respond`, {
@@ -3407,3 +3409,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 };
 
     
+
