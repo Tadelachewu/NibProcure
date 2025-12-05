@@ -49,6 +49,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Separator } from './ui/separator';
 import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
 
 
 const invoiceSchema = z.object({
@@ -550,14 +551,14 @@ export function InvoicesPage() {
     fetchAllData();
   }
   
-  const handleAction = async (invoiceId: string, status: 'Approved for Payment' | 'Disputed') => {
+  const handleAction = async (invoiceId: string, status: 'Approved for Payment' | 'Disputed', reason?: string) => {
       if (!user) return;
       setActiveAction(invoiceId);
       try {
           const response = await fetch(`/api/invoices/${invoiceId}/status`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
-              body: JSON.stringify({ status, userId: user.id })
+              body: JSON.stringify({ status, userId: user.id, reason }),
           });
           if (!response.ok) throw new Error(`Failed to mark invoice as ${status}.`);
           toast({ title: "Success", description: `Invoice has been marked as ${status}.`});
@@ -686,14 +687,7 @@ export function InvoicesPage() {
                                 >
                                 {isActionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />} Approve
                                 </Button>
-                                <Button 
-                                    variant="destructive" 
-                                    size="sm"
-                                    onClick={() => handleAction(invoice.id, 'Disputed')}
-                                    disabled={isActionLoading}
-                                >
-                                {isActionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsDown className="mr-2 h-4 w-4" />} Dispute
-                                </Button>
+                                <DisputeDialog onConfirm={(reason) => handleAction(invoice.id, 'Disputed', reason)} />
                             </>
                         )}
                         {invoice.status === 'Approved_for_Payment' && (
@@ -737,6 +731,43 @@ export function InvoicesPage() {
     </Card>
     </>
   );
+}
+
+function DisputeDialog({ onConfirm }: { onConfirm: (reason: string) => void }) {
+    const [reason, setReason] = useState('');
+    return (
+         <AlertDialog>
+            <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                    <ThumbsDown className="mr-2 h-4 w-4" /> Dispute
+                </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Dispute Invoice</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Please provide a clear reason for disputing this invoice. This will notify the relevant parties and pause payment processing.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="dispute-reason">Reason for Dispute</Label>
+                    <Textarea
+                        id="dispute-reason"
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="e.g., Incorrect quantity received, prices do not match PO..."
+                        className="mt-2"
+                    />
+                </div>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => onConfirm(reason)} disabled={!reason.trim()}>
+                        Submit Dispute
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )
 }
 
 

@@ -29,6 +29,8 @@ import { useAuth } from '@/contexts/auth-context';
 import { Input } from './ui/input';
 import { Separator } from './ui/separator';
 import { Textarea } from './ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { AlertTriangle } from 'lucide-react';
 
 
 const receiptFormSchema = z.object({
@@ -120,7 +122,8 @@ export function GoodsReceiptForm() {
       const response = await fetch('/api/purchase-orders');
       const data: PurchaseOrder[] = await response.json();
       const openPOs = data.filter(po => 
-        ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_'))
+        ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered', 'Disputed'].includes(po.status.replace(/ /g, '_')) ||
+        po.receipts?.some(r => r.status === 'Disputed')
       );
       setPurchaseOrders(openPOs);
     } catch (error) {
@@ -169,6 +172,11 @@ export function GoodsReceiptForm() {
         setSubmitting(false);
       }
   };
+
+  const isSelectedPODisputed = useMemo(() => {
+    if (!selectedPO) return false;
+    return selectedPO.receipts?.some(r => r.status === 'Disputed') ?? false;
+  }, [selectedPO]);
   
   return (
     <Card>
@@ -202,6 +210,15 @@ export function GoodsReceiptForm() {
             
             {selectedPO && (
                 <>
+                {isSelectedPODisputed && (
+                    <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4"/>
+                        <AlertTitle>This Order is Disputed</AlertTitle>
+                        <AlertDescription>
+                            The invoice for this purchase order was disputed. Please carefully re-verify the received quantities and conditions, then re-submit this form to confirm the correct details.
+                        </AlertDescription>
+                    </Alert>
+                )}
                 <Separator />
                 <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
                     <h3 className="text-lg font-medium">Items to Receive</h3>
@@ -266,7 +283,7 @@ export function GoodsReceiptForm() {
              <CardFooter>
                 <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackageCheck className="mr-2 h-4 w-4" />}
-                    Log Received Goods
+                    {isSelectedPODisputed ? 'Confirm & Re-Submit Receipt' : 'Log Received Goods'}
                 </Button>
             </CardFooter>
           )}
