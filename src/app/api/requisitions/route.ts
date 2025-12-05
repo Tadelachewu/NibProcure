@@ -355,7 +355,6 @@ export async function PATCH(
         }
 
     }
-
     // This is a high-level award approval/rejection
     else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') {
         
@@ -364,7 +363,7 @@ export async function PATCH(
         const isPerItemApprovalDuringDecline = (requisition.rfqSettings as any)?.awardStrategy === 'item' && 
                                               (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') &&
                                                newStatus === 'Approved';
-
+        
         if (!isPerItemApprovalDuringDecline && requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
             // Standard award approval/rejection logic here
             const userRoles = (user.roles as any[]).map(r => r.name);
@@ -729,3 +728,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
