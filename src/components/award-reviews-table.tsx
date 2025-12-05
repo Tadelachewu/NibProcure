@@ -51,6 +51,7 @@ import { Label } from './ui/label';
 import { ApprovalSummaryDialog } from './approval-summary-dialog';
 import { Badge } from './ui/badge';
 import Link from 'next/link';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 
 const PAGE_SIZE = 10;
@@ -227,6 +228,8 @@ export function AwardReviewsTable() {
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');
                   
+                  const declinedQuote = req.quotations?.find(q => q.status === 'Declined');
+
                   return (
                     <TableRow key={req.id}>
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
@@ -234,6 +237,13 @@ export function AwardReviewsTable() {
                         <TableCell>
                             <div className="flex flex-col">
                                 <span>{req.title}</span>
+                                {req.status === 'Award_Declined' && declinedQuote?.rejectionReason && (
+                                    <Alert variant="destructive" className="mt-2">
+                                        <AlertTriangle className="h-4 w-4" />
+                                        <AlertTitle>Vendor Declined</AlertTitle>
+                                        <AlertDescription>Reason: "{declinedQuote.rejectionReason}"</AlertDescription>
+                                    </Alert>
+                                )}
                                 {req.approverComment && (
                                     <div className={`text-xs flex items-start gap-1 mt-1 ${isRejectionComment ? 'text-destructive' : 'text-muted-foreground'}`}>
                                         {isRejectionComment 

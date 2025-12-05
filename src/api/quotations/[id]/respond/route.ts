@@ -15,7 +15,7 @@ export async function POST(
   console.log(`[RESPOND-AWARD] Received request for Quote ID: ${quoteId}`);
   try {
     const body = await request.json();
-    const { userId, action, quoteItemId } = body as { userId: string; action: 'accept' | 'reject'; quoteItemId?: string };
+    const { userId, action, quoteItemId, rejectionReason } = body as { userId: string; action: 'accept' | 'reject'; quoteItemId?: string, rejectionReason?: string };
     console.log(`[RESPOND-AWARD] Action: ${action} by User ID: ${userId}. Item-specific: ${!!quoteItemId}`);
 
     const user = await prisma.user.findUnique({
@@ -149,6 +149,11 @@ export async function POST(
             return { message: 'Award accepted. PO has been generated.' };
 
         } else if (action === 'reject') {
+            await tx.quotation.update({
+              where: { id: quoteId },
+              data: { rejectionReason: rejectionReason || 'No reason provided.' },
+            });
+            
             const declinedItemIds = quoteItemId
                 ? [quote.items.find(i => i.id === quoteItemId)?.requisitionItemId].filter(Boolean) as string[]
                 : requisition.items
