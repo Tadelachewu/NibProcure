@@ -356,6 +356,7 @@ async function main() {
               deadline: reqData.deadline ? new Date(reqData.deadline) : undefined,
               scoringDeadline: reqData.scoringDeadline ? new Date(reqData.scoringDeadline) : undefined,
               awardResponseDeadline: reqData.awardResponseDeadline ? new Date(reqData.awardResponseDeadline) : undefined,
+              transactionId: reqData.id,
           }
       });
 
@@ -560,6 +561,7 @@ async function main() {
       update: {},
       create: {
           ...logData,
+          transactionId: log.entityId, // Use the entityId as the transactionId for seeded logs
           timestamp: new Date(log.timestamp),
           user: { connect: { id: userForLog.id } }
       },
@@ -578,5 +580,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-    
