@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -2525,7 +2524,7 @@ export default function QuotationDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const { user, allUsers, role, rolePermissions, rfqSenderSetting, committeeQuorum } = useAuth();
+  const { user, allUsers, role, rolePermissions, rfqSenderSetting, committeeQuorum, token } = useAuth();
   const id = params.id as string;
 
   const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
@@ -2715,68 +2714,69 @@ export default function QuotationDetailsPage() {
   }, [quotesForDisplay, currentQuotesPage]);
 
 
-  const fetchRequisitionAndQuotes = useCallback(async () => {
-      if (!id) return;
-      setLoading(true);
-      try {
-          const [reqResponse, venResponse, quoResponse] = await Promise.all([
-              fetch(`/api/requisitions/${id}`),
-              fetch('/api/vendors'),
-              fetch(`/api/quotations?requisitionId=${id}`),
-          ]);
-          const currentReq = await reqResponse.json();
-          const venData = await venResponse.json();
-          let quoData: Quotation[] = await quoResponse.json();
+  const fetchRequisitionAndQuotes = useCallback(async (isTriggeredByDeadlineCheck = false) => {
+    if (!id) return;
+    if (!isTriggeredByDeadlineCheck) setLoading(true);
 
-          if (currentReq) {
-              setVendors(venData || []);
+    try {
+        const [reqResponse, venResponse, quoResponse] = await Promise.all([
+            fetch(`/api/requisitions/${id}`),
+            fetch('/api/vendors'),
+            fetch(`/api/quotations?requisitionId=${id}`),
+        ]);
+        const currentReq = await reqResponse.json();
+        const venData = await venResponse.json();
+        let quoData: Quotation[] = await quoResponse.json();
 
-              // --- Start of new frontend calculation logic ---
-              if (currentReq.evaluationCriteria && quoData.length > 0) {
-                quoData = quoData.map(quote => {
-                    const itemBids: {requisitionItemId: string; championBidScore: number;}[] = [];
+        if (currentReq) {
+            setVendors(venData || []);
 
-                    for (const reqItem of currentReq.items) {
-                        const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
-                        if (proposalsForItem.length === 0) continue;
+            // --- Start of new frontend calculation logic ---
+            if (currentReq.evaluationCriteria && quoData.length > 0) {
+              quoData = quoData.map(quote => {
+                  const itemBids: {requisitionItemId: string; championBidScore: number;}[] = [];
 
-                        const calculatedProposals = proposalsForItem.map(proposal => {
-                            let totalItemScore = 0;
-                            let scoreCount = 0;
-                            quote.scores?.forEach(scoreSet => {
-                                const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                                if (itemScore) {
-                                    totalItemScore += itemScore.finalScore;
-                                    scoreCount++;
-                                }
-                            });
-                            return scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                        });
+                  for (const reqItem of currentReq.items) {
+                      const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
+                      if (proposalsForItem.length === 0) continue;
 
-                        const championBidScore = Math.max(...calculatedProposals);
-                        itemBids.push({ requisitionItemId: reqItem.id, championBidScore });
-                    }
-                    
-                    const finalVendorScore = itemBids.length > 0
-                        ? itemBids.reduce((acc, bid) => acc + bid.championBidScore, 0) / itemBids.length
-                        : 0;
+                      const calculatedProposals = proposalsForItem.map(proposal => {
+                          let totalItemScore = 0;
+                          let scoreCount = 0;
+                          quote.scores?.forEach(scoreSet => {
+                              const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
+                              if (itemScore) {
+                                  totalItemScore += itemScore.finalScore;
+                                  scoreCount++;
+                              }
+                          });
+                          return scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                      });
 
-                    return { ...quote, finalAverageScore: finalVendorScore };
-                });
-              }
-              // --- End of new frontend calculation logic ---
+                      const championBidScore = Math.max(...calculatedProposals);
+                      itemBids.push({ requisitionItemId: reqItem.id, championBidScore });
+                  }
+                  
+                  const finalVendorScore = itemBids.length > 0
+                      ? itemBids.reduce((acc, bid) => acc + bid.championBidScore, 0) / itemBids.length
+                      : 0;
 
-              setRequisition({...currentReq, quotations: quoData});
-              setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-          } else {
-              toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
-          }
+                  return { ...quote, finalAverageScore: finalVendorScore };
+              });
+            }
+            // --- End of new frontend calculation logic ---
 
-      } catch (error) {
-          toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
-      } finally {
-          setLoading(false);
-      }
+            setRequisition({...currentReq, quotations: quoData});
+            setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
+        }
+
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
+    } finally {
+        if (!isTriggeredByDeadlineCheck) setLoading(false);
+    }
   }, [id, toast]);
 
   useEffect(() => {
@@ -2785,6 +2785,52 @@ export default function QuotationDetailsPage() {
     }
   }, [id, user, fetchRequisitionAndQuotes]);
   
+  // --- New Deadline Check Logic ---
+  useEffect(() => {
+    if (!requisition || !user || !token || requisition.status !== 'Awarded') return;
+
+    const checkAndDecline = async () => {
+        let needsRefresh = false;
+        const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
+        const now = new Date();
+
+        if (requisition.awardResponseDeadline && isPast(now)) {
+             if (awardStrategy === 'item') {
+                 for (const item of requisition.items) {
+                    const awardDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                    for (const detail of awardDetails) {
+                        if (detail.status === 'Awarded') {
+                             needsRefresh = true;
+                             await fetch(`/api/quotations/${detail.quotationId}/respond`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                body: JSON.stringify({ userId: user.id, action: 'reject', quoteItemId: detail.quoteItemId, rejectionReason: 'deadline is passed' })
+                            });
+                        }
+                    }
+                }
+             } else { // Single vendor award
+                 const awardedQuote = quotations.find(q => q.status === 'Awarded');
+                 if (awardedQuote) {
+                     needsRefresh = true;
+                      await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ userId: user.id, action: 'reject', rejectionReason: 'deadline is passed' })
+                    });
+                 }
+             }
+        }
+        
+        if (needsRefresh) {
+            toast({ title: 'Deadline Expired', description: 'An awarded vendor failed to respond in time. The award has been automatically declined.' });
+            fetchRequisitionAndQuotes(true);
+        }
+    };
+
+    checkAndDecline();
+  }, [requisition, quotations, user, token, toast, fetchRequisitionAndQuotes]);
+
 
   const handleFinalizeScores = async (
     awardStrategy: 'all' | 'item', 
@@ -3357,3 +3403,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
+
