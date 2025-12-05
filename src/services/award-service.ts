@@ -316,7 +316,8 @@ export async function handleAwardRejection(
                     entity: 'Requisition', 
                     entityId: requisition.id, 
                     details: 'Award was declined and no standby vendors were available. The RFQ process has been automatically reset.', 
-                    transactionId: requisition.transactionId 
+                    transactionId: requisition.transactionId,
+                    user: { connect: { id: actor.id } },
                 } 
             });
             await deepCleanRequisition(tx, requisition.id);
@@ -435,6 +436,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         
         await tx.auditLog.create({
             data: {
+                timestamp: new Date(),
                 user: { connect: { id: actor.id } },
                 action: 'PROMOTE_STANDBY',
                 entity: 'Requisition',
@@ -470,6 +472,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             await tx.purchaseRequisition.update({ where: { id: requisitionId }, data: { status: 'Scoring_Complete' }});
             await tx.auditLog.create({
                 data: {
+                    timestamp: new Date(),
                     user: { connect: { id: actor.id } },
                     action: 'AWARD_FAILURE',
                     entity: 'Requisition',
