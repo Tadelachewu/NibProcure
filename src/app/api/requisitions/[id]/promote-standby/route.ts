@@ -16,15 +16,28 @@ export async function POST(
     const actor = await getActorFromToken(request);
 
     if (!actor) {
-      return NextResponse.json({ error: 'Unauthorized: Invalid Token' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+    
+    // Corrected Authorization Logic based on RFQ Sender Settings
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    const userRoles = actor.roles as UserRole[];
+
+    if (userRoles.includes('Admin')) {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userId?: string };
+        if (setting.type === 'specific') {
+            isAuthorized = setting.userId === actor.id;
+        } else { // 'all' case
+            isAuthorized = userRoles.includes('Procurement_Officer');
+        }
     }
 
-    // Corrected Authorization Logic
-    const userRoles = actor.roles as UserRole[];
-    const isAuthorized = userRoles.includes('Admin') || userRoles.includes('Procurement_Officer');
 
     if (!isAuthorized) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        return NextResponse.json({ error: 'Unauthorized to promote standby vendors based on system settings.' }, { status: 403 });
     }
 
     const result = await prisma.$transaction(async (tx) => {
