@@ -16,24 +16,12 @@ export async function POST(
     const actor = await getActorFromToken(request);
 
     if (!actor) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return NextResponse.json({ error: 'Unauthorized: Invalid Token' }, { status: 401 });
     }
 
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    let isAuthorized = false;
+    // Corrected Authorization Logic
     const userRoles = actor.roles as UserRole[];
-
-    if (userRoles.includes('Admin')) {
-        isAuthorized = true;
-    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userId?: string };
-        if (setting.type === 'specific') {
-            isAuthorized = setting.userId === actor.id;
-        } else { // 'all' case
-            isAuthorized = userRoles.includes('Procurement_Officer');
-        }
-    }
-
+    const isAuthorized = userRoles.includes('Admin') || userRoles.includes('Procurement_Officer');
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
