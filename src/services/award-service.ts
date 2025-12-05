@@ -233,6 +233,19 @@ export async function handleAwardRejection(
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
     
+    // If the rejection is coming from a goods receipt, also dispute the invoice.
+    if (actor.roles.some((r: any) => r.name === 'Receiving')) {
+        const invoice = await tx.invoice.findFirst({
+            where: { purchaseOrderId: quote.id.startsWith('QUO-') ? requisition.purchaseOrders[0].id : quote.purchaseOrderId }
+        });
+        if (invoice) {
+            await tx.invoice.update({
+                where: { id: invoice.id },
+                data: { status: 'Disputed', disputeReason: rejectionReason }
+            });
+        }
+    }
+
     if (awardStrategy === 'item') {
         let itemsUpdated = 0;
         

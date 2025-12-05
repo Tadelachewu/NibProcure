@@ -4,34 +4,63 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
+import { handleAwardRejection } from '@/services/award-service';
+import { POItem } from '@prisma/client';
 
 export async function POST(request: Request) {
+  const actor = await getActorFromToken(request);
+  if (!actor || !(actor.roles as string[]).includes('Receiving')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { purchaseOrderId, items: receivedItems } = body;
+
   try {
-    const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Receiving')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    const body = await request.json();
-    const { purchaseOrderId, items } = body;
-
     const txResult = await prisma.$transaction(async (tx) => {
         const po = await tx.purchaseOrder.findUnique({ 
             where: { id: purchaseOrderId },
-            include: { items: true }
+            include: { 
+              items: true,
+              requisition: { include: { items: true, quotations: true } }
+            }
         });
 
-        if (!po) {
-          throw new Error('Purchase Order not found');
+        if (!po || !po.requisition) {
+          throw new Error('Purchase Order or associated requisition not found');
         }
 
+        const defectiveItems = receivedItems.filter((item: any) => item.condition === 'Damaged' || item.condition === 'Incorrect');
+        
+        if (defectiveItems.length > 0) {
+            for (const defectiveItem of defectiveItems) {
+                const poItem = po.items.find(pi => pi.id === defectiveItem.poItemId) as POItem;
+                if (!poItem) continue;
+
+                // The quote that won this item award
+                const winningQuote = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
+                if (!winningQuote) continue;
+                
+                await handleAwardRejection(
+                    tx as any,
+                    winningQuote,
+                    po.requisition,
+                    actor,
+                    [poItem.requisitionItemId], // Pass the specific requisition item ID that failed
+                    undefined, // No specific quote item ID is being rejected by the receiver
+                    defectiveItem.notes || 'Goods received were damaged or incorrect.'
+                );
+            }
+        }
+        
+        // Always create the GRN to log what was physically received, even if defective
         const newReceipt = await tx.goodsReceiptNote.create({
           data: {
               transactionId: po.transactionId,
               purchaseOrder: { connect: { id: purchaseOrderId } },
               receivedBy: { connect: { id: actor.id } },
               items: {
-                  create: items.map((item: any) => ({
+                  create: receivedItems.map((item: any) => ({
                       poItemId: item.poItemId,
                       quantityReceived: item.quantityReceived,
                       condition: item.condition.replace(/ /g, '_'),
@@ -43,7 +72,7 @@ export async function POST(request: Request) {
 
         let allItemsDelivered = true;
         for (const poItem of po.items) {
-            const receivedItem = items.find((i: { poItemId: string; }) => i.poItemId === poItem.id);
+            const receivedItem = receivedItems.find((i: { poItemId: string; }) => i.poItemId === poItem.id);
             let newReceivedQuantity = poItem.receivedQuantity;
             if (receivedItem) {
                 newReceivedQuantity += receivedItem.quantityReceived;
@@ -65,17 +94,7 @@ export async function POST(request: Request) {
             data: { status: newPOStatus }
         });
         
-        if (newPOStatus === 'Delivered') {
-            await tx.quotation.updateMany({
-                where: {
-                    requisitionId: po.requisitionId,
-                    status: 'Standby'
-                },
-                data: { status: 'Rejected' }
-            });
-        }
-
-        await prisma.auditLog.create({
+        await tx.auditLog.create({
             data: {
                 transactionId: po.transactionId,
                 user: { connect: { id: actor.id } },
@@ -83,7 +102,7 @@ export async function POST(request: Request) {
                 action: 'RECEIVE_GOODS',
                 entity: 'PurchaseOrder',
                 entityId: po.id,
-                details: `Created Goods Receipt Note ${newReceipt.id}. PO status: ${newPOStatus.replace(/_/g, ' ')}.`,
+                details: `Created Goods Receipt Note ${newReceipt.id}. PO status: ${newPOStatus.replace(/_/g, ' ')}. ${defectiveItems.length > 0 ? `Flagged ${defectiveItems.length} defective item(s), triggering award review.` : ''}`,
             }
         });
 
