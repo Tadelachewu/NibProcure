@@ -219,6 +219,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
  * @param actor - The user performing the action.
  * @param declinedItemIds - The specific requisition item IDs that were declined (for per-item awards).
  * @param rejectedQuoteItemId - The specific quote item that was rejected (for per-item awards).
+ * @param rejectionReason - The reason for the decline.
  * @returns A message indicating the result of the operation.
  */
 export async function handleAwardRejection(
@@ -227,7 +228,8 @@ export async function handleAwardRejection(
     requisition: any,
     actor: any,
     declinedItemIds: string[] = [],
-    rejectedQuoteItemId?: string
+    rejectedQuoteItemId?: string,
+    rejectionReason: string = 'No reason provided.'
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
     
@@ -235,27 +237,28 @@ export async function handleAwardRejection(
         let itemsUpdated = 0;
         
         // Find the specific requisition item that was declined
-        const itemToUpdate = requisition.items.find((item: any) => 
-            (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.quoteItemId === rejectedQuoteItemId)
-        );
+        for (const reqItemId of declinedItemIds) {
+            const itemToUpdate = requisition.items.find((item: any) => item.id === reqItemId);
 
-        if (!itemToUpdate) {
-            throw new Error(`Could not find a requisition item associated with the rejected quote item ID: ${rejectedQuoteItemId}`);
-        }
-        
-        const awardDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-        const updatedDetails = awardDetails.map(d => {
-            if (d.quoteItemId === rejectedQuoteItemId) {
-                itemsUpdated++;
-                return { ...d, status: 'Declined' as const };
+            if (!itemToUpdate) {
+                console.warn(`Could not find a requisition item with ID: ${reqItemId}`);
+                continue;
             }
-            return d;
-        });
+            
+            const awardDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
+            const updatedDetails = awardDetails.map(d => {
+                if (d.vendorId === quote.vendorId) { // Mark this vendor's bid for this item as Declined
+                    itemsUpdated++;
+                    return { ...d, status: 'Declined' as const };
+                }
+                return d;
+            });
 
-        await tx.requisitionItem.update({
-            where: { id: itemToUpdate.id },
-            data: { perItemAwardDetails: updatedDetails as any }
-        });
+            await tx.requisitionItem.update({
+                where: { id: itemToUpdate.id },
+                data: { perItemAwardDetails: updatedDetails as any }
+            });
+        }
         
         if (itemsUpdated > 0) {
             // Set main status to Award_Declined immediately.
@@ -268,7 +271,7 @@ export async function handleAwardRejection(
                     action: 'DECLINE_AWARD', 
                     entity: 'Requisition', 
                     entityId: requisition.id, 
-                    details: `Vendor ${quote.vendorName} declined the award for item "${itemToUpdate.name}". Manual promotion of standby is now possible.`, 
+                    details: `Award for ${itemsUpdated} item(s) was declined by ${actor.name} (Role: ${(actor.roles as any[]).map(r=>r.name).join(', ')}). Reason: ${rejectionReason}. Manual promotion of standby is now possible.`, 
                     transactionId: requisition.transactionId 
                 } 
             });
@@ -278,7 +281,7 @@ export async function handleAwardRejection(
         throw new Error("No awarded items found for this vendor to decline.");
 
     } else { // Single Vendor Strategy
-        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined' } });
+        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined', rejectionReason } });
         
         await tx.auditLog.create({ 
             data: { 
@@ -287,7 +290,7 @@ export async function handleAwardRejection(
                 action: 'DECLINE_AWARD', 
                 entity: 'Quotation', 
                 entityId: quote.id, 
-                details: `Vendor declined award.`, 
+                details: `Award declined by ${actor.name}. Reason: ${rejectionReason}`, 
                 transactionId: requisition.transactionId 
             } 
         });

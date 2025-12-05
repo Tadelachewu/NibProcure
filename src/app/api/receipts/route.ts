@@ -46,8 +46,8 @@ export async function POST(request: Request) {
                     winningQuote,
                     po.requisition,
                     actor,
-                    [poItem.requisitionItemId],
-                    undefined,
+                    [poItem.requisitionItemId], // Pass the specific requisition item ID that failed
+                    undefined, // No specific quote item ID is being rejected by the receiver
                     defectiveItem.notes || 'Goods received were damaged or incorrect.'
                 );
             }
