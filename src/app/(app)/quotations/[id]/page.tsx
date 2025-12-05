@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -1946,7 +1945,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                         <div ref={printRef} className="p-1 space-y-6 bg-background text-foreground print:bg-white print:text-black">
                             <div className="hidden print:block text-center mb-8 pt-4">
                                 <Image src="/logo.png" alt="Logo" width={40} height={40} className="mx-auto mb-2" />
-                                <h1 className="text-2xl font-bold text-black">Scoring & Award Justification Report</h1>
+                                <h1 className="text-2xl font-bold text-black">Scoring &amp; Award Justification Report</h1>
                                 <p className="text-gray-600">{requisition.title}</p>
                                 <p className="text-sm text-gray-500">{requisition.id}</p>
                                 <p className="text-sm text-gray-500">Report Generated: {format(new Date(), 'PPpp')}</p>
@@ -2793,32 +2792,30 @@ export default function QuotationDetailsPage() {
     const checkAndDecline = async () => {
         let needsRefresh = false;
         
-        // This check runs only once per page load.
         if (requisition.awardResponseDeadline && isPast(new Date(requisition.awardResponseDeadline))) {
             const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
             
             if (awardStrategy === 'item') {
                  for (const item of requisition.items) {
                     const awardDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-                    for (const detail of awardDetails) {
-                        // Crucially, only act on items that are still in 'Awarded' state.
-                        if (detail.status === 'Awarded') {
-                             needsRefresh = true;
-                             await fetch(`/api/quotations/${detail.quotationId}/respond`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                body: JSON.stringify({ userId: user.id, action: 'reject', quoteItemId: detail.quoteItemId, rejectionReason: 'deadline is passed' })
-                            });
-                        }
+                    const awardedDetail = awardDetails.find(d => d.status === 'Awarded' || d.status === 'Pending_Award');
+                    
+                    if (awardedDetail) {
+                         needsRefresh = true;
+                         await fetch(`/api/quotations/${awardedDetail.quotationId}/respond`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ userId: user.id, action: 'reject', quoteItemId: awardedDetail.quoteItemId, rejectionReason: 'deadline is passed' })
+                        });
                     }
                 }
-            } else { // Single vendor award
-                 const awardedQuote = quotations.find(q => q.status === 'Awarded');
+            } else {
+                 const awardedQuote = quotations.find(q => q.status === 'Awarded' || q.status === 'Pending_Award');
                  if (awardedQuote) {
                      needsRefresh = true;
                       await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ userId: user.id, action: 'reject', rejectionReason: 'deadline is passed' })
                     });
                  }
