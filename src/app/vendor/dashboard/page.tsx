@@ -115,7 +115,7 @@ export default function VendorDashboardPage() {
                         body: JSON.stringify({
                             userId: user.id,
                             action: 'reject',
-                            rejectionReason: 'Vendor did not respond before the deadline.'
+                            rejectionReason: 'deadline is passed'
                         })
                     });
                     // After declining one, we'll just refetch everything to get the latest state.
@@ -417,3 +417,5 @@ export default function VendorDashboardPage() {
         </div>
     )
 }
+
+    
