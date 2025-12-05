@@ -413,7 +413,7 @@ export async function PATCH(
               await tx.signature.create({
                 data: {
                   minute: { connect: { id: latestMinute.id } },
-                  signerId: userId,
+                  signer: { connect: { id: userId } },
                   signerName: user.name,
                   signerRole: (user.roles as any[]).map(r => r.name).join(', '),
                   decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
