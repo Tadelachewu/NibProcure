@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -16,31 +18,50 @@ export async function GET(request: Request) {
     const userRoles = actor.roles as UserRole[];
     const userId = actor.id;
 
-    // Build the main query conditions
-    const orConditions: any[] = [
-      // The user is the direct current approver.
-      { currentApproverId: userId },
-      // The status matches a committee role the user has.
-      { status: { in: userRoles.map(r => `Pending_${r}`) } },
-    ];
-    
-    // If a user is an Admin or Procurement Officer, they should see all pending reviews
-    if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-        const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
-        const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
-        orConditions.push({
-            status: { in: allPossiblePendingStatuses }
-        });
-        // Also show items ready for notification
-        orConditions.push({ status: 'PostApproved' });
-    }
-
-    const requisitionsForUser = await prisma.purchaseRequisition.findMany({
+    // --- Start of Enhanced Fetching Logic ---
+    const allRequisitions = await prisma.purchaseRequisition.findMany({
         where: {
-            OR: orConditions
+            status: { 
+                in: [
+                    'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review',
+                    'Pending_Managerial_Approval', 'Pending_Director_Approval',
+                    'Pending_VP_Approval', 'Pending_President_Approval', 'PostApproved',
+                    'Award_Declined', 'Partially_Closed'
+                ]
+            }
         },
         include: { items: true, reviews: true }
     });
+
+    const requisitionsForUser = allRequisitions.filter(req => {
+        const isAdminOrProcurement = userRoles.includes('Admin') || userRoles.includes('Procurement_Officer');
+
+        // Admins and Procurement Officers can see everything in review, including declined items.
+        if (isAdminOrProcurement) {
+            return true;
+        }
+        
+        // If the status is declined, regular reviewers should NOT see it.
+        if (req.status === 'Award_Declined' || req.status === 'Partially_Closed') {
+            return false;
+        }
+
+        // Direct assignment always grants access
+        if (req.currentApproverId === userId) {
+            return true;
+        }
+
+        // Check if user has the role required by the current main status
+        if (req.status.startsWith('Pending_')) {
+            const requiredRole = req.status.replace('Pending_', '');
+            if (userRoles.includes(requiredRole as UserRole)) {
+                return true;
+            }
+        }
+
+        return false;
+    });
+    // --- End of Enhanced Fetching Logic ---
 
     const requisitionIds = requisitionsForUser.map(r => r.id);
 
@@ -121,13 +142,14 @@ export async function GET(request: Request) {
 
     const requisitionsWithDetails = detailedRequisitions.map(req => {
       let isActionable = false;
-      if (req.currentApproverId === userId) {
-        isActionable = true;
-      } else if (req.status.startsWith('Pending_')) {
-        const requiredRole = req.status.replace('Pending_', '');
-        if (userRoles.includes(requiredRole as UserRole)) {
-          // This is a committee-level approval, so it's actionable if the user is part of that committee.
+      if (req.status.startsWith('Pending_')) {
+        if (req.currentApproverId === userId) {
           isActionable = true;
+        } else {
+          const requiredRole = req.status.replace('Pending_', '');
+          if (userRoles.includes(requiredRole as UserRole)) {
+            isActionable = true;
+          }
         }
       }
       
