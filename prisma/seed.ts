@@ -21,6 +21,7 @@ async function main() {
   await prisma.quotation.deleteMany({});
   await prisma.review.deleteMany({});
   await prisma.committeeAssignment.deleteMany({});
+  await prisma.signature.deleteMany({});
   await prisma.minute.deleteMany({});
   await prisma.receiptItem.deleteMany({});
   await prisma.goodsReceiptNote.deleteMany({});
@@ -210,14 +211,17 @@ async function main() {
   for (const user of seedData.users.filter(u => u.role !== 'Vendor')) {
     const { committeeAssignments, department, departmentId, vendorId, password, managingDepartment, ...userData } = user;
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
-    const formattedRoleName = userData.role.replace(/ /g, '_');
+    
+    // Ensure roles are in the correct format for connection
+    const userRoles = Array.isArray(userData.roles) ? userData.roles : [userData.role];
+    const connectRoles = userRoles.map(r => ({ name: r.replace(/ /g, '_') }));
 
     await prisma.user.upsert({
       where: { id: user.id },
       update: {
           name: userData.name,
           email: userData.email,
-          roles: { connect: { name: formattedRoleName } },
+          roles: { set: connectRoles }, // Use 'set' to replace existing roles
           department: departmentId ? { connect: { id: departmentId } } : undefined,
       },
       create: {
@@ -225,7 +229,7 @@ async function main() {
           name: userData.name,
           email: userData.email,
           password: hashedPassword,
-          roles: { connect: { name: formattedRoleName } },
+          roles: { connect: connectRoles },
           department: departmentId ? { connect: { id: departmentId } } : undefined,
       },
     });
@@ -255,7 +259,7 @@ async function main() {
       }
 
       const hashedPassword = await bcrypt.hash(vendorUser.password || 'password123', 10);
-      const formattedRoleName = vendorUser.role.replace(/ /g, '_');
+      const formattedRoleName = (Array.isArray(vendorUser.roles) ? vendorUser.roles[0] : vendorUser.role).replace(/ /g, '_');
 
       // Create user for the vendor first
       const createdUser = await prisma.user.upsert({
@@ -263,14 +267,14 @@ async function main() {
           update: {
               name: vendorUser.name,
               email: vendorUser.email,
-              roles: { connect: { name: formattedRoleName } },
+              roles: { set: [{ name: formattedRoleName }] },
           },
           create: {
               id: vendorUser.id,
               name: vendorUser.name,
               email: vendorUser.email,
               password: hashedPassword,
-              roles: { connect: { name: formattedRoleName } },
+              roles: { connect: [{ name: formattedRoleName }] },
           }
       });
 
@@ -340,7 +344,6 @@ async function main() {
           update: {},
           create: {
               ...reqData,
-              transactionId: reqData.id,
               status: reqData.status.replace(/ /g, '_') as any,
               urgency: reqData.urgency || 'Low',
               totalPrice: items.reduce((acc, item) => acc + (item.unitPrice || 0) * item.quantity, 0),
@@ -575,3 +578,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    

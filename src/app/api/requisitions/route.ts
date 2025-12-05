@@ -550,8 +550,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Department not found' }, { status: 404 });
     }
 
-    const newRequisition = await prisma.$transaction(async (tx) => {
-      const createdReq = await tx.purchaseRequisition.create({
+    const newRequisition = await prisma.purchaseRequisition.create({
         data: {
           requester: { connect: { id: actor.id } },
           department: { connect: { id: department.id } },
@@ -589,28 +588,19 @@ export async function POST(request: Request) {
             }
           } : undefined,
         },
-      });
-
-      // Now update the created requisition to set its transactionId
-      const finalReq = await tx.purchaseRequisition.update({
-        where: { id: createdReq.id },
-        data: { transactionId: createdReq.id },
         include: { items: true, customQuestions: true, evaluationCriteria: true }
       });
-
-      await tx.auditLog.create({
+      
+    await prisma.auditLog.create({
         data: {
-          transactionId: finalReq.id,
-          user: { connect: { id: actor.id } },
-          timestamp: new Date(),
-          action: 'CREATE_REQUISITION',
-          entity: 'Requisition',
-          entityId: finalReq.id,
-          details: `Created new requisition: "${finalReq.title}".`,
+            transactionId: newRequisition.id,
+            user: { connect: { id: actor.id } },
+            timestamp: new Date(),
+            action: 'CREATE_REQUISITION',
+            entity: 'Requisition',
+            entityId: newRequisition.id,
+            details: `Created new requisition: "${newRequisition.title}".`,
         }
-      });
-
-      return finalReq;
     });
 
     return NextResponse.json(newRequisition, { status: 201 });
@@ -689,3 +679,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
