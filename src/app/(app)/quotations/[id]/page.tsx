@@ -231,7 +231,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
             const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
             if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
             if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially Awarded';
-            if (vendorItemStatuses.some(s => s.status === 'Declined')) return 'Declined';
+            if (vendorItemStatuses.some(d => d.status === 'Declined')) return 'Declined';
             if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
 
             if (quote.status === 'Submitted') {
@@ -295,6 +295,18 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
+                                {quote.rejectionReason && (
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <AlertCircle className="h-4 w-4 text-destructive inline-block ml-2 cursor-help" />
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Reason for decline: {quote.rejectionReason}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                )}
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="flex-grow space-y-4">
@@ -2239,7 +2251,7 @@ const NotifyVendorDialog = ({
                             type="time"
                             className="w-32"
                             value={deadlineTime}
-                            onChange={(e) => setDeadlineTime(e.target.value)}
+                            onChange={(e) => setNewDeadlineTime(e.target.value)}
                         />
                     </div>
                 </div>
@@ -2508,71 +2520,6 @@ const RestartRfqDialog = ({ requisition, vendors, onRfqRestarted }: { requisitio
         </Dialog>
     )
 }
-    
-
-    
-
-
-
-    
-
-
-
-
-
-
-    
-
-
-
-    
-
-
-
-
-
-    
-
-
-
-    
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
-    
-
-    
-
-
-
-
-
-
     
 export default function QuotationDetailsPage() {
   const router = useRouter();
@@ -3231,6 +3178,15 @@ export default function QuotationDetailsPage() {
                 ? 'An award was declined. You may now promote a standby vendor or restart the RFQ for the failed items.'
                 : 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
             </CardDescription>
+             {requisition.quotations?.some(q => q.rejectionReason) && (
+                <Alert variant="destructive" className="mt-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Vendor Rejection Reason</AlertTitle>
+                    <AlertDescription>
+                        "{requisition.quotations.find(q => q.rejectionReason)?.rejectionReason}"
+                    </AlertDescription>
+                </Alert>
+             )}
           </CardHeader>
           <CardFooter className="gap-4">
             {(requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') ? (
@@ -3350,7 +3306,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
-
+    
     const finalNewDeadline = useMemo(() => {
         if (!newDeadlineDate) return undefined;
         const [hours, minutes] = newDeadlineTime.split(':').map(Number);
@@ -3413,76 +3369,11 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
             </CardContent>
             <CardFooter>
                 <Button onClick={handleReopen} disabled={isSubmitting || !finalNewDeadline}>
-                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} 
                     Re-open RFQ
                 </Button>
             </CardFooter>
         </Card>
     );
 };
-    
-
-    
-
-
-
-    
-
-
-
-
-
-
-    
-
-
-
-    
-
-
-
-
-
-    
-
-
-
-    
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
-    
-
-    
-
-
-
-
-
-
     

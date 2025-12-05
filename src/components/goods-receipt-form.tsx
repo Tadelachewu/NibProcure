@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -20,7 +20,7 @@ import {
 } from './ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PackageCheck } from 'lucide-react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
@@ -31,6 +31,7 @@ import { Separator } from './ui/separator';
 import { Textarea } from './ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { AlertTriangle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 
 const receiptFormSchema = z.object({
@@ -42,7 +43,20 @@ const receiptFormSchema = z.object({
     quantityReceived: z.coerce.number().min(0, "Cannot be negative."),
     condition: z.enum(['Good', 'Damaged', 'Incorrect']),
     notes: z.string().optional(),
-  })).min(1, "At least one item must be received."),
+  })).min(1, "At least one item must be received.")
+  .refine(items => {
+    // For every item, if condition is 'Damaged' or 'Incorrect', notes must be provided.
+    return items.every(item => {
+        if (item.condition === 'Damaged' || item.condition === 'Incorrect') {
+            return item.notes && item.notes.trim().length > 0;
+        }
+        return true;
+    });
+  }, {
+      message: "A reason (in the notes field) is required when an item is marked as Damaged or Incorrect.",
+      // This path is a bit tricky for array fields. We'll show a general error.
+      // A more complex setup could target specific items.
+  }),
 });
 
 type ReceiptFormValues = z.infer<typeof receiptFormSchema>;
@@ -68,6 +82,8 @@ export function GoodsReceiptForm() {
     control: form.control,
     name: "items",
   });
+  
+  const watchedItems = useWatch({ control: form.control, name: 'items'});
 
   const handlePOChange = (poId: string, restoredItems?: any[]) => {
     form.setValue('purchaseOrderId', poId);
@@ -222,8 +238,10 @@ export function GoodsReceiptForm() {
                 <Separator />
                 <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
                     <h3 className="text-lg font-medium">Items to Receive</h3>
-                    {fields.map((field, index) => (
-                        <Card key={field.id} className="p-4">
+                    {fields.map((field, index) => {
+                        const itemIsDefective = watchedItems?.[index]?.condition === 'Damaged' || watchedItems?.[index]?.condition === 'Incorrect';
+                        return (
+                        <Card key={field.id} className={cn("p-4", itemIsDefective && "border-destructive/50 ring-2 ring-destructive/20")}>
                             <p className="font-semibold mb-2">{field.name}</p>
                             <p className="text-sm text-muted-foreground mb-4">Ordered: {field.quantityOrdered}</p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -263,9 +281,9 @@ export function GoodsReceiptForm() {
                                     name={`items.${index}.notes`}
                                     render={({ field }) => (
                                         <FormItem className="md:col-span-2">
-                                            <FormLabel>Item Notes</FormLabel>
+                                            <FormLabel>Item Notes {itemIsDefective && <span className="text-destructive">*</span>}</FormLabel>
                                             <FormControl>
-                                                <Textarea placeholder="e.g. Box was dented but item is fine" {...field} />
+                                                <Textarea placeholder={itemIsDefective ? "Reason for damaged/incorrect status is required..." : "e.g. Box was dented but item is fine"} {...field} />
                                             </FormControl>
                                             <FormMessage />
                                         </FormItem>
@@ -273,7 +291,7 @@ export function GoodsReceiptForm() {
                                 />
                             </div>
                         </Card>
-                    ))}
+                    )})}
                 </div>
                 </>
             )}
