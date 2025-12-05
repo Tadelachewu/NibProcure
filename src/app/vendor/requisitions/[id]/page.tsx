@@ -352,7 +352,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
 
         setSubmitting(true);
         try {
-            const url = isEditMode ? `/api/quotations/${quote.id}` : '/api/quotations';
+            const url = isEditMode ? `/api/quotations/${quote!.id}` : '/api/quotations';
             const method = isEditMode ? 'PATCH' : 'POST';
 
             const response = await fetch(url, {
@@ -739,8 +739,8 @@ export default function VendorRequisitionPage() {
         if (!submittedQuote) return [];
         
         // In a single-vendor award, the awarded items are on the main requisition
-        if (isFullyAwarded && requisition.awardedQuoteItemIds.length > 0) {
-            const awardedItemIds = new Set(requisition.awardedQuoteItemIds);
+        if (isFullyAwarded && requisition!.awardedQuoteItemIds.length > 0) {
+            const awardedItemIds = new Set(requisition!.awardedQuoteItemIds);
             return submittedQuote.items.filter(item => awardedItemIds.has(item.id));
         }
 
@@ -1006,9 +1006,23 @@ export default function VendorRequisitionPage() {
                                                     <p className="text-sm text-muted-foreground">Unit Price: {quoteItem?.unitPrice.toLocaleString()} ETB</p>
                                                 </div>
                                                 <div className="flex gap-2">
-                                                    <Button size="sm" onClick={() => handleAwardResponse('accept', undefined, quoteItem?.id)} disabled={isResponding || isResponseDeadlineExpired}>
-                                                        <ThumbsUp className="mr-2 h-4 w-4" /> Accept
-                                                    </Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button size="sm" disabled={isResponding || isResponseDeadlineExpired}>
+                                                                <ThumbsUp className="mr-2 h-4 w-4" /> Accept
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Confirm Acceptance</AlertDialogTitle>
+                                                                <AlertDialogDescription>Are you sure you want to accept the award for this item?</AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => handleAwardResponse('accept', undefined, quoteItem?.id)}>Confirm</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
                                                     <Button size="sm" variant="destructive" onClick={() => setDeclineState({isOpen: true, quoteItemId: quoteItem?.id})} disabled={isResponding || isResponseDeadlineExpired}>
                                                         <ThumbsDown className="mr-2 h-4 w-4" /> Decline
                                                     </Button>
@@ -1020,9 +1034,26 @@ export default function VendorRequisitionPage() {
                             </div>
                          ) : (
                             <div className="flex gap-4">
-                                <Button onClick={() => handleAwardResponse('accept')} disabled={isResponding || isResponseDeadlineExpired}>
-                                    <ThumbsUp className="mr-2 h-4 w-4" /> Accept Full Award
-                                </Button>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button disabled={isResponding || isResponseDeadlineExpired}>
+                                            <ThumbsUp className="mr-2 h-4 w-4" /> Accept Full Award
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Confirm Full Award Acceptance</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                This will accept the award for all items listed in this offer. This action cannot be undone.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={() => handleAwardResponse('accept')}>Confirm & Accept</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                                
                                 <Button variant="destructive" onClick={() => setDeclineState({ isOpen: true })} disabled={isResponding || isResponseDeadlineExpired}>
                                     <ThumbsDown className="mr-2 h-4 w-4" /> Decline Award
                                 </Button>
