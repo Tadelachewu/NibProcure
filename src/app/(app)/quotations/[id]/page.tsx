@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -1081,199 +1082,198 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const canTakeAction = !isSent && isAuthorized;
 
     return (
-        <>
-            <Card className={cn(isSent && "bg-muted/30")}>
-                <CardHeader>
-                    <div className="flex flex-row items-center justify-between">
-                        <div>
-                            <CardTitle>RFQ Distribution</CardTitle>
-                            <CardDescription>
-                                {isSent
-                                ? "The RFQ has been distributed to vendors."
-                                : "Send the Request for Quotation to vendors to begin receiving bids."
-                                }
-                            </CardDescription>
-                        </div>
+        <Card className={cn(isSent && "bg-muted/30")}>
+            <CardHeader>
+                <div className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>RFQ Distribution</CardTitle>
+                        <CardDescription>
+                            {isSent
+                            ? "The RFQ has been distributed to vendors."
+                            : "Send the Request for Quotation to vendors to begin receiving bids."
+                            }
+                        </CardDescription>
                     </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {!isAuthorized && !isSent && (
-                        <Alert variant="default" className="border-amber-500/50">
-                            <AlertCircle className="h-4 w-4 text-amber-600" />
-                            <AlertTitle>Read-Only Mode</AlertTitle>
-                            <AlertDescription>
-                                You do not have permission to send RFQs based on current system settings.
-                            </AlertDescription>
-                        </Alert>
-                    )}
-                    <div className="space-y-2">
-                        <Label>Quotation Submission Deadline</Label>
-                        <div className="flex gap-2">
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant={"outline"}
-                                        disabled={!canTakeAction}
-                                        className={cn(
-                                        "w-full justify-start text-left font-normal",
-                                        !deadlineDate && "text-muted-foreground"
-                                        )}
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {deadlineDate ? format(deadlineDate, "PPP") : <span>Pick a date</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                        mode="single"
-                                        selected={deadlineDate}
-                                        onSelect={setDeadlineDate}
-                                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) || !canTakeAction}
-                                        initialFocus
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                            <Input
-                                type="time"
-                                className="w-32"
-                                value={deadlineTime}
-                                onChange={(e) => setDeadlineTime(e.target.value)}
-                                disabled={!canTakeAction}
-                            />
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Distribution Type</Label>
-                        <Select value={distributionType} onValueChange={(v) => setDistributionType(v as any)} disabled={!canTakeAction}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Send to all verified vendors</SelectItem>
-                                <SelectItem value="select">Send to selected vendors</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="cpoAmount">CPO Amount (ETB)</Label>
-                        <div className="relative">
-                            <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                id="cpoAmount"
-                                type="number"
-                                placeholder="Enter required CPO amount"
-                                className="pl-10"
-                                value={cpoAmount || ''}
-                                onChange={(e) => setCpoAmount(Number(e.target.value))}
-                                disabled={!canTakeAction}
-                            />
-                        </div>
-                        <p className="text-xs text-muted-foreground">Optional. If set, vendors must submit a CPO of this amount to qualify.</p>
-                    </div>
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="allow-edits">Allow Quote Edits</Label>
-                                <Switch
-                                    id="allow-edits"
-                                    checked={allowQuoteEdits}
-                                    onCheckedChange={setAllowQuoteEdits}
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {!isAuthorized && !isSent && (
+                    <Alert variant="default" className="border-amber-500/50">
+                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                        <AlertTitle>Read-Only Mode</AlertTitle>
+                        <AlertDescription>
+                            You do not have permission to send RFQs based on current system settings.
+                        </AlertDescription>
+                    </Alert>
+                )}
+                <div className="space-y-2">
+                    <Label>Quotation Submission Deadline</Label>
+                    <div className="flex gap-2">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
                                     disabled={!canTakeAction}
+                                    className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !deadlineDate && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {deadlineDate ? format(deadlineDate, "PPP") : <span>Pick a date</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                    mode="single"
+                                    selected={deadlineDate}
+                                    onSelect={setDeadlineDate}
+                                    disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) || !canTakeAction}
+                                    initialFocus
                                 />
-                            </div>
-                            <p className="text-xs text-muted-foreground">If enabled, vendors can edit their submitted quotes until the deadline passes.</p>
-                        </div>
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="experience-doc">Require Experience Document</Label>
-                                <Switch
-                                    id="experience-doc"
-                                    checked={experienceDocumentRequired}
-                                    onCheckedChange={setExperienceDocumentRequired}
-                                    disabled={!canTakeAction}
-                                />
-                            </div>
-                            <p className="text-xs text-muted-foreground">If enabled, vendors must upload a document detailing their relevant experience.</p>
-                        </div>
+                            </PopoverContent>
+                        </Popover>
+                        <Input
+                            type="time"
+                            className="w-32"
+                            value={deadlineTime}
+                            onChange={(e) => setDeadlineTime(e.target.value)}
+                            disabled={!canTakeAction}
+                        />
                     </div>
+                </div>
+                <div className="space-y-2">
+                    <Label>Distribution Type</Label>
+                    <Select value={distributionType} onValueChange={(v) => setDistributionType(v as any)} disabled={!canTakeAction}>
+                        <SelectTrigger>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Send to all verified vendors</SelectItem>
+                            <SelectItem value="select">Send to selected vendors</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
-                    {distributionType === 'select' && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg">Select Vendors</CardTitle>
-                                <div className="relative mt-2">
-                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        placeholder="Search vendors..."
-                                        className="pl-8 w-full"
-                                        value={vendorSearch}
-                                        onChange={(e) => setVendorSearch(e.target.value)}
-                                        disabled={!canTakeAction}
-                                    />
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <ScrollArea className="h-60">
-                                    <div className="space-y-4">
-                                    {filteredVendors.map(vendor => (
-                                        <div key={vendor.id} className="flex items-start space-x-4 rounded-md border p-4 has-[:checked]:bg-muted">
-                                            <Checkbox
-                                                id={`vendor-${vendor.id}`}
-                                                checked={selectedVendors.includes(vendor.id)}
-                                                onCheckedChange={(checked) => {
-                                                    setSelectedVendors(prev =>
-                                                        checked ? [...prev, vendor.id] : prev.filter(id => id !== vendor.id)
-                                                    )
-                                                }}
-                                                className="mt-1"
-                                                disabled={!canTakeAction}
-                                            />
-                                            <div className="flex items-start gap-4 flex-1">
-                                                <Avatar>
-                                                    <AvatarImage src={`https://picsum.photos/seed/${vendor.id}/40/40`} data-ai-hint="logo" />
-                                                    <AvatarFallback>{vendor.name.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                                <div className="grid gap-1">
-                                                    <Label htmlFor={`vendor-${vendor.id}`} className="font-semibold cursor-pointer">
-                                                        {vendor.name}
-                                                    </Label>
-                                                    <p className="text-xs text-muted-foreground">{vendor.email}</p>
-                                                    <p className="text-xs text-muted-foreground">Contact: {vendor.contactPerson}</p>
-                                                </div>
+                {distributionType === 'select' && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-lg">Select Vendors</CardTitle>
+                            <div className="relative mt-2">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search vendors..."
+                                    className="pl-8 w-full"
+                                    value={vendorSearch}
+                                    onChange={(e) => setVendorSearch(e.target.value)}
+                                    disabled={!canTakeAction}
+                                />
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <ScrollArea className="h-60">
+                                <div className="space-y-4">
+                                {filteredVendors.map(vendor => (
+                                    <div key={vendor.id} className="flex items-start space-x-4 rounded-md border p-4 has-[:checked]:bg-muted">
+                                        <Checkbox
+                                            id={`vendor-${vendor.id}`}
+                                            checked={selectedVendors.includes(vendor.id)}
+                                            onCheckedChange={(checked) => {
+                                                setSelectedVendors(prev =>
+                                                    checked ? [...prev, vendor.id] : prev.filter(id => id !== vendor.id)
+                                                )
+                                            }}
+                                            className="mt-1"
+                                            disabled={!canTakeAction}
+                                        />
+                                        <div className="flex items-start gap-4 flex-1">
+                                            <Avatar>
+                                                <AvatarImage src={`https://picsum.photos/seed/${vendor.id}/40/40`} data-ai-hint="logo" />
+                                                <AvatarFallback>{vendor.name.charAt(0)}</AvatarFallback>
+                                            </Avatar>
+                                            <div className="grid gap-1">
+                                                <Label htmlFor={`vendor-${vendor.id}`} className="font-semibold cursor-pointer">
+                                                    {vendor.name}
+                                                </Label>
+                                                <p className="text-xs text-muted-foreground">{vendor.email}</p>
+                                                <p className="text-xs text-muted-foreground">Contact: {vendor.contactPerson}</p>
                                             </div>
                                         </div>
-                                    ))}
-                                    {filteredVendors.length === 0 && (
-                                        <div className="text-center text-muted-foreground py-10">
-                                            No vendors found matching your search.
-                                        </div>
-                                    )}
                                     </div>
-                                </ScrollArea>
-                            </CardContent>
-                        </Card>
-                    )}
-                </CardContent>
-                <CardFooter className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-4">
-                        <Button onClick={handleSendRFQ} disabled={isSubmitting || !deadline || !isAuthorized || isSent}>
-                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                            Send RFQ
-                        </Button>
-                        {isSent ? (
-                            <Badge variant="default" className="gap-2">
-                                <CheckCircle className="h-4 w-4" />
-                                RFQ Distributed on {format(new Date(requisition.updatedAt), 'PP')}
-                            </Badge>
-                        ) : (
-                            !deadline && (
-                                <p className="text-xs text-muted-foreground">A quotation deadline must be set.</p>
-                            )
-                        )}
+                                ))}
+                                {filteredVendors.length === 0 && (
+                                    <div className="text-center text-muted-foreground py-10">
+                                        No vendors found matching your search.
+                                    </div>
+                                )}
+                                </div>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
+                )}
+                
+                <div className="space-y-2">
+                    <Label htmlFor="cpoAmount">CPO Amount (ETB)</Label>
+                    <div className="relative">
+                        <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            id="cpoAmount"
+                            type="number"
+                            placeholder="Enter required CPO amount"
+                            className="pl-10"
+                            value={cpoAmount || ''}
+                            onChange={(e) => setCpoAmount(Number(e.target.value))}
+                            disabled={!canTakeAction}
+                        />
                     </div>
-                </CardFooter>
-            </Card>
-        </>
+                    <p className="text-xs text-muted-foreground">Optional. If set, vendors must submit a CPO of this amount to qualify.</p>
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="allow-edits">Allow Quote Edits</Label>
+                            <Switch
+                                id="allow-edits"
+                                checked={allowQuoteEdits}
+                                onCheckedChange={setAllowQuoteEdits}
+                                disabled={!canTakeAction}
+                            />
+                        </div>
+                        <p className="text-xs text-muted-foreground">If enabled, vendors can edit their submitted quotes until the deadline passes.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="experience-doc">Require Experience Document</Label>
+                            <Switch
+                                id="experience-doc"
+                                checked={experienceDocumentRequired}
+                                onCheckedChange={setExperienceDocumentRequired}
+                                disabled={!canTakeAction}
+                            />
+                        </div>
+                        <p className="text-xs text-muted-foreground">If enabled, vendors must upload a document detailing their relevant experience.</p>
+                    </div>
+                </div>
+            </CardContent>
+            <CardFooter className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-4">
+                    <Button onClick={handleSendRFQ} disabled={isSubmitting || !deadline || !isAuthorized || isSent}>
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Send RFQ
+                    </Button>
+                    {isSent ? (
+                        <Badge variant="default" className="gap-2">
+                            <CheckCircle className="h-4 w-4" />
+                            RFQ Distributed on {format(new Date(requisition.updatedAt), 'PP')}
+                        </Badge>
+                    ) : (
+                        !deadline && (
+                            <p className="text-xs text-muted-foreground">A quotation deadline must be set.</p>
+                        )
+                    )}
+                </div>
+            </CardFooter>
+        </Card>
     );
 };
 
@@ -1805,7 +1805,7 @@ const ScoringProgressTracker = ({
         });
     }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id]);
 
-    const handleFinalizeScores = useCallback((awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
+    const handleFinalizeScores = useCallback((awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteDocumentUrl?: string, minuteJustification?: string) => {
         // This function will be called from the dialogs to trigger the API call in the parent.
         // It's passed down from the main page component.
     }, []);
@@ -2797,15 +2797,15 @@ export default function QuotationDetailsPage() {
             
             if (awardStrategy === 'item') {
                  for (const item of requisition.items) {
-                    const awardDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-                    const awardedDetail = awardDetails.find(d => d.status === 'Awarded' || d.status === 'Pending_Award');
+                    const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                    const awardedDetail = perItemDetails.find(d => d.status === 'Awarded' || d.status === 'Pending_Award');
                     
                     if (awardedDetail) {
                          needsRefresh = true;
                          await fetch(`/api/quotations/${awardedDetail.quotationId}/respond`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId: user.id, action: 'reject', quoteItemId: awardedDetail.quoteItemId, rejectionReason: 'deadline is passed' })
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                            body: JSON.stringify({ actor: user, action: 'reject', quoteItemId: awardedDetail.quoteItemId, rejectionReason: 'deadline is passed' })
                         });
                     }
                 }
@@ -2815,8 +2815,8 @@ export default function QuotationDetailsPage() {
                      needsRefresh = true;
                       await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId: user.id, action: 'reject', rejectionReason: 'deadline is passed' })
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                        body: JSON.stringify({ actor: user, action: 'reject', rejectionReason: 'deadline is passed' })
                     });
                  }
             }
@@ -3404,6 +3404,3 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         </Card>
     );
 };
-
-    
-
