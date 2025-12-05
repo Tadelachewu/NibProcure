@@ -69,14 +69,12 @@ export default function VendorDashboardPage() {
         setLoading(true);
         setError(null);
         try {
-            // Fetch vendor details
             const vendorRes = await fetch(`/api/vendors`);
             if(!vendorRes.ok) throw new Error('Could not fetch vendor details.');
             const allVendors: Vendor[] = await vendorRes.json();
             const currentVendor = allVendors.find(v => v.id === user.vendorId);
             setVendor(currentVendor || null);
 
-            // If vendor is not verified, don't fetch requisitions
             if (currentVendor?.kycStatus !== 'Verified') {
                 setAllRequisitions([]);
                 setLoading(false);
@@ -84,9 +82,7 @@ export default function VendorDashboardPage() {
             }
 
             const response = await fetch('/api/requisitions?forVendor=true', {
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) {
                 if (response.status === 403) {
@@ -95,35 +91,50 @@ export default function VendorDashboardPage() {
                 throw new Error('Failed to fetch requisitions.');
             }
             const requisitionsData: PurchaseRequisition[] = await response.json();
-            setAllRequisitions(requisitionsData);
             
-             // Check for expired deadlines on awarded quotes
+            let needsRefetch = false;
             for (const req of requisitionsData) {
-                const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
-                if (vendorQuote && (vendorQuote.status === 'Awarded' || vendorQuote.status === 'Partially_Awarded') && req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline))) {
-                    console.log(`Deadline missed for quote ${vendorQuote.id}. Triggering decline.`);
-                    toast({
-                        variant: 'destructive',
-                        title: 'Deadline Missed',
-                        description: `You did not respond to the award for "${req.title}" in time. It has been automatically declined.`
-                    });
+                if (req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline))) {
+                    const awardStrategy = (req.rfqSettings as any)?.awardStrategy;
                     
-                    // Trigger the decline API call
-                     await fetch(`/api/quotations/${vendorQuote.id}/respond`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({
-                            userId: user.id,
-                            action: 'reject',
-                            rejectionReason: 'deadline is passed'
-                        })
-                    });
-                    // After declining one, we'll just refetch everything to get the latest state.
-                    fetchAllData();
-                    return; // Exit the loop to avoid multiple fetches
+                    if (awardStrategy === 'item') {
+                        for (const item of req.items) {
+                            const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                            const awardedDetail = perItemDetails.find(d => d.vendorId === user.vendorId && d.status === 'Awarded');
+                            if (awardedDetail) {
+                                needsRefetch = true;
+                                await fetch(`/api/quotations/${awardedDetail.quotationId}/respond`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                    body: JSON.stringify({ userId: user.id, action: 'reject', quoteItemId: awardedDetail.quoteItemId, rejectionReason: 'deadline is passed' })
+                                });
+                            }
+                        }
+                    } else { // Single award
+                        const awardedQuote = req.quotations?.find(q => q.vendorId === user.vendorId && q.status === 'Awarded');
+                        if (awardedQuote) {
+                            needsRefetch = true;
+                            await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                body: JSON.stringify({ userId: user.id, action: 'reject', rejectionReason: 'deadline is passed' })
+                            });
+                        }
+                    }
                 }
             }
 
+            if (needsRefetch) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Deadline Expired',
+                    description: `An award was automatically declined because the response deadline passed.`
+                });
+                fetchAllData(); // Re-trigger the fetch to get the updated state
+                return;
+            }
+
+            setAllRequisitions(requisitionsData);
 
         } catch (err) {
             setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -146,7 +157,6 @@ export default function VendorDashboardPage() {
             return 'Awarded';
         }
         
-        // Highest priority statuses from the vendor's main quote
         if (vendorQuote) {
             if (vendorQuote.status === 'Invoice_Submitted') return 'Invoice Submitted';
             if (vendorQuote.status === 'Accepted') return 'Accepted';
@@ -159,20 +169,18 @@ export default function VendorDashboardPage() {
                 (item.perItemAwardDetails as PerItemAwardDetail[] || [])
                 .filter(d => d.vendorId === user.vendorId)
             );
-        } else if (vendorQuote) { // For single-vendor award, derive item statuses from quote status
+        } else if (vendorQuote) { 
             if (vendorQuote.status === 'Awarded') vendorItemStatuses.push({ status: 'Awarded' } as PerItemAwardDetail);
             if (vendorQuote.status === 'Partially_Awarded') vendorItemStatuses.push({ status: 'Awarded' } as PerItemAwardDetail);
             if (vendorQuote.status === 'Standby') vendorItemStatuses.push({ status: 'Standby' } as PerItemAwardDetail);
         }
 
-        // Check for highest priority statuses derived from items
         if (vendorItemStatuses.some(d => d.status === 'Accepted')) return 'Accepted';
         if (vendorItemStatuses.some(d => d.status === 'Declined')) return 'Declined';
         if (vendorItemStatuses.some(d => d.status === 'Awarded')) {
              if (!isPerItemAward) {
                 return 'Awarded';
             }
-            // For per-item, check if ALL potential awards were won.
             const potentialAwards = req.items.flatMap(i => (i.perItemAwardDetails || [])).filter(d => d.vendorId === user.vendorId);
             const wonAwards = potentialAwards.filter(d => d.status === 'Awarded' || d.status === 'Accepted');
             
@@ -180,7 +188,6 @@ export default function VendorDashboardPage() {
         }
         if (vendorItemStatuses.some(d => d.status === 'Standby')) return 'Standby';
 
-        // Check statuses from the main quote again if no item-level status took precedence
         if (vendorQuote) {
              if (vendorQuote.status === 'Standby') return 'Standby';
             if (vendorQuote.status === 'Submitted') {
@@ -190,16 +197,14 @@ export default function VendorDashboardPage() {
             }
         }
         
-        // If related but no other status fits, it means they can quote
         const isRelated = vendorQuote || vendorItemStatuses.length > 0;
         if (!isRelated) {
             return 'Action Required';
         }
 
-        // Final fallbacks
         if (req.status === 'Closed' || req.status === 'Fulfilled') return 'Closed';
         
-        return 'Processing'; // Default for other intermediate states
+        return 'Processing';
     }, [user]);
 
 
@@ -210,20 +215,17 @@ export default function VendorDashboardPage() {
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
             
-            // Check if any item in this requisition is specifically re-opened for this vendor
             const hasReopenedItemForVendor = req.items.some(item => 
                 item.reopenDeadline && isPast(new Date(item.reopenDeadline)) === false &&
                 item.reopenVendorIds?.includes(user?.vendorId || '')
             );
 
-            // A requisition is active if the vendor submitted a quote for it, OR if they won an award
             const isRelated = vendorQuote || 
                               req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
 
             if (isRelated) {
                 active.push(req);
             } else if (hasReopenedItemForVendor || req.status === 'Accepting_Quotes') {
-                // It's open if it's generally accepting quotes, OR has a specific re-opened item for this vendor
                 open.push(req);
             }
         });

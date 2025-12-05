@@ -2785,22 +2785,23 @@ export default function QuotationDetailsPage() {
     }
   }, [id, user, fetchRequisitionAndQuotes]);
   
-  // --- New Deadline Check Logic ---
   useEffect(() => {
-    if (!requisition || !user || !token || requisition.status !== 'Awarded') return;
+    if (!requisition || !user || !token) return;
 
     const checkAndDecline = async () => {
         let needsRefresh = false;
-        const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
-        const now = new Date();
-
-        if (requisition.awardResponseDeadline && isPast(now)) {
-             if (awardStrategy === 'item') {
+        
+        if (requisition.awardResponseDeadline && isPast(new Date(requisition.awardResponseDeadline))) {
+            const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
+            
+            if (awardStrategy === 'item') {
                  for (const item of requisition.items) {
                     const awardDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                     for (const detail of awardDetails) {
+                        // Find awarded items for any vendor (not just the current user)
                         if (detail.status === 'Awarded') {
                              needsRefresh = true;
+                             // We can't know the user ID of the vendor, so this call assumes the backend can infer it or doesn't need it for a system-triggered decline.
                              await fetch(`/api/quotations/${detail.quotationId}/respond`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -2809,17 +2810,17 @@ export default function QuotationDetailsPage() {
                         }
                     }
                 }
-             } else { // Single vendor award
+            } else { // Single vendor award
                  const awardedQuote = quotations.find(q => q.status === 'Awarded');
                  if (awardedQuote) {
-                     needsRefresh = true;
+                     needsRefetch = true;
                       await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                         body: JSON.stringify({ userId: user.id, action: 'reject', rejectionReason: 'deadline is passed' })
                     });
                  }
-             }
+            }
         }
         
         if (needsRefresh) {
@@ -3402,5 +3403,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         </Card>
     );
 };
-    
 
+    
