@@ -27,7 +27,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as UserRole[]).includes('Admin')) {
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
    try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as UserRole[]).includes('Admin')) {
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -152,7 +152,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
    try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as UserRole[]).includes('Admin')) {
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
