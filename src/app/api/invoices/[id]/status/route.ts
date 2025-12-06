@@ -19,8 +19,10 @@ export async function PATCH(
     const body = await request.json();
     const { status, reason } = body;
 
-    const validStatuses = ['Approved for Payment', 'Disputed'];
-    if (!validStatuses.includes(status)) {
+    const validStatuses = ['Approved_for_Payment', 'Disputed'];
+    const formattedStatus = status.replace(/ /g, '_');
+
+    if (!validStatuses.includes(formattedStatus)) {
       return NextResponse.json({ error: 'Invalid status provided.' }, { status: 400 });
     }
     
@@ -35,13 +37,13 @@ export async function PATCH(
       const updatedInvoice = await tx.invoice.update({
           where: { id: invoiceId },
           data: { 
-            status: status.replace(/ /g, '_') as any,
-            disputeReason: status === 'Disputed' ? reason : null,
+            status: formattedStatus as any,
+            disputeReason: formattedStatus === 'Disputed' ? reason : null,
           }
       });
       
       // If disputed, find the related GRN and update its status
-      if (status === 'Disputed') {
+      if (formattedStatus === 'Disputed') {
         const po = await tx.purchaseOrder.findUnique({
           where: { id: updatedInvoice.purchaseOrderId },
           include: { receipts: true }

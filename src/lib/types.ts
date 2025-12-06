@@ -80,6 +80,7 @@ export type PerItemAwardDetail = {
   unitPrice: number;
   status: PerItemAwardStatus;
   score: number;
+  rejectionReason?: string;
 }
 
 export type RequisitionItem = {
@@ -366,14 +367,6 @@ export type GoodsReceiptNote = {
     photos?: { name: string; url: string }[];
 }
 
-export type InvoiceItem = {
-  id: string;
-  name: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-};
-
 export type InvoiceStatus = 'Pending' | 'Approved_for_Payment' | 'Paid' | 'Disputed';
 
 export type Invoice = {
@@ -385,6 +378,7 @@ export type Invoice = {
   items: InvoiceItem[];
   totalAmount: number;
   status: InvoiceStatus;
+  disputeReason?: string | null;
   documentUrl?: string;
   paymentDate?: Date;
   paymentReference?: string;

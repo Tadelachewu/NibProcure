@@ -668,7 +668,18 @@ export function InvoicesPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        <Badge variant={getStatusVariant(invoice.status)}>{invoice.status.replace(/_/g, ' ')}</Badge>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge variant={getStatusVariant(invoice.status)}>{invoice.status.replace(/_/g, ' ')}</Badge>
+                                </TooltipTrigger>
+                                {invoice.status === 'Disputed' && (invoice as any).disputeReason && (
+                                    <TooltipContent>
+                                        <p>Reason: {(invoice as any).disputeReason}</p>
+                                    </TooltipContent>
+                                )}
+                            </Tooltip>
+                        </TooltipProvider>
                          {invoice.status === 'Paid' && invoice.paymentReference && (
                            <span className="text-xs text-muted-foreground">{invoice.paymentReference}</span>
                          )}

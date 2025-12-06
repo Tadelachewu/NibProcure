@@ -22,7 +22,8 @@ export async function POST(request: Request) {
             where: { id: purchaseOrderId },
             include: { 
               items: true,
-              requisition: { include: { items: true, quotations: true } }
+              requisition: { include: { items: true, quotations: true } },
+              invoices: true
             }
         });
 
@@ -33,23 +34,17 @@ export async function POST(request: Request) {
         const defectiveItems = receivedItems.filter((item: any) => item.condition === 'Damaged' || item.condition === 'Incorrect');
         
         if (defectiveItems.length > 0) {
-            for (const defectiveItem of defectiveItems) {
-                const poItem = po.items.find(pi => pi.id === defectiveItem.poItemId) as POItem;
-                if (!poItem) continue;
-
-                // The quote that won this item award
-                const winningQuote = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
-                if (!winningQuote) continue;
-                
-                await handleAwardRejection(
-                    tx as any,
-                    winningQuote,
-                    po.requisition,
-                    actor,
-                    [poItem.requisitionItemId], // Pass the specific requisition item ID that failed
-                    undefined, // No specific quote item ID is being rejected by the receiver
-                    defectiveItem.notes || 'Goods received were damaged or incorrect.'
-                );
+            // Find the most recent invoice to dispute
+            const invoiceToDispute = po.invoices.sort((a,b) => new Date(b.invoiceDate).getTime() - new Date(a.invoiceDate).getTime())[0];
+            
+            if (invoiceToDispute) {
+                await tx.invoice.update({
+                    where: { id: invoiceToDispute.id },
+                    data: {
+                        status: 'Disputed',
+                        disputeReason: `Goods received were marked as ${defectiveItems.map(i => i.condition.toLowerCase()).join(', ')}. GRN Notes: ${defectiveItems.map(i => i.notes).join('; ')}`,
+                    }
+                });
             }
         }
         
@@ -66,7 +61,8 @@ export async function POST(request: Request) {
                       condition: item.condition.replace(/ /g, '_'),
                       notes: item.notes,
                   }))
-              }
+              },
+              status: defectiveItems.length > 0 ? 'Disputed' : 'Received',
           }
         });
 
@@ -102,7 +98,7 @@ export async function POST(request: Request) {
                 action: 'RECEIVE_GOODS',
                 entity: 'PurchaseOrder',
                 entityId: po.id,
-                details: `Created Goods Receipt Note ${newReceipt.id}. PO status: ${newPOStatus.replace(/_/g, ' ')}. ${defectiveItems.length > 0 ? `Flagged ${defectiveItems.length} defective item(s), triggering award review.` : ''}`,
+                details: `Created Goods Receipt Note ${newReceipt.id}. PO status: ${newPOStatus.replace(/_/g, ' ')}. ${defectiveItems.length > 0 ? `Flagged ${defectiveItems.length} defective item(s), automatically disputing related invoice.` : ''}`,
             }
         });
 
