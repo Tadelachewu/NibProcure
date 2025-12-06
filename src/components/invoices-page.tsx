@@ -22,7 +22,7 @@ import {
   CardFooter,
 } from './ui/card';
 import { Button } from './ui/button';
-import { Invoice, InvoiceStatus, PurchaseOrder, MatchingResult, MatchingStatus } from '@/lib/types';
+import { Invoice, PurchaseOrder, MatchingResult, GoodsReceiptNote } from '@/lib/types';
 import { format } from 'date-fns';
 import {
   Dialog,
@@ -37,7 +37,7 @@ import {
 import { Input } from './ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, ThumbsUp, ThumbsDown, FileUp, FileText, Banknote, CheckCircle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, CheckCircle2, AlertTriangle, Clock, List, Printer } from 'lucide-react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
@@ -91,10 +91,7 @@ function AddInvoiceForm({ onInvoiceAdded }: { onInvoiceAdded: () => void }) {
         fetchData();
     }, []);
     
-    const { fields, replace } = useFieldArray({
-        control: form.control,
-        name: "items"
-    });
+    const { fields, replace } = useForm().control;
 
     const handlePOChange = (poId: string) => {
         form.setValue('purchaseOrderId', poId);
@@ -106,9 +103,9 @@ function AddInvoiceForm({ onInvoiceAdded }: { onInvoiceAdded: () => void }) {
                 unitPrice: item.unitPrice,
                 totalPrice: item.totalPrice,
             }));
-            replace(invoiceItems);
+            form.setValue('items', invoiceItems);
         } else {
-            replace([]);
+            form.setValue('items', []);
         }
     }
     
@@ -162,7 +159,7 @@ function AddInvoiceForm({ onInvoiceAdded }: { onInvoiceAdded: () => void }) {
                 </DialogDescription>
             </DialogHeader>
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                     <div className="grid md:grid-cols-2 gap-4">
                          <FormField
                             control={form.control}
@@ -218,11 +215,11 @@ function AddInvoiceForm({ onInvoiceAdded }: { onInvoiceAdded: () => void }) {
                     
                     <h4 className="text-lg font-semibold pt-4">Invoice Items</h4>
                     <div className="space-y-2 max-h-60 overflow-y-auto border rounded-md p-2">
-                         {fields.map((field, index) => (
-                            <div key={field.id} className="grid grid-cols-4 gap-2 items-center">
-                                <p className="col-span-2">{field.name}</p>
-                                <p>x {field.quantity}</p>
-                                <p className="text-right">{field.totalPrice.toFixed(2)} ETB</p>
+                         {form.getValues('items').map((item: any, index: number) => (
+                            <div key={index} className="grid grid-cols-4 gap-2 items-center">
+                                <p className="col-span-2">{item.name}</p>
+                                <p>x {item.quantity}</p>
+                                <p className="text-right">{item.totalPrice.toFixed(2)} ETB</p>
                             </div>
                         ))}
                     </div>
@@ -487,6 +484,7 @@ const MatchingStatusBadge = ({ result, onRefresh }: { result: MatchingResult | n
 
 export function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [allPOs, setAllPOs] = useState<PurchaseOrder[]>([]);
   const [matchResults, setMatchResults] = useState<Record<string, MatchingResult | null>>({});
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
@@ -502,7 +500,13 @@ export function InvoicesPage() {
       const invResponse = await fetch('/api/invoices');
       if (!invResponse.ok) throw new Error('Failed to fetch invoices');
       const invData: Invoice[] = await invResponse.json();
+      
+      const poResponse = await fetch('/api/purchase-orders');
+      if (!poResponse.ok) throw new Error('Failed to fetch POs');
+      const poData: PurchaseOrder[] = await poResponse.json();
+
       setInvoices(invData);
+      setAllPOs(poData);
       
       const initialMatchResults: Record<string, null> = {};
       invData.forEach(inv => {
@@ -654,7 +658,9 @@ export function InvoicesPage() {
               {paginatedInvoices.length > 0 ? (
                 paginatedInvoices.map((invoice, index) => {
                   const matchResult = matchResults[invoice.id];
-                  const isActionDisabled = !matchResult || matchResult.status !== 'Matched';
+                  const po = allPOs.find(p => p.id === invoice.purchaseOrderId);
+                  const isDisputedGRN = po?.receipts?.some(r => r.status === 'Disputed');
+                  const isActionDisabled = !matchResult || matchResult.status !== 'Matched' || isDisputedGRN;
                   const isActionLoading = activeAction === invoice.id;
                   
                   return (
@@ -679,14 +685,33 @@ export function InvoicesPage() {
                       <div className="flex gap-2">
                         {invoice.status === 'Pending' && (
                             <>
-                                <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => handleAction(invoice.id, 'Approved for Payment')}
-                                    disabled={isActionDisabled || isActionLoading}
-                                >
-                                {isActionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />} Approve
-                                </Button>
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span tabIndex={0}>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={() => handleAction(invoice.id, 'Approved for Payment')}
+                                                    disabled={isActionDisabled || isActionLoading}
+                                                >
+                                                {isActionLoading && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ThumbsUp className="mr-2 h-4 w-4" />} Approve
+                                                </Button>
+                                            </span>
+                                        </TooltipTrigger>
+                                        {isDisputedGRN && (
+                                            <TooltipContent>
+                                                <p>Cannot approve: Associated goods receipt is disputed.</p>
+                                            </TooltipContent>
+                                        )}
+                                        {matchResult?.status !== 'Matched' && !isDisputedGRN && (
+                                            <TooltipContent>
+                                                <p>Cannot approve: 3-way match has not passed.</p>
+                                            </TooltipContent>
+                                        )}
+                                    </Tooltip>
+                                </TooltipProvider>
+
                                 <DisputeDialog onConfirm={(reason) => handleAction(invoice.id, 'Disputed', reason)} />
                             </>
                         )}

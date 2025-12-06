@@ -30,35 +30,15 @@ export async function POST(request: Request) {
           throw new Error('Purchase Order or associated requisition not found');
         }
 
-        const defectiveItems = receivedItems.filter((item: any) => item.condition === 'Damaged' || item.condition === 'Incorrect');
+        const hasDefectiveItems = receivedItems.some((item: any) => item.condition === 'Damaged' || item.condition === 'Incorrect');
         
-        if (defectiveItems.length > 0) {
-            for (const defectiveItem of defectiveItems) {
-                const poItem = po.items.find(pi => pi.id === defectiveItem.poItemId) as POItem;
-                if (!poItem) continue;
-
-                // The quote that won this item award
-                const winningQuote = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
-                if (!winningQuote) continue;
-                
-                await handleAwardRejection(
-                    tx as any,
-                    winningQuote,
-                    po.requisition,
-                    actor,
-                    [poItem.requisitionItemId], // Pass the specific requisition item ID that failed
-                    undefined, // No specific quote item ID is being rejected by the receiver
-                    defectiveItem.notes || 'Goods received were damaged or incorrect.'
-                );
-            }
-        }
-        
-        // Always create the GRN to log what was physically received, even if defective
+        // Always create the GRN to log what was physically received
         const newReceipt = await tx.goodsReceiptNote.create({
           data: {
               transactionId: po.transactionId,
               purchaseOrder: { connect: { id: purchaseOrderId } },
               receivedBy: { connect: { id: actor.id } },
+              status: hasDefectiveItems ? 'Disputed' : 'Processed', // Set status based on item conditions
               items: {
                   create: receivedItems.map((item: any) => ({
                       poItemId: item.poItemId,
@@ -102,7 +82,7 @@ export async function POST(request: Request) {
                 action: 'RECEIVE_GOODS',
                 entity: 'PurchaseOrder',
                 entityId: po.id,
-                details: `Created Goods Receipt Note ${newReceipt.id}. PO status: ${newPOStatus.replace(/_/g, ' ')}. ${defectiveItems.length > 0 ? `Flagged ${defectiveItems.length} defective item(s), triggering award review.` : ''}`,
+                details: `Created Goods Receipt Note ${newReceipt.id}. GRN Status: ${newReceipt.status}. PO status: ${newPOStatus.replace(/_/g, ' ')}.`,
             }
         });
 
