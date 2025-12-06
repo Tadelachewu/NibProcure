@@ -53,7 +53,7 @@ export function ApprovalsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, rfqSenderSetting, allUsers } = useAuth();
+  const { user, token, rfqSenderSetting, allUsers } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -125,7 +125,7 @@ export function ApprovalsTable() {
   }
   
   const submitAction = async () => {
-    if (!selectedRequisition || !actionType || !user) return;
+    if (!selectedRequisition || !actionType || !user || !token) return;
     
     let rfqSenderId: string | null = null;
     if (actionType === 'approve') {
@@ -140,16 +140,22 @@ export function ApprovalsTable() {
     try {
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify({ 
             id: selectedRequisition.id, 
-            status: actionType === 'approve' ? 'PreApproved' : 'Rejected', 
+            status: actionType === 'approve' ? 'Approved' : 'Rejected', 
             userId: user.id, 
             comment,
             rfqSenderId,
         }),
       });
-      if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
+      if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Failed to ${actionType} requisition`);
+      }
       toast({
         title: "Success",
         description: `Requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
