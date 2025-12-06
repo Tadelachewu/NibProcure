@@ -106,16 +106,15 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        const allRoles = await prisma.role.findMany({ select: { name: true } });
-        const allPendingStatuses = allRoles.map(role => `Pending_${role.name}`);
-
-        const baseRfqLifecycleStatuses = [
+        // Corrected list of valid statuses for the RFQ lifecycle
+        const rfqLifecycleStatuses = [
             'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
             'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
-            'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed'
+            'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed',
+            'Pending_Committee_B_Review', 'Pending_Committee_A_Recommendation',
+            'Pending_Managerial_Approval', 'Pending_Director_Approval',
+            'Pending_VP_Approval', 'Pending_President_Approval'
         ];
-        
-        const rfqLifecycleStatuses = [...baseRfqLifecycleStatuses, ...allPendingStatuses];
 
         const userRoles = userPayload?.roles.map(r => r.name) || [];
 
@@ -728,5 +727,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
