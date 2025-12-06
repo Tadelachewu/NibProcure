@@ -2,7 +2,7 @@
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
-import { User, UserRole, PerItemAwardDetail, QuoteItem } from '@/lib/types';
+import { User, UserRole, PerItemAwardDetail, QuoteItem, Review } from '@/lib/types';
 
 /**
  * Creates the initial review entries in the database for a new approval workflow.
@@ -193,7 +193,7 @@ export async function handleAwardRejection(
             const updatedDetails = awardDetails.map(d => {
                 if (d.vendorId === quote.vendorId) { // Mark this vendor's bid for this item as Declined
                     itemsUpdated++;
-                    return { ...d, status: 'Declined' as const };
+                    return { ...d, status: 'Declined' as const, rejectionReason };
                 }
                 return d;
             });

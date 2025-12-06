@@ -3215,6 +3215,24 @@ export default function QuotationDetailsPage() {
                     </AlertDescription>
                 </Alert>
              )}
+             {requisition.items.some(i => (i.perItemAwardDetails as any[])?.some(d => d.rejectionReason)) && (
+                  <Alert variant="destructive" className="mt-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Item Rejection Reason(s)</AlertTitle>
+                    <AlertDescription>
+                       <ul className="list-disc pl-5">
+                          {requisition.items.flatMap(i => (i.perItemAwardDetails || []) as PerItemAwardDetail[])
+                            .filter(d => d.rejectionReason)
+                            .map((d, index) => (
+                              <li key={index}>
+                                <strong>{d.vendorName} for "{d.proposedItemName}":</strong> {d.rejectionReason}
+                              </li>
+                            ))
+                          }
+                        </ul>
+                    </AlertDescription>
+                </Alert>
+             )}
           </CardHeader>
           <CardFooter className="gap-4">
             {(requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') ? (

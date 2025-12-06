@@ -80,6 +80,7 @@ export type PerItemAwardDetail = {
   unitPrice: number;
   status: PerItemAwardStatus;
   score: number;
+  rejectionReason?: string;
 }
 
 export type RequisitionItem = {
@@ -151,6 +152,17 @@ export type Minute = {
     signatures?: Signature[];
 }
 
+export type Review = {
+    id: string;
+    requisitionId: string;
+    stepId: string;
+    status: 'Pending' | 'Approved' | 'Rejected';
+    comment?: string;
+    reviewerId?: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 
 export type PurchaseRequisition = {
   id:string; // Will be UUID
@@ -200,6 +212,7 @@ export type PurchaseRequisition = {
   };
   minutes?: Minute[];
   auditTrail?: AuditLog[];
+  reviews?: Review[];
 };
 
 export type AuditLog = {
@@ -307,6 +320,7 @@ export type Quotation = {
     status: QuotationStatus;
     notes?: string;
     rank?: 1 | 2 | 3;
+    rejectionReason?: string;
     answers?: QuoteAnswer[];
     scores?: CommitteeScoreSet[];
     finalAverageScore?: number;
@@ -345,13 +359,16 @@ export type PurchaseOrder = {
     invoices?: Invoice[];
 };
 
+export type ReceiptItemStatus = 'Pending' | 'Verified' | 'Disputed';
+export type GoodsReceiptCondition = 'Good' | 'Damaged' | 'Incorrect';
 
 export type ReceiptItem = {
+    id: string;
     poItemId: string;
     name: string;
     quantityOrdered: number;
     quantityReceived: number;
-    condition: 'Good' | 'Damaged' | 'Incorrect';
+    condition: GoodsReceiptCondition;
     notes?: string;
 }
 
@@ -364,6 +381,7 @@ export type GoodsReceiptNote = {
     receivedDate: Date;
     items: ReceiptItem[];
     photos?: { name: string; url: string }[];
+    status?: ReceiptItemStatus;
 }
 
 export type InvoiceItem = {
@@ -390,6 +408,7 @@ export type Invoice = {
   paymentReference?: string;
   paymentEvidenceUrl?: string;
   po?: PurchaseOrder;
+  isDisputed?: boolean;
 };
 
 
@@ -433,9 +452,10 @@ export type DocumentRecord = {
 }
 
 export interface ApprovalStep {
+    id: string;
     role: UserRole;
-    id?: string;
-    order?: number;
+    order: number;
+    reviews?: Review[];
 }
 
 export interface ApprovalThreshold {
