@@ -50,7 +50,7 @@ export async function verifyJwt(token: string) {
 }
 
 
-export async function getActorFromToken(request: Request): Promise<User | null> {
+export async function getActorFromToken(request: Request): Promise<(User & { roles: { name: UserRole }[] }) | null> {
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.split(' ')[1];
     if (!token) return null;
@@ -65,10 +65,11 @@ export async function getActorFromToken(request: Request): Promise<User | null> 
     
     if (!user) return null;
 
+    // Return the user object with the roles as an array of objects
     return {
       ...user,
       department: user.department?.name,
-      roles: user.roles.map(r => r.name as UserRole),
+      roles: user.roles,
     }
 }
 
