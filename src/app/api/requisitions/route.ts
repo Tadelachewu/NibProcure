@@ -12,8 +12,6 @@ import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-s
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { RequisitionStatus } from '@prisma/client';
-
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -99,7 +97,28 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        const allPossibleStatuses = Object.values(RequisitionStatus);
+        const allPossibleStatuses = [
+            'Draft',
+            'Pending_Approval',
+            'Rejected',
+            'PreApproved',
+            'Accepting_Quotes',
+            'Scoring_In_Progress',
+            'Scoring_Complete',
+            'Awarded',
+            'Award_Declined',
+            'PostApproved',
+            'PO_Created',
+            'Partially_Closed',
+            'Fulfilled',
+            'Closed',
+            'Pending_Committee_B_Review',
+            'Pending_Committee_A_Recommendation',
+            'Pending_Managerial_Approval',
+            'Pending_Director_Approval',
+            'Pending_VP_Approval',
+            'Pending_President_Approval'
+        ];
 
         const userRoles = actor?.roles.map(r => r.name) || [];
 
@@ -588,3 +607,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
