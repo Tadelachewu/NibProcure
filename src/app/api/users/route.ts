@@ -68,6 +68,7 @@ export async function POST(request: Request) {
             entity: 'User',
             entityId: newUser.id,
             details: `Created new user "${name}" with roles: ${roles.join(', ')}.`,
+            transactionId: newUser.id,
         }
     });
 
@@ -126,6 +127,7 @@ export async function PATCH(request: Request) {
             entity: 'User',
             entityId: id,
             details: `Updated user "${oldUser.name}". Name: ${oldUser.name} -> ${name}. Roles: ${oldUser.roles.map(r=>r.name).join(', ')} -> ${roles.join(', ')}.`,
+            transactionId: id,
         }
     });
 
@@ -172,6 +174,7 @@ export async function DELETE(request: Request) {
             entity: 'User',
             entityId: id,
             details: `Deleted user: "${userToDelete.name}".`,
+            transactionId: id,
         }
     });
 
