@@ -26,12 +26,8 @@ export async function GET(request: Request) {
     
     // If a user is an Admin or Procurement Officer, they should see all pending reviews
     if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-        const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
-        const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
-        orConditions.push({
-            status: { in: allPossiblePendingStatuses }
-        });
-        // Also show items ready for notification and those declined/partially closed
+        // Correctly filter for all statuses that are part of a review workflow
+        orConditions.push({ status: { startsWith: 'Pending_' } });
         orConditions.push({ status: 'PostApproved' });
         orConditions.push({ status: 'Award_Declined' });
         orConditions.push({ status: 'Partially_Closed' });
