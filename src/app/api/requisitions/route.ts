@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
-import { decodeJwt } from '@/lib/auth';
+import { decodeJwt, getActorFromToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { isPast } from 'date-fns';
@@ -24,11 +24,11 @@ export async function GET(request: Request) {
 
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.split(' ')[1];
-  let userPayload: (User & { roles: { name: UserRole }[] }) | null = null;
+  let userPayload: User | null = null;
   if(token) {
-    const decodedUser = decodeJwt<User & { roles: UserRole[] }>(token);
+    const decodedUser = decodeJwt<User>(token);
     if(decodedUser) {
-        userPayload = decodedUser as any;
+        userPayload = decodedUser;
     }
   }
 
@@ -36,7 +36,10 @@ export async function GET(request: Request) {
     let whereClause: any = {};
     
     if (forAwardReview === 'true' && userPayload) {
-        const userRoles = userPayload.roles.map(r => r.name);
+        const userWithRoles = await prisma.user.findUnique({ where: { id: userPayload.id }, include: { roles: true }});
+        if (!userWithRoles) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+        const userRoles = userWithRoles.roles.map(r => r.name);
         const userId = userPayload.id;
         
         const orConditions: any[] = [
@@ -49,7 +52,7 @@ export async function GET(request: Request) {
         // If a user is an Admin or Procurement Officer, they should see all pending reviews
         if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
             const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
-            const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
+            const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`).filter(s => s !== 'Pending_Vendor' && s !== 'Pending_Requester' );
             orConditions.push({ status: { in: allPossiblePendingStatuses } });
             // Also show items ready for notification and those declined/partially closed
             orConditions.push({ status: 'PostApproved' });
@@ -106,18 +109,18 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        const allRoles = await prisma.role.findMany({ select: { name: true } });
-        const allPendingStatuses = allRoles.map(role => `Pending_${role.name}`);
+        const userWithRoles = await prisma.user.findUnique({ where: { id: userPayload?.id }, include: { roles: true }});
+        if (!userWithRoles) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
-        const baseRfqLifecycleStatuses = [
-            'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
-            'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
-            'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed'
-        ];
+        const allPossibleStatuses = Object.values(await prisma.requisition.fields.status.type.getValues()).map(v => v.name);
+
+        const baseRfqLifecycleStatuses = allPossibleStatuses.filter(s => 
+            s !== 'Draft' && s !== 'Pending_Approval' && s !== 'Rejected'
+        );
         
-        const rfqLifecycleStatuses = [...baseRfqLifecycleStatuses, ...allPendingStatuses];
+        const rfqLifecycleStatuses = baseRfqLifecycleStatuses;
 
-        const userRoles = userPayload?.roles.map(r => r.name) || [];
+        const userRoles = userWithRoles.roles.map(r => r.name);
 
         if (userRoles.includes('Committee_Member')) {
             whereClause = {
@@ -144,7 +147,7 @@ export async function GET(request: Request) {
         ];
       }
       
-      if (userPayload && userPayload.roles.some(r => r.name === 'Requester') && !statusParam && !approverId) {
+      if (userPayload && (userPayload.roles as any[]).some(r => r.name === 'Requester') && !statusParam && !approverId) {
         whereClause.requesterId = userPayload.id;
       }
     }
@@ -301,7 +304,7 @@ export async function PATCH(
             totalPrice: totalPrice,
             status: status ? status.replace(/ /g, '_') : requisition.status,
             approver: { disconnect: true },
-            approverComment: null, // *** FIX: Clear the rejection comment on resubmission ***
+            approverComment: null,
             items: {
                 deleteMany: {},
                 create: body.items.map((item: any) => ({
@@ -358,14 +361,11 @@ export async function PATCH(
     // This is a high-level award approval/rejection
     else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') {
         
-        // This is a special case for per-item awards where the main status might be 'Award_Declined'
-        // but an individual item is being approved.
         const isPerItemApprovalDuringDecline = (requisition.rfqSettings as any)?.awardStrategy === 'item' && 
                                               (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') &&
                                                newStatus === 'Approved';
         
         if (!isPerItemApprovalDuringDecline && requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
-            // Standard award approval/rejection logic here
             const userRoles = (user.roles as any[]).map(r => r.name);
             let isAuthorizedToAct = false;
             if (requisition.currentApproverId === userId) {
@@ -383,24 +383,13 @@ export async function PATCH(
             }
         }
         
-        // --- START SAFEGUARD ---
-        const hasBeenDeclined = requisition.quotations.some(q => q.status === 'Declined');
-        const hasItemBeenDeclined = requisition.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
-
-        if ((hasBeenDeclined || hasItemBeenDeclined) && !isPerItemApprovalDuringDecline) {
-            console.error(`[PATCH /api/requisitions] Aborting approval: Award for Req ${id} was declined by the vendor.`);
-            return NextResponse.json({ error: 'Cannot approve. The award was declined by the vendor. Please refresh to see the latest status.'}, { status: 409 }); // 409 Conflict
-        }
-        // --- END SAFEGUARD ---
-        
-        console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
         const transactionResult = await prisma.$transaction(async (tx) => {
 
             if (newStatus === 'Rejected') {
                 const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
                 dataToUpdate.status = previousStatus;
                 dataToUpdate.currentApproverId = previousApproverId;
-                dataToUpdate.approverComment = comment; // Save the rejection reason
+                dataToUpdate.approverComment = comment; 
                 auditDetails = serviceAuditDetails;
                 auditAction = 'REJECT_AWARD_STEP';
             } else { // Approved
@@ -567,18 +556,17 @@ export async function PATCH(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const actor = await prisma.user.findUnique({
-      where: { id: body.requesterId },
-      include: { roles: true },
-    });
+    const actor = await getActorFromToken(request);
+    
     if (!actor) {
-      return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
+    
     const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
     if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
       const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
       if (setting.type === 'specific_roles') {
-        const userRoles = actor.roles.map(r => r.name);
+        const userRoles = actor.roles;
         const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
         if (!canCreate) {
           return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
@@ -667,13 +655,13 @@ export async function DELETE(
   request: Request,
 ) {
   try {
-    const body = await request.json();
-    const { id, userId } = body;
-
-    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
+
+    const body = await request.json();
+    const { id } = body;
 
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
 
@@ -681,7 +669,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const canDelete = (requisition.requesterId === userId) || ((user.roles as any[]).some(r => r.name === 'Procurement_Officer' || r.name === 'Admin'));
+    const canDelete = (requisition.requesterId === actor.id) || ((actor.roles as any[]).some(r => r.name === 'Procurement_Officer' || r.name === 'Admin'));
 
     if (!canDelete) {
       return NextResponse.json({ error: 'You are not authorized to delete this requisition.' }, { status: 403 });
@@ -706,7 +694,7 @@ export async function DELETE(
     await prisma.auditLog.create({
         data: {
             transactionId: requisition.transactionId,
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'DELETE_REQUISITION',
             entity: 'Requisition',
