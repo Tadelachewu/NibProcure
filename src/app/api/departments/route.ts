@@ -26,7 +26,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as any[]).some(r => r.name === 'Admin')) {
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Error creating department:", error);
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
    try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as any[]).some(r => r.name === 'Admin')) {
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -151,7 +151,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
    try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as any[]).some(r => r.name === 'Admin')) {
+    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
