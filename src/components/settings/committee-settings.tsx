@@ -79,17 +79,29 @@ export function CommitteeSettings() {
             const key = sortedCommitteeKeys[i];
             const committee = localConfig[key];
 
+            // Basic range validation
             if (committee.max !== null && committee.min > committee.max) {
                  toast({ variant: 'destructive', title: 'Invalid Range', description: `In Committee ${key}, the minimum value cannot be greater than the maximum.`});
                  setIsSaving(false);
                  return;
             }
-
-             if (i > 0) {
+            
+            // Check for overlaps and gaps with the previous tier
+            if (i > 0) {
                 const prevKey = sortedCommitteeKeys[i-1];
                 const prevCommittee = localConfig[prevKey];
-                 if (prevCommittee.max === null || committee.min <= prevCommittee.max) {
-                    toast({ variant: 'destructive', title: 'Overlapping Ranges', description: `Committee ${key}'s range overlaps with Committee ${prevKey}'s range.`});
+                if (prevCommittee.max === null) {
+                    toast({ variant: 'destructive', title: 'Invalid Configuration', description: `Committee ${prevKey} has no maximum value but is not the last committee.`});
+                    setIsSaving(false);
+                    return;
+                }
+                if (committee.min <= prevCommittee.max) {
+                    toast({ variant: 'destructive', title: 'Overlapping Ranges', description: `Committee ${key}'s range (starts at ${committee.min.toLocaleString()}) overlaps with Committee ${prevKey}'s range (ends at ${prevCommittee.max.toLocaleString()}).`});
+                    setIsSaving(false);
+                    return;
+                }
+                 if (committee.min !== prevCommittee.max + 1) {
+                    toast({ variant: 'destructive', title: 'Gap Detected', description: `There is a gap between Committee ${prevKey}'s range (ends at ${prevCommittee.max.toLocaleString()}) and Committee ${key}'s range (starts at ${committee.min.toLocaleString()}). Ranges must be continuous.`});
                     setIsSaving(false);
                     return;
                 }
@@ -328,5 +340,3 @@ export function CommitteeSettings() {
         </div>
     );
 }
-
-    
