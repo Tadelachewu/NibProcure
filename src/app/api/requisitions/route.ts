@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
-import { decodeJwt } from '@/lib/auth';
+import { getActorFromToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { isPast } from 'date-fns';
@@ -12,6 +12,7 @@ import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-s
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { RequisitionStatus } from '@prisma/client';
 
 
 export async function GET(request: Request) {
@@ -22,22 +23,14 @@ export async function GET(request: Request) {
   const forQuoting = searchParams.get('forQuoting');
   const forAwardReview = searchParams.get('forReview');
 
-  const authHeader = request.headers.get('Authorization');
-  const token = authHeader?.split(' ')[1];
-  let userPayload: (User & { roles: { name: UserRole }[] }) | null = null;
-  if(token) {
-    const decodedUser = decodeJwt<User & { roles: UserRole[] }>(token);
-    if(decodedUser) {
-        userPayload = decodedUser as any;
-    }
-  }
+  const actor = await getActorFromToken(request);
 
   try {
     let whereClause: any = {};
     
-    if (forAwardReview === 'true' && userPayload) {
-        const userRoles = userPayload.roles.map(r => r.name);
-        const userId = userPayload.id;
+    if (forAwardReview === 'true' && actor) {
+        const userRoles = actor.roles.map(r => r.name);
+        const userId = actor.id;
         
         const orConditions: any[] = [
             // The user is the direct current approver.
@@ -60,7 +53,7 @@ export async function GET(request: Request) {
         whereClause.OR = orConditions;
 
     } else if (forVendor === 'true') {
-        if (!userPayload || !userPayload.vendorId) {
+        if (!actor || !actor.vendorId) {
              return NextResponse.json({ error: 'Unauthorized: No valid vendor found for this user.' }, { status: 403 });
         }
         
@@ -73,14 +66,14 @@ export async function GET(request: Request) {
                     {
                         OR: [
                         { allowedVendorIds: { isEmpty: true } },
-                        { allowedVendorIds: { has: userPayload.vendorId } },
+                        { allowedVendorIds: { has: actor.vendorId } },
                         ],
                     },
                     {
                         NOT: {
                         quotations: {
                             some: {
-                            vendorId: userPayload.vendorId,
+                            vendorId: actor.vendorId,
                             },
                         },
                         },
@@ -90,7 +83,7 @@ export async function GET(request: Request) {
             {
                 quotations: {
                     some: {
-                        vendorId: userPayload.vendorId,
+                        vendorId: actor.vendorId,
                     }
                 }
             },
@@ -98,7 +91,7 @@ export async function GET(request: Request) {
                 items: {
                   some: {
                     perItemAwardDetails: {
-                      array_contains: [{vendorId: userPayload.vendorId}],
+                      array_contains: [{vendorId: actor.vendorId}],
                     },
                   },
                 },
@@ -106,30 +99,21 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        const allRoles = await prisma.role.findMany({ select: { name: true } });
-        const allPendingStatuses = allRoles.map(role => `Pending_${role.name}`);
+        const allPossibleStatuses = Object.values(RequisitionStatus);
 
-        const baseRfqLifecycleStatuses = [
-            'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
-            'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
-            'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed'
-        ];
-        
-        const rfqLifecycleStatuses = [...baseRfqLifecycleStatuses, ...allPendingStatuses];
-
-        const userRoles = userPayload?.roles.map(r => r.name) || [];
+        const userRoles = actor?.roles.map(r => r.name) || [];
 
         if (userRoles.includes('Committee_Member')) {
             whereClause = {
-                status: { in: rfqLifecycleStatuses },
+                status: { in: allPossibleStatuses },
                 OR: [
-                    { financialCommitteeMembers: { some: { id: userPayload?.id } } },
-                    { technicalCommitteeMembers: { some: { id: userPayload?.id } } },
+                    { financialCommitteeMembers: { some: { id: actor?.id } } },
+                    { technicalCommitteeMembers: { some: { id: actor?.id } } },
                 ],
             };
         } else {
             whereClause = {
-                status: { in: rfqLifecycleStatuses }
+                status: { in: allPossibleStatuses }
             };
         }
     } else {
@@ -144,8 +128,8 @@ export async function GET(request: Request) {
         ];
       }
       
-      if (userPayload && userPayload.roles.some(r => r.name === 'Requester') && !statusParam && !approverId) {
-        whereClause.requesterId = userPayload.id;
+      if (actor && actor.roles.some(r => r.name === 'Requester') && !statusParam && !approverId) {
+        whereClause.requesterId = actor.id;
       }
     }
 
@@ -251,16 +235,16 @@ export async function PATCH(
   request: Request,
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
     const body = await request.json();
-    const { id, status, userId, comment } = body;
+    const { id, status, comment } = body;
+    const userId = actor.id;
     console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${userId}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
-
-    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
 
     const requisition = await prisma.purchaseRequisition.findUnique({ 
         where: { id },
@@ -285,7 +269,6 @@ export async function PATCH(
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
     
-    // This handles editing a draft or rejected requisition and resubmitting
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && body.title) {
         const totalPrice = body.items.reduce((acc: number, item: any) => {
             const price = item.unitPrice || 0;
@@ -301,7 +284,7 @@ export async function PATCH(
             totalPrice: totalPrice,
             status: status ? status.replace(/ /g, '_') : requisition.status,
             approver: { disconnect: true },
-            approverComment: null, // *** FIX: Clear the rejection comment on resubmission ***
+            approverComment: null,
             items: {
                 deleteMany: {},
                 create: body.items.map((item: any) => ({
@@ -321,7 +304,6 @@ export async function PATCH(
                 })),
             },
         };
-         // Safely check for evaluation criteria before attempting to delete/recreate
         if (body.evaluationCriteria) {
              const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
              if (oldCriteria) {
@@ -346,71 +328,46 @@ export async function PATCH(
                 dataToUpdate.currentApprover = { connect: { id: department.headId } };
                 dataToUpdate.status = 'Pending_Approval';
             } else {
-                // If no department head, auto-approve to next stage
                 dataToUpdate.status = 'PreApproved';
                 dataToUpdate.currentApprover = { disconnect: true };
             }
             auditAction = 'SUBMIT_FOR_APPROVAL';
             auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
         }
-
-    }
-    // This is a high-level award approval/rejection
-    else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') {
-        
-        // This is a special case for per-item awards where the main status might be 'Award_Declined'
-        // but an individual item is being approved.
-        const isPerItemApprovalDuringDecline = (requisition.rfqSettings as any)?.awardStrategy === 'item' && 
-                                              (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') &&
-                                               newStatus === 'Approved';
-        
-        if (!isPerItemApprovalDuringDecline && requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
-            // Standard award approval/rejection logic here
-            const userRoles = (user.roles as any[]).map(r => r.name);
-            let isAuthorizedToAct = false;
-            if (requisition.currentApproverId === userId) {
-                isAuthorizedToAct = true;
-            } else {
-                const requiredRoleForStatus = requisition.status.replace('Pending_', '');
-                if (userRoles.includes(requiredRoleForStatus) || userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-                    isAuthorizedToAct = true;
-                }
-            }
-
-            if (!isAuthorizedToAct) {
-                console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
-                return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
-            }
+    } else if (requisition.status === 'Pending_Approval') {
+        console.log(`[PATCH /api/requisitions] Handling departmental approval for Req ID: ${id}`);
+        if (requisition.currentApproverId !== userId && !actor.roles.some(r => r.name === 'Admin')) {
+            return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
         }
-        
-        // --- START SAFEGUARD ---
-        const hasBeenDeclined = requisition.quotations.some(q => q.status === 'Declined');
-        const hasItemBeenDeclined = requisition.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
-
-        if ((hasBeenDeclined || hasItemBeenDeclined) && !isPerItemApprovalDuringDecline) {
-            console.error(`[PATCH /api/requisitions] Aborting approval: Award for Req ${id} was declined by the vendor.`);
-            return NextResponse.json({ error: 'Cannot approve. The award was declined by the vendor. Please refresh to see the latest status.'}, { status: 409 }); // 409 Conflict
+        if (newStatus === 'Rejected') {
+            dataToUpdate.status = 'Rejected';
+            dataToUpdate.currentApprover = { disconnect: true };
+            dataToUpdate.approverComment = comment;
+            auditAction = 'REJECT_REQUISITION';
+            auditDetails = `Requisition ${id} was rejected by department head with comment: "${comment}".`;
+        } else {
+             dataToUpdate.status = 'PreApproved';
+             dataToUpdate.currentApprover = { disconnect: true };
+             dataToUpdate.approverComment = comment;
+             auditAction = 'PRE_APPROVE_REQUISITION';
+             auditDetails = `Requisition ${id} was pre-approved by department head with comment: "${comment}". Ready for RFQ.`;
         }
-        // --- END SAFEGUARD ---
-        
+        dataToUpdate.approver = { connect: { id: userId } };
+    } else if (requisition.status.startsWith('Pending_')) {
         console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
         const transactionResult = await prisma.$transaction(async (tx) => {
-
             if (newStatus === 'Rejected') {
-                const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
+                const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, actor, comment);
                 dataToUpdate.status = previousStatus;
                 dataToUpdate.currentApproverId = previousApproverId;
-                dataToUpdate.approverComment = comment; // Save the rejection reason
+                dataToUpdate.approverComment = comment;
                 auditDetails = serviceAuditDetails;
                 auditAction = 'REJECT_AWARD_STEP';
-            } else { // Approved
-                const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
-                // IF it's a per-item approval during decline, we DON'T update the main status.
-                if (!isPerItemApprovalDuringDecline) {
-                   dataToUpdate.status = nextStatus;
-                }
+            } else {
+                const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, actor);
+                dataToUpdate.status = nextStatus;
                 dataToUpdate.currentApproverId = nextApproverId;
-                dataToUpdate.approverComment = comment; // Save approval comment
+                dataToUpdate.approverComment = comment;
                 auditDetails = serviceAuditDetails;
                 auditAction = 'APPROVE_AWARD_STEP';
             }
@@ -426,15 +383,14 @@ export async function PATCH(
                 data: {
                   minute: { connect: { id: latestMinute.id } },
                   signer: { connect: { id: userId } },
-                  signerName: user.name,
-                  signerRole: (user.roles as any[]).map(r => r.name).join(', '),
+                  signerName: actor.name,
+                  signerRole: actor.roles.map(r => r.name).join(', '),
                   decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
                   comment: comment,
                 }
               });
               auditDetails += ` Signature recorded as ${signatureRecord.id}.`;
               
-              // New: Append signature to the PDF
               const filePath = path.join(process.cwd(), 'public', latestMinute.documentUrl);
               try {
                 const pdfBytes = await fs.readFile(filePath);
@@ -465,7 +421,6 @@ export async function PATCH(
                 auditDetails += ` Signature appended to document.`;
               } catch(e) {
                   console.error("Failed to append signature to PDF:", e);
-                  // Don't fail the whole transaction, just log that it happened.
                   auditDetails += ` (Failed to append signature to PDF).`;
               }
             }
@@ -473,7 +428,7 @@ export async function PATCH(
             await tx.auditLog.create({
                 data: {
                     transactionId: updatedRequisition.transactionId,
-                    user: { connect: { id: user.id } },
+                    user: { connect: { id: actor.id } },
                     timestamp: new Date(),
                     action: auditAction,
                     entity: 'Requisition',
@@ -486,30 +441,6 @@ export async function PATCH(
         });
         console.log(`[PATCH /api/requisitions] Award action transaction complete for Req ID: ${id}`);
         return NextResponse.json(transactionResult);
-    }
-
-    // This is the initial departmental approval
-    else if (requisition.status === 'Pending_Approval') {
-        console.log(`[PATCH /api/requisitions] Handling departmental approval for Req ID: ${id}`);
-        if (requisition.currentApproverId !== userId && !user.roles.some(r => r.name === 'Admin')) {
-            return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
-        }
-        if (newStatus === 'Rejected') {
-            dataToUpdate.status = 'Rejected';
-            dataToUpdate.currentApprover = { disconnect: true };
-            dataToUpdate.approverComment = comment;
-            auditAction = 'REJECT_REQUISITION';
-            auditDetails = `Requisition ${id} was rejected by department head with comment: "${comment}".`;
-        } else { // Department head approves
-             dataToUpdate.status = 'PreApproved'; // *** FIX: Correct status for departmental approval ***
-             dataToUpdate.currentApprover = { disconnect: true };
-             dataToUpdate.approverComment = comment;
-             auditAction = 'PRE_APPROVE_REQUISITION';
-             auditDetails = `Requisition ${id} was pre-approved by department head with comment: "${comment}". Ready for RFQ.`;
-        }
-        dataToUpdate.approver = { connect: { id: userId } };
-        
-    // This handles a requester submitting a draft
     } else if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
         console.log(`[PATCH /api/requisitions] Handling draft submission for Req ID: ${id}`);
         const isRequester = requisition.requesterId === userId;
@@ -519,13 +450,11 @@ export async function PATCH(
             dataToUpdate.currentApprover = { connect: { id: department.headId } };
             dataToUpdate.status = 'Pending_Approval';
         } else {
-            // If no department head, auto-approve to next stage
             dataToUpdate.status = 'PreApproved';
             dataToUpdate.currentApprover = { disconnect: true };
         }
          auditDetails = `Requisition ${id} submitted for approval.`;
          auditAction = 'SUBMIT_FOR_APPROVAL';
-
     } else {
         return NextResponse.json({ error: 'Invalid operation for current status.' }, { status: 400 });
     }
@@ -538,7 +467,7 @@ export async function PATCH(
     await prisma.auditLog.create({
         data: {
             transactionId: updatedRequisition.transactionId,
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: auditAction,
             entity: 'Requisition',
@@ -566,14 +495,12 @@ export async function PATCH(
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const actor = await prisma.user.findUnique({
-      where: { id: body.requesterId },
-      include: { roles: true },
-    });
+    const actor = await getActorFromToken(request);
     if (!actor) {
-      return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
+
+    const body = await request.json();
     const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
     if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
       const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
@@ -661,72 +588,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-
-export async function DELETE(
-  request: Request,
-) {
-  try {
-    const body = await request.json();
-    const { id, userId } = body;
-
-    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
-
-    if (!requisition) {
-      return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
-    }
-
-    const canDelete = (requisition.requesterId === userId) || ((user.roles as any[]).some(r => r.name === 'Procurement_Officer' || r.name === 'Admin'));
-
-    if (!canDelete) {
-      return NextResponse.json({ error: 'You are not authorized to delete this requisition.' }, { status: 403 });
-    }
-    
-    if (requisition.status !== 'Draft' && requisition.status !== 'Rejected') {
-        return NextResponse.json({ error: `Cannot delete a requisition with status "${requisition.status}".` }, { status: 400 });
-    }
-    
-    await prisma.requisitionItem.deleteMany({ where: { requisitionId: id } });
-    await prisma.customQuestion.deleteMany({ where: { requisitionId: id } });
-    
-    const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id }});
-    if (oldCriteria) {
-        await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
-        await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
-        await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id }});
-    }
-
-    await prisma.purchaseRequisition.delete({ where: { id } });
-
-    await prisma.auditLog.create({
-        data: {
-            transactionId: requisition.transactionId,
-            user: { connect: { id: user.id } },
-            timestamp: new Date(),
-            action: 'DELETE_REQUISITION',
-            entity: 'Requisition',
-            entityId: id,
-            details: `Deleted requisition: "${requisition.title}".`,
-        }
-    });
-
-    return NextResponse.json({ message: 'Requisition deleted successfully.' });
-  } catch (error) {
-     console.error('Failed to delete requisition:', error);
-     if (error instanceof Error) {
-        const prismaError = error as any;
-        if(prismaError.code === 'P2025') {
-            return NextResponse.json({ error: 'Failed to delete related data. The requisition may have already been deleted.' }, { status: 404 });
-        }
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
-  }
-}
-
-    

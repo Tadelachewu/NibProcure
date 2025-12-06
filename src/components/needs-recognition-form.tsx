@@ -124,7 +124,7 @@ interface NeedsRecognitionFormProps {
 export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRecognitionFormProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const { user, departments } = useAuth();
+  const { user, departments, token } = useAuth();
   const isEditMode = !!existingRequisition;
   const storageKey = isEditMode ? `requisition-form-${existingRequisition.id}` : 'new-requisition-form';
 
@@ -220,6 +220,14 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   const itemsWatch = form.watch('items');
 
   const onFinalSubmit = async (values: z.infer<typeof formSchema>, isDraft: boolean) => {
+    if (!token) {
+        toast({
+            variant: "destructive",
+            title: "Authentication Error",
+            description: "You are not logged in. Please log in and try again.",
+        });
+        return;
+    }
     setLoading(true);
 
     const schemaToUse = isDraft ? draftFormSchema : formSchema;
@@ -248,11 +256,11 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
         };
 
         const status = isDraft ? 'Draft' : 'Pending_Approval';
-        const body = { ...formattedValues, id: existingRequisition?.id, status: status, userId: user?.id };
+        const body = { ...formattedValues, id: existingRequisition?.id, status: status };
         
         const response = await fetch('/api/requisitions', {
             method: isEditMode ? 'PATCH' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(body),
         });
 
