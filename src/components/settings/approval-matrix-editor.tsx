@@ -67,7 +67,7 @@ export function ApprovalMatrixEditor() {
             }
 
 
-            // Committee range validation
+            // --- NEW: Committee range validation ---
             for (const step of tier.steps) {
                 const match = step.role.match(/Committee_(\w+)_Member/);
                 if (match) {
@@ -76,11 +76,12 @@ export function ApprovalMatrixEditor() {
                         const committeeRange = committeeConfig[committeeKey];
                         const tierMax = tier.max ?? Infinity;
 
-                        if (tierMax < committeeRange.min) {
-                            toast({ 
+                        // Check if the tier's range is a SUBSET of the committee's range.
+                        if (tier.min < committeeRange.min || tierMax > (committeeRange.max ?? Infinity)) {
+                             toast({ 
                                 variant: 'destructive', 
                                 title: 'Configuration Conflict', 
-                                description: `Tier "${tier.name}" (max value: ${tierMax.toLocaleString()}) is too low for Committee ${committeeKey}, which reviews items starting at ${committeeRange.min.toLocaleString()} ETB.`,
+                                description: `Tier "${tier.name}" has a range of ${tier.min.toLocaleString()} - ${tierMax.toLocaleString()}, which is outside the allowed review range for Committee ${committeeKey} (${committeeRange.min.toLocaleString()} - ${committeeRange.max?.toLocaleString() ?? 'Infinity'}).`,
                                 duration: 10000,
                             });
                             setIsSaving(false);
