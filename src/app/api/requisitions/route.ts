@@ -356,7 +356,7 @@ export async function PATCH(
 
     }
     // This is a high-level award approval/rejection
-    else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') {
+    else if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
         
         // This is a special case for per-item awards where the main status might be 'Award_Declined'
         // but an individual item is being approved.
@@ -364,7 +364,7 @@ export async function PATCH(
                                               (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') &&
                                                newStatus === 'Approved';
         
-        if (!isPerItemApprovalDuringDecline && requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
+        if (!isPerItemApprovalDuringDecline) {
             // Standard award approval/rejection logic here
             const userRoles = (user.roles as any[]).map(r => r.name);
             let isAuthorizedToAct = false;
@@ -501,11 +501,11 @@ export async function PATCH(
             auditAction = 'REJECT_REQUISITION';
             auditDetails = `Requisition ${id} was rejected by department head with comment: "${comment}".`;
         } else { // Department head approves
-             dataToUpdate.status = 'PreApproved'; // *** FIX: Correct status for departmental approval ***
-             dataToUpdate.currentApprover = { disconnect: true };
+             dataToUpdate.status = 'PreApproved';
+             dataToUpdate.currentApprover = { disconnect: true }; // Clear the approver after this step
              dataToUpdate.approverComment = comment;
              auditAction = 'PRE_APPROVE_REQUISITION';
-             auditDetails = `Requisition ${id} was pre-approved by department head with comment: "${comment}". Ready for RFQ.`;
+             auditDetails = `Requisition ${id} was pre-approved by department head. Ready for RFQ.`;
         }
         dataToUpdate.approver = { connect: { id: userId } };
         
@@ -728,5 +728,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
