@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function GET() {
     try {
@@ -25,14 +25,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { name, description, headId, userId } = body;
-    
-    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    const body = await request.json();
+    const { name, description, headId } = body;
+    
     if (!name) {
       return NextResponse.json({ error: 'Department name is required' }, { status: 400 });
     }
@@ -57,6 +57,7 @@ export async function POST(request: Request) {
             action: 'CREATE_DEPARTMENT',
             entity: 'Department',
             entityId: newDepartment.id,
+            transactionId: newDepartment.id,
             details: `Created new department: "${name}".`,
         }
     });
@@ -73,13 +74,13 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
    try {
-    const body = await request.json();
-    const { id, name, description, headId, userId } = body;
-    
-    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { id, name, description, headId } = body;
 
     if (!id || !name) {
       return NextResponse.json({ error: 'Department ID and name are required' }, { status: 400 });
@@ -127,6 +128,7 @@ export async function PATCH(request: Request) {
             action: 'UPDATE_DEPARTMENT',
             entity: 'Department',
             entityId: id,
+            transactionId: id,
             details: `Updated department name from "${oldName}" to "${name}".`,
         }
     });
@@ -148,13 +150,13 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
    try {
-    const body = await request.json();
-    const { id, userId } = body;
-
-    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { id } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Department ID is required' }, { status: 400 });
@@ -169,6 +171,7 @@ export async function DELETE(request: Request) {
             action: 'DELETE_DEPARTMENT',
             entity: 'Department',
             entityId: id,
+            transactionId: id,
             details: `Deleted department: "${deletedDepartment.name}".`,
         }
     });
