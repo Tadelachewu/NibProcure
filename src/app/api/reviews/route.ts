@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, RequisitionStatus } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 import { UserRole, PerItemAwardDetail, Minute } from '@/lib/types';
 
@@ -20,14 +20,21 @@ export async function GET(request: Request) {
     const orConditions: any[] = [
       // The user is the direct current approver.
       { currentApproverId: userId },
-      // The status matches a committee role the user has.
-      { status: { in: userRoles.map(r => `Pending_${r}`) } },
     ];
+
+    // The status matches a committee role the user has.
+    const pendingCommitteeStatuses = userRoles
+        .map(r => `Pending_${r}`)
+        .filter(s => Object.values(RequisitionStatus).includes(s as RequisitionStatus));
+
+    if (pendingCommitteeStatuses.length > 0) {
+        orConditions.push({ status: { in: pendingCommitteeStatuses } });
+    }
+
     
     // If a user is an Admin or Procurement Officer, they should see all pending reviews
     if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-        const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
-        const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
+        const allPossiblePendingStatuses = Object.values(RequisitionStatus).filter(s => s.startsWith('Pending_'));
         orConditions.push({
             status: { in: allPossiblePendingStatuses }
         });
