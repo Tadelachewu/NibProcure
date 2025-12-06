@@ -139,12 +139,6 @@ export function AwardReviewsTable() {
 
     setActiveActionId(selectedRequisition.id);
 
-    const minute = {
-        decisionBody: selectedRequisition.status.replace(/_/g, ' '),
-        justification,
-        attendeeIds: [user.id],
-    }
-
     try {
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
@@ -154,7 +148,6 @@ export function AwardReviewsTable() {
             status: actionType === 'approve' ? 'Approved' : 'Rejected', 
             userId: user.id, 
             comment: justification,
-            minute,
         }),
       });
       if (!response.ok) {

@@ -22,6 +22,8 @@ export async function GET(request: Request) {
       { currentApproverId: userId },
       // The status matches a committee role the user has.
       { status: { in: userRoles.map(r => `Pending_${r}`) } },
+       // The user has previously signed a minute on this requisition
+      { minutes: { some: { signatures: { some: { signerId: userId } } } } }
     ];
     
     // If a user is an Admin or Procurement Officer, they should see all pending reviews
