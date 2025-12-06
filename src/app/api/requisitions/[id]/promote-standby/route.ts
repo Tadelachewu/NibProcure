@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { promoteStandbyVendor } from '@/services/award-service';
 import { UserRole } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -12,33 +13,19 @@ export async function POST(
 ) {
   const requisitionId = params.id;
   try {
-    const body = await request.json();
-    const { userId } = body;
-
-    const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    let isAuthorized = false;
-    const userRoles = (user.roles as any[]).map(r => r.name);
-
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userId?: string };
-        if (setting.type === 'specific') {
-            isAuthorized = setting.userId === userId;
-        } else { // 'all' case
-            isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
-        }
-    }
+    const isAuthorized = (actor.roles as any[]).includes('Procurement_Officer') || (actor.roles as any[]).includes('Admin');
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      return await promoteStandbyVendor(tx, requisitionId, user);
+      return await promoteStandbyVendor(tx, requisitionId, actor);
     }, {
       maxWait: 15000,
       timeout: 30000,
@@ -54,3 +41,5 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
