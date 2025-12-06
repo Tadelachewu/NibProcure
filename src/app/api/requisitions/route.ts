@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
-import { prisma } from '@/lib/prisma';
+import { prisma, RequisitionStatus } from '@/lib/prisma';
 import { decodeJwt } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
@@ -48,8 +48,7 @@ export async function GET(request: Request) {
 
         // If a user is an Admin or Procurement Officer, they should see all pending reviews
         if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-            const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
-            const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
+            const allPossiblePendingStatuses = Object.values(RequisitionStatus).filter(s => s.startsWith('Pending_'));
             orConditions.push({ status: { in: allPossiblePendingStatuses } });
             // Also show items ready for notification and those declined/partially closed
             orConditions.push({ status: 'PostApproved' });
@@ -106,15 +105,8 @@ export async function GET(request: Request) {
         ];
 
     } else if (forQuoting) {
-        // Corrected list of valid statuses for the RFQ lifecycle
-        const rfqLifecycleStatuses = [
-            'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
-            'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
-            'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed',
-            'Pending_Committee_B_Review', 'Pending_Committee_A_Recommendation',
-            'Pending_Managerial_Approval', 'Pending_Director_Approval',
-            'Pending_VP_Approval', 'Pending_President_Approval'
-        ];
+        // Use all possible enum values to ensure the query is always valid.
+        const rfqLifecycleStatuses = Object.values(RequisitionStatus);
 
         const userRoles = userPayload?.roles.map(r => r.name) || [];
 
@@ -727,3 +719,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
