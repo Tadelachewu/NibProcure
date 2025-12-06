@@ -5,10 +5,10 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { User, UserRole, PerItemAwardDetail, QuoteItem } from '@/lib/types';
 
 /**
- * Finds the correct next approval step for a given requisition based on its current status and value.
+ * Creates the initial review entries in the database for a new approval workflow.
  * @param tx - Prisma transaction client.
  * @param requisition - The full requisition object.
- * @param actor - The user performing the current approval.
+ * @param actor - The user initiating the review process.
  * @returns An object with the next status, next approver ID, and a detailed audit message.
  */
 export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisition: any, actor: User) {
@@ -17,7 +17,7 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
     const approvalMatrix = await tx.approvalThreshold.findMany({
       include: {
         steps: {
-          include: { role: { select: { name: true } } },
+          include: { role: { select: { name: true, id: true } } },
           orderBy: { order: 'asc' }
         }
       },
@@ -28,65 +28,50 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         totalAwardValue >= tier.min && (tier.max === null || totalAwardValue <= tier.max)
     );
 
-    if (!relevantTier) {
-        throw new Error(`No approval tier found for an award value of ${totalAwardValue.toLocaleString()} ETB.`);
-    }
-
-    if (relevantTier.steps.length === 0) {
+    if (!relevantTier || relevantTier.steps.length === 0) {
+        // No steps for this tier, so it's auto-approved.
+        await tx.review.create({
+            data: {
+                requisitionId: requisition.id,
+                stepId: 'auto-approved', // Placeholder
+                status: 'Approved',
+                comment: `Award value ${totalAwardValue.toLocaleString()} ETB falls into tier "${relevantTier?.name || 'Unknown'}" which has no approval steps. Auto-approved.`,
+                reviewerId: actor.id,
+            }
+        });
         return { 
             nextStatus: 'PostApproved', 
             nextApproverId: null, 
-            auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB falls into "${relevantTier.name}" tier which has no approval steps. Auto-approved for vendor notification.`
+            auditDetails: `Award value ${totalAwardValue.toLocaleString()} ETB auto-approved for vendor notification.`
         };
     }
     
-    const currentStepIndex = relevantTier.steps.findIndex(step => {
-        // Find the step that corresponds to the requisition's CURRENT status.
-        return `Pending_${step.role.name}` === requisition.status;
+    // This is the first step in the chain
+    const firstStep = relevantTier.steps[0];
+    const firstRoleName = firstStep.role.name;
+    const nextStatus = `Pending_${firstRoleName}`; // This status is still useful for a high-level view
+
+    let nextApproverId: string | null = null;
+    if (!firstRoleName.includes('Committee')) {
+        const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: firstRoleName } } }});
+        nextApproverId = approverUser?.id || null;
+    }
+
+    // Create the first Review record
+    await tx.review.create({
+        data: {
+            requisitionId: requisition.id,
+            stepId: firstStep.id,
+            status: 'Pending',
+            reviewerId: nextApproverId, // Can be null for committee roles
+        }
     });
 
-    let nextStepIndex = currentStepIndex + 1;
-    
-    // If the requisition isn't in a pending state found in the matrix, it means this is the first approval for this tier.
-    if (currentStepIndex === -1) {
-        nextStepIndex = 0;
-    }
-
-
-    while(nextStepIndex < relevantTier.steps.length) {
-        const nextStep = relevantTier.steps[nextStepIndex];
-        const nextRoleName = nextStep.role.name;
-        
-        // Dynamically create the pending status. This is the core fix.
-        const nextStatus = `Pending_${nextRoleName}`;
-        
-        // Find a user for the next step. Committee roles don't get a specific approver ID.
-        let nextApproverId: string | null = null;
-        if (!nextRoleName.includes('Committee')) {
-            const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: nextRoleName } } }});
-            if (!approverUser) {
-                // If a specific approver role is not found (e.g. "President"), we should not throw an error, but rather log a warning.
-                // In a real system, there should be robust error handling or fallback mechanisms.
-                console.warn(`Could not find a user for the role: ${nextRoleName.replace(/_/g, ' ')}. The approval will be unassigned.`);
-            } else {
-                 nextApproverId = approverUser.id;
-            }
-        }
-
-        const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
-        return {
-            nextStatus,
-            nextApproverId,
-            auditDetails: `Award approved by ${actorRoles}. Advanced to ${nextRoleName.replace(/_/g, ' ')}.`
-        };
-    }
-
-    // If we've gone through all the steps, it's the final approval for this tier.
     const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
     return {
-        nextStatus: 'PostApproved',
-        nextApproverId: null,
-        auditDetails: `Final award approval for requisition ${requisition.id} granted by ${actorRoles}. Ready for vendor notification.`
+        nextStatus,
+        nextApproverId, // This might still be useful for notifications
+        auditDetails: `Award routed to ${firstRoleName.replace(/_/g, ' ')} for review.`
     };
 }
 
@@ -100,59 +85,18 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
  * @returns An object with the previous status, previous approver ID, and a detailed audit message.
  */
 export async function getPreviousApprovalStep(tx: Prisma.TransactionClient, requisition: any, actor: User, reason: string) {
-    const totalAwardValue = requisition.totalPrice;
+    // This function's logic might need to be re-evaluated with the new Review model.
+    // For now, rejecting at any stage sends it back to 'Scoring_Complete'.
     
-    const approvalMatrix = await tx.approvalThreshold.findMany({
-      include: {
-        steps: {
-          include: { role: { select: { name: true } } },
-          orderBy: { order: 'asc' }
-        }
-      },
-      orderBy: { min: 'asc' }
+    await tx.review.updateMany({
+        where: { requisitionId: requisition.id, status: 'Pending' },
+        data: { status: 'Rejected', comment: reason, reviewerId: actor.id }
     });
 
-    const relevantTier = approvalMatrix.find(tier => 
-        totalAwardValue >= tier.min && (tier.max === null || totalAwardValue <= tier.max)
-    );
-
-    if (!relevantTier || relevantTier.steps.length === 0) {
-        // No defined steps, rejection sends it back to scoring
-        return {
-            previousStatus: 'Scoring_Complete',
-            previousApproverId: null,
-            auditDetails: `Award rejected by ${(actor.roles as any[]).map(r=>r.name).join(', ')}. No approval tier found, returning to scoring.`
-        };
-    }
-    
-    const currentStepIndex = relevantTier.steps.findIndex(step => 
-        `Pending_${step.role.name}` === requisition.status
-    );
-
-    if (currentStepIndex <= 0) {
-        // This is the first step in the chain. Rejection reverts to Scoring_Complete.
-        return {
-            previousStatus: 'Scoring_Complete',
-            previousApproverId: null, // Unassign it
-            auditDetails: `Award rejected at first step by ${(actor.roles as any[]).map(r=>r.name).join(', ')}. Requisition returned to 'Scoring Complete' for re-evaluation. Reason: "${reason}"`
-        };
-    }
-    
-    const previousStep = relevantTier.steps[currentStepIndex - 1];
-    const previousRoleName = previousStep.role.name;
-    const previousStatus = `Pending_${previousRoleName}`;
-    
-    let previousApproverId: string | null = null;
-    if (!previousRoleName.includes('Committee')) {
-        const previousApprover = await tx.user.findFirst({ where: { roles: { some: { name: previousRoleName } } }});
-        previousApproverId = previousApprover?.id || null;
-    }
-
-    const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
     return {
-        previousStatus,
-        previousApproverId,
-        auditDetails: `Award rejected by ${actorRoles}. Sent back to previous step: ${previousRoleName.replace(/_/g, ' ')}. Reason: "${reason}"`
+        previousStatus: 'Scoring_Complete',
+        previousApproverId: null, // Unassign it
+        auditDetails: `Award rejected by ${(actor.roles as any[]).map(r=>r.name).join(', ')}. Requisition returned to 'Scoring Complete' for re-evaluation. Reason: "${reason}"`
     };
 }
 
@@ -415,8 +359,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         let newTotalValue = 0;
         for (const item of updatedRequisition.items) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-             // Only include the value of items newly moved to 'Pending_Award'.
-             // Exclude 'Accepted' items that are already paid or being processed.
              const newlyPendingAward = details.find(d => d.status === 'Pending_Award');
              if (newlyPendingAward) {
                  newTotalValue += newlyPendingAward.unitPrice * item.quantity;
