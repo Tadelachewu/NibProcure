@@ -357,10 +357,13 @@ export async function PATCH(
 
     }
     // This is a high-level award approval/rejection
-    else if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
+    else if (
+      requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval' ||
+      ((requisition.rfqSettings as any)?.awardStrategy === 'item' &&
+      (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') &&
+      newStatus === 'Approved')
+    ) {
         
-        // This is a special case for per-item awards where the main status might be 'Award_Declined'
-        // but an individual item is being approved.
         const isPerItemApprovalDuringDecline = (requisition.rfqSettings as any)?.awardStrategy === 'item' && 
                                               (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') &&
                                                newStatus === 'Approved';
