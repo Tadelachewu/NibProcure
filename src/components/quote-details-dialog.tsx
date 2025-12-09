@@ -94,12 +94,17 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                             </>
                         )}
                         
-                        {(quote.cpoDocumentUrl || quote.experienceDocumentUrl) && (
+                        {(quote.cpoDocumentUrl || quote.experienceDocumentUrl || quote.summaryDocumentUrl) && (
                              <>
                                 <Separator />
                                 <div className="space-y-2">
                                      <h3 className="font-semibold">Attached Documents</h3>
-                                     <div className="flex gap-4">
+                                     <div className="flex flex-wrap gap-4">
+                                        {quote.summaryDocumentUrl && (
+                                            <a href={quote.summaryDocumentUrl} target="_blank" rel="noopener noreferrer">
+                                                <Button variant="default"><FileText className="mr-2"/> Summarized Proposal</Button>
+                                            </a>
+                                        )}
                                         {quote.cpoDocumentUrl && (
                                             <a href={quote.cpoDocumentUrl} target="_blank" rel="noopener noreferrer">
                                                 <Button variant="outline"><FileText className="mr-2"/> CPO Document</Button>
@@ -123,4 +128,3 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
         </Dialog>
     );
 }
-

@@ -38,7 +38,7 @@ const quoteFormSchema = z.object({
     unitPrice: z.coerce.number().min(0.01, "Price is required."),
     leadTimeDays: z.coerce.number().min(0, "Lead time is required."),
     brandDetails: z.string().optional(),
-    imageUrl: z.string().min(1, "An image is required for each item."),
+    imageUrl: z.string().optional(),
   })),
   answers: z.array(z.object({
       questionId: z.string(),
@@ -46,6 +46,7 @@ const quoteFormSchema = z.object({
   })).optional(),
   cpoDocumentUrl: z.string().optional(),
   experienceDocumentUrl: z.string().optional(),
+  summaryDocumentUrl: z.string().optional(),
 }).refine(
     (data, ctx) => {
         // This is a placeholder for the actual requisition data
@@ -232,6 +233,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: quote.answers || requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: quote.cpoDocumentUrl || '',
             experienceDocumentUrl: quote.experienceDocumentUrl || '',
+            summaryDocumentUrl: quote.summaryDocumentUrl || '',
         } : {
             notes: "",
             items: requisition.items.map(item => ({
@@ -246,6 +248,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: '',
             experienceDocumentUrl: '',
+            summaryDocumentUrl: '',
         },
     });
 
@@ -410,13 +413,60 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             <CardContent>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                        {isCpoRequired && (
-                             <FormField
+                        <div className="grid md:grid-cols-2 gap-4">
+                            {isCpoRequired && (
+                                <FormField
+                                    control={form.control}
+                                    name="cpoDocumentUrl"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>CPO Document (Required)</FormLabel>
+                                        <FormControl>
+                                            <Input type="file" accept=".pdf" onChange={async (e) => {
+                                                if (e.target.files?.[0]) {
+                                                    const path = await handleFileUpload(e.target.files[0]);
+                                                    if (path) field.onChange(path);
+                                                }
+                                            }} />
+                                        </FormControl>
+                                        <FormDescription>
+                                            A CPO of {requisition.cpoAmount?.toLocaleString()} ETB is required for this requisition.
+                                        </FormDescription>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
+                            
+                            {isExperienceRequired && (
+                                <FormField
+                                    control={form.control}
+                                    name="experienceDocumentUrl"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Experience Document (Required)</FormLabel>
+                                        <FormControl>
+                                            <Input type="file" accept=".pdf" onChange={async (e) => {
+                                                if (e.target.files?.[0]) {
+                                                    const path = await handleFileUpload(e.target.files[0]);
+                                                    if (path) field.onChange(path);
+                                                }
+                                            }} />
+                                        </FormControl>
+                                        <FormDescription>
+                                            Please upload a document detailing your relevant experience for this bid.
+                                        </FormDescription>
+                                        <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
+                            <FormField
                                 control={form.control}
-                                name="cpoDocumentUrl"
+                                name="summaryDocumentUrl"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>CPO Document (Required)</FormLabel>
+                                    <FormLabel>Summarized Proposal Document (Optional)</FormLabel>
                                     <FormControl>
                                         <Input type="file" accept=".pdf" onChange={async (e) => {
                                             if (e.target.files?.[0]) {
@@ -426,37 +476,13 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                         }} />
                                     </FormControl>
                                     <FormDescription>
-                                        A CPO of {requisition.cpoAmount?.toLocaleString()} ETB is required for this requisition.
+                                        Optionally, upload a single PDF summarizing all your proposed items and details.
                                     </FormDescription>
                                     <FormMessage />
                                     </FormItem>
                                 )}
                              />
-                        )}
-                        
-                        {isExperienceRequired && (
-                             <FormField
-                                control={form.control}
-                                name="experienceDocumentUrl"
-                                render={({ field }) => (
-                                    <FormItem>
-                                    <FormLabel>Experience Document (Required)</FormLabel>
-                                    <FormControl>
-                                        <Input type="file" accept=".pdf" onChange={async (e) => {
-                                            if (e.target.files?.[0]) {
-                                                const path = await handleFileUpload(e.target.files[0]);
-                                                if (path) field.onChange(path);
-                                            }
-                                        }} />
-                                    </FormControl>
-                                    <FormDescription>
-                                        Please upload a document detailing your relevant experience for this bid.
-                                    </FormDescription>
-                                    <FormMessage />
-                                    </FormItem>
-                                )}
-                             />
-                        )}
+                        </div>
 
 
                         <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
@@ -517,7 +543,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                             name={`items.${overallIndex}.imageUrl`}
                                                             render={({ field }) => (
                                                                 <FormItem>
-                                                                <FormLabel>Item Image</FormLabel>
+                                                                <FormLabel>Item Image (Optional)</FormLabel>
                                                                 <FormControl>
                                                                     <Input type="file" accept="image/*" onChange={async (e) => {
                                                                         if (e.target.files?.[0]) {
@@ -527,7 +553,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                                     }} />
                                                                 </FormControl>
                                                                 <FormDescription>
-                                                                    A clear image of the proposed item is required.
+                                                                    A clear image of the proposed item.
                                                                 </FormDescription>
                                                                 <FormMessage />
                                                                 </FormItem>

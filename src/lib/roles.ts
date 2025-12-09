@@ -125,5 +125,3 @@ export const rolePermissions: Record<UserRole, string[]> = {
   VP_Resources_and_Facilities: ['/dashboard', '/award-reviews', '/records', '/report-issue'],
   President: ['/dashboard', '/award-reviews', '/records', '/report-issue'],
 };
-
-```
