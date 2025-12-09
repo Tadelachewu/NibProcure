@@ -66,7 +66,7 @@ export async function POST(
                 totalPrice: totalValue,
                 deadline: new Date(newDeadline),
                 allowedVendorIds: vendorIds,
-                parent: { 
+                parentRequisition: { 
                     connect: {
                         id: originalRequisition.id 
                     }
@@ -218,3 +218,5 @@ export async function POST(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
