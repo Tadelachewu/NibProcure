@@ -256,7 +256,14 @@ function FinanceDashboard() {
         const pending = invoices.filter(i => i.status === 'Pending').length;
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
         const disputed = invoices.filter(i => i.status === 'Disputed').length;
-        return { pending, approved, disputed };
+        
+        const paidInvoices = invoices.filter(i => i.status === 'Paid');
+        const unpaidInvoices = invoices.filter(i => i.status === 'Pending' || i.status === 'Approved_for_Payment');
+
+        const totalPaid = paidInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+        const totalUnpaid = unpaidInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+
+        return { pending, approved, disputed, totalPaid, totalUnpaid };
     }, [invoices]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -266,6 +273,8 @@ function FinanceDashboard() {
             <StatCard title="Pending Invoices" value={stats.pending.toString()} description="Awaiting 3-way match and approval" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Review Invoices"/>
             <StatCard title="Ready for Payment" value={stats.approved.toString()} description="Approved invoices to be paid" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Process Payments"/>
             <StatCard title="Disputed Invoices" value={stats.disputed.toString()} description="Invoices with discrepancies" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Resolve Disputes" variant="destructive"/>
+            <StatCard title="Total Unpaid" value={`${stats.totalUnpaid.toLocaleString()} ETB`} description="Invoices pending or approved for payment" icon={<Wallet className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View Unpaid"/>
+            <StatCard title="Total Paid" value={`${stats.totalPaid.toLocaleString()} ETB`} description="Successfully paid and closed invoices" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View History"/>
         </div>
     )
 }
