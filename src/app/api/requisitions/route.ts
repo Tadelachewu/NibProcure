@@ -254,7 +254,6 @@ export async function PATCH(
   try {
     const body = await request.json();
     const { id, status, userId, comment } = body;
-    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${userId}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
 
@@ -279,14 +278,11 @@ export async function PATCH(
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
-    
-    console.log(`[PATCH /api/requisitions] Current req status: ${requisition.status}. Requested new status: ${newStatus}`);
 
     let dataToUpdate: any = {};
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
     
-    // This handles editing a draft or rejected requisition and resubmitting
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && body.title) {
         const totalPrice = body.items.reduce((acc: number, item: any) => {
             const price = item.unitPrice || 0;
@@ -322,7 +318,6 @@ export async function PATCH(
                 })),
             },
         };
-         // Safely check for evaluation criteria before attempting to delete/recreate
         if (body.evaluationCriteria) {
              const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
              if (oldCriteria) {
@@ -347,14 +342,12 @@ export async function PATCH(
                 dataToUpdate.currentApprover = { connect: { id: department.headId } };
                 dataToUpdate.status = 'Pending_Approval';
             } else {
-                // If no department head, auto-approve to next stage
                 dataToUpdate.status = 'PreApproved';
                 dataToUpdate.currentApprover = { disconnect: true };
             }
             auditAction = 'SUBMIT_FOR_APPROVAL';
             auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
         }
-
     }
     // This is a high-level award approval/rejection
     else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined') {
@@ -365,20 +358,21 @@ export async function PATCH(
                 const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
                 dataToUpdate.status = previousStatus;
                 dataToUpdate.currentApproverId = previousApproverId;
-                dataToUpdate.approverComment = comment; // Save the rejection reason
+                dataToUpdate.approverComment = comment;
                 auditDetails = serviceAuditDetails;
                 auditAction = 'REJECT_AWARD_STEP';
             } else { // Approved
                 const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
-                // IF it's a per-item approval during decline, we DON'T update the main status.
+                
                 const isPerItemApprovalDuringDecline = (requisition.rfqSettings as any)?.awardStrategy === 'item' &&
                                                      (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed');
                                                      
                 if (!isPerItemApprovalDuringDecline) {
                    dataToUpdate.status = nextStatus;
                 }
+                
                 dataToUpdate.currentApproverId = nextApproverId;
-                dataToUpdate.approverComment = comment; // Save approval comment
+                dataToUpdate.approverComment = comment;
                 auditDetails = serviceAuditDetails;
                 auditAction = 'APPROVE_AWARD_STEP';
             }
@@ -402,12 +396,10 @@ export async function PATCH(
               });
               auditDetails += ` Signature recorded as ${signatureRecord.id}.`;
               
-              // New: Append signature to the PDF
               const filePath = path.join(process.cwd(), 'public', latestMinute.documentUrl);
               try {
                 const pdfBytes = await fs.readFile(filePath);
                 const pdfDoc = await PDFDocument.load(pdfBytes);
-                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
                 const newPage = pdfDoc.addPage();
                 
                 const { width, height } = newPage.getSize();
@@ -433,7 +425,6 @@ export async function PATCH(
                 auditDetails += ` Signature appended to document.`;
               } catch(e) {
                   console.error("Failed to append signature to PDF:", e);
-                  // Don't fail the whole transaction, just log that it happened.
                   auditDetails += ` (Failed to append signature to PDF).`;
               }
             }
@@ -484,7 +475,6 @@ export async function PATCH(
             dataToUpdate.currentApprover = { connect: { id: department.headId } };
             dataToUpdate.status = 'Pending_Approval';
         } else {
-            // If no department head, auto-approve to next stage
             dataToUpdate.status = 'PreApproved';
             dataToUpdate.currentApprover = { disconnect: true };
         }
