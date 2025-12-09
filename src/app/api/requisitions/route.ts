@@ -357,47 +357,8 @@ export async function PATCH(
 
     }
     // This is a high-level award approval/rejection
-    else if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
+    else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined') {
         
-        // This is a special case for per-item awards where the main status might be 'Award_Declined'
-        // but an individual item is being approved.
-        const isPerItemApprovalDuringDecline = (requisition.rfqSettings as any)?.awardStrategy === 'item' && 
-                                              (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') &&
-                                               newStatus === 'Approved';
-        
-        if (!isPerItemApprovalDuringDecline) {
-            // Standard award approval/rejection logic here
-            const userRoles = (user.roles as any[]).map(r => r.name);
-            let isAuthorizedToAct = false;
-            if (requisition.currentApproverId === userId) {
-                isAuthorizedToAct = true;
-            } else {
-                const requiredRoleForStatus = requisition.status.replace('Pending_', '');
-                if (userRoles.includes(requiredRoleForStatus) || userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-                    isAuthorizedToAct = true;
-                }
-            }
-
-            if (!isAuthorizedToAct) {
-                console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
-                return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
-            }
-        }
-        
-        // --- START SAFEGUARD ---
-        const hasBeenDeclined = requisition.quotations.some(q => q.status === 'Declined');
-        const hasItemBeenDeclined = requisition.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
-
-        if ((hasBeenDeclined || hasItemBeenDeclined) && !isPerItemApprovalDuringDecline) {
-             const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
-             if (awardStrategy !== 'item') {
-                 console.error(`[PATCH /api/requisitions] Aborting approval: Award for Req ${id} was declined by the vendor.`);
-                 return NextResponse.json({ error: 'Cannot approve. The award was declined by the vendor. Please refresh to see the latest status.'}, { status: 409 }); // 409 Conflict
-             }
-        }
-        // --- END SAFEGUARD ---
-        
-        console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
         const transactionResult = await prisma.$transaction(async (tx) => {
 
             if (newStatus === 'Rejected') {
@@ -410,6 +371,9 @@ export async function PATCH(
             } else { // Approved
                 const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
                 // IF it's a per-item approval during decline, we DON'T update the main status.
+                const isPerItemApprovalDuringDecline = (requisition.rfqSettings as any)?.awardStrategy === 'item' &&
+                                                     (requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed');
+                                                     
                 if (!isPerItemApprovalDuringDecline) {
                    dataToUpdate.status = nextStatus;
                 }
@@ -488,13 +452,11 @@ export async function PATCH(
 
             return updatedRequisition;
         });
-        console.log(`[PATCH /api/requisitions] Award action transaction complete for Req ID: ${id}`);
         return NextResponse.json(transactionResult);
     }
 
     // This is the initial departmental approval
     else if (requisition.status === 'Pending_Approval') {
-        console.log(`[PATCH /api/requisitions] Handling departmental approval for Req ID: ${id}`);
         if (requisition.currentApproverId !== userId && !user.roles.some(r => r.name === 'Admin')) {
             return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
         }
@@ -515,7 +477,6 @@ export async function PATCH(
         
     // This handles a requester submitting a draft
     } else if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
-        console.log(`[PATCH /api/requisitions] Handling draft submission for Req ID: ${id}`);
         const isRequester = requisition.requesterId === userId;
         if (!isRequester) return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
         const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
