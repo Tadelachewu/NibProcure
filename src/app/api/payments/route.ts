@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -23,7 +24,7 @@ export async function POST(
 
     const invoiceToUpdate = await prisma.invoice.findUnique({ 
         where: { id: invoiceId },
-        include: { purchaseOrder: true }
+        include: { po: true }
     });
     if (!invoiceToUpdate) {
         return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
@@ -46,9 +47,9 @@ export async function POST(
             }
         });
         
-        if (invoiceToUpdate.purchaseOrder?.requisitionId) {
+        if (invoiceToUpdate.po?.requisitionId) {
             const requisition = await tx.purchaseRequisition.findUnique({
-                where: { id: invoiceToUpdate.purchaseOrder.requisitionId },
+                where: { id: invoiceToUpdate.po.requisitionId },
                 include: { items: true, purchaseOrders: { include: { items: true, invoices: true }}}
             });
             
