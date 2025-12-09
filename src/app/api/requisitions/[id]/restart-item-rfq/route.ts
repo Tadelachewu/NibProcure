@@ -125,7 +125,7 @@ export async function POST(
             where: { id: originalRequisitionId },
             include: { 
                 items: true,
-                purchaseOrders: { include: { invoices: true }}
+                purchaseOrders: { include: { invoices: true, items: true }}
             }
         });
 
@@ -140,11 +140,20 @@ export async function POST(
                 const acceptedAward = details.find(d => d.status === 'Accepted');
                 if (acceptedAward) {
                     const po = updatedOriginalReq.purchaseOrders.find(p => p.items.some(poi => poi.requisitionItemId === item.id));
-                    return po?.invoices.some(inv => inv.status === 'Paid') || false;
+                    // Check if *every* invoice related to this PO is paid
+                    return po?.invoices.every(inv => inv.status === 'Paid') || false;
                 }
 
                 // If an award failed and was not restarted, it's also terminal.
                 if(details.some(d => d.status === 'Failed_to_Award')) return true;
+
+                // If an award was declined but there are still standby options, it's NOT terminal
+                const hasDeclined = details.some(d => d.status === 'Declined');
+                const hasStandby = details.some(d => d.status === 'Standby');
+                if(hasDeclined && hasStandby) return false;
+                
+                // If it was declined and had no standby, it is now considered failed, which is terminal.
+                if(hasDeclined && !hasStandby) return true;
 
                 return false;
             });
@@ -213,10 +222,11 @@ export async function POST(
   } catch (error) {
     console.error('Failed to restart item RFQ:', error);
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+      if ((error as any).code === 'P2002') {
+        return NextResponse.json({ error: 'Failed to create new requisition due to a unique constraint violation. This may be a temporary issue. Please try again.' }, { status: 409 });
+      }
+      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
