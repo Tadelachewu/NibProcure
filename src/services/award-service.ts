@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -248,7 +247,7 @@ export async function handleAwardRejection(
             
             const awardDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             const updatedDetails = awardDetails.map(d => {
-                if (d.vendorId === quote.vendorId && (d.status === 'Awarded' || d.status === 'Pending_Award')) {
+                if (d.vendorId === quote.vendorId && (d.status === 'Awarded' || d.status === 'Pending_Award' || d.status === 'Accepted')) {
                     itemsUpdated++;
                     return { ...d, status: 'Declined' as const, rejectionReason: formattedReason };
                 }
@@ -520,5 +519,3 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
-
-    

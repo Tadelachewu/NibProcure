@@ -285,7 +285,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
 
                 const shouldShowItems = isPerItemStrategy && isAwarded && thisVendorItemStatuses.length > 0;
                 
-                 const declinedItemAward = isPerItemStrategy 
+                const declinedItemAward = isPerItemStrategy 
                     ? requisition.items
                         .flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []))
                         .find(detail => detail.vendorId === quote.vendorId && (detail.status === 'Declined' || detail.status === 'Failed_to_Award') && detail.rejectionReason)
@@ -3159,6 +3159,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
