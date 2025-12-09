@@ -284,6 +284,12 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
 
                 const shouldShowItems = isPerItemStrategy && isAwarded && thisVendorItemStatuses.length > 0;
                 
+                 const declinedItemAward = isPerItemStrategy 
+                    ? requisition.items
+                        .flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []))
+                        .find(detail => detail.vendorId === quote.vendorId && (detail.status === 'Declined' || detail.status === 'Failed_to_Award') && detail.rejectionReason)
+                    : null;
+                
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Partially_Awarded' || mainStatus === 'Accepted') && !isPerItemStrategy && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
@@ -296,14 +302,14 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
-                                {quote.rejectionReason && (
+                                {(quote.rejectionReason || declinedItemAward) && (
                                     <TooltipProvider>
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <AlertCircle className="h-4 w-4 text-destructive inline-block ml-2 cursor-help" />
                                             </TooltipTrigger>
                                             <TooltipContent>
-                                                <p>Reason for decline: {quote.rejectionReason}</p>
+                                                <p>Reason for decline: {declinedItemAward?.rejectionReason || quote.rejectionReason}</p>
                                             </TooltipContent>
                                         </Tooltip>
                                     </TooltipProvider>
@@ -3152,6 +3158,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
