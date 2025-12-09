@@ -4,7 +4,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
-import { handleAwardRejection } from '@/services/award-service';
 import { POItem } from '@prisma/client';
 
 export async function POST(request: Request) {
@@ -31,8 +30,7 @@ export async function POST(request: Request) {
           throw new Error('Purchase Order, associated requisition, or vendor not found');
         }
 
-        const defectiveItems = receivedItems.filter((item: any) => item.condition === 'Damaged' || item.condition === 'Incorrect');
-        const hasDefectiveItems = defectiveItems.length > 0;
+        const hasDefectiveItems = receivedItems.some((item: any) => item.condition === 'Damaged' || item.condition === 'Incorrect');
         
         // Always create the GRN to log what was physically received
         const newReceipt = await tx.goodsReceiptNote.create({
@@ -88,33 +86,6 @@ export async function POST(request: Request) {
             }
         });
         
-        if (hasDefectiveItems) {
-            const acceptedQuote = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
-            if (acceptedQuote && po.vendor.user) {
-                const poItemsMap = new Map(po.items.map(item => [item.id, item]));
-
-                const declinedReqItemIds = defectiveItems.map((defective: any) => {
-                    const poItem = poItemsMap.get(defective.poItemId);
-                    return poItem?.requisitionItemId;
-                }).filter(Boolean);
-
-                const rejectionReason = defectiveItems
-                    .map((item: any) => `Item "${item.name}": Condition was ${item.condition}. Notes: ${item.notes}`)
-                    .join('; ');
-
-                await handleAwardRejection(
-                    tx, 
-                    acceptedQuote, 
-                    po.requisition,
-                    po.vendor.user,
-                    declinedReqItemIds,
-                    'Receiving',
-                    rejectionReason
-                );
-            }
-        }
-
-
         return newReceipt;
     });
 
