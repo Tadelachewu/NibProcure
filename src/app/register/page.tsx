@@ -111,7 +111,7 @@ export default function RegisterPage() {
 
         if (response.ok) {
             localStorage.removeItem(storageKey); // Clear saved data on success
-            authLogin(result.token, result.user, result.roles);
+            authLogin(result.token, result.user);
             toast({
                 title: 'Registration Successful',
                 description: `Welcome, ${result.user.name}! Your vendor application is pending verification.`,

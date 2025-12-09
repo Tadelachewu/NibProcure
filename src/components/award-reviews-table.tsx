@@ -234,7 +234,7 @@ export function AwardReviewsTable() {
                   if (userSignature) {
                       statusBadge = <Badge variant={userSignature.decision === 'APPROVED' ? 'default' : 'destructive'} className={userSignature.decision === 'APPROVED' ? 'bg-green-600' : ''}>You {userSignature.decision}</Badge>;
                   } else if (isActionable) {
-                      statusBadge = <Badge variant="secondary" className="border-amber-500 text-amber-600 animate-pulse">{`Pending Your Action`}</Badge>;
+                      statusBadge = <Badge variant="secondary" className="border-amber-500 text-amber-600 animate-pulse">{currentDecisionBody}</Badge>;
                   } else {
                       statusBadge = <Badge variant="outline">{currentDecisionBody}</Badge>;
                   }
