@@ -18,6 +18,7 @@ import { CommitteeSettings } from './settings/committee-settings';
 import { ApprovalMatrixEditor } from './settings/approval-matrix-editor';
 import { QuorumSettings } from './settings/quorum-settings';
 import { RequisitionCreatorSettings } from './settings/requisition-creator-settings';
+import { SystemIssuesViewer } from './settings/system-issues-viewer';
 
 
 export function SettingsPage() {
@@ -30,7 +31,7 @@ export function SettingsPage() {
         <TabsTrigger value="roles">Role Management</TabsTrigger>
         <TabsTrigger value="users">User Management</TabsTrigger>
         <TabsTrigger value="departments">Departments</TabsTrigger>
-        <TabsTrigger value="notifications">Notifications</TabsTrigger>
+        <TabsTrigger value="issues">System Issues</TabsTrigger>
       </TabsList>
       <TabsContent value="general">
         <div className="space-y-6">
@@ -55,19 +56,10 @@ export function SettingsPage() {
        <TabsContent value="departments">
         <DepartmentManagementEditor />
       </TabsContent>
-      <TabsContent value="notifications">
-         <Card>
-          <CardHeader>
-            <CardTitle>Notification Settings</CardTitle>
-            <CardDescription>
-              Manage how and when you receive notifications. This page is under construction.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p>Future notification settings will be available here.</p>
-          </CardContent>
-        </Card>
+      <TabsContent value="issues">
+        <SystemIssuesViewer />
       </TabsContent>
     </Tabs>
   );
 }
+```
