@@ -490,6 +490,7 @@ export function InvoicesPage() {
   const [isFormOpen, setFormOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [actionType, setActionType] = useState<'approve' | 'dispute' | null>(null);
 
   const { toast } = useToast();
   const { user } = useAuth();
@@ -558,6 +559,7 @@ export function InvoicesPage() {
   const handleAction = async (invoiceId: string, status: 'Approved for Payment' | 'Disputed', reason?: string) => {
       if (!user) return;
       setActiveAction(invoiceId);
+      setActionType(status === 'Disputed' ? 'dispute' : 'approve');
       try {
           const response = await fetch(`/api/invoices/${invoiceId}/status`, {
               method: 'PATCH',
@@ -575,6 +577,7 @@ export function InvoicesPage() {
         });
       } finally {
         setActiveAction(null);
+        setActionType(null);
       }
   }
 
