@@ -43,6 +43,16 @@ export default function AppLayout({
   const pathname = usePathname();
   const { toast } = useToast();
   
+  const canCreateRequisition = useMemo(() => {
+    if (!user || !requisitionCreatorSetting) return false;
+    if (requisitionCreatorSetting.type === 'all_users') return true;
+    if (requisitionCreatorSetting.type === 'specific_roles') {
+      const userRoles = (user.roles as any[]).map(r => typeof r === 'string' ? r : r.name);
+      return userRoles.some(userRole => requisitionCreatorSetting.allowedRoles?.includes(userRole));
+    }
+    return false;
+  }, [user, requisitionCreatorSetting]);
+  
   const accessibleNavItems = useMemo(() => {
     if (!role) return [];
     // Use the special 'Combined' key which holds the union of all permissions
@@ -50,15 +60,12 @@ export default function AppLayout({
     let items = navItems.filter(item => allowedPaths.includes(item.path));
 
     // Handle "New Requisition" link based on requisitionCreatorSetting
-    if (requisitionCreatorSetting.type === 'specific_roles') {
-        const canCreate = user?.roles.some(r => requisitionCreatorSetting.allowedRoles?.includes(r as any));
-        if (!canCreate) {
-            items = items.filter(item => item.path !== '/new-requisition');
-        }
+    if (!canCreateRequisition) {
+        items = items.filter(item => item.path !== '/new-requisition');
     }
 
     return items;
-  }, [role, rolePermissions, user, requisitionCreatorSetting]);
+  }, [role, rolePermissions, canCreateRequisition]);
 
 
   const handleLogout = useCallback(() => {
@@ -110,7 +117,7 @@ export default function AppLayout({
     const allowedPaths = rolePermissions['Combined'] || [];
     
     // If somehow permissions are empty and user is not admin, logout
-    if (user && allowedPaths.length === 0 && !user.roles?.includes('Admin')) { 
+    if (user && allowedPaths.length === 0 && !(user.roles as any[])?.some(r => r.name === 'Admin')) { 
         console.warn(`No permissions found for user roles. Logging out.`);
         logout();
         return;
@@ -123,13 +130,15 @@ export default function AppLayout({
         return;
     }
     
-    // Special check for new-requisition page
-    if (currentPath === '/new-requisition' && requisitionCreatorSetting.type === 'specific_roles') {
-        const canCreate = user?.roles.some(r => requisitionCreatorSetting.allowedRoles?.includes(r as any));
-        if (!canCreate) {
-            router.push(allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0] || '/');
-            return;
-        }
+    // Special check for new-requisition page based on dynamic setting
+    if (currentPath === '/new-requisition' && !canCreateRequisition) {
+        toast({
+            variant: 'destructive',
+            title: 'Access Denied',
+            description: 'You do not have permission to create a new requisition.',
+        });
+        router.push(allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0] || '/');
+        return;
     }
 
 
@@ -150,10 +159,10 @@ export default function AppLayout({
     // Redirect to default path if it's different, otherwise, as a last resort, logout
     if (defaultPath && defaultPath !== currentPath) {
         router.push(defaultPath);
-    } else if (!defaultPath && !user.roles?.includes('Admin')) {
+    } else if (!defaultPath && !(user.roles as any[])?.some(r => r.name === 'Admin')) {
         logout();
     }
-  }, [pathname, loading, role, user, router, rolePermissions, logout, requisitionCreatorSetting]);
+  }, [pathname, loading, role, user, router, rolePermissions, logout, canCreateRequisition, toast]);
 
 
   if (loading || !user || !role) {
