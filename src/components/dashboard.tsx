@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -20,17 +19,17 @@ import {
   Loader2,
   Banknote,
   AlertTriangle,
+  PackageCheck,
+  FileBadge,
+  Trophy,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { Invoice, PurchaseRequisition } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from './ui/table';
 import { Badge } from './ui/badge';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { useRouter } from 'next/navigation';
-
-interface DashboardProps {
-  setActiveView: (view: string) => void;
-}
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 const StatCard = ({
   title,
@@ -39,6 +38,7 @@ const StatCard = ({
   icon,
   onClick,
   cta,
+  variant = 'default'
 }: {
   title: string;
   value: string;
@@ -46,8 +46,9 @@ const StatCard = ({
   icon: React.ReactNode;
   onClick?: () => void;
   cta?: string;
+  variant?: 'default' | 'destructive'
 }) => (
-  <Card>
+  <Card className={variant === 'destructive' ? 'bg-destructive/10 border-destructive/50' : ''}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium">{title}</CardTitle>
       {icon}
@@ -58,7 +59,7 @@ const StatCard = ({
     </CardContent>
     {onClick && cta && (
       <CardFooter>
-        <Button variant="outline" size="sm" onClick={onClick}>
+        <Button variant="outline" size="sm" onClick={onClick} className="w-full">
           {cta} <ArrowRight className="ml-2 h-4 w-4" />
         </Button>
       </CardFooter>
@@ -66,214 +67,240 @@ const StatCard = ({
   </Card>
 );
 
+const RecentRequisitionsTable = ({ requisitions }: { requisitions: PurchaseRequisition[] }) => {
+    const router = useRouter();
+    return (
+        <Card className="col-span-1 lg:col-span-2">
+            <CardHeader>
+                <CardTitle>Your Recent Requisitions</CardTitle>
+                <CardDescription>The last 5 requisitions you created.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                 <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Title</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Created</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {requisitions.map(req => (
+                            <TableRow key={req.id} className="cursor-pointer" onClick={() => router.push(`/requisitions/${req.id}/edit`)}>
+                                <TableCell className="font-medium">{req.title}</TableCell>
+                                <TableCell><Badge>{req.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    )
+}
 
-function ProcurementOfficerDashboard({ setActiveView }: { setActiveView: (view: string) => void }) {
+function RequesterDashboard() {
+    const { user, token } = useAuth();
     const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
-    const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const [reqResponse, invResponse] = await Promise.all([
-                fetch('/api/requisitions'),
-                fetch('/api/invoices')
-            ]);
-            const reqData = await reqResponse.json();
-            const invData = await invResponse.json();
-            
-            // Fix: Handle both array and object responses from the API
-            setRequisitions(Array.isArray(reqData) ? reqData : reqData.requisitions || []);
-            setInvoices(invData);
-        } catch (error) {
-            console.error("Failed to fetch dashboard data:", error);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
     useEffect(() => {
-        fetchData();
-        window.addEventListener('focus', fetchData);
-        return () => {
-            window.removeEventListener('focus', fetchData);
-        };
-    }, [fetchData]);
+        if (!user || !token) return;
+        setLoading(true);
+        fetch(`/api/requisitions?requesterId=${user.id}`, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(res => res.json())
+            .then(data => setRequisitions(data))
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [user, token]);
 
     const stats = useMemo(() => {
-        const openRequisitions = requisitions.filter(r => r.status !== 'Closed' && r.status !== 'Fulfilled').length;
-        const pendingApprovals = requisitions.filter(r => r.status === 'Pending Approval').length;
-        const pendingPayments = invoices.filter(i => i.status === 'Approved for Payment').length;
+        const drafts = requisitions.filter(r => r.status === 'Draft').length;
+        const pending = requisitions.filter(r => r.status === 'Pending_Approval').length;
+        const rejected = requisitions.filter(r => r.status === 'Rejected').length;
+        return { drafts, pending, rejected };
+    }, [requisitions]);
 
-        return { openRequisitions, pendingApprovals, pendingPayments };
-    }, [requisitions, invoices]);
-    
-    const alerts = useMemo(() => {
-        const mismatchedInvoices = invoices.filter(i => {
-            // Simplified check, in a real app this would use the matching service result
-            const po = { totalAmount: 1000, items: [{id: '1', quantity: 10}]};
-            const grn = { items: [{poItemId: '1', quantityReceived: 9}]};
-            return i.totalAmount !== po.totalAmount;
-        });
-        return { mismatchedInvoices };
-    }, [invoices]);
-    
     const recentRequisitions = useMemo(() => {
         return [...requisitions]
             .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, 5);
     }, [requisitions]);
 
-    if (loading) {
-        return <div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>
-    }
+    if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
     return (
-        <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                 <StatCard
-                    title="Open Requisitions"
-                    value={stats.openRequisitions.toString()}
-                    description="Across all departments"
-                    icon={<FileText className="h-4 w-4 text-muted-foreground" />}
-                    onClick={() => router.push('/requisitions')}
-                    cta="View Requisitions"
-                />
-                <StatCard
-                    title="Pending Approvals"
-                    value={stats.pendingApprovals.toString()}
-                    description="Awaiting manager sign-off"
-                    icon={<GanttChartSquare className="h-4 w-4 text-muted-foreground" />}
-                     onClick={() => router.push('/approvals')}
-                    cta="Review Approvals"
-                />
-                <StatCard
-                    title="Pending Payments"
-                    value={stats.pendingPayments.toString()}
-                    description="Invoices approved for payment"
-                    icon={<Banknote className="h-4 w-4 text-muted-foreground" />}
-                    onClick={() => router.push('/invoices')}
-                    cta="Process Payments"
-                />
-            </div>
-            
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 items-start">
-                <Card className="lg:col-span-2">
-                    <CardHeader>
-                        <CardTitle>Recent Requisitions</CardTitle>
-                        <CardDescription>The 5 most recently created requisitions.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>ID</TableHead>
-                                    <TableHead>Title</TableHead>
-                                    <TableHead>Requester</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Date</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {recentRequisitions.map(req => (
-                                    <TableRow key={req.id} className="cursor-pointer" onClick={() => router.push(`/requisitions/${req.id}/edit`)}>
-                                        <TableCell className="font-medium">{req.id}</TableCell>
-                                        <TableCell>{req.title}</TableCell>
-                                        <TableCell>{req.requesterName}</TableCell>
-                                        <TableCell><Badge>{req.status}</Badge></TableCell>
-                                        <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
-                
-                <Card>
-                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <AlertTriangle className="text-destructive"/>
-                            Alerts & Actions
-                        </CardTitle>
-                        <CardDescription>Items needing immediate attention.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        {alerts.mismatchedInvoices.length > 0 && (
-                             <div className="space-y-2">
-                                <h4 className="font-semibold text-sm">Mismatched Invoices</h4>
-                                {alerts.mismatchedInvoices.map(inv => (
-                                     <Button key={inv.id} variant="outline" size="sm" className="w-full justify-between h-auto py-2" onClick={() => router.push('/invoices')}>
-                                        <div className="text-left">
-                                            <p>{inv.id}</p>
-                                            <p className="text-xs text-muted-foreground">PO: {inv.purchaseOrderId}</p>
-                                        </div>
-                                        <ArrowRight />
-                                    </Button>
-                                ))}
-                            </div>
-                        )}
-                        {alerts.mismatchedInvoices.length === 0 && (
-                            <p className="text-sm text-muted-foreground text-center py-8">No urgent alerts.</p>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+             <Card className="col-span-full md:col-span-2 lg:col-span-4">
+                <CardHeader>
+                    <CardTitle>Start a New Procurement Request</CardTitle>
+                    <CardDescription>Need something for your team? Start by creating a purchase requisition.</CardDescription>
+                </CardHeader>
+                <CardFooter>
+                    <Button onClick={() => router.push('/new-requisition')} size="lg">
+                    <FilePlus className="mr-2 h-4 w-4" /> Create New Requisition
+                    </Button>
+                </CardFooter>
+            </Card>
+            <StatCard title="Drafts" value={stats.drafts.toString()} description="Requisitions you are working on" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/requisitions')} cta="View Drafts"/>
+            <StatCard title="Pending Approval" value={stats.pending.toString()} description="Requisitions awaiting sign-off" icon={<GanttChartSquare className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/requisitions')} cta="Track Progress"/>
+            <StatCard title="Rejected" value={stats.rejected.toString()} description="Requisitions that need revision" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/requisitions')} cta="View & Edit" variant="destructive" />
+        
+            {recentRequisitions.length > 0 && <RecentRequisitionsTable requisitions={recentRequisitions} />}
+        </div>
+    );
+}
+
+function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: boolean }) {
+    const { user, token } = useAuth();
+    const [pendingCount, setPendingCount] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const router = useRouter();
+
+    const pageTitle = forAwardReviews ? "Award Reviews" : "Departmental Approvals";
+    const apiEndpoint = forAwardReviews ? '/api/reviews' : `/api/requisitions?approverId=${user?.id}`;
+    const targetPage = forAwardReviews ? '/award-reviews' : '/approvals';
+
+    useEffect(() => {
+        if (!user || !token) return;
+        setLoading(true);
+        fetch(apiEndpoint, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(res => res.json())
+            .then(data => setPendingCount(Array.isArray(data) ? data.filter((req: any) => req.isActionable !== false).length : 0))
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [user, token, apiEndpoint]);
+
+    if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+
+    return (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+             <StatCard
+                title={`Pending ${pageTitle}`}
+                value={pendingCount.toString()}
+                description={`Items awaiting your review and decision.`}
+                icon={<GanttChartSquare className="h-4 w-4 text-muted-foreground" />}
+                onClick={() => router.push(targetPage)}
+                cta="Review Now"
+                variant={pendingCount > 0 ? "default" : "default"}
+            />
         </div>
     )
 }
 
-export function Dashboard({ setActiveView }: DashboardProps) {
-  const { role, user } = useAuth();
-  const router = useRouter();
+function ProcurementOfficerDashboard() {
+    const [data, setData] = useState({ requisitions: [], invoices: [] });
+    const [loading, setLoading] = useState(true);
+    const router = useRouter();
 
+    useEffect(() => {
+        setLoading(true);
+        Promise.all([
+            fetch('/api/requisitions').then(res => res.json()),
+            fetch('/api/invoices').then(res => res.json()),
+        ]).then(([requisitions, invoices]) => {
+            setData({ requisitions, invoices });
+        }).catch(console.error).finally(() => setLoading(false));
+    }, []);
+
+    const stats = useMemo(() => {
+        const readyForRfq = data.requisitions.filter((r: PurchaseRequisition) => r.status === 'PreApproved').length;
+        const acceptingQuotes = data.requisitions.filter((r: PurchaseRequisition) => r.status === 'Accepting_Quotes').length;
+        const readyToAward = data.requisitions.filter((r: PurchaseRequisition) => r.status === 'Scoring_Complete').length;
+        const awardDeclined = data.requisitions.filter((r: PurchaseRequisition) => r.status === 'Award_Declined').length;
+
+        return { readyForRfq, acceptingQuotes, readyToAward, awardDeclined };
+    }, [data]);
+
+    if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+
+    return (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <StatCard title="Ready for RFQ" value={stats.readyForRfq.toString()} description="Approved and waiting for RFQ" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Manage Quotations"/>
+            <StatCard title="Accepting Quotes" value={stats.acceptingQuotes.toString()} description="RFQs currently active with vendors" icon={<FileBadge className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="View Active RFQs"/>
+            <StatCard title="Ready to Award" value={stats.readyToAward.toString()} description="Scoring is complete" icon={<Trophy className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Finalize Awards"/>
+            <StatCard title="Award Declined" value={stats.awardDeclined.toString()} description="Vendor declined award, action needed" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Promote Standby" variant="destructive"/>
+        </div>
+    );
+}
+
+function FinanceDashboard() {
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [loading, setLoading] = useState(true);
+    const router = useRouter();
+
+     useEffect(() => {
+        setLoading(true);
+        fetch('/api/invoices').then(res => res.json())
+            .then(data => setInvoices(data))
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, []);
+
+    const stats = useMemo(() => {
+        const pending = invoices.filter(i => i.status === 'Pending').length;
+        const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
+        const disputed = invoices.filter(i => i.status === 'Disputed').length;
+        return { pending, approved, disputed };
+    }, [invoices]);
+
+    if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+
+    return (
+         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <StatCard title="Pending Invoices" value={stats.pending.toString()} description="Awaiting 3-way match and approval" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Review Invoices"/>
+            <StatCard title="Ready for Payment" value={stats.approved.toString()} description="Approved invoices to be paid" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Process Payments"/>
+            <StatCard title="Disputed Invoices" value={stats.disputed.toString()} description="Invoices with discrepancies" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Resolve Disputes" variant="destructive"/>
+        </div>
+    )
+}
+
+function ReceivingDashboard() {
+    const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+    const [loading, setLoading] = useState(true);
+    const router = useRouter();
+
+     useEffect(() => {
+        setLoading(true);
+        fetch('/api/purchase-orders').then(res => res.json())
+            .then(data => setPurchaseOrders(data))
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, []);
+
+    const readyToReceiveCount = useMemo(() => {
+        return purchaseOrders.filter(po => ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status)).length;
+    }, [purchaseOrders]);
+
+    if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    
+    return (
+         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <StatCard title="Orders to Receive" value={readyToReceiveCount.toString()} description="Purchase orders awaiting goods receipt" icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods')} cta="Log Incoming Goods"/>
+        </div>
+    )
+}
+
+
+export function Dashboard() {
+  const { role, user } = useAuth();
 
   const renderDashboard = () => {
     switch (role) {
-      case 'Requester':
-        return (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-             <Card className="col-span-full md:col-span-2">
-              <CardHeader>
-                <CardTitle>Start a New Procurement Request</CardTitle>
-                <CardDescription>
-                  Need something for your team? Start by creating a purchase
-                  requisition.
-                </CardDescription>
-              </CardHeader>
-              <CardFooter>
-                <Button onClick={() => router.push('/new-requisition')}>
-                  <FilePlus className="mr-2 h-4 w-4" /> Create New Requisition
-                </Button>
-              </CardFooter>
-            </Card>
-            <StatCard
-              title="Your Requisitions"
-              value="3"
-              description="Your active and pending requests"
-              icon={<FileText className="h-4 w-4 text-muted-foreground" />}
-              onClick={() => router.push('requisitions')}
-              cta="View History"
-            />
-          </div>
-        );
-      case 'Approver':
-        return (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard
-              title="Pending Approvals"
-              value="8"
-              description="Requisitions awaiting your review"
-              icon={
-                <GanttChartSquare className="h-4 w-4 text-muted-foreground" />
-              }
-              cta="Review Now"
-              onClick={() => router.push('approvals')}
-            />
-          </div>
-        );
-      case 'Procurement_Officer':
-        return <ProcurementOfficerDashboard setActiveView={setActiveView} />;
+      case 'Requester': return <RequesterDashboard />;
+      case 'Approver': return <ApproverDashboard />;
+      case 'Committee_A_Member':
+      case 'Committee_B_Member':
+      case 'Manager_Procurement_Division':
+      case 'Director_Supply_Chain_and_Property_Management':
+      case 'VP_Resources_and_Facilities':
+      case 'President':
+        return <ApproverDashboard forAwardReviews={true} />;
+      case 'Procurement_Officer': return <ProcurementOfficerDashboard />;
+      case 'Admin': return <ProcurementOfficerDashboard />; // Admin gets the same overview
+      case 'Finance': return <FinanceDashboard />;
+      case 'Receiving': return <ReceivingDashboard />;
       default:
         return <p>No dashboard available for this role.</p>;
     }
@@ -285,8 +312,8 @@ export function Dashboard({ setActiveView }: DashboardProps) {
         <div>
             <h1 className="text-3xl font-bold">Welcome back, {user?.name}!</h1>
             <p className="text-muted-foreground">
-            Here's a summary of procurement activities for your role as a{' '}
-            <strong>{role?.replace(/_/g, ' ')}</strong>.
+              Here's a summary of procurement activities for your role as a{' '}
+              <strong>{role?.replace(/_/g, ' ')}</strong>.
             </p>
         </div>
       </div>
@@ -294,5 +321,3 @@ export function Dashboard({ setActiveView }: DashboardProps) {
     </div>
   );
 }
-
-    
