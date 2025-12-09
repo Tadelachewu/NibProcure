@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -388,8 +389,11 @@ export async function PATCH(
         const hasItemBeenDeclined = requisition.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
 
         if ((hasBeenDeclined || hasItemBeenDeclined) && !isPerItemApprovalDuringDecline) {
-            console.error(`[PATCH /api/requisitions] Aborting approval: Award for Req ${id} was declined by the vendor.`);
-            return NextResponse.json({ error: 'Cannot approve. The award was declined by the vendor. Please refresh to see the latest status.'}, { status: 409 }); // 409 Conflict
+             const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
+             if (awardStrategy !== 'item') {
+                 console.error(`[PATCH /api/requisitions] Aborting approval: Award for Req ${id} was declined by the vendor.`);
+                 return NextResponse.json({ error: 'Cannot approve. The award was declined by the vendor. Please refresh to see the latest status.'}, { status: 409 }); // 409 Conflict
+             }
         }
         // --- END SAFEGUARD ---
         

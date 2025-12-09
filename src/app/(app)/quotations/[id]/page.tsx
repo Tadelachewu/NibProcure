@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -231,8 +232,8 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
         if (isPerItemStrategy) {
             const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
             if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
-            if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially Awarded';
             if (vendorItemStatuses.some(d => d.status === 'Declined')) return 'Declined';
+            if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially Awarded';
             if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
 
             if (quote.status === 'Submitted') {
@@ -3158,6 +3159,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 

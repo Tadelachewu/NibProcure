@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -247,7 +248,6 @@ export async function handleAwardRejection(
             
             const awardDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             const updatedDetails = awardDetails.map(d => {
-                // Find the specific award for this vendor on this item to mark as declined
                 if (d.vendorId === quote.vendorId && (d.status === 'Awarded' || d.status === 'Pending_Award')) {
                     itemsUpdated++;
                     return { ...d, status: 'Declined' as const, rejectionReason: formattedReason };

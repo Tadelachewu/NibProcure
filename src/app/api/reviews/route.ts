@@ -1,4 +1,5 @@
 
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -18,19 +19,19 @@ export async function GET(request: Request) {
 
     // Build the main query conditions
     const orConditions: any[] = [
-      // The user is the direct current approver.
-      { currentApproverId: userId },
+      // The user is the direct current approver for a pending item.
+      { currentApproverId: userId, status: { startsWith: 'Pending_' } },
       // The status matches a committee role the user has.
       { status: { in: userRoles.map(r => `Pending_${r}`) } },
+      // The user has already signed a minute for this requisition
+      { minutes: { some: { signatures: { some: { signerId: userId } } } } }
     ];
     
     // If a user is an Admin or Procurement Officer, they should see all pending reviews
     if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
         const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
         const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
-        orConditions.push({
-            status: { in: allPossiblePendingStatuses }
-        });
+        orConditions.push({ status: { in: allPossiblePendingStatuses } });
         // Also show items ready for notification and those declined/partially closed
         orConditions.push({ status: 'PostApproved' });
         orConditions.push({ status: 'Award_Declined' });
