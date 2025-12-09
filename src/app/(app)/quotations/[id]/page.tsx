@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -285,13 +284,16 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
 
                 const shouldShowItems = isPerItemStrategy && isAwarded && thisVendorItemStatuses.length > 0;
                 
-                const declinedItemAward = isPerItemStrategy 
+                const declinedItemAwards = isPerItemStrategy
                     ? requisition.items
-                        .flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []))
-                        .find(detail => detail.vendorId === quote.vendorId && (detail.status === 'Declined' || detail.status === 'Failed_to_Award') && detail.rejectionReason)
-                    : null;
-                
-                const hasDeclineReason = quote.rejectionReason || !!declinedItemAward;
+                        .flatMap(item => {
+                            const detail = (item.perItemAwardDetails as PerItemAwardDetail[] || [])
+                                .find(detail => detail.vendorId === quote.vendorId && (detail.status === 'Declined' || detail.status === 'Failed_to_Award') && detail.rejectionReason);
+                            return detail ? [{ ...detail, reqItemName: item.name }] : [];
+                        })
+                    : [];
+
+                const hasDeclineReason = quote.rejectionReason || declinedItemAwards.length > 0;
 
 
                 return (
@@ -311,7 +313,19 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                                     <AlertCircle className="h-4 w-4 text-destructive inline-block ml-2 cursor-help" />
                                                 </TooltipTrigger>
                                                 <TooltipContent>
-                                                    <p>Reason for decline: {declinedItemAward?.rejectionReason || quote.rejectionReason}</p>
+                                                    <div className="space-y-2">
+                                                        <p className="font-semibold">Reason(s) for Decline:</p>
+                                                        {isPerItemStrategy && declinedItemAwards.length > 0 ? (
+                                                            declinedItemAwards.map((award, index) => (
+                                                                <div key={index}>
+                                                                    <p><strong>Item:</strong> {award.reqItemName}</p>
+                                                                    <p className="italic text-muted-foreground">"{award.rejectionReason}"</p>
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            <p className="italic text-muted-foreground">"{quote.rejectionReason}"</p>
+                                                        )}
+                                                    </div>
                                                 </TooltipContent>
                                             </Tooltip>
                                         </TooltipProvider>
@@ -3164,6 +3178,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
