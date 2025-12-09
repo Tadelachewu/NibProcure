@@ -612,7 +612,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         }
     }
 
-    const committeeMembers = useMemo(() => allUsers.filter(u => (u.roles as any[])?.some(r => r.name === 'Committee_Member')), [allUsers]);
+    const availableUsers = useMemo(() => allUsers.filter(u => !(u.roles as any[])?.some(r => r.name === 'Vendor' || r.name === 'Admin')), [allUsers]);
     const assignedFinancialMembers = useMemo(() => allUsers.filter(u => requisition.financialCommitteeMemberIds?.includes(u.id)), [allUsers, requisition]);
     const assignedTechnicalMembers = useMemo(() => allUsers.filter(u => requisition.technicalCommitteeMemberIds?.includes(u.id)), [allUsers, requisition]);
     const allAssignedMemberIds = useMemo(() => [...(requisition.financialCommitteeMemberIds || []), ...(requisition.technicalCommitteeMemberIds || [])], [requisition]);
@@ -644,13 +644,13 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         const otherType = type === 'financial' ? 'technical' : 'financial';
         const otherCommitteeIds = new Set(form.watch(`${otherType}CommitteeMemberIds`));
 
-        const availableMembers = useMemo(() => {
+        const filteredAvailableUsers = useMemo(() => {
             const lowercasedSearch = search.toLowerCase();
-            return committeeMembers.filter(member =>
+            return availableUsers.filter(member =>
                 !otherCommitteeIds.has(member.id) &&
                 (member.name.toLowerCase().includes(lowercasedSearch) || member.email.toLowerCase().includes(lowercasedSearch))
             );
-        }, [committeeMembers, search, otherCommitteeIds]);
+        }, [availableUsers, search, otherCommitteeIds]);
 
         return (
             <div className="space-y-2">
@@ -670,7 +670,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                     <FormItem className="flex-1 flex flex-col min-h-0">
                         <ScrollArea className="flex-1 rounded-md border h-60">
                             <div className="space-y-1 p-1">
-                            {availableMembers.map(member => (
+                            {filteredAvailableUsers.map(member => (
                                 <FormField
                                     key={member.id}
                                     control={form.control}
@@ -701,8 +701,8 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                                     )}
                                 />
                             ))}
-                            {availableMembers.length === 0 && (
-                                <div className="text-center text-muted-foreground py-10">No members available.</div>
+                            {filteredAvailableUsers.length === 0 && (
+                                <div className="text-center text-muted-foreground py-10">No users available.</div>
                             )}
                             </div>
                         </ScrollArea>
@@ -3178,6 +3178,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 

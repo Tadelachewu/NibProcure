@@ -53,7 +53,7 @@ export function ApprovalsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, rfqSenderSetting, allUsers } = useAuth();
+  const { user, rfqSenderSetting, allUsers, token } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -82,36 +82,32 @@ export function ApprovalsTable() {
 
 
   const fetchRequisitions = useCallback(async () => {
-    if (!user) return;
+    if (!user || !token) return;
     try {
       setLoading(true);
-      const apiUrl = `/api/requisitions?status=Pending_Approval,PreApproved,Rejected&approverId=${user.id}`;
+      const apiUrl = `/api/requisitions?approverId=${user.id}`;
       
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch requisitions for approval');
       }
       const data: PurchaseRequisition[] = await response.json();
-      setRequisitions(data);
+      const pendingRequisitions = data.filter(r => r.status === 'Pending_Approval');
+      setRequisitions(pendingRequisitions);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, token]);
 
   useEffect(() => {
-    if (user) {
+    if (user && token) {
         fetchRequisitions();
-    } else {
-        setLoading(false);
     }
-    
-    window.addEventListener('focus', fetchRequisitions);
-    return () => {
-        window.removeEventListener('focus', fetchRequisitions);
-    }
-  }, [user, fetchRequisitions]);
+  }, [user, token, fetchRequisitions]);
 
   const handleAction = (req: PurchaseRequisition, type: 'approve' | 'reject') => {
     setSelectedRequisition(req);
@@ -125,31 +121,23 @@ export function ApprovalsTable() {
   }
   
   const submitAction = async () => {
-    if (!selectedRequisition || !actionType || !user) return;
-    
-    let rfqSenderId: string | null = null;
-    if (actionType === 'approve') {
-      if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userId) {
-        rfqSenderId = rfqSenderSetting.userId;
-      } else {
-        const firstProcOfficer = allUsers.find(u => (u.roles as any[]).some(r => r.name === 'Procurement_Officer'));
-        rfqSenderId = firstProcOfficer?.id || null;
-      }
-    }
+    if (!selectedRequisition || !actionType || !user || !token) return;
 
     try {
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ 
             id: selectedRequisition.id, 
             status: actionType === 'approve' ? 'PreApproved' : 'Rejected', 
             userId: user.id, 
             comment,
-            rfqSenderId,
         }),
       });
-      if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
+      if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Failed to ${actionType} requisition`);
+      }
       toast({
         title: "Success",
         description: `Requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
