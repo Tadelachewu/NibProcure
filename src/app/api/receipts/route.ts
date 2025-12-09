@@ -91,8 +91,10 @@ export async function POST(request: Request) {
         if (hasDefectiveItems) {
             const acceptedQuote = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
             if (acceptedQuote && po.vendor.user) {
+                const poItemsMap = new Map(po.items.map(item => [item.id, item]));
+
                 const declinedReqItemIds = defectiveItems.map((defective: any) => {
-                    const poItem = po.items.find(p => p.id === defective.poItemId);
+                    const poItem = poItemsMap.get(defective.poItemId);
                     return poItem?.requisitionItemId;
                 }).filter(Boolean);
 
@@ -104,7 +106,7 @@ export async function POST(request: Request) {
                     tx, 
                     acceptedQuote, 
                     po.requisition,
-                    po.vendor.user, // Use the VENDOR's user as the actor for the decline
+                    po.vendor.user,
                     declinedReqItemIds,
                     'Receiving',
                     rejectionReason

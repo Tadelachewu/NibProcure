@@ -247,7 +247,7 @@ export async function handleAwardRejection(
             
             const awardDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             const updatedDetails = awardDetails.map(d => {
-                if (d.vendorId === quote.vendorId) { // Mark this vendor's bid for this item as Declined
+                if (d.vendorId === quote.vendorId) {
                     itemsUpdated++;
                     return { ...d, status: 'Declined' as const, rejectionReason: formattedReason };
                 }
@@ -261,9 +261,6 @@ export async function handleAwardRejection(
         }
         
         if (itemsUpdated > 0) {
-            // Do not change the main status, just log the event.
-            // The UI will reflect the change based on the item-level status.
-
             await tx.auditLog.create({ 
                 data: { 
                     timestamp: new Date(), 
@@ -275,7 +272,7 @@ export async function handleAwardRejection(
                     transactionId: requisition.transactionId 
                 } 
             });
-            // Don't update main requisition status for per-item declines
+            // DO NOT update the main requisition status for per-item declines.
             return { message: 'Per-item award has been declined. A standby vendor can now be manually promoted.' };
         }
         
@@ -296,7 +293,6 @@ export async function handleAwardRejection(
             } 
         });
 
-        // This is the key change: only update the status if it's a single-vendor award
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }
