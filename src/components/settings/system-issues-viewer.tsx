@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -180,50 +181,51 @@ export function SystemIssuesViewer() {
                 )}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-        
-        <Dialog open={!!selectedIssue} onOpenChange={(open) => !open && setSelectedIssue(null)}>
-            <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>Respond to Issue: {selectedIssue?.title}</DialogTitle>
-                    <DialogDescription>
-                        Submitted by {selectedIssue?.submittedBy.name} on {selectedIssue?.createdAt ? format(new Date(selectedIssue.createdAt), 'PP') : ''}.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-4">
-                    <Card>
-                        <CardHeader><CardTitle className="text-base">Original Report</CardTitle></CardHeader>
-                        <CardContent>
-                            <p className="text-sm whitespace-pre-wrap">{selectedIssue?.description}</p>
-                        </CardContent>
-                    </Card>
-                    <div>
-                        <Label htmlFor="response">Your Response</Label>
-                        <Textarea id="response" value={response} onChange={(e) => setResponse(e.target.value)} rows={6} className="mt-2" placeholder="Provide a solution or update..."/>
-                    </div>
-                     <div>
-                        <Label htmlFor="status">Set Status</Label>
-                        <Select value={newStatus} onValueChange={(value) => setNewStatus(value)}>
-                            <SelectTrigger id="status" className="mt-2">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="In Progress">In Progress</SelectItem>
-                                <SelectItem value="Closed">Closed</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="ghost" onClick={() => setSelectedIssue(null)}>Cancel</Button>
-                    <Button onClick={handleResponseSubmit} disabled={isResponding}>
-                        {isResponding && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                        Submit Response
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-      </>
+          </div>
+        </CardContent>
+      </Card>
+      
+      <Dialog open={!!selectedIssue} onOpenChange={(open) => !open && setSelectedIssue(null)}>
+          <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                  <DialogTitle>Respond to Issue: {selectedIssue?.title}</DialogTitle>
+                  <DialogDescription>
+                      Submitted by {selectedIssue?.submittedBy.name} on {selectedIssue?.createdAt ? format(new Date(selectedIssue.createdAt), 'PP') : ''}.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="py-4 space-y-4">
+                  <Card>
+                      <CardHeader><CardTitle className="text-base">Original Report</CardTitle></CardHeader>
+                      <CardContent>
+                          <p className="text-sm whitespace-pre-wrap">{selectedIssue?.description}</p>
+                      </CardContent>
+                  </Card>
+                  <div>
+                      <Label htmlFor="response">Your Response</Label>
+                      <Textarea id="response" value={response} onChange={(e) => setResponse(e.target.value)} rows={6} className="mt-2" placeholder="Provide a solution or update..."/>
+                  </div>
+                   <div>
+                      <Label htmlFor="status">Set Status</Label>
+                      <Select value={newStatus} onValueChange={(value) => setNewStatus(value)}>
+                          <SelectTrigger id="status" className="mt-2">
+                              <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="In Progress">In Progress</SelectItem>
+                              <SelectItem value="Closed">Closed</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
+              </div>
+              <DialogFooter>
+                  <Button variant="ghost" onClick={() => setSelectedIssue(null)}>Cancel</Button>
+                  <Button onClick={handleResponseSubmit} disabled={isResponding}>
+                      {isResponding && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                      Submit Response
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+    </>
   );
 }
