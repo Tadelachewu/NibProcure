@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Calculator, List } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Calculator, List, AlertTriangle } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -285,13 +285,13 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
 
                 const shouldShowItems = isPerItemStrategy && isAwarded && thisVendorItemStatuses.length > 0;
                 
-                const declinedItemAwards = isPerItemStrategy 
+                const declinedItemAward = isPerItemStrategy 
                     ? requisition.items
                         .flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []))
-                        .filter(detail => detail.vendorId === quote.vendorId && (detail.status === 'Declined' || detail.status === 'Failed_to_Award') && detail.rejectionReason)
-                    : [];
+                        .find(detail => detail.vendorId === quote.vendorId && (detail.status === 'Declined' || detail.status === 'Failed_to_Award') && detail.rejectionReason)
+                    : null;
                 
-                const hasDeclineReason = quote.rejectionReason || declinedItemAwards.length > 0;
+                const hasDeclineReason = quote.rejectionReason || !!declinedItemAward;
 
 
                 return (
@@ -308,23 +308,10 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                         <TooltipProvider>
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <AlertCircle className="h-4 w-4 text-destructive cursor-help" />
+                                                    <AlertCircle className="h-4 w-4 text-destructive inline-block ml-2 cursor-help" />
                                                 </TooltipTrigger>
-                                                <TooltipContent className="max-w-xs">
-                                                    <div className="space-y-2">
-                                                        {quote.rejectionReason && (
-                                                            <p><strong>Overall Decline Reason:</strong> {quote.rejectionReason}</p>
-                                                        )}
-                                                        {declinedItemAwards.map(itemAward => {
-                                                            const reqItem = requisition.items.find(i => i.id === itemAward.requisitionItemId);
-                                                            return(
-                                                                <div key={itemAward.quoteItemId}>
-                                                                    <p className="font-semibold">Item: {reqItem?.name}</p>
-                                                                    <p className="text-sm pl-2">Reason: {itemAward.rejectionReason}</p>
-                                                                </div>
-                                                            )
-                                                        })}
-                                                    </div>
+                                                <TooltipContent>
+                                                    <p>Reason for decline: {declinedItemAward?.rejectionReason || quote.rejectionReason}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                         </TooltipProvider>
@@ -3177,6 +3164,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
