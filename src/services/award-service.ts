@@ -247,7 +247,8 @@ export async function handleAwardRejection(
             
             const awardDetails = (itemToUpdate.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             const updatedDetails = awardDetails.map(d => {
-                if (d.vendorId === quote.vendorId) {
+                // Find the specific award for this vendor on this item to mark as declined
+                if (d.vendorId === quote.vendorId && (d.status === 'Awarded' || d.status === 'Pending_Award')) {
                     itemsUpdated++;
                     return { ...d, status: 'Declined' as const, rejectionReason: formattedReason };
                 }
@@ -293,6 +294,7 @@ export async function handleAwardRejection(
             } 
         });
 
+        // For single-vendor awards, declining the award MUST change the requisition status.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }
