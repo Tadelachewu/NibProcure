@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -36,6 +35,7 @@ import {
   FileBarChart2,
   AlertTriangle,
   MessageSquare,
+  History,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -223,66 +223,47 @@ export function AwardReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   
-                  // The `isActionable` flag is now passed directly from the API.
                   const isActionable = req.isActionable;
-
-                  const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
-                  const isRejectionComment = lastCommentLog?.action.includes('REJECT');
                   
-                  const getDeclinedReason = () => {
-                      if (req.status !== 'Award_Declined') return null;
-                      
-                      const perItemDecline = req.items
-                        .flatMap(item => item.perItemAwardDetails || [])
-                        .find(detail => detail.status === 'Declined' && detail.rejectionReason);
+                  const getSimplifiedStatus = () => {
+                    if (!user) return <Badge variant="outline">Unknown</Badge>;
+                    const currentDecisionBody = req.status.replace(/_/g, ' ');
 
-                      if (perItemDecline) return perItemDecline.rejectionReason;
+                    const relevantMinute = req.minutes?.find(m => m.decisionBody === currentDecisionBody);
+                    const userSignature = relevantMinute?.signatures?.find(s => s.signerId === user.id);
 
-                      const quoteDecline = req.quotations?.find(q => q.status === 'Declined' && q.rejectionReason);
-                      return quoteDecline?.rejectionReason || null;
+                    if (userSignature) {
+                      if (userSignature.decision === 'APPROVED') {
+                        return <Badge variant="default" className="bg-green-600">You Approved</Badge>;
+                      }
+                      if (userSignature.decision === 'REJECTED') {
+                        return <Badge variant="destructive">You Rejected</Badge>;
+                      }
+                    }
+
+                    if (isActionable) {
+                      return <Badge variant="secondary" className="border-amber-500 text-amber-600 animate-pulse">{`Pending ${currentDecisionBody}`}</Badge>;
+                    }
+
+                    return <Badge variant="outline">{currentDecisionBody}</Badge>;
                   }
-
-                  const declinedReason = getDeclinedReason();
 
                   return (
                     <TableRow key={req.id}>
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                         <TableCell className="font-medium text-primary">{req.id}</TableCell>
-                        <TableCell>
-                            <div className="flex flex-col">
-                                <span>{req.title}</span>
-                                {declinedReason && (
-                                    <Alert variant="destructive" className="mt-2">
-                                        <AlertTriangle className="h-4 w-4" />
-                                        <AlertTitle>Award Declined</AlertTitle>
-                                        <AlertDescription>Reason: "{declinedReason}"</AlertDescription>
-                                    </Alert>
-                                )}
-                                {req.approverComment && (
-                                    <div className={`text-xs flex items-start gap-1 mt-1 ${isRejectionComment ? 'text-destructive' : 'text-muted-foreground'}`}>
-                                        {isRejectionComment 
-                                            ? <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                                            : <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
-                                        }
-                                        <div className="flex flex-col whitespace-pre-wrap break-words">
-                                            <span className="font-semibold">{isRejectionComment ? 'Rejection Reason:' : 'Approval Comment:'}</span>
-                                            <span className="italic">"{req.approverComment}"</span>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </TableCell>
+                        <TableCell>{req.title}</TableCell>
                         <TableCell className="font-semibold">{req.totalPrice.toLocaleString()} ETB</TableCell>
-                        <TableCell><Badge variant="secondary">{req.status.replace(/_/g, ' ')}</Badge></TableCell>
+                        <TableCell>{getSimplifiedStatus()}</TableCell>
                         <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
                         <TableCell>
                         <div className="flex gap-2">
                               <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
-                                <FileText className="mr-2 h-4 w-4" /> Summary
+                                <History className="mr-2 h-4 w-4" /> History
                               </Button>
                               <Button variant="outline" size="sm" asChild>
                                   <Link href={`/quotations/${req.id}`}>
-                                      <Eye className="mr-2 h-4 w-4" /> Review Bids
+                                      <Eye className="mr-2 h-4 w-4" /> Bids
                                   </Link>
                               </Button>
                               <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={!isActionable || isLoadingAction}>

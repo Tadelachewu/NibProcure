@@ -17,7 +17,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { AlertCircle, CheckCircle, FileText, MessageSquare, User, Trophy, Crown, Medal, Download, PenLine } from 'lucide-react';
+import { AlertCircle, CheckCircle, FileText, MessageSquare, User, Trophy, Crown, Medal, Download, PenLine, History } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import Link from 'next/link';
@@ -130,21 +130,17 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
     <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
             <DialogHeader>
-                <DialogTitle>Approval Summary: {requisition.id}</DialogTitle>
+                <DialogTitle>Requisition History: {requisition.id}</DialogTitle>
                 <DialogDescription>
-                    {isPromotedStandby
-                        ? `Executive brief for the promoted standby award on: `
-                        : `Executive brief for the award recommendation on: `
-                    }
-                    <span className="font-semibold">{requisition.title}</span>
+                    Full audit trail and decision summary for: {requisition.title}
                 </DialogDescription>
             </DialogHeader>
              <div className="flex-1 overflow-hidden flex flex-col">
-                <Tabs defaultValue="summary" className="flex-1 flex flex-col min-h-0">
+                <Tabs defaultValue="history" className="flex-1 flex flex-col min-h-0">
                     <TabsList>
-                        <TabsTrigger value="summary">Summary</TabsTrigger>
+                        <TabsTrigger value="summary">Award Summary</TabsTrigger>
                         <TabsTrigger value="history">Workflow History</TabsTrigger>
-                        <TabsTrigger value="minutes">Minutes</TabsTrigger>
+                        <TabsTrigger value="minutes">Meeting Minutes</TabsTrigger>
                     </TabsList>
                     <TabsContent value="summary" className="mt-4 flex-1 overflow-hidden">
                         <ScrollArea className="h-full pr-4">
@@ -283,7 +279,7 @@ export function ApprovalSummaryDialog({ requisition, isOpen, onClose }: Approval
                                     return (
                                     <div key={log.id} className="relative mb-8">
                                         <div className="absolute -left-3 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-background border-2 border-primary">
-                                            <CheckCircle className="h-4 w-4 text-primary" />
+                                            <History className="h-4 w-4 text-primary" />
                                         </div>
                                         <div className="pl-8">
                                             <p className="font-semibold">{log.action.replace(/_/g, ' ')}</p>
