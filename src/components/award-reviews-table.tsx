@@ -228,7 +228,20 @@ export function AwardReviewsTable() {
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');
                   
-                  const declinedQuote = req.quotations?.find(q => q.status === 'Declined');
+                  const getDeclinedReason = () => {
+                      if (req.status !== 'Award_Declined') return null;
+                      
+                      const perItemDecline = req.items
+                        .flatMap(item => item.perItemAwardDetails || [])
+                        .find(detail => detail.status === 'Declined' && detail.rejectionReason);
+
+                      if (perItemDecline) return perItemDecline.rejectionReason;
+
+                      const quoteDecline = req.quotations?.find(q => q.status === 'Declined' && q.rejectionReason);
+                      return quoteDecline?.rejectionReason || null;
+                  }
+
+                  const declinedReason = getDeclinedReason();
 
                   return (
                     <TableRow key={req.id}>
@@ -237,11 +250,11 @@ export function AwardReviewsTable() {
                         <TableCell>
                             <div className="flex flex-col">
                                 <span>{req.title}</span>
-                                {req.status === 'Award_Declined' && declinedQuote?.rejectionReason && (
+                                {declinedReason && (
                                     <Alert variant="destructive" className="mt-2">
                                         <AlertTriangle className="h-4 w-4" />
-                                        <AlertTitle>Vendor Declined</AlertTitle>
-                                        <AlertDescription>Reason: "{declinedQuote.rejectionReason}"</AlertDescription>
+                                        <AlertTitle>Award Declined</AlertTitle>
+                                        <AlertDescription>Reason: "{declinedReason}"</AlertDescription>
                                     </Alert>
                                 )}
                                 {req.approverComment && (

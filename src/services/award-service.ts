@@ -218,7 +218,7 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
  * @param requisition - The associated requisition.
  * @param actor - The user performing the action.
  * @param declinedItemIds - The specific requisition item IDs that were declined (for per-item awards).
- * @param rejectedQuoteItemId - The specific quote item that was rejected (for per-item awards).
+ * @param rejectionSource - The origin of the rejection ('Vendor' or 'Receiving').
  * @param rejectionReason - The reason for the decline.
  * @returns A message indicating the result of the operation.
  */
@@ -228,15 +228,15 @@ export async function handleAwardRejection(
     requisition: any,
     actor: any,
     declinedItemIds: string[] = [],
-    rejectedQuoteItemId?: string,
+    rejectionSource: 'Vendor' | 'Receiving',
     rejectionReason: string = 'No reason provided.'
 ) {
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
+    const formattedReason = `[${rejectionSource}] ${rejectionReason}`;
     
     if (awardStrategy === 'item') {
         let itemsUpdated = 0;
         
-        // Find the specific requisition item that was declined
         for (const reqItemId of declinedItemIds) {
             const itemToUpdate = requisition.items.find((item: any) => item.id === reqItemId);
 
@@ -249,7 +249,7 @@ export async function handleAwardRejection(
             const updatedDetails = awardDetails.map(d => {
                 if (d.vendorId === quote.vendorId) { // Mark this vendor's bid for this item as Declined
                     itemsUpdated++;
-                    return { ...d, status: 'Declined' as const };
+                    return { ...d, status: 'Declined' as const, rejectionReason: formattedReason };
                 }
                 return d;
             });
@@ -261,8 +261,8 @@ export async function handleAwardRejection(
         }
         
         if (itemsUpdated > 0) {
-            // Set main status to Award_Declined immediately.
-            await tx.purchaseRequisition.update({ where: { id: requisition.id }, data: { status: 'Award_Declined' } });
+            // Do not change the main status, just log the event.
+            // The UI will reflect the change based on the item-level status.
 
             await tx.auditLog.create({ 
                 data: { 
@@ -271,7 +271,7 @@ export async function handleAwardRejection(
                     action: 'DECLINE_AWARD', 
                     entity: 'Requisition', 
                     entityId: requisition.id, 
-                    details: `Award for ${itemsUpdated} item(s) was declined by ${actor.name} (Role: ${(actor.roles as any[]).map(r=>r.name).join(', ')}). Reason: ${rejectionReason}. Manual promotion of standby is now possible.`, 
+                    details: `Award for ${itemsUpdated} item(s) was declined. Source: ${rejectionSource}. Reason: ${rejectionReason}. Manual promotion of standby is now possible.`, 
                     transactionId: requisition.transactionId 
                 } 
             });
@@ -281,7 +281,7 @@ export async function handleAwardRejection(
         throw new Error("No awarded items found for this vendor to decline.");
 
     } else { // Single Vendor Strategy
-        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined', rejectionReason } });
+        await tx.quotation.update({ where: { id: quote.id }, data: { status: 'Declined', rejectionReason: formattedReason } });
         
         await tx.auditLog.create({ 
             data: { 
@@ -290,13 +290,11 @@ export async function handleAwardRejection(
                 action: 'DECLINE_AWARD', 
                 entity: 'Quotation', 
                 entityId: quote.id, 
-                details: `Award declined by ${actor.name}. Reason: ${rejectionReason}`, 
+                details: `Award declined. Source: ${rejectionSource}. Reason: ${rejectionReason}`, 
                 transactionId: requisition.transactionId 
             } 
         });
 
-        // Always set the status to Award_Declined to reflect the latest event.
-        // The UI will handle allowing other actions to continue.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }

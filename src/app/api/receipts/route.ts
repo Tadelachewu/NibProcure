@@ -22,15 +22,17 @@ export async function POST(request: Request) {
             where: { id: purchaseOrderId },
             include: { 
               items: true,
-              requisition: { include: { items: true, quotations: true } }
+              requisition: { include: { items: true, quotations: true } },
+              vendor: { include: { user: true } }
             }
         });
 
-        if (!po || !po.requisition) {
-          throw new Error('Purchase Order or associated requisition not found');
+        if (!po || !po.requisition || !po.vendor) {
+          throw new Error('Purchase Order, associated requisition, or vendor not found');
         }
 
-        const hasDefectiveItems = receivedItems.some((item: any) => item.condition === 'Damaged' || item.condition === 'Incorrect');
+        const defectiveItems = receivedItems.filter((item: any) => item.condition === 'Damaged' || item.condition === 'Incorrect');
+        const hasDefectiveItems = defectiveItems.length > 0;
         
         // Always create the GRN to log what was physically received
         const newReceipt = await tx.goodsReceiptNote.create({
@@ -85,6 +87,31 @@ export async function POST(request: Request) {
                 details: `Created Goods Receipt Note ${newReceipt.id}. GRN Status: ${newReceipt.status}. PO status: ${newPOStatus.replace(/_/g, ' ')}.`,
             }
         });
+        
+        if (hasDefectiveItems) {
+            const acceptedQuote = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
+            if (acceptedQuote && po.vendor.user) {
+                const declinedReqItemIds = defectiveItems.map((defective: any) => {
+                    const poItem = po.items.find(p => p.id === defective.poItemId);
+                    return poItem?.requisitionItemId;
+                }).filter(Boolean);
+
+                const rejectionReason = defectiveItems
+                    .map((item: any) => `Item "${item.name}": Condition was ${item.condition}. Notes: ${item.notes}`)
+                    .join('; ');
+
+                await handleAwardRejection(
+                    tx, 
+                    acceptedQuote, 
+                    po.requisition,
+                    po.vendor.user, // Use the VENDOR's user as the actor for the decline
+                    declinedReqItemIds,
+                    'Receiving',
+                    rejectionReason
+                );
+            }
+        }
+
 
         return newReceipt;
     });

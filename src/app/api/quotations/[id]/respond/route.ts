@@ -161,7 +161,7 @@ export async function POST(
                     .map(item => item.id);
             
             console.log(`[RESPOND-AWARD] Handling award rejection. Declined item IDs: ${declinedItemIds.join(', ')}`);
-            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds, quoteItemId);
+            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds, 'Vendor', rejectionReason);
         }
         
         throw new Error('Invalid action.');
