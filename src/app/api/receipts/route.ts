@@ -5,7 +5,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 import { POItem } from '@prisma/client';
-import { handleAwardRejection } from '@/services/award-service';
 
 export async function POST(request: Request) {
   const actor = await getActorFromToken(request);
@@ -84,25 +83,10 @@ export async function POST(request: Request) {
                 action: 'RECEIVE_GOODS',
                 entity: 'PurchaseOrder',
                 entityId: po.id,
-                details: `Created Goods Receipt Note ${newReceipt.id}. GRN Status: ${newReceipt.status}. PO status: ${newPOStatus.replace(/_/g, ' ')}.`,
+                details: `Created Goods Receipt Note ${newReceipt.id}. GRN Status: ${newReceipt.status.replace(/_/g, ' ')}. PO status: ${newPOStatus.replace(/_/g, ' ')}.`,
             }
         });
         
-        // If there are defective items, call the award rejection service
-        if (hasDefectiveItems) {
-            const quoteForVendor = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
-            if(quoteForVendor) {
-                const declinedReqItemIds = defectiveItems.map((item: any) => {
-                    const poItem = po.items.find(p => p.id === item.poItemId);
-                    return poItem?.requisitionItemId;
-                }).filter(Boolean);
-
-                const firstReason = defectiveItems[0].notes || 'Goods received were damaged or incorrect.';
-
-                await handleAwardRejection(tx, quoteForVendor, po.requisition, po.vendor.user!, declinedReqItemIds, 'Receiving', firstReason);
-            }
-        }
-
         return newReceipt;
     });
 

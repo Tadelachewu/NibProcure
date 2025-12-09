@@ -663,7 +663,7 @@ export function InvoicesPage() {
                   const matchResult = matchResults[invoice.id];
                   const po = allPOs.find(p => p.id === invoice.purchaseOrderId);
                   const isDisputedGRN = po?.receipts?.some(r => r.status === 'Disputed');
-                  const isActionDisabled = !matchResult || matchResult.status !== 'Matched' || isDisputedGRN;
+                  const isActionDisabled = !matchResult || matchResult.status !== 'Matched' || !!isDisputedGRN;
                   const isActionLoading = activeAction === invoice.id;
                   
                   return (
