@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertTriangle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Calculator, List, AlertCircle } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Calculator, List } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -285,12 +285,15 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
 
                 const shouldShowItems = isPerItemStrategy && isAwarded && thisVendorItemStatuses.length > 0;
                 
-                const declinedItemAward = isPerItemStrategy 
+                const declinedItemAwards = isPerItemStrategy 
                     ? requisition.items
                         .flatMap(item => (item.perItemAwardDetails as PerItemAwardDetail[] || []))
-                        .find(detail => detail.vendorId === quote.vendorId && (detail.status === 'Declined' || detail.status === 'Failed_to_Award') && detail.rejectionReason)
-                    : null;
+                        .filter(detail => detail.vendorId === quote.vendorId && (detail.status === 'Declined' || detail.status === 'Failed_to_Award') && detail.rejectionReason)
+                    : [];
                 
+                const hasDeclineReason = quote.rejectionReason || declinedItemAwards.length > 0;
+
+
                 return (
                     <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Partially_Awarded' || mainStatus === 'Accepted') && !isPerItemStrategy && 'border-primary ring-2 ring-primary')}>
                        <CardHeader>
@@ -299,22 +302,37 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                  {isAwarded && !isPerItemStrategy && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
-                               <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
+                                <div className="flex items-center gap-1">
+                                    <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
+                                    {hasDeclineReason && (
+                                        <TooltipProvider>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <AlertCircle className="h-4 w-4 text-destructive cursor-help" />
+                                                </TooltipTrigger>
+                                                <TooltipContent className="max-w-xs">
+                                                    <div className="space-y-2">
+                                                        {quote.rejectionReason && (
+                                                            <p><strong>Overall Decline Reason:</strong> {quote.rejectionReason}</p>
+                                                        )}
+                                                        {declinedItemAwards.map(itemAward => {
+                                                            const reqItem = requisition.items.find(i => i.id === itemAward.requisitionItemId);
+                                                            return(
+                                                                <div key={itemAward.quoteItemId}>
+                                                                    <p className="font-semibold">Item: {reqItem?.name}</p>
+                                                                    <p className="text-sm pl-2">Reason: {itemAward.rejectionReason}</p>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    )}
+                               </div>
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
-                                {(quote.rejectionReason || declinedItemAward) && (
-                                    <TooltipProvider>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                <AlertCircle className="h-4 w-4 text-destructive inline-block ml-2 cursor-help" />
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>Reason for decline: {declinedItemAward?.rejectionReason || quote.rejectionReason}</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    </TooltipProvider>
-                                )}
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="flex-grow space-y-4">
@@ -2958,7 +2976,7 @@ export default function QuotationDetailsPage() {
                 ? 'An award was declined. You may now promote a standby vendor or restart the RFQ for the failed items.'
                 : 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
             </CardDescription>
-             {requisition.quotations?.some(q => q.rejectionReason) && (
+             {(requisition.quotations?.some(q => q.rejectionReason) && (requisition.rfqSettings as any)?.awardStrategy === 'all') && (
                 <Alert variant="destructive" className="mt-2">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>Vendor Rejection Reason</AlertTitle>
@@ -3159,6 +3177,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
