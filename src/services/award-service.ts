@@ -262,6 +262,11 @@ export async function handleAwardRejection(
         }
         
         if (itemsUpdated > 0) {
+            // Set the main requisition status to 'Award_Declined'
+            await tx.purchaseRequisition.update({
+                where: { id: requisition.id },
+                data: { status: 'Award_Declined' }
+            });
             await tx.auditLog.create({ 
                 data: { 
                     timestamp: new Date(), 
@@ -273,7 +278,6 @@ export async function handleAwardRejection(
                     transactionId: requisition.transactionId 
                 } 
             });
-            // DO NOT update the main requisition status for per-item declines.
             return { message: 'Per-item award has been declined. A standby vendor can now be manually promoted.' };
         }
         
@@ -516,3 +520,5 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
+
+    
