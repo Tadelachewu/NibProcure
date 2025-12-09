@@ -225,28 +225,20 @@ export function AwardReviewsTable() {
                   
                   const isActionable = req.isActionable;
                   
-                  const getSimplifiedStatus = () => {
-                    if (!user) return <Badge variant="outline">Unknown</Badge>;
-                    const currentDecisionBody = req.status.replace(/_/g, ' ');
+                  const currentDecisionBody = req.status.replace(/_/g, ' ');
 
-                    const relevantMinute = req.minutes?.find(m => m.decisionBody === currentDecisionBody);
-                    const userSignature = relevantMinute?.signatures?.find(s => s.signerId === user.id);
+                  const relevantMinute = req.minutes?.find(m => m.decisionBody === currentDecisionBody);
+                  const userSignature = relevantMinute?.signatures?.find(s => s.signerId === user?.id);
 
-                    if (userSignature) {
-                      if (userSignature.decision === 'APPROVED') {
-                        return <Badge variant="default" className="bg-green-600">You Approved</Badge>;
-                      }
-                      if (userSignature.decision === 'REJECTED') {
-                        return <Badge variant="destructive">You Rejected</Badge>;
-                      }
-                    }
-
-                    if (isActionable) {
-                      return <Badge variant="secondary" className="border-amber-500 text-amber-600 animate-pulse">{`Pending ${currentDecisionBody}`}</Badge>;
-                    }
-
-                    return <Badge variant="outline">{currentDecisionBody}</Badge>;
+                  let statusBadge;
+                  if (userSignature) {
+                      statusBadge = <Badge variant={userSignature.decision === 'APPROVED' ? 'default' : 'destructive'} className={userSignature.decision === 'APPROVED' ? 'bg-green-600' : ''}>You {userSignature.decision}</Badge>;
+                  } else if (isActionable) {
+                      statusBadge = <Badge variant="secondary" className="border-amber-500 text-amber-600 animate-pulse">{`Pending Your Action`}</Badge>;
+                  } else {
+                      statusBadge = <Badge variant="outline">{currentDecisionBody}</Badge>;
                   }
+
 
                   return (
                     <TableRow key={req.id}>
@@ -254,7 +246,7 @@ export function AwardReviewsTable() {
                         <TableCell className="font-medium text-primary">{req.id}</TableCell>
                         <TableCell>{req.title}</TableCell>
                         <TableCell className="font-semibold">{req.totalPrice.toLocaleString()} ETB</TableCell>
-                        <TableCell>{getSimplifiedStatus()}</TableCell>
+                        <TableCell>{statusBadge}</TableCell>
                         <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
                         <TableCell>
                         <div className="flex gap-2">

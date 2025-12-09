@@ -47,7 +47,15 @@ export default function LoginPage() {
           title: 'Login Successful',
           description: `Welcome back, ${result.user.name}!`,
         });
-        router.push('/');
+        
+        // Determine redirect based on role
+        const isVendor = result.user.roles?.includes('Vendor');
+        if (isVendor) {
+            router.push('/vendor/dashboard');
+        } else {
+            router.push('/');
+        }
+        
       } else {
         throw new Error(result.error || 'Invalid email or password.');
       }
