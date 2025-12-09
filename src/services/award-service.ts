@@ -275,6 +275,7 @@ export async function handleAwardRejection(
                     transactionId: requisition.transactionId 
                 } 
             });
+            // Don't update main requisition status for per-item declines
             return { message: 'Per-item award has been declined. A standby vendor can now be manually promoted.' };
         }
         
@@ -295,6 +296,7 @@ export async function handleAwardRejection(
             } 
         });
 
+        // This is the key change: only update the status if it's a single-vendor award
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }
