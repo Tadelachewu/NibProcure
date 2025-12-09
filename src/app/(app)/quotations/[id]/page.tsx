@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -66,6 +67,7 @@ import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
 import { ExtendDeadlineDialog } from '@/components/extend-deadline-dialog';
 import { OverdueReportDialog } from '@/components/overdue-report-dialog';
+import { RestartRfqDialog } from '@/components/restart-rfq-dialog';
 
 
 const PAGE_SIZE = 6;
@@ -1752,7 +1754,7 @@ const ScoringProgressTracker = ({
   onSuccess: () => void;
   onCommitteeUpdate: (open: boolean) => void;
   isFinalizing: boolean;
-  isAuthorized: boolean;
+  isAuthorized: boolean
 }) => {
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
@@ -2533,7 +2535,7 @@ export default function QuotationDetailsPage() {
     if (!requisition || !user || !token || deadlineCheckPerformed) return;
 
     const checkAndDecline = async () => {
-        let needsRefresh = false;
+        let needsRefetch = false;
         
         if (requisition.awardResponseDeadline && isPast(new Date(requisition.awardResponseDeadline))) {
             const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
@@ -2544,7 +2546,7 @@ export default function QuotationDetailsPage() {
                     const awardedDetail = perItemDetails.find(d => d.status === 'Awarded' || d.status === 'Pending_Award');
                     
                     if (awardedDetail) {
-                         needsRefresh = true;
+                         needsRefetch = true;
                          await fetch(`/api/quotations/${awardedDetail.quotationId}/respond`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -2555,7 +2557,7 @@ export default function QuotationDetailsPage() {
             } else {
                  const awardedQuote = quotations.find(q => q.status === 'Awarded' || q.status === 'Pending_Award');
                  if (awardedQuote) {
-                     needsRefresh = true;
+                     needsRefetch = true;
                       await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -2567,7 +2569,7 @@ export default function QuotationDetailsPage() {
         
         setDeadlineCheckPerformed(true);
 
-        if (needsRefresh) {
+        if (needsRefetch) {
             toast({ title: 'Deadline Expired', description: 'An awarded vendor failed to respond in time. The award has been automatically declined.' });
             fetchRequisitionAndQuotes();
         }
