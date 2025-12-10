@@ -15,7 +15,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
         const ticketId = params.id;
         const body = await request.json();
-        const { response, status } = body;
+        const { response, status, adminId } = body;
 
         if (!response || !status) {
             return NextResponse.json({ error: 'Response and status are required.' }, { status: 400 });
@@ -31,7 +31,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
             data: {
                 response,
                 status,
-                adminId: actor.id,
+                adminId: adminId,
                 updatedAt: new Date(),
             }
         });

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from './ui/card';
 import { Button } from './ui/button';
@@ -64,7 +64,11 @@ function AdminView({ tickets, onTicketUpdated }: { tickets: SupportTicket[], onT
             const res = await fetch(`/api/support/${selectedTicket.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ ...values, adminId: admin.id }),
+                body: JSON.stringify({ 
+                    response: values.response,
+                    status: values.status,
+                    adminId: admin.id 
+                }),
             });
             if (!res.ok) throw new Error("Failed to submit response.");
             toast({ title: "Response Sent", description: "The user has been notified."});
@@ -131,7 +135,7 @@ function AdminView({ tickets, onTicketUpdated }: { tickets: SupportTicket[], onT
                                 )} />
                                 <FormField control={form.control} name="status" render={({field}) => (
                                     <FormItem><FormLabel>Update Status</FormLabel><FormControl>
-                                        <select {...field} className="w-full p-2 border rounded-md">
+                                        <select {...field} className="w-full p-2 border rounded-md bg-background">
                                             <option value="In_Progress">In Progress</option>
                                             <option value="Closed">Closed</option>
                                         </select>
