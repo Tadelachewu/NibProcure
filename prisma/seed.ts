@@ -15,11 +15,9 @@ async function main() {
   await prisma.score.deleteMany({});
   await prisma.itemScore.deleteMany({});
   await prisma.committeeScoreSet.deleteMany({});
-  await prisma.standbyAssignment.deleteMany({});
   await prisma.quoteAnswer.deleteMany({});
   await prisma.quoteItem.deleteMany({});
   await prisma.quotation.deleteMany({});
-  await prisma.review.deleteMany({});
   await prisma.committeeAssignment.deleteMany({});
   await prisma.signature.deleteMany({});
   await prisma.minute.deleteMany({});
@@ -40,6 +38,8 @@ async function main() {
   await prisma.vendor.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.department.deleteMany({});
+  await prisma.approvalStep.deleteMany({});
+  await prisma.approvalThreshold.deleteMany({});
   await prisma.role.deleteMany({});
   await prisma.setting.deleteMany({});
   console.log('Data cleared.');
