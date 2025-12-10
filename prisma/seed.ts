@@ -35,13 +35,16 @@ async function main() {
   await prisma.technicalCriterion.deleteMany({});
   await prisma.evaluationCriteria.deleteMany({});
   await prisma.requisitionItem.deleteMany({});
+  // Deleting RequisitionRoleAssignment before related models
+  if (prisma.requisitionRoleAssignment) {
+      await prisma.requisitionRoleAssignment.deleteMany({});
+  }
   await prisma.purchaseRequisition.deleteMany({});
   await prisma.kYC_Document.deleteMany({});
   await prisma.vendor.deleteMany({});
+  await prisma.systemIssue.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.department.deleteMany({});
-  await prisma.approvalStep.deleteMany({});
-  await prisma.approvalThreshold.deleteMany({});
   await prisma.role.deleteMany({});
   await prisma.setting.deleteMany({});
   console.log('Data cleared.');
@@ -161,41 +164,6 @@ async function main() {
 
   console.log('Seeded settings.');
 
-  // Seed Approval Matrix
-  const defaultApprovalThresholds = [
-    { name: 'Low Value', min: 0, max: 10000, steps: [{ role: 'Manager_Procurement_Division'}] },
-    { name: 'Mid Value', min: 10001, max: 200000, steps: [{ role: 'Committee_B_Member'}, { role: 'Manager_Procurement_Division'}, { role: 'Director_Supply_Chain_and_Property_Management'}] },
-    { name: 'High Value', min: 200001, max: 1000000, steps: [{ role: 'Committee_A_Member'}, { role: 'Director_Supply_Chain_and_Property_Management'}, { role: 'VP_Resources_and_Facilities'}] },
-    { name: 'Very-High Value', min: 1000001, max: null, steps: [{ role: 'Committee_A_Member'}, { role: 'VP_Resources_and_Facilities'}, { role: 'President'}] },
-  ];
-
-  for (const tier of defaultApprovalThresholds) {
-    const createdThreshold = await prisma.approvalThreshold.upsert({
-      where: { name: tier.name },
-      update: { min: tier.min, max: tier.max },
-      create: {
-        name: tier.name,
-        min: tier.min,
-        max: tier.max,
-      },
-    });
-
-    // Clear old steps before adding new ones
-    await prisma.approvalStep.deleteMany({ where: { thresholdId: createdThreshold.id }});
-
-    for (let i = 0; i < tier.steps.length; i++) {
-      await prisma.approvalStep.create({
-        data: {
-          threshold: { connect: { id: createdThreshold.id } },
-          role: { connect: { name: tier.steps[i].role } },
-          order: i,
-        },
-      });
-    }
-  }
-  console.log('Seeded approval matrix.');
-
-
   // Seed Departments without heads first
   for (const department of seedData.departments) {
     const { head, users, headId, ...deptData } = department;
@@ -288,7 +256,7 @@ async function main() {
           phone: vendor.phone,
           address: vendor.address,
           kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
-          userId: createdUser.id,
+          user: { connect: { id: createdUser.id } },
       },
       create: {
           id: vendor.id,
@@ -298,14 +266,8 @@ async function main() {
           phone: vendor.phone,
           address: vendor.address,
           kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
-          userId: createdUser.id,
+          user: { connect: { id: createdUser.id } },
       },
-    });
-
-    // Now, update the user with the vendorId
-    await prisma.user.update({
-        where: { id: createdUser.id },
-        data: { vendorId: createdVendor.id }
     });
 
     if (kycDocuments) {
@@ -339,10 +301,8 @@ async function main() {
           ...reqData
       } = requisition;
 
-      const createdRequisition = await prisma.purchaseRequisition.upsert({
-          where: { id: reqData.id },
-          update: {},
-          create: {
+      const newRequisition = await prisma.purchaseRequisition.create({
+          data: {
               ...reqData,
               status: reqData.status.replace(/ /g, '_') as any,
               urgency: reqData.urgency || 'Low',
@@ -356,9 +316,15 @@ async function main() {
               deadline: reqData.deadline ? new Date(reqData.deadline) : undefined,
               scoringDeadline: reqData.scoringDeadline ? new Date(reqData.scoringDeadline) : undefined,
               awardResponseDeadline: reqData.awardResponseDeadline ? new Date(reqData.awardResponseDeadline) : undefined,
-              transactionId: reqData.id,
+              // transactionId is set in the next step
           }
       });
+      
+      const createdRequisition = await prisma.purchaseRequisition.update({
+          where: { id: newRequisition.id },
+          data: { transactionId: newRequisition.id }
+      });
+
 
       // Seed RequisitionItems
       if (items) {
@@ -580,3 +546,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    
