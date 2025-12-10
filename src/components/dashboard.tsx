@@ -213,10 +213,16 @@ function ProcurementOfficerDashboard() {
         const awardDeclined = data.requisitions.filter(r => r.status === 'Award_Declined').length;
         const inCommitteeScoring = data.requisitions.filter(r => r.status === 'Scoring_In_Progress').length;
         const pendingFinalReview = data.requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
-        const paidInvoices = data.invoices.filter(i => i.status === 'Paid').length;
-        const unpaidInvoices = data.invoices.filter(i => i.status !== 'Paid').length;
+        
+        const paidInvoicesValue = data.invoices
+            .filter(i => i.status === 'Paid')
+            .reduce((sum, i) => sum + i.totalAmount, 0);
 
-        return { readyForRfq, acceptingQuotes, readyToAward, awardDeclined, inCommitteeScoring, pendingFinalReview, paidInvoices, unpaidInvoices };
+        const unpaidInvoicesValue = data.invoices
+            .filter(i => i.status !== 'Paid')
+            .reduce((sum, i) => sum + i.totalAmount, 0);
+
+        return { readyForRfq, acceptingQuotes, readyToAward, awardDeclined, inCommitteeScoring, pendingFinalReview, paidInvoicesValue, unpaidInvoicesValue };
     }, [data]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -229,8 +235,8 @@ function ProcurementOfficerDashboard() {
             <StatCard title="Ready to Award" value={stats.readyToAward.toString()} description="Scoring is complete" icon={<Trophy className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Finalize Awards"/>
             <StatCard title="Pending Award Review" value={stats.pendingFinalReview.toString()} description="Awards in hierarchical approval" icon={<GanttChartSquare className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/award-reviews')} cta="Track Reviews"/>
             <StatCard title="Award Declined" value={stats.awardDeclined.toString()} description="Vendor declined, action needed" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Promote Standby" variant="destructive"/>
-            <StatCard title="Unpaid Invoices" value={stats.unpaidInvoices.toString()} description="Invoices pending or approved" icon={<Wallet className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View Invoices"/>
-            <StatCard title="Paid Invoices" value={stats.paidInvoices.toString()} description="Successfully paid and closed" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View History"/>
+            <StatCard title="Total Unpaid" value={`${stats.unpaidInvoicesValue.toLocaleString()} ETB`} description="Invoices pending or approved" icon={<Wallet className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View Invoices"/>
+            <StatCard title="Total Paid" value={`${stats.paidInvoicesValue.toLocaleString()} ETB`} description="Successfully paid and closed" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View History"/>
         </div>
     );
 }
