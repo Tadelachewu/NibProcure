@@ -1,4 +1,3 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -66,7 +65,7 @@ export async function POST(
                 totalPrice: totalValue,
                 deadline: new Date(newDeadline),
                 allowedVendorIds: vendorIds,
-                parentRequisition: { 
+                parent: { 
                     connect: {
                         id: originalRequisition.id 
                     }
@@ -120,52 +119,49 @@ export async function POST(
             }
         }
 
-        // --- Start of New Logic: Check if original requisition can be closed ---
+        // --- Start of Corrected Logic: Check if original requisition can be closed ---
         const updatedOriginalReq = await tx.purchaseRequisition.findUnique({
             where: { id: originalRequisitionId },
             include: { 
                 items: true,
-                purchaseOrders: { include: { invoices: true, items: true }}
+                purchaseOrders: { include: { items: true, invoices: true }}
             }
         });
 
         if (updatedOriginalReq) {
-            const allItemsAreTerminal = updatedOriginalReq.items.every(item => {
-                const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-                if (details.length === 0) return true; // Not part of an award, considered terminal.
-                
-                const hasBeenRestarted = details.some(d => d.status === 'Restarted');
-                if(hasBeenRestarted) return true;
-
-                const acceptedAward = details.find(d => d.status === 'Accepted');
-                if (acceptedAward) {
-                    const po = updatedOriginalReq.purchaseOrders.find(p => p.items.some(poi => poi.requisitionItemId === item.id));
-                    // Check if *every* invoice related to this PO is paid
-                    return po?.invoices.every(inv => inv.status === 'Paid') || false;
-                }
-
-                // If an award failed and was not restarted, it's also terminal.
-                if(details.some(d => d.status === 'Failed_to_Award')) return true;
-
-                // If an award was declined but there are still standby options, it's NOT terminal
-                const hasDeclined = details.some(d => d.status === 'Declined');
-                const hasStandby = details.some(d => d.status === 'Standby');
-                if(hasDeclined && hasStandby) return false;
-                
-                // If it was declined and had no standby, it is now considered failed, which is terminal.
-                if(hasDeclined && !hasStandby) return true;
-
-                return false;
-            });
+            // Get all items that were NOT part of this restart operation.
+            const remainingItems = updatedOriginalReq.items.filter(item => !itemIds.includes(item.id));
             
-            if (allItemsAreTerminal) {
-                await tx.purchaseRequisition.update({
+            // If there are no remaining items, the parent is effectively empty and can be closed.
+            if (remainingItems.length === 0) {
+                 await tx.purchaseRequisition.update({
                     where: { id: originalRequisitionId },
                     data: { status: 'Closed' }
                 });
+            } else {
+                 // Check if ALL remaining items are fully paid.
+                const allRemainingItemsArePaid = remainingItems.every(item => {
+                    const po = updatedOriginalReq.purchaseOrders.find(p => p.items.some(pi => pi.requisitionItemId === item.id));
+                    
+                    // If an item has a PO, all its invoices must be 'Paid'.
+                    if (po) {
+                        const relatedInvoices = po.invoices || [];
+                        // It must have at least one invoice and all must be paid.
+                        return relatedInvoices.length > 0 && relatedInvoices.every(inv => inv.status === 'Paid');
+                    }
+                    // If an item has no PO, it's not considered "paid" and the requisition shouldn't close.
+                    return false;
+                });
+                
+                if (allRemainingItemsArePaid) {
+                    await tx.purchaseRequisition.update({
+                        where: { id: originalRequisitionId },
+                        data: { status: 'Closed' }
+                    });
+                }
             }
         }
-        // --- End of New Logic ---
+        // --- End of Corrected Logic ---
 
         await tx.auditLog.create({
             data: {
@@ -222,10 +218,10 @@ export async function POST(
   } catch (error) {
     console.error('Failed to restart item RFQ:', error);
     if (error instanceof Error) {
-      if ((error as any).code === 'P2002') {
-        return NextResponse.json({ error: 'Failed to create new requisition due to a unique constraint violation. This may be a temporary issue. Please try again.' }, { status: 409 });
-      }
-      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+        if ((error as any).code === 'P2002') {
+          return NextResponse.json({ error: 'Failed to create new requisition due to a unique constraint violation. This may be a temporary issue. Please try again.' }, { status: 409 });
+        }
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
