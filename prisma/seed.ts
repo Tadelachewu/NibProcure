@@ -40,8 +40,6 @@ async function main() {
   await prisma.vendor.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.department.deleteMany({});
-  await prisma.approvalStep.deleteMany({});
-  await prisma.approvalThreshold.deleteMany({});
   await prisma.role.deleteMany({});
   await prisma.setting.deleteMany({});
   console.log('Data cleared.');
