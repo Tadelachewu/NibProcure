@@ -305,7 +305,6 @@ export async function PATCH(
             urgency: body.urgency,
             department: { connect: { name: body.department } },
             totalPrice: totalPrice,
-            status: status ? status.replace(/ /g, '_') : requisition.status,
             approver: { disconnect: true },
             approverComment: null, // *** FIX: Clear the rejection comment on resubmission ***
             items: {
@@ -346,16 +345,19 @@ export async function PATCH(
         }
         
         if (newStatus === 'Pending_Approval') {
+            dataToUpdate.status = 'Pending_Approval';
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
             if (department?.headId) { 
                 dataToUpdate.currentApprover = { connect: { id: department.headId } };
-                dataToUpdate.status = 'Pending_Approval';
             } else {
+                // If no head, it might auto-approve to PreApproved
                 dataToUpdate.status = 'PreApproved';
                 dataToUpdate.currentApprover = { disconnect: true };
             }
             auditAction = 'SUBMIT_FOR_APPROVAL';
             auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
+        } else {
+            dataToUpdate.status = newStatus || requisition.status;
         }
 
     } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Approval') {
@@ -685,3 +687,4 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
