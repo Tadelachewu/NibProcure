@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -45,7 +44,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { requisitionId, vendorId, items, notes, answers, cpoDocumentUrl, experienceDocumentUrl, summaryDocumentUrl } = body;
+    const { requisitionId, vendorId, items, notes, answers, cpoDocumentUrl, experienceDocumentUrl } = body;
 
     const vendor = await prisma.vendor.findUnique({ where: { id: vendorId }, include: { user: true } });
     if (!vendor) {
@@ -86,7 +85,6 @@ export async function POST(request: Request) {
             notes,
             cpoDocumentUrl,
             experienceDocumentUrl,
-            summaryDocumentUrl,
             items: {
                 create: items.map((item: any) => ({
                     requisitionItemId: item.requisitionItemId,

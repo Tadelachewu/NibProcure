@@ -95,17 +95,12 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                             </>
                         )}
                         
-                        {(quote.cpoDocumentUrl || quote.experienceDocumentUrl || quote.summaryDocumentUrl) && (
+                        {(quote.cpoDocumentUrl || quote.experienceDocumentUrl) && (
                              <>
                                 <Separator />
                                 <div className="space-y-2">
                                      <h3 className="font-semibold">Attached Documents</h3>
                                      <div className="flex gap-4 flex-wrap">
-                                        {quote.summaryDocumentUrl && (
-                                            <a href={quote.summaryDocumentUrl} target="_blank" rel="noopener noreferrer">
-                                                <Button variant="outline"><FileText className="mr-2"/> Summary Document</Button>
-                                            </a>
-                                        )}
                                         {quote.cpoDocumentUrl && (
                                             <a href={quote.cpoDocumentUrl} target="_blank" rel="noopener noreferrer">
                                                 <Button variant="outline"><FileText className="mr-2"/> CPO Document</Button>
