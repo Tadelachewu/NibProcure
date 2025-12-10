@@ -80,6 +80,7 @@ export type PerItemAwardDetail = {
   unitPrice: number;
   status: PerItemAwardStatus;
   score: number;
+  rejectionReason?: string;
 }
 
 export type RequisitionItem = {
@@ -365,6 +366,7 @@ export type GoodsReceiptNote = {
     receivedById: string;
     receivedDate: Date;
     items: ReceiptItem[];
+    status: 'Processed' | 'Disputed';
     photos?: { name: string; url: string }[];
 }
 
@@ -391,6 +393,7 @@ export type Invoice = {
   paymentDate?: Date;
   paymentReference?: string;
   paymentEvidenceUrl?: string;
+  disputeReason?: string;
   po?: PurchaseOrder;
 };
 
