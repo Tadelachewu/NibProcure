@@ -1,5 +1,3 @@
-
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -598,6 +596,7 @@ export async function POST(request: Request) {
     if (!department) {
       return NextResponse.json({ error: 'Department not found' }, { status: 404 });
     }
+    
     const transactionResult = await prisma.$transaction(async (tx) => {
       const newRequisition = await tx.purchaseRequisition.create({
         data: {
@@ -638,11 +637,13 @@ export async function POST(request: Request) {
           } : undefined,
         },
       });
+
       const finalRequisition = await tx.purchaseRequisition.update({
         where: { id: newRequisition.id },
         data: { transactionId: newRequisition.id },
         include: { items: true, customQuestions: true, evaluationCriteria: true }
       });
+
       await tx.auditLog.create({
         data: {
           transactionId: finalRequisition.id,
@@ -654,8 +655,10 @@ export async function POST(request: Request) {
           details: `Created new requisition: "${finalRequisition.title}".`,
         }
       });
+
       return finalRequisition;
     });
+
     return NextResponse.json(transactionResult, { status: 201 });
   } catch (error) {
     console.error('Failed to create requisition:', error);
