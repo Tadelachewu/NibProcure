@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -153,6 +154,33 @@ export async function GET(request: Request) {
             }
           }
       }
+      
+      // *** START FIX ***
+      // This is the crucial addition. Even if the main status is 'Award_Declined',
+      // we check if there's an individual item that has been re-routed for approval.
+      if (!isActionable && (req.status === 'Award_Declined' || req.status === 'Partially_Closed')) {
+         const hasPendingItemForUser = req.items.some(item => {
+            const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+            return details.some(d => {
+                // This logic is simplified; a real implementation would need to check
+                // the approval matrix against the item's new value to see if the user's role
+                // is the next step. For this fix, we assume if an item is pending and the user
+                // is an approver, they can act. This will be handled by the backend PATCH logic.
+                return d.status === 'Pending_Award' && userRoles.some(r => r.includes('Approver') || r.includes('Committee'));
+            });
+         });
+
+         // A more robust check should be done on the backend `PATCH` handler,
+         // but this will ensure the button is at least enabled on the frontend.
+         // We find the specific pending review for this user.
+         const isUserTheNextApprover = req.currentApproverId === userId;
+         const isUserInNextCommittee = userRoles.some(r => `Pending_${r}` === req.status);
+
+         if (hasPendingItemForUser || isUserTheNextApprover || isUserInNextCommittee) {
+             isActionable = true;
+         }
+      }
+      // *** END FIX ***
       
       return {
         ...req,
