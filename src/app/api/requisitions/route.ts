@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
-import { decodeJwt } from '@/lib/auth';
+import { decodeJwt, getActorFromToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { isPast } from 'date-fns';
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   const token = authHeader?.split(' ')[1];
   let userPayload: (User & { roles: { name: UserRole }[] }) | null = null;
   if(token) {
-    const decodedUser = decodeJwt<User & { roles: UserRole[] }>(token);
+    const decodedUser = await getActorFromToken(request);
     if(decodedUser) {
         userPayload = decodedUser as any;
     }
@@ -36,31 +36,31 @@ export async function GET(request: Request) {
     let whereClause: any = {};
     
     if (forAwardReview === 'true' && userPayload) {
-        const userRoles = userPayload.roles.map(r => r.name);
+        const userRoles = userPayload.roles as any[];
         const userId = userPayload.id;
         
         const orConditions: any[] = [
-            // The user is the direct current approver.
-            { currentApproverId: userId },
-            // The status matches a committee role the user has.
-            { status: { in: userRoles.map(r => `Pending_${r}`) } },
+          // The user is the direct current approver for a pending item.
+          { currentApproverId: userId, status: { startsWith: 'Pending_' } },
+          // The status matches a committee role the user has.
+          { status: { in: userRoles.map(r => `Pending_${r.name}`) } },
         ];
         
         const reviewableStatuses: RequisitionStatus[] = ['Award_Declined', 'Partially_Closed'];
-        if(userRoles.some(r => reviewableStatuses.includes(r))) {
+
+        // If user is approver, they can also see declined/partially closed items
+        if(userRoles.some(r => r.name !== 'Requester' && r.name !== 'Vendor')) {
             orConditions.push({ status: { in: reviewableStatuses } });
         }
 
 
         // If a user is an Admin or Procurement Officer, they should see all pending reviews
-        if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+        if (userRoles.some(r => r.name === 'Admin' || r.name === 'Procurement_Officer')) {
             const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
             const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
             orConditions.push({ status: { in: allPossiblePendingStatuses } });
             // Also show items ready for notification and those declined/partially closed
             orConditions.push({ status: 'PostApproved' });
-            orConditions.push({ status: 'Award_Declined' });
-            orConditions.push({ status: 'Partially_Closed' });
         }
         
         whereClause.OR = orConditions;
@@ -123,7 +123,7 @@ export async function GET(request: Request) {
         
         const rfqLifecycleStatuses = [...baseRfqLifecycleStatuses, ...allPendingStatuses];
 
-        const userRoles = userPayload?.roles.map(r => r.name) || [];
+        const userRoles = userPayload?.roles.map(r => (r as any).name) || [];
 
         if (userRoles.includes('Committee_Member')) {
             whereClause = {
@@ -150,7 +150,7 @@ export async function GET(request: Request) {
         ];
       }
       
-      if (userPayload && userPayload.roles.some(r => r.name === 'Requester') && !statusParam && !approverId) {
+      if (userPayload && userPayload.roles.some(r => (r as any).name === 'Requester') && !statusParam && !approverId) {
         whereClause.requesterId = userPayload.id;
       }
     }
@@ -362,9 +362,17 @@ export async function PATCH(
         dataToUpdate.status = 'PreApproved';
         dataToUpdate.approver = { connect: { id: userId } };
         dataToUpdate.approverComment = comment;
-        dataToUpdate.currentApproverId = null;
+        dataToUpdate.currentApprover = { disconnect: true };
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Departmental approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;
+    }
+    else if (newStatus === 'Rejected' && requisition.status === 'Pending_Approval') {
+        dataToUpdate.status = 'Rejected';
+        dataToUpdate.approver = { connect: { id: userId } };
+        dataToUpdate.approverComment = comment;
+        dataToUpdate.currentApprover = { disconnect: true };
+        auditAction = 'REJECT_REQUISITION';
+        auditDetails = `Requisition ${id} was rejected with comment: "${comment}".`;
     }
     else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') {
         
@@ -402,7 +410,11 @@ export async function PATCH(
 
             const req = await tx.purchaseRequisition.update({
                 where: { id },
-                data: dataToUpdate,
+                data: {
+                    status: dataToUpdate.status,
+                    currentApprover: dataToUpdate.currentApproverId ? { connect: { id: dataToUpdate.currentApproverId } } : { disconnect: true },
+                    approverComment: dataToUpdate.approverComment,
+                },
             });
             
             const latestMinute = requisition.minutes[0];
@@ -673,3 +685,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
