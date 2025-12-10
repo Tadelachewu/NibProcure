@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     // Build the main query conditions
     const orConditions: any[] = [
       // The user is the direct current approver for a pending item.
-      { currentApproverId: userId },
+      { currentApproverId: userId, status: { startsWith: 'Pending_' } },
       // The status matches a committee role the user has.
       { status: { in: userRoles.map(r => `Pending_${r}`) } },
       // The user has already signed a minute for this requisition
@@ -143,11 +143,14 @@ export async function GET(request: Request) {
       );
 
       if (!hasAlreadyActed) {
-          const isUserTheNextApprover = req.currentApproverId === userId;
-          const isUserInNextCommittee = userRoles.some(r => `Pending_${r}` === req.status);
-          
-          if (isUserTheNextApprover || isUserInNextCommittee) {
+          if (req.currentApproverId === userId) {
             isActionable = true;
+          } else if (req.status.startsWith('Pending_')) {
+            const requiredRole = req.status.replace('Pending_', '');
+            if (userRoles.includes(requiredRole as UserRole)) {
+              // This is a committee-level approval, so it's actionable if the user is part of that committee.
+              isActionable = true;
+            }
           }
       }
       
