@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -22,11 +21,13 @@ export async function GET(request: Request) {
     // Build the main query conditions
     const orConditions: any[] = [
       // The user is the direct current approver for a pending item.
-      { currentApproverId: userId, status: { startsWith: 'Pending_' } },
+      { currentApproverId: userId },
       // The status matches a committee role the user has.
       { status: { in: userRoles.map(r => `Pending_${r}`) } },
       // The user has already signed a minute for this requisition
-      { minutes: { some: { signatures: { some: { signerId: userId } } } } }
+      { minutes: { some: { signatures: { some: { signerId: userId } } } } },
+       // The requisition is in a state of decline or partial closure, which might still have items needing action.
+      { status: { in: ['Award_Declined', 'Partially_Closed'] } },
     ];
     
     // If a user is an Admin or Procurement Officer, they should see all pending reviews
@@ -36,8 +37,6 @@ export async function GET(request: Request) {
         orConditions.push({ status: { in: allPossiblePendingStatuses } });
         // Also show items ready for notification and those declined/partially closed
         orConditions.push({ status: 'PostApproved' });
-        orConditions.push({ status: 'Award_Declined' });
-        orConditions.push({ status: 'Partially_Closed' });
     }
 
     const requisitionsForUser = await prisma.purchaseRequisition.findMany({
@@ -144,43 +143,13 @@ export async function GET(request: Request) {
       );
 
       if (!hasAlreadyActed) {
-          if (req.currentApproverId === userId) {
+          const isUserTheNextApprover = req.currentApproverId === userId;
+          const isUserInNextCommittee = userRoles.some(r => `Pending_${r}` === req.status);
+          
+          if (isUserTheNextApprover || isUserInNextCommittee) {
             isActionable = true;
-          } else if (req.status.startsWith('Pending_')) {
-            const requiredRole = req.status.replace('Pending_', '');
-            if (userRoles.includes(requiredRole as UserRole)) {
-              // This is a committee-level approval, so it's actionable if the user is part of that committee.
-              isActionable = true;
-            }
           }
       }
-      
-      // *** START FIX ***
-      // This is the crucial addition. Even if the main status is 'Award_Declined',
-      // we check if there's an individual item that has been re-routed for approval.
-      if (!isActionable && (req.status === 'Award_Declined' || req.status === 'Partially_Closed')) {
-         const hasPendingItemForUser = req.items.some(item => {
-            const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-            return details.some(d => {
-                // This logic is simplified; a real implementation would need to check
-                // the approval matrix against the item's new value to see if the user's role
-                // is the next step. For this fix, we assume if an item is pending and the user
-                // is an approver, they can act. This will be handled by the backend PATCH logic.
-                return d.status === 'Pending_Award' && userRoles.some(r => r.includes('Approver') || r.includes('Committee'));
-            });
-         });
-
-         // A more robust check should be done on the backend `PATCH` handler,
-         // but this will ensure the button is at least enabled on the frontend.
-         // We find the specific pending review for this user.
-         const isUserTheNextApprover = req.currentApproverId === userId;
-         const isUserInNextCommittee = userRoles.some(r => `Pending_${r}` === req.status);
-
-         if (hasPendingItemForUser || isUserTheNextApprover || isUserInNextCommittee) {
-             isActionable = true;
-         }
-      }
-      // *** END FIX ***
       
       return {
         ...req,
