@@ -312,6 +312,7 @@ export type Quotation = {
     finalAverageScore?: number;
     cpoDocumentUrl?: string;
     experienceDocumentUrl?: string;
+    summaryDocumentUrl?: string;
 };
 
 export type POItem = {

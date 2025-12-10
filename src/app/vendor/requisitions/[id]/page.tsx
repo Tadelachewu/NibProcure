@@ -47,11 +47,9 @@ const quoteFormSchema = z.object({
   })).optional(),
   cpoDocumentUrl: z.string().optional(),
   experienceDocumentUrl: z.string().optional(),
+  summaryDocumentUrl: z.string().optional(),
 }).refine(
     (data, ctx) => {
-        // This is a placeholder for the actual requisition data
-        // In a real app, you'd pass the requisition data to the validation context
-        // For now, we'll make cpoDocumentUrl optional and handle the logic in the component
         return true;
     }
 );
@@ -324,7 +322,6 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
     const onSubmit = async (values: z.infer<typeof quoteFormSchema>) => {
         if (!user || !requisition) return;
         
-        // Manual validation for required answers
         let hasError = false;
         if (requisition.customQuestions) {
             for (let i = 0; i < requisition.customQuestions.length; i++) {
@@ -411,6 +408,27 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             <CardContent>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                        <FormField
+                            control={form.control}
+                            name="summaryDocumentUrl"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Overall Summary Document (Optional)</FormLabel>
+                                <FormControl>
+                                    <Input type="file" accept=".pdf,.doc,.docx" onChange={async (e) => {
+                                        if (e.target.files?.[0]) {
+                                            const path = await handleFileUpload(e.target.files[0]);
+                                            if (path) field.onChange(path);
+                                        }
+                                    }} />
+                                </FormControl>
+                                <FormDescription>
+                                    Upload a single document summarizing all your proposed items and details.
+                                </FormDescription>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                         {isCpoRequired && (
                              <FormField
                                 control={form.control}
@@ -735,19 +753,16 @@ export default function VendorRequisitionPage() {
     const itemsToDisplayInQuoteCard = useMemo(() => {
         if (!submittedQuote) return [];
         
-        // In a single-vendor award, the awarded items are on the main requisition
         if (isFullyAwarded && requisition!.awardedQuoteItemIds.length > 0) {
             const awardedItemIds = new Set(requisition!.awardedQuoteItemIds);
             return submittedQuote.items.filter(item => awardedItemIds.has(item.id));
         }
 
-        // In a per-item award, the details are on the requisition items
         if (isPartiallyAwarded) {
             const awardedQuoteItemIds = new Set(awardedItems.map(item => item.quoteItemId));
             return submittedQuote.items.filter(item => awardedQuoteItemIds.has(item.id));
         }
         
-        // If not awarded or accepted yet, show all items from the original quote
         return submittedQuote.items;
     }, [submittedQuote, isPartiallyAwarded, awardedItems, isFullyAwarded, requisition]);
 
@@ -760,7 +775,6 @@ export default function VendorRequisitionPage() {
     const isAccepted = useMemo(() => {
         if (!requisition || !user?.vendorId) return false;
     
-        // For per-item awards, check if at least one item has been accepted by the vendor.
         if (isPartiallyAwarded) {
              const hasAcceptedItem = requisition.items.some(item =>
                 (item.perItemAwardDetails || []).some(d => d.vendorId === user.vendorId && d.status === 'Accepted')
@@ -768,7 +782,6 @@ export default function VendorRequisitionPage() {
             return hasAcceptedItem;
         }
         
-        // For single-vendor awards, check the main quote status.
         const vendorQuote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
         return vendorQuote?.status === 'Accepted';
     }, [requisition, user, isPartiallyAwarded]);
@@ -801,7 +814,6 @@ export default function VendorRequisitionPage() {
                  setSubmittedQuote(vendorSubmittedQuote);
                  const poResponse = await fetch('/api/purchase-orders');
                  const allPOs: PurchaseOrder[] = await poResponse.json();
-                 // Now there can be multiple POs, find all associated with this vendor and req
                  const vendorPOs = allPOs.filter(p => p.requisitionId === foundReq.id && p.vendor.id === user.vendorId);
                  setPurchaseOrders(vendorPOs);
              } else {

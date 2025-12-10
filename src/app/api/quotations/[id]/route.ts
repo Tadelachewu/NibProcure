@@ -65,7 +65,7 @@ export async function PATCH(
         }
 
         const body = await request.json();
-        const { items, notes, answers, cpoDocumentUrl, experienceDocumentUrl, summaryDocumentUrl } = body;
+        const { items, notes, answers, cpoDocumentUrl, experienceDocumentUrl } = body;
         
         const quote = await prisma.quotation.findUnique({
              where: { id: quoteId },
@@ -112,7 +112,6 @@ export async function PATCH(
                 notes,
                 cpoDocumentUrl,
                 experienceDocumentUrl,
-                summaryDocumentUrl,
                 items: {
                     create: items.map((item: any) => ({
                         requisitionItemId: item.requisitionItemId,
