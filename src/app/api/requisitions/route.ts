@@ -326,6 +326,15 @@ export async function PATCH(
                     options: q.options || [],
                 })),
             },
+            customQuestions: {
+                deleteMany: {},
+                create: body.customQuestions?.map((q: any) => ({
+                    questionText: q.questionText,
+                    questionType: q.questionType.replace(/-/g, '_'),
+                    isRequired: q.isRequired,
+                    options: q.options || [],
+                })),
+            },
         };
         if (body.evaluationCriteria) {
              const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
@@ -551,64 +560,69 @@ export async function POST(request: Request) {
     if (!department) {
       return NextResponse.json({ error: 'Department not found' }, { status: 404 });
     }
+
     const transactionResult = await prisma.$transaction(async (tx) => {
-      const newRequisition = await tx.purchaseRequisition.create({
-        data: {
-          requester: { connect: { id: actor.id } },
-          department: { connect: { id: department.id } },
-          title: body.title,
-          urgency: body.urgency,
-          justification: body.justification,
-          status: 'Draft',
-          totalPrice: totalPrice,
-          items: {
-            create: body.items.map((item: any) => ({
-              name: item.name,
-              quantity: Number(item.quantity) || 0,
-              unitPrice: Number(item.unitPrice) || 0,
-              description: item.description || ''
-            }))
-          },
-          customQuestions: {
-            create: body.customQuestions?.map((q: any) => ({
-              questionText: q.questionText,
-              questionType: q.questionType.replace(/-/g, '_'),
-              isRequired: q.isRequired,
-              options: q.options || [],
-            }))
-          },
-          evaluationCriteria: body.evaluationCriteria ? {
-            create: {
-              financialWeight: body.evaluationCriteria.financialWeight,
-              technicalWeight: body.evaluationCriteria.technicalWeight,
-              financialCriteria: {
-                create: body.evaluationCriteria.financialCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
-              },
-              technicalCriteria: {
-                create: body.evaluationCriteria.technicalCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
-              }
+        // Generate a new ID that will be used for both the requisition and its transaction tracking.
+        const newRequisitionId = `REQ-${Date.now()}`; // Or use a more robust UUID library in production
+
+        const newRequisition = await tx.purchaseRequisition.create({
+            data: {
+                id: newRequisitionId,
+                transactionId: newRequisitionId,
+                requester: { connect: { id: actor.id } },
+                department: { connect: { id: department.id } },
+                title: body.title,
+                urgency: body.urgency,
+                justification: body.justification,
+                status: 'Draft',
+                totalPrice: totalPrice,
+                items: {
+                    create: body.items.map((item: any) => ({
+                        name: item.name,
+                        quantity: Number(item.quantity) || 0,
+                        unitPrice: Number(item.unitPrice) || 0,
+                        description: item.description || ''
+                    }))
+                },
+                customQuestions: {
+                    create: body.customQuestions?.map((q: any) => ({
+                        questionText: q.questionText,
+                        questionType: q.questionType.replace(/-/g, '_'),
+                        isRequired: q.isRequired,
+                        options: q.options || [],
+                    }))
+                },
+                evaluationCriteria: body.evaluationCriteria ? {
+                    create: {
+                        financialWeight: body.evaluationCriteria.financialWeight,
+                        technicalWeight: body.evaluationCriteria.technicalWeight,
+                        financialCriteria: {
+                            create: body.evaluationCriteria.financialCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
+                        },
+                        technicalCriteria: {
+                            create: body.evaluationCriteria.technicalCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
+                        }
+                    }
+                } : undefined,
+            },
+            include: { items: true, customQuestions: true, evaluationCriteria: true }
+        });
+
+        await tx.auditLog.create({
+            data: {
+                transactionId: newRequisition.id,
+                user: { connect: { id: actor.id } },
+                timestamp: new Date(),
+                action: 'CREATE_REQUISITION',
+                entity: 'Requisition',
+                entityId: newRequisition.id,
+                details: `Created new requisition: "${newRequisition.title}".`,
             }
-          } : undefined,
-        },
-      });
-      const finalRequisition = await tx.purchaseRequisition.update({
-        where: { id: newRequisition.id },
-        data: { transactionId: newRequisition.id },
-        include: { items: true, customQuestions: true, evaluationCriteria: true }
-      });
-      await tx.auditLog.create({
-        data: {
-          transactionId: finalRequisition.id,
-          user: { connect: { id: actor.id } },
-          timestamp: new Date(),
-          action: 'CREATE_REQUISITION',
-          entity: 'Requisition',
-          entityId: finalRequisition.id,
-          details: `Created new requisition: "${finalRequisition.title}".`,
-        }
-      });
-      return finalRequisition;
+        });
+
+        return newRequisition;
     });
+
     return NextResponse.json(transactionResult, { status: 201 });
   } catch (error) {
     console.error('Failed to create requisition:', error);
