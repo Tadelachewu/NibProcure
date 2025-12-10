@@ -636,6 +636,8 @@ export async function POST(request: Request) {
               }
             }
           } : undefined,
+          // transactionId will be set in the next step
+          transactionId: "placeholder",
         },
       });
       const finalRequisition = await tx.purchaseRequisition.update({
