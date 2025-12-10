@@ -41,7 +41,7 @@ function AdminView({ tickets, onTicketUpdated }: { tickets: SupportTicket[], onT
     const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
-    const { user: admin } = useAuth();
+    const { user: admin, token } = useAuth();
     
     const form = useForm<z.infer<typeof responseFormSchema>>({
         resolver: zodResolver(responseFormSchema),
@@ -58,12 +58,12 @@ function AdminView({ tickets, onTicketUpdated }: { tickets: SupportTicket[], onT
     }, [selectedTicket, form]);
 
     const handleRespond = async (values: z.infer<typeof responseFormSchema>) => {
-        if (!selectedTicket || !admin) return;
+        if (!selectedTicket || !admin || !token) return;
         setIsSubmitting(true);
         try {
             const res = await fetch(`/api/support/${selectedTicket.id}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ ...values, adminId: admin.id }),
             });
             if (!res.ok) throw new Error("Failed to submit response.");
@@ -154,7 +154,7 @@ function AdminView({ tickets, onTicketUpdated }: { tickets: SupportTicket[], onT
 }
 
 function UserView({ tickets, onTicketSubmitted }: { tickets: SupportTicket[], onTicketSubmitted: () => void }) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -164,12 +164,12 @@ function UserView({ tickets, onTicketSubmitted }: { tickets: SupportTicket[], on
   });
 
   const onSubmit = async (values: z.infer<typeof ticketFormSchema>) => {
-    if (!user) return;
+    if (!user || !token) return;
     setIsSubmitting(true);
     try {
       const response = await fetch('/api/support', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ ...values, requesterId: user.id }),
       });
       if (!response.ok) throw new Error("Failed to submit ticket.");
@@ -244,15 +244,17 @@ function UserView({ tickets, onTicketSubmitted }: { tickets: SupportTicket[], on
 }
 
 export function SupportPage() {
-  const { user, role } = useAuth();
+  const { user, role, token } = useAuth();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchTickets = async () => {
-    if (!user) return;
+  const fetchTickets = useCallback(async () => {
+    if (!user || !token) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/support');
+      const res = await fetch('/api/support', {
+          headers: { Authorization: `Bearer ${token}` }
+      });
       const data = await res.json();
       setTickets(data);
     } catch (error) {
@@ -260,11 +262,11 @@ export function SupportPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, token]);
 
   useEffect(() => {
     fetchTickets();
-  }, [user]);
+  }, [fetchTickets]);
 
   if (loading) {
     return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;

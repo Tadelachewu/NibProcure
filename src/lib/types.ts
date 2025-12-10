@@ -306,10 +306,11 @@ export type Quotation = {
     updatedAt: Date;
     status: QuotationStatus;
     notes?: string;
+    rejectionReason?: string;
     rank?: 1 | 2 | 3;
+    finalAverageScore?: number;
     answers?: QuoteAnswer[];
     scores?: CommitteeScoreSet[];
-    finalAverageScore?: number;
     cpoDocumentUrl?: string;
     experienceDocumentUrl?: string;
     summaryDocumentUrl?: string;
