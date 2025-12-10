@@ -29,9 +29,6 @@ async function main() {
   await prisma.purchaseOrder.deleteMany({});
   await prisma.contract.deleteMany({});
   await prisma.customQuestion.deleteMany({});
-  await prisma.financialCriterion.deleteMany({});
-  await prisma.technicalCriterion.deleteMany({});
-  await prisma.evaluationCriteria.deleteMany({});
   await prisma.requisitionItem.deleteMany({});
   await prisma.purchaseRequisition.deleteMany({});
   await prisma.kYC_Document.deleteMany({});
