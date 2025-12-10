@@ -34,11 +34,6 @@ async function main() {
   await prisma.financialCriterion.deleteMany({});
   await prisma.technicalCriterion.deleteMany({});
   await prisma.evaluationCriteria.deleteMany({});
-  await prisma.requisitionItem.deleteMany({});
-  // Deleting RequisitionRoleAssignment before related models
-  if (prisma.requisitionRoleAssignment) {
-      await prisma.requisitionRoleAssignment.deleteMany({});
-  }
   await prisma.purchaseRequisition.deleteMany({});
   await prisma.kYC_Document.deleteMany({});
   await prisma.vendor.deleteMany({});
