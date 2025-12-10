@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -47,7 +46,6 @@ const quoteFormSchema = z.object({
   })).optional(),
   cpoDocumentUrl: z.string().optional(),
   experienceDocumentUrl: z.string().optional(),
-  summaryDocumentUrl: z.string().optional(),
 }).refine(
     (data, ctx) => {
         return true;
@@ -408,27 +406,6 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             <CardContent>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                        <FormField
-                            control={form.control}
-                            name="summaryDocumentUrl"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Overall Summary Document (Optional)</FormLabel>
-                                <FormControl>
-                                    <Input type="file" accept=".pdf,.doc,.docx" onChange={async (e) => {
-                                        if (e.target.files?.[0]) {
-                                            const path = await handleFileUpload(e.target.files[0]);
-                                            if (path) field.onChange(path);
-                                        }
-                                    }} />
-                                </FormControl>
-                                <FormDescription>
-                                    Upload a single document summarizing all your proposed items and details.
-                                </FormDescription>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
                         {isCpoRequired && (
                              <FormField
                                 control={form.control}
