@@ -222,11 +222,7 @@ export function AwardReviewsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
-                  
-                  // The `isActionable` flag is passed from the API,
-                  // but we add a client-side check for the specific 'Award_Declined' case
-                  // where we need to approve a newly promoted item.
-                  const isActionable = req.isActionable || (req.status === 'Award_Declined' && req.currentApproverId === user?.id);
+                  const isActionable = req.isActionable ?? false;
 
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');

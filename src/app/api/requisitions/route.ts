@@ -45,6 +45,12 @@ export async function GET(request: Request) {
             // The status matches a committee role the user has.
             { status: { in: userRoles.map(r => `Pending_${r}`) } },
         ];
+        
+        const reviewableStatuses: RequisitionStatus[] = ['Award_Declined', 'Partially_Closed'];
+        if(reviewableStatuses.includes(userPayload.status)) {
+            orConditions.push({ status: { in: reviewableStatuses } });
+        }
+
 
         // If a user is an Admin or Procurement Officer, they should see all pending reviews
         if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
@@ -284,6 +290,7 @@ export async function PATCH(
     let dataToUpdate: any = {};
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
+    let updatedRequisition;
     
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && body.title) {
         const totalPrice = body.items.reduce((acc: number, item: any) => {
@@ -368,7 +375,7 @@ export async function PATCH(
         }
         
         console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
-        const transactionResult = await prisma.$transaction(async (tx) => {
+        updatedRequisition = await prisma.$transaction(async (tx) => {
 
             if (newStatus === 'Rejected') {
                 const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
@@ -386,7 +393,7 @@ export async function PATCH(
                 auditAction = 'APPROVE_AWARD_STEP';
             }
 
-            const updatedRequisition = await tx.purchaseRequisition.update({
+            const req = await tx.purchaseRequisition.update({
                 where: { id },
                 data: dataToUpdate,
             });
@@ -414,6 +421,7 @@ export async function PATCH(
                 const { width, height } = newPage.getSize();
                 let y = height - 50;
 
+                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
                 const drawText = (text: string, size: number, options: { y: number, color?: any, font?: any }) => {
                     newPage.drawText(text, { x: 50, y: options.y, size, font: options.font || font, color: options.color || rgb(0,0,0) });
                     return options.y - (size * 1.5);
@@ -440,7 +448,7 @@ export async function PATCH(
 
             await tx.auditLog.create({
                 data: {
-                    transactionId: updatedRequisition.transactionId,
+                    transactionId: req.transactionId,
                     user: { connect: { id: user.id } },
                     timestamp: new Date(),
                     action: auditAction,
@@ -450,17 +458,17 @@ export async function PATCH(
                 }
             });
 
-            return updatedRequisition;
+            return req;
         });
         console.log(`[PATCH /api/requisitions] Award action transaction complete for Req ID: ${id}`);
-        return NextResponse.json(transactionResult);
+        return NextResponse.json(updatedRequisition);
     }
 
     else {
         return NextResponse.json({ error: 'Invalid operation for current status.' }, { status: 400 });
     }
     
-    const updatedRequisition = await prisma.purchaseRequisition.update({
+    updatedRequisition = await prisma.purchaseRequisition.update({
       where: { id },
       data: dataToUpdate,
     });

@@ -1,8 +1,10 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
-import { UserRole, PerItemAwardDetail } from '@/lib/types';
+import { UserRole, PerItemAwardDetail, Minute } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,57 +18,41 @@ export async function GET(request: Request) {
     const userRoles = actor.roles as UserRole[];
     const userId = actor.id;
 
-    // --- Start of Enhanced Fetching Logic ---
-    const allRequisitions = await prisma.purchaseRequisition.findMany({
+    // Build the main query conditions
+    const orConditions: any[] = [
+      // The user is the direct current approver for a pending item.
+      { currentApproverId: userId, status: { startsWith: 'Pending_' } },
+      // The status matches a committee role the user has.
+      { status: { in: userRoles.map(r => `Pending_${r}`) } },
+      // The user has already signed a minute for this requisition
+      { minutes: { some: { signatures: { some: { signerId: userId } } } } }
+    ];
+    
+    // If a user is an Admin or Procurement Officer, they should see all pending reviews
+    if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+        const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
+        const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
+        orConditions.push({ status: { in: allPossiblePendingStatuses } });
+        // Also show items ready for notification and those declined/partially closed
+        orConditions.push({ status: 'PostApproved' });
+        orConditions.push({ status: 'Award_Declined' });
+        orConditions.push({ status: 'Partially_Closed' });
+    }
+
+    const requisitionsForUser = await prisma.purchaseRequisition.findMany({
         where: {
-            status: { 
-                in: [
-                    'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review',
-                    'Pending_Managerial_Approval', 'Pending_Director_Approval',
-                    'Pending_VP_Approval', 'Pending_President_Approval', 'PostApproved',
-                    'Award_Declined', 'Partially_Awarded' // Include statuses that might hide pending items
-                ]
-            }
+            OR: orConditions
         },
-        include: { items: true, reviews: true }
-    });
-
-    const requisitionsForUser = allRequisitions.filter(req => {
-        // Direct assignment always grants access
-        if (req.currentApproverId === userId) {
-            return true;
-        }
-
-        // Admins and Procurement Officers can see everything in review
-        if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-            return true;
-        }
-
-        // Check if user has the role required by the current main status
-        if (req.status.startsWith('Pending_')) {
-            const requiredRole = req.status.replace('Pending_', '');
-            if (userRoles.includes(requiredRole as UserRole)) {
-                return true;
+        include: { 
+          items: true, 
+          reviews: true,
+          minutes: {
+            include: {
+              signatures: true,
             }
+          }
         }
-        
-        // NEW: Check for per-item pending awards, even if main status doesn't reflect it
-        const isPerItem = (req.rfqSettings as any)?.awardStrategy === 'item';
-        if (isPerItem) {
-            const hasPendingItem = req.items.some(item => 
-                (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Pending_Award')
-            );
-            if (hasPendingItem) {
-                // If an item is pending, the current reviewer is determined by the approval matrix for THAT item's value,
-                // which is complex to re-calculate here. We rely on the `currentApproverId` being set correctly.
-                // This logic primarily ensures the requisition shows up on the list for Admins/POs if an item is pending.
-                return true;
-            }
-        }
-
-        return false;
     });
-    // --- End of Enhanced Fetching Logic ---
 
     const requisitionIds = requisitionsForUser.map(r => r.id);
 
@@ -101,7 +87,8 @@ export async function GET(request: Request) {
             minutes: {
             include: {
                 author: true,
-                attendees: true
+                attendees: true,
+                signatures: true,
             }
             }
       },
@@ -147,15 +134,24 @@ export async function GET(request: Request) {
 
     const requisitionsWithDetails = detailedRequisitions.map(req => {
       let isActionable = false;
-      if (req.status.startsWith('Pending_')) {
-        if (req.currentApproverId === userId) {
-          isActionable = true;
-        } else {
-          const requiredRole = req.status.replace('Pending_', '');
-          if (userRoles.includes(requiredRole as UserRole)) {
+      const currentDecisionBody = req.status.replace(/_/g, ' ');
+
+      // Check if user has already signed a minute for this specific decision body/status
+      const hasAlreadyActed = req.minutes.some(minute => 
+        minute.decisionBody === currentDecisionBody &&
+        minute.signatures.some(sig => sig.signerId === userId)
+      );
+
+      if (!hasAlreadyActed) {
+          if (req.currentApproverId === userId) {
             isActionable = true;
+          } else if (req.status.startsWith('Pending_')) {
+            const requiredRole = req.status.replace('Pending_', '');
+            if (userRoles.includes(requiredRole as UserRole)) {
+              // This is a committee-level approval, so it's actionable if the user is part of that committee.
+              isActionable = true;
+            }
           }
-        }
       }
       
       return {
