@@ -1,9 +1,10 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
-import { decodeJwt } from '@/lib/auth';
+import { decodeJwt, getActorFromToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { isPast } from 'date-fns';
@@ -246,20 +247,122 @@ export async function GET(request: Request) {
   }
 }
 
+export async function POST(request: Request) {
+  try {
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 403 });
+    }
+
+    const body = await request.json();
+
+    const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
+    if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
+      const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
+      if (setting.type === 'specific_roles') {
+        const userRoles = (actor.roles as any[]).map(r => r.name);
+        const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
+        if (!canCreate) {
+          return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
+        }
+      }
+    }
+    const totalPrice = body.items.reduce((acc: number, item: any) => {
+      const price = item.unitPrice || 0;
+      const quantity = item.quantity || 0;
+      return acc + (price * quantity);
+    }, 0);
+    const department = await prisma.department.findUnique({ where: { name: body.department } });
+    if (!department) {
+      return NextResponse.json({ error: 'Department not found' }, { status: 404 });
+    }
+    
+    const transactionResult = await prisma.$transaction(async (tx) => {
+      const newRequisition = await tx.purchaseRequisition.create({
+        data: {
+          requester: { connect: { id: actor.id } },
+          department: { connect: { id: department.id } },
+          title: body.title,
+          urgency: body.urgency,
+          justification: body.justification,
+          status: 'Draft',
+          totalPrice: totalPrice,
+          transactionId: 'temp', // Temporary placeholder
+          items: {
+            create: body.items.map((item: any) => ({
+              name: item.name,
+              quantity: Number(item.quantity) || 0,
+              unitPrice: Number(item.unitPrice) || 0,
+              description: item.description || ''
+            }))
+          },
+          customQuestions: {
+            create: body.customQuestions?.map((q: any) => ({
+              questionText: q.questionText,
+              questionType: q.questionType.replace(/-/g, '_'),
+              isRequired: q.isRequired,
+              options: q.options || [],
+            }))
+          },
+          evaluationCriteria: body.evaluationCriteria ? {
+            create: {
+              financialWeight: body.evaluationCriteria.financialWeight,
+              technicalWeight: body.evaluationCriteria.technicalWeight,
+              financialCriteria: {
+                create: body.evaluationCriteria.financialCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
+              },
+              technicalCriteria: {
+                create: body.evaluationCriteria.technicalCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
+              }
+            }
+          } : undefined,
+        },
+      });
+
+      const finalRequisition = await tx.purchaseRequisition.update({
+        where: { id: newRequisition.id },
+        data: { transactionId: newRequisition.id },
+        include: { items: true, customQuestions: true, evaluationCriteria: true }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          transactionId: finalRequisition.id,
+          user: { connect: { id: actor.id } },
+          timestamp: new Date(),
+          action: 'CREATE_REQUISITION',
+          entity: 'Requisition',
+          entityId: finalRequisition.id,
+          details: `Created new requisition: "${finalRequisition.title}".`,
+        }
+      });
+
+      return finalRequisition;
+    });
+
+    return NextResponse.json(transactionResult, { status: 201 });
+  } catch (error) {
+    console.error('Failed to create requisition:', error);
+    if (error instanceof Error) {
+        return NextResponse.json({ error: 'Failed to process requisition', details: error.message }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   request: Request,
 ) {
   try {
+    const actor = await getActorFromToken(request);
+     if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 403 });
+    }
     const body = await request.json();
-    const { id, status, userId, comment } = body;
-    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${userId}`);
+    const { id, status, comment } = body;
+    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${actor.id}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
-
-    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
 
     const requisition = await prisma.purchaseRequisition.findUnique({ 
         where: { id },
@@ -365,9 +468,9 @@ export async function PATCH(
         
         if (!isPerItemApprovalDuringDecline) {
             // Standard award approval/rejection logic here
-            const userRoles = (user.roles as any[]).map(r => r.name);
+            const userRoles = (actor.roles as any[]).map(r => r.name);
             let isAuthorizedToAct = false;
-            if (requisition.currentApproverId === userId) {
+            if (requisition.currentApproverId === actor.id) {
                 isAuthorizedToAct = true;
             } else {
                 const requiredRoleForStatus = requisition.status.replace('Pending_', '');
@@ -377,7 +480,7 @@ export async function PATCH(
             }
 
             if (!isAuthorizedToAct) {
-                console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
+                console.error(`[PATCH /api/requisitions] User ${actor.id} not authorized for status ${requisition.status}.`);
                 return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
             }
         }
@@ -399,14 +502,14 @@ export async function PATCH(
         const transactionResult = await prisma.$transaction(async (tx) => {
 
             if (newStatus === 'Rejected') {
-                const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
+                const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, actor, comment);
                 dataToUpdate.status = previousStatus;
                 dataToUpdate.currentApproverId = previousApproverId;
                 dataToUpdate.approverComment = comment; // Save the rejection reason
                 auditDetails = serviceAuditDetails;
                 auditAction = 'REJECT_AWARD_STEP';
             } else { // Approved
-                const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
+                const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, actor);
                 // IF it's a per-item approval during decline, we DON'T update the main status.
                 if (!isPerItemApprovalDuringDecline) {
                    dataToUpdate.status = nextStatus;
@@ -427,9 +530,9 @@ export async function PATCH(
               const signatureRecord = await tx.signature.create({
                 data: {
                   minute: { connect: { id: latestMinute.id } },
-                  signer: { connect: { id: userId } },
-                  signerName: user.name,
-                  signerRole: (user.roles as any[]).map(r => r.name).join(', '),
+                  signer: { connect: { id: actor.id } },
+                  signerName: actor.name,
+                  signerRole: (actor.roles as any[]).map(r => r.name).join(', '),
                   decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
                   comment: comment,
                 }
@@ -475,7 +578,7 @@ export async function PATCH(
             await tx.auditLog.create({
                 data: {
                     transactionId: updatedRequisition.transactionId,
-                    user: { connect: { id: user.id } },
+                    user: { connect: { id: actor.id } },
                     timestamp: new Date(),
                     action: auditAction,
                     entity: 'Requisition',
@@ -493,7 +596,7 @@ export async function PATCH(
     // This is the initial departmental approval
     else if (requisition.status === 'Pending_Approval') {
         console.log(`[PATCH /api/requisitions] Handling departmental approval for Req ID: ${id}`);
-        if (requisition.currentApproverId !== userId && !user.roles.some(r => r.name === 'Admin')) {
+        if (requisition.currentApproverId !== actor.id && !(actor.roles as any[]).some(r => r.name === 'Admin')) {
             return NextResponse.json({ error: 'Unauthorized. You are not the current approver.' }, { status: 403 });
         }
         if (newStatus === 'Rejected') {
@@ -509,12 +612,12 @@ export async function PATCH(
              auditAction = 'PRE_APPROVE_REQUISITION';
              auditDetails = `Requisition ${id} was pre-approved by department head. Ready for RFQ.`;
         }
-        dataToUpdate.approver = { connect: { id: userId } };
+        dataToUpdate.approver = { connect: { id: actor.id } };
         
     // This handles a requester submitting a draft
     } else if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && newStatus === 'Pending_Approval') {
         console.log(`[PATCH /api/requisitions] Handling draft submission for Req ID: ${id}`);
-        const isRequester = requisition.requesterId === userId;
+        const isRequester = requisition.requesterId === actor.id;
         if (!isRequester) return NextResponse.json({ error: 'Unauthorized.' }, { status: 403 });
         const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
         if (department?.headId) {
@@ -540,7 +643,7 @@ export async function PATCH(
     await prisma.auditLog.create({
         data: {
             transactionId: updatedRequisition.transactionId,
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: auditAction,
             entity: 'Requisition',
@@ -566,121 +669,16 @@ export async function PATCH(
   }
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const actor = await prisma.user.findUnique({
-      where: { id: body.requesterId },
-      include: { roles: true },
-    });
-    if (!actor) {
-      return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
-    }
-    const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
-    if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
-      const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
-      if (setting.type === 'specific_roles') {
-        const userRoles = actor.roles.map(r => r.name);
-        const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
-        if (!canCreate) {
-          return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
-        }
-      }
-    }
-    const totalPrice = body.items.reduce((acc: number, item: any) => {
-      const price = item.unitPrice || 0;
-      const quantity = item.quantity || 0;
-      return acc + (price * quantity);
-    }, 0);
-    const department = await prisma.department.findUnique({ where: { name: body.department } });
-    if (!department) {
-      return NextResponse.json({ error: 'Department not found' }, { status: 404 });
-    }
-    
-    const transactionResult = await prisma.$transaction(async (tx) => {
-      const newRequisition = await tx.purchaseRequisition.create({
-        data: {
-          requester: { connect: { id: actor.id } },
-          department: { connect: { id: department.id } },
-          title: body.title,
-          urgency: body.urgency,
-          justification: body.justification,
-          status: 'Draft',
-          totalPrice: totalPrice,
-          items: {
-            create: body.items.map((item: any) => ({
-              name: item.name,
-              quantity: Number(item.quantity) || 0,
-              unitPrice: Number(item.unitPrice) || 0,
-              description: item.description || ''
-            }))
-          },
-          customQuestions: {
-            create: body.customQuestions?.map((q: any) => ({
-              questionText: q.questionText,
-              questionType: q.questionType.replace(/-/g, '_'),
-              isRequired: q.isRequired,
-              options: q.options || [],
-            }))
-          },
-          evaluationCriteria: body.evaluationCriteria ? {
-            create: {
-              financialWeight: body.evaluationCriteria.financialWeight,
-              technicalWeight: body.evaluationCriteria.technicalWeight,
-              financialCriteria: {
-                create: body.evaluationCriteria.financialCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
-              },
-              technicalCriteria: {
-                create: body.evaluationCriteria.technicalCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
-              }
-            }
-          } : undefined,
-        },
-      });
-
-      const finalRequisition = await tx.purchaseRequisition.update({
-        where: { id: newRequisition.id },
-        data: { transactionId: newRequisition.id },
-        include: { items: true, customQuestions: true, evaluationCriteria: true }
-      });
-
-      await tx.auditLog.create({
-        data: {
-          transactionId: finalRequisition.id,
-          user: { connect: { id: actor.id } },
-          timestamp: new Date(),
-          action: 'CREATE_REQUISITION',
-          entity: 'Requisition',
-          entityId: finalRequisition.id,
-          details: `Created new requisition: "${finalRequisition.title}".`,
-        }
-      });
-
-      return finalRequisition;
-    });
-
-    return NextResponse.json(transactionResult, { status: 201 });
-  } catch (error) {
-    console.error('Failed to create requisition:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process requisition', details: error.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
-  }
-}
-
-
 export async function DELETE(
   request: Request,
 ) {
   try {
-    const body = await request.json();
-    const { id, userId } = body;
-
-    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await getActorFromToken(request);
+     if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 403 });
     }
+    const body = await request.json();
+    const { id } = body;
 
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
 
@@ -688,7 +686,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const canDelete = (requisition.requesterId === userId) || ((user.roles as any[]).some(r => r.name === 'Procurement_Officer' || r.name === 'Admin'));
+    const canDelete = (requisition.requesterId === actor.id) || ((actor.roles as any[]).some(r => r.name === 'Procurement_Officer' || r.name === 'Admin'));
 
     if (!canDelete) {
       return NextResponse.json({ error: 'You are not authorized to delete this requisition.' }, { status: 403 });
@@ -713,7 +711,7 @@ export async function DELETE(
     await prisma.auditLog.create({
         data: {
             transactionId: requisition.transactionId,
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'DELETE_REQUISITION',
             entity: 'Requisition',

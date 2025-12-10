@@ -3,9 +3,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { auditLogs } from '@/lib/data-store';
-import { users } from '@/lib/auth-store';
 import { PurchaseOrderStatus } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function GET(
   request: Request,
@@ -37,18 +36,18 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Procurement_Officer')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const poId = params.id;
     const body = await request.json();
-    const { status, userId } = body;
+    const { status } = body;
 
-    const validStatuses: PurchaseOrderStatus[] = ['On Hold', 'Cancelled'];
-    if (!validStatuses.includes(status)) {
+    const validStatuses: PurchaseOrderStatus[] = ['On_Hold', 'Cancelled'];
+    if (!validStatuses.includes(status.replace(/ /g, '_'))) {
       return NextResponse.json({ error: 'Invalid or unsupported status for manual update.' }, { status: 400 });
-    }
-    
-    const user = users.find(u => u.id === userId);
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
     const poToUpdate = await prisma.purchaseOrder.findUnique({ where: { id: poId }});
@@ -62,25 +61,23 @@ export async function PATCH(
         data: { status: status.replace(/ /g, '_') as any }
     });
     
-    const auditLogEntry = {
-        id: `log-${Date.now()}-${Math.random()}`,
-        timestamp: new Date(),
-        user: user.name,
-        role: user.role,
-        action: 'UPDATE_PO_STATUS',
-        entity: 'PurchaseOrder',
-        entityId: poId,
-        details: `Updated PO status from "${oldStatus}" to "${status}".`,
-    };
-    auditLogs.unshift(auditLogEntry);
+    await prisma.auditLog.create({
+        data: {
+            user: { connect: { id: actor.id } },
+            timestamp: new Date(),
+            action: 'UPDATE_PO_STATUS',
+            entity: 'PurchaseOrder',
+            entityId: poId,
+            details: `Updated PO status from "${oldStatus}" to "${status}".`,
+        }
+    });
 
     return NextResponse.json(updatedPO);
   } catch (error) {
     console.error('Failed to update PO status:', error);
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-

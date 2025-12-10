@@ -1,8 +1,9 @@
 
+'use server';
 
 import { NextResponse } from 'next/server';
-import { auditLogs, quotations, requisitions } from '@/lib/data-store';
-import { users } from '@/lib/auth-store';
+import { prisma } from '@/lib/prisma';
+import { getActorFromToken } from '@/lib/auth';
 
 
 export async function POST(
@@ -11,53 +12,47 @@ export async function POST(
 ) {
   console.log(`POST /api/requisitions/${params.id}/reset-award`);
   try {
-    const requisitionId = params.id;
-    const body = await request.json();
-    console.log('Request body:', body);
-    const { userId } = body;
-    
-    const user = users.find(u => u.id === userId);
-    if (!user) {
-        console.error('User not found for ID:', userId);
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).some(r => ['Admin', 'Procurement_Officer'].includes(r))) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const requisitionId = params.id;
     
-    const requisition = requisitions.find(r => r.id === requisitionId);
+    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
     if (!requisition) {
       console.error('Requisition not found for ID:', requisitionId);
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
     console.log('Found requisition to reset:', requisition);
 
-    let quotesResetCount = 0;
-    quotations.forEach(q => {
-        if (q.requisitionId === requisitionId) {
-            q.status = 'Submitted';
-            quotesResetCount++;
-        }
+    await prisma.$transaction(async (tx) => {
+        await tx.quotation.updateMany({
+            where: { requisitionId: requisitionId },
+            data: { status: 'Submitted', rank: null }
+        });
+
+        await tx.purchaseRequisition.update({
+            where: { id: requisitionId },
+            data: { status: 'Approved' }
+        });
+
+        await tx.auditLog.create({
+            data: {
+                user: { connect: { id: actor.id } },
+                timestamp: new Date(),
+                action: 'RESET_AWARD',
+                entity: 'Requisition',
+                entityId: requisitionId,
+                details: 'Award decision has been reset, returning all quotes to Submitted status.',
+                transactionId: requisitionId
+            }
+        });
     });
-    console.log(`Reset ${quotesResetCount} quotes to 'Submitted' status.`);
 
-    requisition.status = 'Approved';
-    requisition.updatedAt = new Date();
-    console.log(`Requisition ${requisitionId} status reverted to 'Approved'.`);
-
-    const auditDetails = `changed the award decision for requisition ${requisitionId}, reverting all quotes to Submitted.`;
+    console.log(`Reset award for requisition ${requisitionId}`);
+    return NextResponse.json({ message: 'Award reset successfully' });
     
-    const auditLogEntry = {
-        id: `log-${Date.now()}-${Math.random()}`,
-        timestamp: new Date(),
-        user: user.name,
-        role: user.role,
-        action: 'RESET_AWARD',
-        entity: 'Requisition',
-        entityId: requisitionId,
-        details: auditDetails,
-    };
-    auditLogs.unshift(auditLogEntry);
-    console.log('Added audit log:', auditLogEntry);
-
-    return NextResponse.json({ message: 'Award reset successfully', requisition });
   } catch (error) {
     console.error('Failed to reset award:', error);
     if (error instanceof Error) {
