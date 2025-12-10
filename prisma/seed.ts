@@ -303,7 +303,7 @@ async function main() {
     // Now, update the user with the vendorId
     await prisma.user.update({
         where: { id: createdUser.id },
-        data: { vendorId: createdVendor.id }
+        data: { vendor: { connect: { id: createdVendor.id } } }
     });
 
     if (kycDocuments) {
