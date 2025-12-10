@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -38,7 +39,7 @@ const quoteFormSchema = z.object({
     unitPrice: z.coerce.number().min(0.01, "Price is required."),
     leadTimeDays: z.coerce.number().min(0, "Lead time is required."),
     brandDetails: z.string().optional(),
-    imageUrl: z.string().min(1, "An image is required for each item."),
+    imageUrl: z.string().optional(),
   })),
   answers: z.array(z.object({
       questionId: z.string(),
@@ -46,6 +47,7 @@ const quoteFormSchema = z.object({
   })).optional(),
   cpoDocumentUrl: z.string().optional(),
   experienceDocumentUrl: z.string().optional(),
+  summaryDocumentUrl: z.string().optional(),
 }).refine(
     (data, ctx) => {
         // This is a placeholder for the actual requisition data
@@ -232,6 +234,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: quote.answers || requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: quote.cpoDocumentUrl || '',
             experienceDocumentUrl: quote.experienceDocumentUrl || '',
+            summaryDocumentUrl: quote.summaryDocumentUrl || '',
         } : {
             notes: "",
             items: requisition.items.map(item => ({
@@ -246,6 +249,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: '',
             experienceDocumentUrl: '',
+            summaryDocumentUrl: '',
         },
     });
 
@@ -458,6 +462,28 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                              />
                         )}
 
+                        <FormField
+                            control={form.control}
+                            name="summaryDocumentUrl"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Overall Summary Document (Optional)</FormLabel>
+                                <FormControl>
+                                    <Input type="file" accept=".pdf" onChange={async (e) => {
+                                        if (e.target.files?.[0]) {
+                                            const path = await handleFileUpload(e.target.files[0]);
+                                            if (path) field.onChange(path);
+                                        }
+                                    }} />
+                                </FormControl>
+                                <FormDescription>
+                                    Upload a single document summarizing all your proposed items and details for evaluation.
+                                </FormDescription>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
 
                         <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
                              {originalItems.map(originalItem => {
@@ -517,7 +543,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                             name={`items.${overallIndex}.imageUrl`}
                                                             render={({ field }) => (
                                                                 <FormItem>
-                                                                <FormLabel>Item Image</FormLabel>
+                                                                <FormLabel>Item Image (Optional)</FormLabel>
                                                                 <FormControl>
                                                                     <Input type="file" accept="image/*" onChange={async (e) => {
                                                                         if (e.target.files?.[0]) {
@@ -526,9 +552,6 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                                         }
                                                                     }} />
                                                                 </FormControl>
-                                                                <FormDescription>
-                                                                    A clear image of the proposed item is required.
-                                                                </FormDescription>
                                                                 <FormMessage />
                                                                 </FormItem>
                                                             )}
@@ -884,12 +907,25 @@ export default function VendorRequisitionPage() {
                 )}
             </CardHeader>
             <CardContent className="space-y-4">
+                {quote.summaryDocumentUrl && (
+                     <div className="text-sm">
+                        <h3 className="font-semibold">Summary Document</h3>
+                        <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
+                            <a href={quote.summaryDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-primary"/>
+                                <span>{quote.summaryDocumentUrl.split('/').pop()}</span>
+                            </a>
+                        </div>
+                    </div>
+                )}
                 {quote.cpoDocumentUrl && (
                      <div className="text-sm">
                         <h3 className="font-semibold">CPO Document</h3>
                         <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
-                            <FileText className="h-4 w-4 text-primary"/>
-                            <span>{quote.cpoDocumentUrl}</span>
+                            <a href={quote.cpoDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-primary"/>
+                                <span>{quote.cpoDocumentUrl.split('/').pop()}</span>
+                            </a>
                         </div>
                     </div>
                 )}
@@ -897,8 +933,10 @@ export default function VendorRequisitionPage() {
                      <div className="text-sm">
                         <h3 className="font-semibold">Experience Document</h3>
                         <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
-                            <FileText className="h-4 w-4 text-primary"/>
-                            <span>{quote.experienceDocumentUrl}</span>
+                             <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-primary"/>
+                                <span>{quote.experienceDocumentUrl.split('/').pop()}</span>
+                            </a>
                         </div>
                     </div>
                 )}
