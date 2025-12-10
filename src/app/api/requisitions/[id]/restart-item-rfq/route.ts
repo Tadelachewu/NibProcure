@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -65,7 +66,7 @@ export async function POST(
                 totalPrice: totalValue,
                 deadline: new Date(newDeadline),
                 allowedVendorIds: vendorIds,
-                parent: { 
+                parentRequisition: { 
                     connect: {
                         id: originalRequisition.id 
                     }
