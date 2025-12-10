@@ -1,19 +1,17 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
-import { decodeJwt } from '@/lib/auth';
+import { getActorFromToken, getUserByToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
-import { isPast } from 'date-fns';
+import { differenceInMinutes, format } from 'date-fns';
 import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-service';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { promises as fs } from 'fs';
 import path from 'path';
-
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -25,9 +23,9 @@ export async function GET(request: Request) {
 
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.split(' ')[1];
-  let userPayload: (User & { roles: { name: UserRole }[] }) | null = null;
+  let userPayload: User & { roles: { name: UserRole }[] } | null = null;
   if(token) {
-    const decodedUser = decodeJwt<User & { roles: UserRole[] }>(token);
+    const decodedUser = await getActorFromToken(request);
     if(decodedUser) {
         userPayload = decodedUser as any;
     }
@@ -248,6 +246,109 @@ export async function GET(request: Request) {
   }
 }
 
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const actor = await prisma.user.findUnique({
+      where: { id: body.requesterId },
+      include: { roles: true },
+    });
+
+    if (!actor) {
+      return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
+    }
+    const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
+    if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
+      const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
+      if (setting.type === 'specific_roles') {
+        const userRoles = actor.roles.map(r => r.name);
+        const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
+        if (!canCreate) {
+          return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
+        }
+      }
+    }
+    const totalPrice = body.items.reduce((acc: number, item: any) => {
+      const price = item.unitPrice || 0;
+      const quantity = item.quantity || 0;
+      return acc + (price * quantity);
+    }, 0);
+    const department = await prisma.department.findUnique({ where: { name: body.department } });
+    if (!department) {
+      return NextResponse.json({ error: 'Department not found' }, { status: 404 });
+    }
+
+    const transactionResult = await prisma.$transaction(async (tx) => {
+      const newRequisition = await tx.purchaseRequisition.create({
+        data: {
+          requester: { connect: { id: actor.id } },
+          department: { connect: { id: department.id } },
+          title: body.title,
+          urgency: body.urgency,
+          justification: body.justification,
+          status: 'Draft',
+          totalPrice: totalPrice,
+          items: {
+            create: body.items.map((item: any) => ({
+              name: item.name,
+              quantity: Number(item.quantity) || 0,
+              unitPrice: Number(item.unitPrice) || 0,
+              description: item.description || ''
+            }))
+          },
+          customQuestions: {
+            create: body.customQuestions?.map((q: any) => ({
+              questionText: q.questionText,
+              questionType: q.questionType.replace(/-/g, '_'),
+              isRequired: q.isRequired,
+              options: q.options || [],
+            }))
+          },
+          evaluationCriteria: body.evaluationCriteria ? {
+            create: {
+              financialWeight: body.evaluationCriteria.financialWeight,
+              technicalWeight: body.evaluationCriteria.technicalWeight,
+              financialCriteria: {
+                create: body.evaluationCriteria.financialCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
+              },
+              technicalCriteria: {
+                create: body.evaluationCriteria.technicalCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
+              }
+            }
+          } : undefined,
+        },
+      });
+
+      const finalRequisition = await tx.purchaseRequisition.update({
+        where: { id: newRequisition.id },
+        data: { transactionId: newRequisition.id },
+        include: { items: true, customQuestions: true, evaluationCriteria: true }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          transactionId: finalRequisition.id,
+          user: { connect: { id: actor.id } },
+          timestamp: new Date(),
+          action: 'CREATE_REQUISITION',
+          entity: 'Requisition',
+          entityId: finalRequisition.id,
+          details: `Created new requisition: "${finalRequisition.title}".`,
+        }
+      });
+      return finalRequisition;
+    });
+
+    return NextResponse.json(transactionResult, { status: 201 });
+  } catch (error) {
+    console.error('Failed to create requisition:', error);
+    if (error instanceof Error) {
+        return NextResponse.json({ error: 'Failed to process requisition', details: error.message }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+  }
+}
+
 export async function PATCH(
   request: Request,
 ) {
@@ -271,7 +372,7 @@ export async function PATCH(
             items: true, 
             quotations: { include: { items: true, scores: { include: { itemScores: true } } } },
             minutes: {
-              orderBy: { createdAt: 'desc' },
+              orderBy { createdAt: 'desc' },
               take: 1
             }
         }
@@ -568,104 +669,6 @@ export async function PATCH(
   }
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const actor = await prisma.user.findUnique({
-      where: { id: body.requesterId },
-      include: { roles: true },
-    });
-    if (!actor) {
-      return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
-    }
-    const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
-    if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
-      const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
-      if (setting.type === 'specific_roles') {
-        const userRoles = actor.roles.map(r => r.name);
-        const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
-        if (!canCreate) {
-          return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
-        }
-      }
-    }
-    const totalPrice = body.items.reduce((acc: number, item: any) => {
-      const price = item.unitPrice || 0;
-      const quantity = item.quantity || 0;
-      return acc + (price * quantity);
-    }, 0);
-    const department = await prisma.department.findUnique({ where: { name: body.department } });
-    if (!department) {
-      return NextResponse.json({ error: 'Department not found' }, { status: 404 });
-    }
-    const transactionResult = await prisma.$transaction(async (tx) => {
-      const newRequisition = await tx.purchaseRequisition.create({
-        data: {
-          requester: { connect: { id: actor.id } },
-          department: { connect: { id: department.id } },
-          title: body.title,
-          urgency: body.urgency,
-          justification: body.justification,
-          status: 'Draft',
-          totalPrice: totalPrice,
-          items: {
-            create: body.items.map((item: any) => ({
-              name: item.name,
-              quantity: Number(item.quantity) || 0,
-              unitPrice: Number(item.unitPrice) || 0,
-              description: item.description || ''
-            }))
-          },
-          customQuestions: {
-            create: body.customQuestions?.map((q: any) => ({
-              questionText: q.questionText,
-              questionType: q.questionType.replace(/-/g, '_'),
-              isRequired: q.isRequired,
-              options: q.options || [],
-            }))
-          },
-          evaluationCriteria: body.evaluationCriteria ? {
-            create: {
-              financialWeight: body.evaluationCriteria.financialWeight,
-              technicalWeight: body.evaluationCriteria.technicalWeight,
-              financialCriteria: {
-                create: body.evaluationCriteria.financialCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
-              },
-              technicalCriteria: {
-                create: body.evaluationCriteria.technicalCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
-              }
-            }
-          } : undefined,
-        },
-      });
-      const finalRequisition = await tx.purchaseRequisition.update({
-        where: { id: newRequisition.id },
-        data: { transactionId: newRequisition.id },
-        include: { items: true, customQuestions: true, evaluationCriteria: true }
-      });
-      await tx.auditLog.create({
-        data: {
-          transactionId: finalRequisition.id,
-          user: { connect: { id: actor.id } },
-          timestamp: new Date(),
-          action: 'CREATE_REQUISITION',
-          entity: 'Requisition',
-          entityId: finalRequisition.id,
-          details: `Created new requisition: "${finalRequisition.title}".`,
-        }
-      });
-      return finalRequisition;
-    });
-    return NextResponse.json(transactionResult, { status: 201 });
-  } catch (error) {
-    console.error('Failed to create requisition:', error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process requisition', details: error.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
-  }
-}
-
 
 export async function DELETE(
   request: Request,
@@ -732,5 +735,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
