@@ -23,7 +23,8 @@ export async function POST(request: Request) {
             include: { 
               items: true,
               requisition: { include: { items: true, quotations: { include: { items: true } } } },
-              vendor: { include: { user: true } }
+              vendor: { include: { user: true } },
+              invoices: true,
             }
         });
 
@@ -88,18 +89,33 @@ export async function POST(request: Request) {
             }
         });
         
-        // If there are defective items, call the award rejection service
+        // If there are defective items, find the invoice and dispute it.
         if (hasDefectiveItems) {
-            const quoteForVendor = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
-            if(quoteForVendor) {
-                const declinedReqItemIds = defectiveItems.map((item: any) => {
-                    const poItem = po.items.find(p => p.id === item.poItemId);
-                    return poItem?.requisitionItemId;
-                }).filter(Boolean);
+            const firstReason = defectiveItems[0].notes || 'Goods received were damaged or incorrect.';
+            
+            // Find the most recent, non-paid invoice for this PO
+            const invoiceToDispute = po.invoices.find(inv => inv.status !== 'Paid');
 
-                const firstReason = defectiveItems[0].notes || 'Goods received were damaged or incorrect.';
+            if (invoiceToDispute) {
+                await tx.invoice.update({
+                    where: { id: invoiceToDispute.id },
+                    data: {
+                        status: 'Disputed',
+                        disputeReason: firstReason,
+                    }
+                });
 
-                await handleAwardRejection(tx, quoteForVendor, po.requisition, po.vendor.user!, declinedReqItemIds, 'Receiving', firstReason);
+                await tx.auditLog.create({
+                    data: {
+                        transactionId: po.transactionId,
+                        user: { connect: { id: actor.id } },
+                        timestamp: new Date(),
+                        action: 'AUTO_DISPUTE_INVOICE',
+                        entity: 'Invoice',
+                        entityId: invoiceToDispute.id,
+                        details: `Invoice automatically disputed due to defective items recorded in GRN ${newReceipt.id}. Reason: ${firstReason}`,
+                    }
+                });
             }
         }
 
