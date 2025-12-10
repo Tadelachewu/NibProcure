@@ -40,14 +40,25 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         };
     }
     
-    const currentStepIndex = relevantTier.steps.findIndex(step => {
-        // Find the step that corresponds to the requisition's CURRENT status.
-        return `Pending_${step.role.name}` === requisition.status;
-    });
+    // Determine current step index more robustly
+    let currentStepIndex = -1;
+    for(let i=0; i < relevantTier.steps.length; i++) {
+        const step = relevantTier.steps[i];
+        if (requisition.status === `Pending_${step.role.name}` || (actor.roles as any[]).some(r => r.name === step.role.name)) {
+            currentStepIndex = i;
+            // If the user's role matches, we've found our current position in the chain.
+            // We break to ensure we don't accidentally pick up a later step if a user has multiple approval roles.
+            const userRoles = (actor.roles as any[]).map(r => r.name);
+            if (userRoles.includes(step.role.name)) {
+                 break;
+            }
+        }
+    }
+
 
     let nextStepIndex = currentStepIndex + 1;
     
-    // If the requisition isn't in a pending state found in the matrix, it means this is the first approval for this tier.
+    // If the requisition isn't in a pending state found in the matrix (e.g. it's Scoring_Complete or Award_Declined), start from the beginning.
     if (currentStepIndex === -1) {
         nextStepIndex = 0;
     }
@@ -57,16 +68,12 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         const nextStep = relevantTier.steps[nextStepIndex];
         const nextRoleName = nextStep.role.name;
         
-        // Dynamically create the pending status. This is the core fix.
         const nextStatus = `Pending_${nextRoleName}`;
         
-        // Find a user for the next step. Committee roles don't get a specific approver ID.
         let nextApproverId: string | null = null;
         if (!nextRoleName.includes('Committee')) {
             const approverUser = await tx.user.findFirst({ where: { roles: { some: { name: nextRoleName } } }});
             if (!approverUser) {
-                // If a specific approver role is not found (e.g. "President"), we should not throw an error, but rather log a warning.
-                // In a real system, there should be robust error handling or fallback mechanisms.
                 console.warn(`Could not find a user for the role: ${nextRoleName.replace(/_/g, ' ')}. The approval will be unassigned.`);
             } else {
                  nextApproverId = approverUser.id;
@@ -81,7 +88,6 @@ export async function getNextApprovalStep(tx: Prisma.TransactionClient, requisit
         };
     }
 
-    // If we've gone through all the steps, it's the final approval for this tier.
     const actorRoles = (actor.roles as any[]).map(r => r.name).join(', ').replace(/_/g, ' ');
     return {
         nextStatus: 'PostApproved',
@@ -117,7 +123,6 @@ export async function getPreviousApprovalStep(tx: Prisma.TransactionClient, requ
     );
 
     if (!relevantTier || relevantTier.steps.length === 0) {
-        // No defined steps, rejection sends it back to scoring
         return {
             previousStatus: 'Scoring_Complete',
             previousApproverId: null,
@@ -130,7 +135,6 @@ export async function getPreviousApprovalStep(tx: Prisma.TransactionClient, requ
     );
 
     if (currentStepIndex <= 0) {
-        // This is the first step in the chain. Rejection reverts to Scoring_Complete.
         return {
             previousStatus: 'Scoring_Complete',
             previousApproverId: null, // Unassign it
@@ -157,12 +161,6 @@ export async function getPreviousApprovalStep(tx: Prisma.TransactionClient, requ
 }
 
 
-/**
- * Performs a "deep clean" of a requisition, deleting all quotes, scores,
- * and resetting committee assignments to prepare for a fresh RFQ process.
- * @param tx - Prisma transaction client.
- * @param requisitionId - The ID of the requisition to clean.
- */
 async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId: string) {
     const quotationsToDelete = await tx.quotation.findMany({
         where: { requisitionId },
@@ -186,7 +184,6 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     await tx.committeeAssignment.deleteMany({ where: { requisitionId }});
     await tx.standbyAssignment.deleteMany({ where: { requisitionId } });
     
-    // Also clear per-item award details from items
     await tx.requisitionItem.updateMany({
         where: { requisitionId: requisitionId },
         data: { perItemAwardDetails: Prisma.JsonNull }
@@ -210,18 +207,6 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
 }
 
 
-/**
- * Handles the logic when a vendor rejects an award. It updates the quote and requisition status,
- * setting the stage for a manual promotion of a standby vendor.
- * @param tx - Prisma transaction client.
- * @param quote - The quote that was rejected.
- * @param requisition - The associated requisition.
- * @param actor - The user performing the action.
- * @param declinedItemIds - The specific requisition item IDs that were declined (for per-item awards).
- * @param rejectionSource - The origin of the rejection ('Vendor' or 'Receiving').
- * @param rejectionReason - The reason for the decline.
- * @returns A message indicating the result of the operation.
- */
 export async function handleAwardRejection(
     tx: Prisma.TransactionClient, 
     quote: any, 
@@ -261,7 +246,6 @@ export async function handleAwardRejection(
         }
         
         if (itemsUpdated > 0) {
-            // Set the main requisition status to 'Award_Declined'
             await tx.purchaseRequisition.update({
                 where: { id: requisition.id },
                 data: { status: 'Award_Declined' }
@@ -297,7 +281,6 @@ export async function handleAwardRejection(
             } 
         });
 
-        // For single-vendor awards, declining the award MUST change the requisition status.
         await tx.purchaseRequisition.update({
             where: { id: requisition.id },
             data: { status: 'Award_Declined' }
@@ -328,14 +311,6 @@ export async function handleAwardRejection(
 }
 
 
-/**
- * Promotes the next standby vendor(s) and starts their approval workflow.
- * This function handles both single-vendor and per-item award strategies.
- * @param tx - Prisma transaction client.
- * @param requisitionId - The ID of the requisition.
- * @param actor - The user performing the action.
- * @returns A message indicating the result of the operation.
- */
 export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
     const requisition = await tx.purchaseRequisition.findUnique({
         where: { id: requisitionId },
@@ -352,7 +327,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         let promotedCount = 0;
         let auditDetailsMessage = 'Promoted standby vendors: ';
 
-        // Find all items that have a bid in 'Declined' status.
         const itemsNeedingPromotion = requisition.items.filter(item => 
             (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Declined')
         );
@@ -364,15 +338,13 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         for (const item of itemsNeedingPromotion) {
             const currentDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
             
-            // Build a list of ineligible QUOTE ITEM IDs that have already failed.
             const ineligibleQuoteItemIds = new Set(
                 currentDetails.filter(d => d.status === 'Failed_to_Award' || d.status === 'Declined').map(d => d.quoteItemId)
             );
 
-            // Find the next eligible standby vendor.
             const bidToPromote = currentDetails
                 .filter(d => d.status === 'Standby' && !ineligibleQuoteItemIds.has(d.quoteItemId))
-                .sort((a, b) => a.rank - b.rank)[0]; // Get the one with the lowest rank (e.g., 2 then 3)
+                .sort((a, b) => a.rank - b.rank)[0];
             
             if (bidToPromote) {
                 promotedCount++;
@@ -382,7 +354,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                     if (d.quoteItemId === bidToPromote.quoteItemId) {
                         return { ...d, status: 'Pending_Award' as const };
                     }
-                    // Mark the just-declined bid as failed so it's not picked again
                     if (d.status === 'Declined') {
                         return { ...d, status: 'Failed_to_Award' as const };
                     }
@@ -394,7 +365,6 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                     data: { perItemAwardDetails: updatedDetails as any }
                 });
             } else {
-                // No more standby vendors for this item.
                  const updatedDetails = currentDetails.map(d => 
                     d.status === 'Declined' ? { ...d, status: 'Failed_to_Award' as const } : d
                 );
@@ -409,15 +379,12 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             return { message: 'No eligible standby vendors were found for promotion. Please review the awards.' };
         }
         
-        // After all promotions, refetch the state to calculate new total and get next approval step.
         const updatedRequisition = await tx.purchaseRequisition.findUnique({ where: {id: requisitionId}, include: { items: true }});
         if (!updatedRequisition) throw new Error("Could not refetch requisition for value calculation.");
 
         let newTotalValue = 0;
         for (const item of updatedRequisition.items) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
-             // Only include the value of items newly moved to 'Pending_Award'.
-             // Exclude 'Accepted' items that are already paid or being processed.
              const newlyPendingAward = details.find(d => d.status === 'Pending_Award');
              if (newlyPendingAward) {
                  newTotalValue += newlyPendingAward.unitPrice * item.quantity;
