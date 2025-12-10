@@ -209,10 +209,10 @@ function ProcurementOfficerDashboard() {
     const stats = useMemo(() => {
         const readyForRfq = data.requisitions.filter(r => r.status === 'PreApproved').length;
         const acceptingQuotes = data.requisitions.filter(r => r.status === 'Accepting_Quotes').length;
-        const readyToAward = data.requisitions.filter(r => r.status === 'Scoring_Complete').length;
-        const awardDeclined = data.requisitions.filter(r => r.status === 'Award_Declined').length;
         const inCommitteeScoring = data.requisitions.filter(r => r.status === 'Scoring_In_Progress').length;
+        const readyToAward = data.requisitions.filter(r => r.status === 'Scoring_Complete').length;
         const pendingFinalReview = data.requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
+        const awardDeclined = data.requisitions.filter(r => r.status === 'Award_Declined').length;
         
         const paidInvoicesValue = data.invoices
             .filter(i => i.status === 'Paid')
@@ -222,7 +222,7 @@ function ProcurementOfficerDashboard() {
             .filter(i => i.status !== 'Paid')
             .reduce((sum, i) => sum + i.totalAmount, 0);
 
-        return { readyForRfq, acceptingQuotes, readyToAward, awardDeclined, inCommitteeScoring, pendingFinalReview, paidInvoicesValue, unpaidInvoicesValue };
+        return { readyForRfq, acceptingQuotes, inCommitteeScoring, readyToAward, pendingFinalReview, awardDeclined, paidInvoicesValue, unpaidInvoicesValue };
     }, [data]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -231,7 +231,7 @@ function ProcurementOfficerDashboard() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Ready for RFQ" value={stats.readyForRfq.toString()} description="Approved and waiting for RFQ" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Manage Quotations"/>
             <StatCard title="Accepting Quotes" value={stats.acceptingQuotes.toString()} description="RFQs currently active with vendors" icon={<FileBadge className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="View Active RFQs"/>
-            <StatCard title="In Committee Scoring" value={stats.inCommitteeScoring.toString()} description="Quotes being evaluated" icon={<Users className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Monitor Progress"/>
+            <StatCard title="In Committee Scoring" value={stats.inCommitteeScoring.toString()} description="Quotes being evaluated by committee" icon={<Users className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Monitor Progress"/>
             <StatCard title="Ready to Award" value={stats.readyToAward.toString()} description="Scoring is complete" icon={<Trophy className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Finalize Awards"/>
             <StatCard title="Pending Award Review" value={stats.pendingFinalReview.toString()} description="Awards in hierarchical approval" icon={<GanttChartSquare className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/award-reviews')} cta="Track Reviews"/>
             <StatCard title="Award Declined" value={stats.awardDeclined.toString()} description="Vendor declined, action needed" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Promote Standby" variant="destructive"/>
