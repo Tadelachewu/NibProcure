@@ -30,7 +30,6 @@ export function SettingsPage() {
         <TabsTrigger value="roles">Role Management</TabsTrigger>
         <TabsTrigger value="users">User Management</TabsTrigger>
         <TabsTrigger value="departments">Departments</TabsTrigger>
-        <TabsTrigger value="notifications">Notifications</TabsTrigger>
       </TabsList>
       <TabsContent value="general">
         <div className="space-y-6">
@@ -54,19 +53,6 @@ export function SettingsPage() {
       </TabsContent>
        <TabsContent value="departments">
         <DepartmentManagementEditor />
-      </TabsContent>
-      <TabsContent value="notifications">
-         <Card>
-          <CardHeader>
-            <CardTitle>Notification Settings</CardTitle>
-            <CardDescription>
-              Manage how and when you receive notifications. This page is under construction.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p>Future notification settings will be available here.</p>
-          </CardContent>
-        </Card>
       </TabsContent>
     </Tabs>
   );

@@ -19,6 +19,7 @@ import {
   ClipboardCheck,
   Users,
   Trophy,
+  MessageSquareWarning,
 } from 'lucide-react';
 import { ComponentType } from 'react';
 
@@ -43,6 +44,7 @@ export const navItems: NavItem[] = [
   { path: '/receive-goods', label: 'Receive Goods', icon: PackageCheck },
   { path: '/records', label: 'Records', icon: Archive },
   { path: '/audit-log', label: 'Audit Log', icon: History },
+  { path: '/support', label: 'Support', icon: MessageSquareWarning },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -62,55 +64,64 @@ export const rolePermissions: Record<UserRole, string[]> = {
     '/audit-log',
     '/settings',
     '/award-reviews',
+    '/support',
   ],
   Committee: [
     '/dashboard',
     '/quotations',
     '/records',
+    '/support',
   ],
   Requester: [
     '/dashboard',
     '/new-requisition',
     '/requisitions',
-    '/records'
+    '/records',
+    '/support',
   ],
   Approver: [
     '/dashboard',
     '/requisitions',
     '/approvals',
-    '/records'
+    '/records',
+    '/support',
   ],
   Finance: [
     '/dashboard',
     '/invoices',
     '/records',
-    '/purchase-orders'
+    '/purchase-orders',
+    '/support',
   ],
   Receiving: [
     '/dashboard',
     '/receive-goods',
     '/records',
+    '/support',
   ],
   Vendor: [], // Vendor has a separate layout, no access to the main app layout
   Committee_Member: [
     '/dashboard',
     '/quotations',
-    '/records'
+    '/records',
+    '/support',
   ],
   Committee_A_Member: [
       '/dashboard',
       '/award-reviews',
       '/quotations',
       '/records',
+      '/support',
   ],
   Committee_B_Member: [
       '/dashboard',
       '/award-reviews',
       '/quotations',
       '/records',
+      '/support',
   ],
-  Manager_Procurement_Division: ['/dashboard', '/award-reviews', '/records'],
-  Director_Supply_Chain_and_Property_Management: ['/dashboard', '/award-reviews', '/records'],
-  VP_Resources_and_Facilities: ['/dashboard', '/award-reviews', '/records'],
-  President: ['/dashboard', '/award-reviews', '/records'],
+  Manager_Procurement_Division: ['/dashboard', '/award-reviews', '/records', '/support'],
+  Director_Supply_Chain_and_Property_Management: ['/dashboard', '/award-reviews', '/records', '/support'],
+  VP_Resources_and_Facilities: ['/dashboard', '/award-reviews', '/records', '/support'],
+  President: ['/dashboard', '/award-reviews', '/records', '/support'],
 };

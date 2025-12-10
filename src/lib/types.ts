@@ -446,3 +446,19 @@ export interface ApprovalThreshold {
     max: number | null; // null for infinity
     steps: ApprovalStep[];
 }
+
+export type SupportTicketStatus = 'Open' | 'In_Progress' | 'Closed';
+
+export type SupportTicket = {
+  id: string;
+  subject: string;
+  message: string;
+  status: SupportTicketStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  requesterId: string;
+  requester: User;
+  adminId?: string | null;
+  admin?: User | null;
+  response?: string | null;
+}
