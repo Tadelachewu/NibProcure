@@ -53,6 +53,7 @@ import { ApprovalSummaryDialog } from './approval-summary-dialog';
 import { Badge } from './ui/badge';
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/tooltip';
 
 
 const PAGE_SIZE = 10;
@@ -247,27 +248,40 @@ export function AwardReviewsTable() {
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                         <TableCell className="font-medium text-primary">{req.id}</TableCell>
                         <TableCell>
-                            <div className="flex flex-col">
+                            <div className="flex flex-col gap-1">
                                 <span>{req.title}</span>
+                                <div className="flex items-center gap-2">
                                 {declinedReason && (
-                                    <Alert variant="destructive" className="mt-2">
-                                        <AlertTriangle className="h-4 w-4" />
-                                        <AlertTitle>Award Declined</AlertTitle>
-                                        <AlertDescription>Reason: "{declinedReason}"</AlertDescription>
-                                    </Alert>
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Badge variant="destructive" className="cursor-help">
+                                                    <AlertTriangle className="h-3 w-3 mr-1.5" />
+                                                    Award Declined
+                                                </Badge>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p className="max-w-xs">Reason: {declinedReason}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
                                 )}
                                 {req.approverComment && (
-                                    <div className={`text-xs flex items-start gap-1 mt-1 ${isRejectionComment ? 'text-destructive' : 'text-muted-foreground'}`}>
-                                        {isRejectionComment 
-                                            ? <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-                                            : <MessageSquare className="h-3 w-3 mt-0.5 shrink-0" />
-                                        }
-                                        <div className="flex flex-col whitespace-pre-wrap break-words">
-                                            <span className="font-semibold">{isRejectionComment ? 'Rejection Reason:' : 'Approval Comment:'}</span>
-                                            <span className="italic">"{req.approverComment}"</span>
-                                        </div>
-                                    </div>
+                                     <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Badge variant={isRejectionComment ? "destructive" : "outline"} className="cursor-help">
+                                                     {isRejectionComment ? <AlertTriangle className="h-3 w-3 mr-1.5" /> : <MessageSquare className="h-3 w-3 mr-1.5" />}
+                                                    {isRejectionComment ? 'Prev. Rejection' : 'Prev. Comment'}
+                                                </Badge>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p className="max-w-xs">{req.approverComment}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
                                 )}
+                                </div>
                             </div>
                         </TableCell>
                         <TableCell className="font-semibold">{req.totalPrice.toLocaleString()} ETB</TableCell>
