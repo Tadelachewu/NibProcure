@@ -18,13 +18,8 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
     const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
     const canPromote = useMemo(() => {
-        const applicableStatuses = ['Award_Declined', 'Partially_Closed'];
-        if (!applicableStatuses.includes(requisition.status)) {
-            return false;
-        }
-
+        // This button should be available if there's *any* item that was declined but has a standby.
         if (isPerItemStrategy) {
-            // Check if there is at least one item that has a declined winner AND a standby vendor.
             return requisition.items.some(item => {
                 const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                 const hasDeclinedWinner = details.some(d => d.status === 'Declined');
@@ -34,7 +29,8 @@ export function AwardStandbyButton({ requisition, quotations, onPromote, isChang
                 return standbyExists;
             });
         } else {
-            // For single-vendor strategy, just check if any quote is on standby.
+             // For single-vendor, it's simpler: was the main award declined, and is there a standby quote?
+            if (requisition.status !== 'Award_Declined') return false;
             return quotations.some(q => q.status === 'Standby');
         }
     }, [requisition, quotations, isPerItemStrategy]);
