@@ -231,6 +231,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: quote.answers || requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: quote.cpoDocumentUrl || '',
             experienceDocumentUrl: quote.experienceDocumentUrl || '',
+            summaryDocumentUrl: quote.summaryDocumentUrl || '',
         } : {
             notes: "",
             items: requisition.items.map(item => ({
@@ -245,6 +246,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: '',
             experienceDocumentUrl: '',
+            summaryDocumentUrl: '',
         },
     });
 
