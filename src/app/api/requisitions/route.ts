@@ -47,7 +47,7 @@ export async function GET(request: Request) {
         ];
         
         const reviewableStatuses: RequisitionStatus[] = ['Award_Declined', 'Partially_Closed'];
-        if(reviewableStatuses.includes(userPayload.status)) {
+        if(userRoles.some(r => reviewableStatuses.includes(r))) {
             orConditions.push({ status: { in: reviewableStatuses } });
         }
 
@@ -115,7 +115,7 @@ export async function GET(request: Request) {
         const allRoles = await prisma.role.findMany({ select: { name: true } });
         const allPendingStatuses = allRoles.map(role => `Pending_${role.name}`);
 
-        const baseRfqLifecycleStatuses = [
+        const baseRfqLifecycleStatuses: RequisitionStatus[] = [
             'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
             'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
             'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed'
@@ -358,6 +358,13 @@ export async function PATCH(
             auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
         }
 
+    } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Approval') {
+        dataToUpdate.status = 'PreApproved';
+        dataToUpdate.approver = { connect: { id: userId } };
+        dataToUpdate.approverComment = comment;
+        dataToUpdate.currentApproverId = null;
+        auditAction = 'APPROVE_REQUISITION';
+        auditDetails = `Departmental approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;
     }
     else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') {
         
