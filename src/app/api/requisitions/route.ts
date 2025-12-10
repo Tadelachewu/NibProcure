@@ -372,7 +372,7 @@ export async function PATCH(
             items: true, 
             quotations: { include: { items: true, scores: { include: { itemScores: true } } } },
             minutes: {
-              orderBy { createdAt: 'desc' },
+              orderBy: { createdAt: 'desc' },
               take: 1
             }
         }
