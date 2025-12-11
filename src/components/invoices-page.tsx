@@ -715,7 +715,7 @@ export function InvoicesPage() {
                                     </Tooltip>
                                 </TooltipProvider>
 
-                                <DisputeDialog onConfirm={(reason) => handleAction(invoice.id, 'Disputed', reason)} />
+                                <DisputeDialog onConfirm={(reason) => handleAction(invoice.id, 'Disputed', reason)} disabled={isDisputedGRN} />
                             </>
                         )}
                         {invoice.status === 'Approved_for_Payment' && (
@@ -761,12 +761,12 @@ export function InvoicesPage() {
   );
 }
 
-function DisputeDialog({ onConfirm }: { onConfirm: (reason: string) => void }) {
+function DisputeDialog({ onConfirm, disabled }: { onConfirm: (reason: string) => void; disabled?: boolean }) {
     const [reason, setReason] = useState('');
     return (
          <AlertDialog>
             <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
+                <Button variant="destructive" size="sm" disabled={disabled}>
                     <ThumbsDown className="mr-2 h-4 w-4" /> Dispute
                 </Button>
             </AlertDialogTrigger>

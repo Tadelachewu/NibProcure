@@ -31,7 +31,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { Invoice, PurchaseRequisition } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from './ui/table';
 import { Badge } from './ui/badge';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
@@ -333,7 +333,7 @@ function CommitteeDashboard() {
             const assignment = r.committeeAssignments?.find(a => a.userId === user.id);
             const isScoringComplete = assignment?.scoresSubmitted ?? false;
             // A requisition is pending score if the quotation deadline has passed AND the committee member has not submitted their scores.
-            const deadlinePassed = r.deadline ? new Date() > new Date(r.deadline) : false;
+            const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
             return deadlinePassed && !isScoringComplete;
         }).length;
         
