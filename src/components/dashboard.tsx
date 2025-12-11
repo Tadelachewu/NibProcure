@@ -171,7 +171,23 @@ function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: bool
         setLoading(true);
         fetch(apiEndpoint, { headers: { 'Authorization': `Bearer ${token}` } })
             .then(res => res.json())
-            .then(data => setPendingCount(Array.isArray(data) ? data.filter((req: any) => req.isActionable !== false).length : 0))
+            .then((data: any[]) => {
+                if (Array.isArray(data)) {
+                    // Recalculate actionable items on the client
+                    const actionableCount = data.filter(req => {
+                        const userRoles = (user.roles as any[])?.map(r => r.name);
+                        if (req.currentApproverId === user.id) return true;
+                        if (req.status.startsWith('Pending_')) {
+                            const requiredRole = req.status.replace('Pending_', '');
+                            if (userRoles.includes(requiredRole)) return true;
+                        }
+                        return false;
+                    }).length;
+                    setPendingCount(actionableCount);
+                } else {
+                    setPendingCount(0);
+                }
+            })
             .catch(console.error)
             .finally(() => setLoading(false));
     }, [user, token, apiEndpoint]);
@@ -332,7 +348,6 @@ function CommitteeDashboard() {
         const pendingForScoring = requisitions.filter(r => {
             const assignment = r.committeeAssignments?.find(a => a.userId === user.id);
             const isScoringComplete = assignment?.scoresSubmitted ?? false;
-            // A requisition is pending score if the quotation deadline has passed AND the committee member has not submitted their scores.
             const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
             return deadlinePassed && !isScoringComplete;
         }).length;

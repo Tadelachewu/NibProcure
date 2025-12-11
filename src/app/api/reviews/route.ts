@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -16,102 +18,78 @@ export async function GET(request: Request) {
     const userRoles = actor.roles as UserRole[];
     const userId = actor.id;
 
-    // Build the main query conditions
+    // Base conditions for any reviewable item
     const orConditions: any[] = [
       // The user is the direct current approver for a pending item.
       { currentApproverId: userId, status: { startsWith: 'Pending_' } },
       // The status matches a committee role the user has.
       { status: { in: userRoles.map(r => `Pending_${r}`) } },
-      // The user has already signed a minute for this requisition
-      { minutes: { some: { signatures: { some: { signerId: userId } } } } },
-       // The requisition is in a state of decline or partial closure, which might still have items needing action.
+      // The requisition is in a state of decline or partial closure, which might still have items needing action.
       { status: { in: ['Award_Declined', 'Partially_Closed'] } },
     ];
     
-    // If a user is an Admin or Procurement Officer, they should see all pending reviews
+    // If a user is an Admin or Procurement Officer, they should see ALL pending reviews for oversight.
     if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
         const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
         const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
         orConditions.push({ status: { in: allPossiblePendingStatuses } });
-        // Also show items ready for notification and those declined/partially closed
-        orConditions.push({ status: 'PostApproved' });
+        orConditions.push({ status: 'PostApproved' }); // Also show items ready for notification
     }
 
-    const requisitionsForUser = await prisma.purchaseRequisition.findMany({
+    // Fetch all requisitions that match the initial broad criteria
+    const potentiallyReviewableRequisitions = await prisma.purchaseRequisition.findMany({
         where: {
             OR: orConditions
         },
-        include: { 
-          items: true, 
-          reviews: true,
-          minutes: {
-            include: {
-              signatures: true,
-            }
-          }
-        }
-    });
-
-    const requisitionIds = requisitionsForUser.map(r => r.id);
-
-    // Fetch full data for the filtered requisitions
-    const detailedRequisitions = await prisma.purchaseRequisition.findMany({
-        where: { id: { in: requisitionIds } },
         include: {
             requester: { select: { name: true } },
             items: {
-            select: {
-                id: true,
-                name: true,
-                quantity: true,
-                perItemAwardDetails: true,
-            }
+                select: { id: true, name: true, quantity: true, perItemAwardDetails: true }
             },
             quotations: {
                 include: {
                     items: true,
-                    scores: {
-                        include: {
-                            scorer: true,
-                            itemScores: {
-                                include: {
-                                    scores: true,
-                                },
-                            },
-                        },
-                    },
+                    scores: { include: { scorer: true, itemScores: { include: { scores: true } } } }
                 }
             },
             minutes: {
-            include: {
-                author: true,
-                attendees: true,
-                signatures: true,
-            }
+                include: { author: true, attendees: true, signatures: true }
             }
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     });
 
+    // Client-side filtering to determine what's TRULY actionable for the current user
+    const finalRequisitions = potentiallyReviewableRequisitions.filter(req => {
+        const userRoles = (actor.roles as any[]);
+        // Direct assignment check
+        if (req.currentApproverId === userId) {
+            return true;
+        }
+        // Committee check
+        if (req.status.startsWith('Pending_')) {
+            const requiredRole = req.status.replace('Pending_', '');
+            if (userRoles.includes(requiredRole)) {
+                return true;
+            }
+        }
+        // If an admin/PO, they see everything that matches the broad query
+        if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
+            return true;
+        }
 
-    const transactionIds = detailedRequisitions.map(r => r.transactionId).filter(Boolean) as string[];
+        return false;
+    });
+
+    const transactionIds = finalRequisitions.map(r => r.transactionId).filter(Boolean) as string[];
     const auditLogs = await prisma.auditLog.findMany({
       where: {
         transactionId: { in: transactionIds }
       },
       include: {
-        user: {
-          select: {
-            name: true,
-            roles: true,
-          }
-        }
+        user: { select: { name: true, roles: true } }
       },
-      orderBy: {
-        timestamp: 'desc'
-      }
+      orderBy: { timestamp: 'desc' }
     });
 
     const logsByTransaction = auditLogs.reduce((acc, log) => {
@@ -130,34 +108,10 @@ export async function GET(request: Request) {
       return acc;
     }, {} as Record<string, any[]>);
 
-    const requisitionsWithDetails = detailedRequisitions.map(req => {
-      let isActionable = false;
-      const currentDecisionBody = req.status.replace(/_/g, ' ');
-
-      // Check if user has already signed a minute for this specific decision body/status
-      const hasAlreadyActed = req.minutes.some(minute => 
-        minute.decisionBody === currentDecisionBody &&
-        minute.signatures.some(sig => sig.signerId === userId)
-      );
-
-      if (!hasAlreadyActed) {
-          if (req.currentApproverId === userId) {
-            isActionable = true;
-          } else if (req.status.startsWith('Pending_')) {
-            const requiredRole = req.status.replace('Pending_', '');
-            if (userRoles.includes(requiredRole as UserRole)) {
-              // This is a committee-level approval, so it's actionable if the user is part of that committee.
-              isActionable = true;
-            }
-          }
-      }
-      
-      return {
-        ...req,
-        isActionable,
-        auditTrail: logsByTransaction[req.transactionId!] || []
-      };
-    });
+    const requisitionsWithDetails = finalRequisitions.map(req => ({
+      ...req,
+      auditTrail: logsByTransaction[req.transactionId!] || []
+    }));
 
     return NextResponse.json(requisitionsWithDetails);
   } catch (error) {
