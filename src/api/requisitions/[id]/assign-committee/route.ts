@@ -1,9 +1,10 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 
 
 export async function POST(
@@ -28,13 +29,52 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
-    if (!user || (user.role !== 'Procurement_Officer' && user.role !== 'Committee' && user.role !== 'Admin')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const user = await prisma.user.findUnique({where: {id: userId}, include: { roles: true }});
+    if (!user) {
+        return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
+    
+    // Correct Authorization Logic
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    const userRoles = (user.roles as any[]).map(r => r.name);
+    
+    if (userRoles.includes('Admin') || userRoles.includes('Committee')) {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userId?: string };
+        if (setting.type === 'specific') {
+            isAuthorized = setting.userId === userId;
+        } else { // 'all' case
+            isAuthorized = userRoles.includes('Procurement_Officer');
+        }
+    }
+
+    if (!isAuthorized) {
+        return NextResponse.json({ error: 'Unauthorized to assign committees based on system settings.' }, { status: 403 });
+    }
+    
+    const newAllMemberIds = new Set([...(financialCommitteeMemberIds || []), ...(technicalCommitteeMemberIds || [])]);
     
     // Start a transaction to ensure atomicity
     const transactionResult = await prisma.$transaction(async (tx) => {
+        
+        // Add "Committee_Member" role to new members
+        const committeeRole = await tx.role.findUnique({ where: { name: 'Committee_Member' } });
+        if (!committeeRole) {
+            throw new Error("Committee_Member role not found. Please seed the database.");
+        }
+
+        for (const memberId of newAllMemberIds) {
+            await tx.user.update({
+                where: { id: memberId },
+                data: {
+                    roles: {
+                        connect: { id: committeeRole.id }
+                    }
+                }
+            });
+        }
 
         const updatedRequisition = await tx.purchaseRequisition.update({
         where: { id },
@@ -52,7 +92,6 @@ export async function POST(
         }
         });
 
-        const newAllMemberIds = new Set([...(financialCommitteeMemberIds || []), ...(technicalCommitteeMemberIds || [])]);
         const existingAssignments = await tx.committeeAssignment.findMany({
             where: { requisitionId: id },
         });
@@ -82,8 +121,6 @@ export async function POST(
             });
         }
         
-        // Unchanged members' status is preserved automatically by not touching them.
-
         await tx.auditLog.create({
             data: {
                 transactionId: requisition.transactionId,

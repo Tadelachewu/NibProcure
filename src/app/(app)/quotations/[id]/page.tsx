@@ -613,7 +613,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         }
     }
 
-    const committeeMembers = useMemo(() => allUsers.filter(u => (u.roles as any[])?.some(r => r.name === 'Committee_Member')), [allUsers]);
+    const potentialMembers = useMemo(() => allUsers.filter(u => !(u.roles as any[])?.some(r => r.name === 'Vendor')), [allUsers]);
     const assignedFinancialMembers = useMemo(() => allUsers.filter(u => requisition.financialCommitteeMemberIds?.includes(u.id)), [allUsers, requisition]);
     const assignedTechnicalMembers = useMemo(() => allUsers.filter(u => requisition.technicalCommitteeMemberIds?.includes(u.id)), [allUsers, requisition]);
     const allAssignedMemberIds = useMemo(() => [...(requisition.financialCommitteeMemberIds || []), ...(requisition.technicalCommitteeMemberIds || [])], [requisition]);
@@ -647,11 +647,11 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
 
         const availableMembers = useMemo(() => {
             const lowercasedSearch = search.toLowerCase();
-            return committeeMembers.filter(member =>
+            return potentialMembers.filter(member =>
                 !otherCommitteeIds.has(member.id) &&
                 (member.name.toLowerCase().includes(lowercasedSearch) || member.email.toLowerCase().includes(lowercasedSearch))
             );
-        }, [committeeMembers, search, otherCommitteeIds]);
+        }, [potentialMembers, search, otherCommitteeIds]);
 
         return (
             <div className="space-y-2">
@@ -3168,6 +3168,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
