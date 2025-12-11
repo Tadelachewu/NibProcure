@@ -662,8 +662,8 @@ export function InvoicesPage() {
                 paginatedInvoices.map((invoice, index) => {
                   const matchResult = matchResults[invoice.id];
                   const po = allPOs.find(p => p.id === invoice.purchaseOrderId);
-                  const isDisputedGRN = po?.receipts?.some(r => r.status === 'Disputed');
-                  const isActionDisabled = !matchResult || matchResult.status !== 'Matched' || isDisputedGRN;
+                  const isGrnDisputed = po?.receipts?.some(r => r.status === 'Disputed') ?? false;
+                  const isActionDisabled = !matchResult || matchResult.status !== 'Matched';
                   const isActionLoading = activeAction === invoice.id;
                   
                   return (
@@ -702,12 +702,12 @@ export function InvoicesPage() {
                                                 </Button>
                                             </span>
                                         </TooltipTrigger>
-                                        {isDisputedGRN && (
+                                        {isGrnDisputed && (
                                             <TooltipContent>
                                                 <p>Cannot approve: Associated goods receipt is disputed.</p>
                                             </TooltipContent>
                                         )}
-                                        {matchResult?.status !== 'Matched' && !isDisputedGRN && (
+                                        {matchResult?.status !== 'Matched' && !isGrnDisputed && (
                                             <TooltipContent>
                                                 <p>Cannot approve: 3-way match has not passed.</p>
                                             </TooltipContent>
@@ -715,7 +715,7 @@ export function InvoicesPage() {
                                     </Tooltip>
                                 </TooltipProvider>
 
-                                <DisputeDialog onConfirm={(reason) => handleAction(invoice.id, 'Disputed', reason)} />
+                                <DisputeDialog onConfirm={(reason) => handleAction(invoice.id, 'Disputed', reason)} disabled={isGrnDisputed} />
                             </>
                         )}
                         {invoice.status === 'Approved_for_Payment' && (
@@ -761,12 +761,12 @@ export function InvoicesPage() {
   );
 }
 
-function DisputeDialog({ onConfirm }: { onConfirm: (reason: string) => void }) {
+function DisputeDialog({ onConfirm, disabled }: { onConfirm: (reason: string) => void, disabled?: boolean }) {
     const [reason, setReason] = useState('');
     return (
          <AlertDialog>
             <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm">
+                <Button variant="destructive" size="sm" disabled={disabled}>
                     <ThumbsDown className="mr-2 h-4 w-4" /> Dispute
                 </Button>
             </AlertDialogTrigger>

@@ -31,7 +31,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { Invoice, PurchaseRequisition } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from './ui/table';
 import { Badge } from './ui/badge';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
@@ -313,9 +313,11 @@ function CommitteeDashboard() {
     useEffect(() => {
         if (!user || !token) return;
         setLoading(true);
+        // Fetch all requisitions in the quoting lifecycle
         fetch(`/api/requisitions?forQuoting=true`, { headers: { 'Authorization': `Bearer ${token}` } })
             .then(res => res.json())
-            .then(data => {
+            .then((data: PurchaseRequisition[]) => {
+                // Filter client-side to find only requisitions assigned to this committee member
                 const assignedReqs = data.filter((req: PurchaseRequisition) => 
                     req.financialCommitteeMemberIds?.includes(user.id) ||
                     req.technicalCommitteeMemberIds?.includes(user.id)
@@ -327,10 +329,11 @@ function CommitteeDashboard() {
     }, [user, token]);
 
     const stats = useMemo(() => {
-        const pendingScore = requisitions.filter(r => 
-            (r.status === 'Scoring_In_Progress' || (r.status === 'Accepting_Quotes' && r.deadline && new Date() > new Date(r.deadline))) &&
-            !(r.committeeAssignments?.find(a => a.userId === user?.id)?.scoresSubmitted)
-        ).length;
+        const pendingScore = requisitions.filter(r => {
+            const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
+            const hasScored = r.committeeAssignments?.some(a => a.userId === user?.id && a.scoresSubmitted);
+            return deadlinePassed && !hasScored;
+        }).length;
         
         const scored = requisitions.filter(r => 
             r.committeeAssignments?.some(a => a.userId === user?.id && a.scoresSubmitted)
@@ -348,7 +351,7 @@ function CommitteeDashboard() {
                 value={stats.pendingScore.toString()} 
                 description="Requisitions awaiting your evaluation." 
                 icon={<Edit className="h-4 w-4 text-muted-foreground" />} 
-                onClick={() => router.push('/quotations')} 
+                onClick={() => router.push('/quotations?tab=pending')}
                 cta="Go to Scoring"
                 variant={stats.pendingScore > 0 ? 'default' : 'default'}
             />
@@ -357,6 +360,8 @@ function CommitteeDashboard() {
                 value={stats.scored.toString()} 
                 description="Requisitions you have already evaluated." 
                 icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />} 
+                onClick={() => router.push('/quotations?tab=scored')}
+                cta="View Scored"
             />
         </div>
     );
