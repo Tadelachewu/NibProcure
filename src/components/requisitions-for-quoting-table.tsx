@@ -76,7 +76,7 @@ export function RequisitionsForQuotingTable() {
     const scored = requisitions.filter(r => 
         r.committeeAssignments?.some(a => a.userId === user.id && a.scoresSubmitted)
     );
-    return { pendingRequisitions, scoredRequisitions };
+    return { pendingRequisitions: pending, scoredRequisitions: scored };
   }, [requisitions, user]);
 
   const requisitionsToDisplay = activeTab === 'scored' ? scoredRequisitions : pendingRequisitions;
