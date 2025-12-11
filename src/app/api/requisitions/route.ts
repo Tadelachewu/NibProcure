@@ -1,8 +1,7 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
-import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
+import type { PurchaseRequisition, User, UserRole, Vendor, RequisitionStatus } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
 import { decodeJwt, getActorFromToken } from '@/lib/auth';
 import { headers } from 'next/headers';
@@ -125,19 +124,19 @@ export async function GET(request: Request) {
 
         const userRoles = userPayload?.roles.map(r => (r as any).name) || [];
 
+        const whereConditions: any = {
+            status: { in: rfqLifecycleStatuses },
+        };
+
         if (userRoles.includes('Committee_Member')) {
-            whereClause = {
-                status: { in: rfqLifecycleStatuses },
-                OR: [
-                    { financialCommitteeMembers: { some: { id: userPayload?.id } } },
-                    { technicalCommitteeMembers: { some: { id: userPayload?.id } } },
-                ],
-            };
-        } else {
-            whereClause = {
-                status: { in: rfqLifecycleStatuses }
-            };
+            whereConditions.OR = [
+                { status: 'PreApproved' }, // Always show PreApproved to committee members
+                { financialCommitteeMembers: { some: { id: userPayload?.id } } },
+                { technicalCommitteeMembers: { some: { id: userPayload?.id } } },
+            ];
         }
+
+        whereClause = whereConditions;
     } else {
       if (statusParam) {
         const statuses = statusParam.split(',').map(s => s.trim().replace(/ /g, '_'));
