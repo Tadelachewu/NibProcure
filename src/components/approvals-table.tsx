@@ -85,7 +85,7 @@ export function ApprovalsTable() {
     if (!user) return;
     try {
       setLoading(true);
-      const apiUrl = `/api/requisitions?status=Pending_Approval,PreApproved,Rejected&approverId=${user.id}`;
+      const apiUrl = `/api/requisitions?status=Pending_Approval&approverId=${user.id}`;
       
       const response = await fetch(apiUrl);
       if (!response.ok) {
@@ -126,16 +126,6 @@ export function ApprovalsTable() {
   
   const submitAction = async () => {
     if (!selectedRequisition || !actionType || !user) return;
-    
-    let rfqSenderId: string | null = null;
-    if (actionType === 'approve') {
-      if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userId) {
-        rfqSenderId = rfqSenderSetting.userId;
-      } else {
-        const firstProcOfficer = allUsers.find(u => (u.roles as any[]).some(r => r.name === 'Procurement_Officer'));
-        rfqSenderId = firstProcOfficer?.id || null;
-      }
-    }
 
     try {
       const response = await fetch(`/api/requisitions`, {
@@ -146,7 +136,6 @@ export function ApprovalsTable() {
             status: actionType === 'approve' ? 'PreApproved' : 'Rejected', 
             userId: user.id, 
             comment,
-            rfqSenderId,
         }),
       });
       if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);

@@ -1,3 +1,4 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -370,7 +371,7 @@ export async function PATCH(
         dataToUpdate.status = 'Rejected';
         dataToUpdate.approver = { connect: { id: userId } };
         dataToUpdate.approverComment = comment;
-        dataToUpdate.currentApprover = { disconnect: true };
+        dataToUpdate.currentApproverId = null;
         auditAction = 'REJECT_REQUISITION';
         auditDetails = `Requisition ${id} was rejected with comment: "${comment}".`;
     }
