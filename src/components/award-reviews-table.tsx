@@ -214,7 +214,7 @@ export function AwardReviewsTable() {
                 <TableHead>Title</TableHead>
                 <TableHead>Award Value</TableHead>
                 <TableHead>Required Review</TableHead>
-                <TableHead>Created At</TableHead>
+                <TableHead>Justification</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -222,7 +222,20 @@ export function AwardReviewsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
-                  const isActionable = req.isActionable ?? false;
+                  
+                  const userRoles = (user?.roles as any[])?.map(r => r.name) || [];
+                  let isActionable = false;
+                  if(user && req.status) {
+                      if(req.currentApproverId === user.id) {
+                          isActionable = true;
+                      } else if (req.status.startsWith('Pending_')) {
+                          const requiredRole = req.status.replace('Pending_', '');
+                          if (userRoles.includes(requiredRole)) {
+                              isActionable = true;
+                          }
+                      }
+                  }
+
 
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');
@@ -241,6 +254,8 @@ export function AwardReviewsTable() {
                   }
 
                   const declinedReason = getDeclinedReason();
+                  
+                  const finalizationMinute = req.minutes?.find(m => m.decisionBody === 'Award Finalization');
 
                   return (
                     <TableRow key={req.id}>
@@ -285,7 +300,20 @@ export function AwardReviewsTable() {
                         </TableCell>
                         <TableCell className="font-semibold">{req.totalPrice.toLocaleString()} ETB</TableCell>
                         <TableCell><Badge variant="secondary">{req.status.replace(/_/g, ' ')}</Badge></TableCell>
-                        <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
+                        <TableCell>
+                            {finalizationMinute ? (
+                                <div className="flex flex-col">
+                                    <span className="text-sm">{finalizationMinute.justification}</span>
+                                    {finalizationMinute.documentUrl && (
+                                        <Button asChild variant="link" size="sm" className="h-auto p-0 justify-start">
+                                            <a href={finalizationMinute.documentUrl} target="_blank" rel="noopener noreferrer">View Minute</a>
+                                        </Button>
+                                    )}
+                                </div>
+                            ) : (
+                                <span className="text-muted-foreground italic text-xs">No justification recorded.</span>
+                            )}
+                        </TableCell>
                         <TableCell>
                         <div className="flex gap-2">
                               <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
