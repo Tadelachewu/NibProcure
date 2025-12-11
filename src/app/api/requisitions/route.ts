@@ -259,7 +259,6 @@ export async function PATCH(
   try {
     const body = await request.json();
     const { id, status, userId, comment } = body;
-    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${userId}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
 
@@ -285,13 +284,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
     
-    console.log(`[PATCH /api/requisitions] Current req status: ${requisition.status}. Requested new status: ${newStatus}`);
-
     let dataToUpdate: any = {};
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
     let updatedRequisition;
     
+    // This is the logic path for updating a DRAFT or REJECTED requisition
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && body.title) {
         const totalPrice = body.items.reduce((acc: number, item: any) => {
             const price = item.unitPrice || 0;
@@ -307,7 +305,7 @@ export async function PATCH(
             totalPrice: totalPrice,
             status: status ? status.replace(/ /g, '_') : requisition.status,
             approver: { disconnect: true },
-            approverComment: null, // *** FIX: Clear the rejection comment on resubmission ***
+            approverComment: null,
             items: {
                 deleteMany: {},
                 create: body.items.map((item: any) => ({
@@ -358,14 +356,17 @@ export async function PATCH(
             auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
         }
 
-    } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Approval') {
+    } 
+    // This is the logic path for initial DEPARTMENTAL approval
+    else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Approval') {
         dataToUpdate.status = 'PreApproved';
         dataToUpdate.approver = { connect: { id: userId } };
         dataToUpdate.approverComment = comment;
-        dataToUpdate.currentApprover = { disconnect: true };
+        dataToUpdate.currentApproverId = null;
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Departmental approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;
     }
+    // This is the logic path for initial DEPARTMENTAL rejection
     else if (newStatus === 'Rejected' && requisition.status === 'Pending_Approval') {
         dataToUpdate.status = 'Rejected';
         dataToUpdate.approver = { connect: { id: userId } };
@@ -374,116 +375,34 @@ export async function PATCH(
         auditAction = 'REJECT_REQUISITION';
         auditDetails = `Requisition ${id} was rejected with comment: "${comment}".`;
     }
+    // This is the logic path for AWARD reviews (committee, managerial, etc.)
     else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') {
-        
-        if (newStatus !== 'Approved' && newStatus !== 'Rejected') {
-             return NextResponse.json({ error: 'Invalid action. Only approve or reject is allowed at this stage.' }, { status: 400 });
-        }
         
         const isAuthorizedToAct = (requisition.currentApproverId === userId) || 
                                   (user.roles as any[]).some(r => requisition.status === `Pending_${r.name}`) ||
                                   (user.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer');
 
         if (!isAuthorizedToAct) {
-            console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
             return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
         }
         
-        console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
-        updatedRequisition = await prisma.$transaction(async (tx) => {
+        if (newStatus === 'Rejected') {
+            const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(prisma, requisition, user, comment);
+            dataToUpdate.status = previousStatus;
+            dataToUpdate.currentApproverId = previousApproverId;
+            dataToUpdate.approverComment = comment; 
+            auditDetails = serviceAuditDetails;
+            auditAction = 'REJECT_AWARD_STEP';
+        } else { // Approved
+            const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(prisma, requisition, user);
+            dataToUpdate.status = nextStatus;
+            dataToUpdate.currentApproverId = nextApproverId;
+            dataToUpdate.approverComment = comment;
+            auditDetails = serviceAuditDetails;
+            auditAction = 'APPROVE_AWARD_STEP';
+        }
 
-            if (newStatus === 'Rejected') {
-                const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
-                dataToUpdate.status = previousStatus;
-                dataToUpdate.currentApproverId = previousApproverId;
-                dataToUpdate.approverComment = comment; 
-                auditDetails = serviceAuditDetails;
-                auditAction = 'REJECT_AWARD_STEP';
-            } else { // Approved
-                const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
-                dataToUpdate.status = nextStatus;
-                dataToUpdate.currentApproverId = nextApproverId;
-                dataToUpdate.approverComment = comment;
-                auditDetails = serviceAuditDetails;
-                auditAction = 'APPROVE_AWARD_STEP';
-            }
-
-            const req = await tx.purchaseRequisition.update({
-                where: { id },
-                data: {
-                    status: dataToUpdate.status,
-                    currentApprover: dataToUpdate.currentApproverId ? { connect: { id: dataToUpdate.currentApproverId } } : { disconnect: true },
-                    approverComment: dataToUpdate.approverComment,
-                },
-            });
-            
-            const latestMinute = requisition.minutes[0];
-            if (latestMinute && latestMinute.documentUrl) {
-              const signatureRecord = await tx.signature.create({
-                data: {
-                  minute: { connect: { id: latestMinute.id } },
-                  signer: { connect: { id: userId } },
-                  signerName: user.name,
-                  signerRole: (user.roles as any[]).map(r => r.name).join(', '),
-                  decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
-                  comment: comment,
-                }
-              });
-              auditDetails += ` Signature recorded as ${signatureRecord.id}.`;
-              
-              const filePath = path.join(process.cwd(), 'public', latestMinute.documentUrl);
-              try {
-                const pdfBytes = await fs.readFile(filePath);
-                const pdfDoc = await PDFDocument.load(pdfBytes);
-                const newPage = pdfDoc.addPage();
-                
-                const { width, height } = newPage.getSize();
-                let y = height - 50;
-
-                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-                const drawText = (text: string, size: number, options: { y: number, color?: any, font?: any }) => {
-                    newPage.drawText(text, { x: 50, y: options.y, size, font: options.font || font, color: options.color || rgb(0,0,0) });
-                    return options.y - (size * 1.5);
-                }
-
-                y = drawText(`Digital Signature Record`, 18, { y });
-                y -= 20;
-
-                y = drawText(`Decision: ${signatureRecord.decision}`, 14, { y, color: signatureRecord.decision === 'APPROVED' ? rgb(0.1, 0.5, 0.1) : rgb(0.7, 0, 0) });
-                y = drawText(`Signer: ${signatureRecord.signerName} (${signatureRecord.signerRole})`, 12, { y });
-                y = drawText(`Date: ${new Date(signatureRecord.signedAt).toLocaleString()}`, 12, { y });
-                y -= 10;
-                y = drawText(`Justification:`, 12, { y });
-                y = drawText(signatureRecord.comment || 'No comment provided.', 11, { y, font: await pdfDoc.embedFont(StandardFonts.HelveticaOblique) });
-
-                const modifiedPdfBytes = await pdfDoc.save();
-                await fs.writeFile(filePath, modifiedPdfBytes);
-                auditDetails += ` Signature appended to document.`;
-              } catch(e) {
-                  console.error("Failed to append signature to PDF:", e);
-                  auditDetails += ` (Failed to append signature to PDF).`;
-              }
-            }
-
-            await tx.auditLog.create({
-                data: {
-                    transactionId: req.transactionId,
-                    user: { connect: { id: user.id } },
-                    timestamp: new Date(),
-                    action: auditAction,
-                    entity: 'Requisition',
-                    entityId: id,
-                    details: auditDetails,
-                }
-            });
-
-            return req;
-        });
-        console.log(`[PATCH /api/requisitions] Award action transaction complete for Req ID: ${id}`);
-        return NextResponse.json(updatedRequisition);
-    }
-
-    else {
+    } else {
         return NextResponse.json({ error: 'Invalid operation for current status.' }, { status: 400 });
     }
     
