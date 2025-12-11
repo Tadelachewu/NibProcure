@@ -327,13 +327,16 @@ function CommitteeDashboard() {
     }, [user, token]);
 
     const stats = useMemo(() => {
-        const pendingScore = requisitions.filter(r => 
-            (r.status === 'Scoring_In_Progress' || (r.status === 'Accepting_Quotes' && r.deadline && new Date() > new Date(r.deadline))) &&
-            !(r.committeeAssignments?.find(a => a.userId === user?.id)?.scoresSubmitted)
-        ).length;
+        if (!user) return { pendingScore: 0, scored: 0 };
+        
+        const pendingScore = requisitions.filter(r => {
+            const assignment = r.committeeAssignments?.find(a => a.userId === user.id);
+            const deadlinePassed = r.deadline ? new Date() > new Date(r.deadline) : false;
+            return deadlinePassed && (!assignment || !assignment.scoresSubmitted);
+        }).length;
         
         const scored = requisitions.filter(r => 
-            r.committeeAssignments?.some(a => a.userId === user?.id && a.scoresSubmitted)
+            r.committeeAssignments?.some(a => a.userId === user.id && a.scoresSubmitted)
         ).length;
         
         return { pendingScore, scored };
@@ -356,7 +359,9 @@ function CommitteeDashboard() {
                 title="Scored by You" 
                 value={stats.scored.toString()} 
                 description="Requisitions you have already evaluated." 
-                icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />} 
+                icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />}
+                onClick={() => router.push('/quotations?view=scored')}
+                cta="View Scored"
             />
         </div>
     );

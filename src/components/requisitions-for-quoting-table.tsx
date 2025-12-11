@@ -21,9 +21,10 @@ import { Button } from './ui/button';
 import { PurchaseRequisition, PerItemAwardDetail } from '@/lib/types';
 import { format, isPast } from 'date-fns';
 import { Badge } from './ui/badge';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FileX2, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 
 const PAGE_SIZE = 10;
 
@@ -33,7 +34,11 @@ export function RequisitionsForQuotingTable() {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, role, token, committeeQuorum } = useAuth();
+  
+  const initialView = searchParams.get('view') || 'pending';
+  const [activeTab, setActiveTab] = useState(initialView);
 
 
   useEffect(() => {
@@ -61,11 +66,26 @@ export function RequisitionsForQuotingTable() {
     }
   }, [user, token]);
   
-  const totalPages = Math.ceil(requisitions.length / PAGE_SIZE);
+  const { pendingRequisitions, scoredRequisitions } = useMemo(() => {
+    if (!user) return { pendingRequisitions: [], scoredRequisitions: [] };
+    const pending = requisitions.filter(r => {
+        const assignment = r.committeeAssignments?.find(a => a.userId === user.id);
+        const deadlinePassed = r.deadline ? new Date() > new Date(r.deadline) : false;
+        return deadlinePassed && (!assignment || !assignment.scoresSubmitted);
+    });
+    const scored = requisitions.filter(r => 
+        r.committeeAssignments?.some(a => a.userId === user.id && a.scoresSubmitted)
+    );
+    return { pendingRequisitions, scoredRequisitions };
+  }, [requisitions, user]);
+
+  const requisitionsToDisplay = activeTab === 'scored' ? scoredRequisitions : pendingRequisitions;
+  
+  const totalPages = Math.ceil(requisitionsToDisplay.length / PAGE_SIZE);
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return requisitions.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [requisitions, currentPage]);
+    return requisitionsToDisplay.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [requisitionsToDisplay, currentPage]);
 
 
   const handleRowClick = (reqId: string) => {
@@ -172,6 +192,14 @@ export function RequisitionsForQuotingTable() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {role === 'Committee_Member' && (
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-4">
+                <TabsList>
+                    <TabsTrigger value="pending">Pending Your Score</TabsTrigger>
+                    <TabsTrigger value="scored">Scored By You</TabsTrigger>
+                </TabsList>
+            </Tabs>
+        )}
         <div className="border rounded-md">
           <Table>
             <TableHeader>
@@ -211,7 +239,7 @@ export function RequisitionsForQuotingTable() {
                         <p className="font-semibold">No Requisitions Found</p>
                         <p className="text-muted-foreground">
                             {role === 'Committee_Member'
-                                ? 'There are no requisitions currently assigned to you for scoring.'
+                                ? `There are no requisitions currently in the '${activeTab}' list.`
                                 : 'There are no requisitions in the RFQ lifecycle stage.'
                             }
                         </p>
@@ -225,7 +253,7 @@ export function RequisitionsForQuotingTable() {
         </div>
          <div className="flex items-center justify-between mt-4">
           <div className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages || 1} ({requisitions.length} total requisitions)
+            Page {currentPage} of {totalPages || 1} ({requisitionsToDisplay.length} total requisitions)
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
