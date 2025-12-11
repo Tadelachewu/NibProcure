@@ -42,20 +42,30 @@ function AdminView({ tickets, onTicketUpdated }: { tickets: SupportTicket[], onT
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
     const { user: admin, token } = useAuth();
+    const responseStorageKey = selectedTicket ? `support-response-${selectedTicket.id}` : null;
     
     const form = useForm<z.infer<typeof responseFormSchema>>({
         resolver: zodResolver(responseFormSchema),
         defaultValues: { response: '', status: 'In_Progress' },
     });
+
+    const responseValue = form.watch('response');
     
     useEffect(() => {
         if(selectedTicket) {
+            const savedResponse = localStorage.getItem(`support-response-${selectedTicket.id}`);
             form.reset({
-                response: selectedTicket.response || '',
+                response: savedResponse || selectedTicket.response || '',
                 status: selectedTicket.status.replace(/ /g, '_') as 'In_Progress' | 'Closed',
             });
         }
     }, [selectedTicket, form]);
+
+    useEffect(() => {
+        if (responseStorageKey && responseValue) {
+            localStorage.setItem(responseStorageKey, responseValue);
+        }
+    }, [responseValue, responseStorageKey]);
 
     const handleRespond = async (values: z.infer<typeof responseFormSchema>) => {
         if (!selectedTicket || !admin || !token) return;
@@ -72,6 +82,9 @@ function AdminView({ tickets, onTicketUpdated }: { tickets: SupportTicket[], onT
             });
             if (!res.ok) throw new Error("Failed to submit response.");
             toast({ title: "Response Sent", description: "The user has been notified."});
+            if (responseStorageKey) {
+                localStorage.removeItem(responseStorageKey);
+            }
             onTicketUpdated();
             setSelectedTicket(null);
         } catch (e) {
@@ -161,11 +174,33 @@ function UserView({ tickets, onTicketSubmitted }: { tickets: SupportTicket[], on
   const { user, token } = useAuth();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const storageKey = 'new-support-ticket-form';
 
   const form = useForm<z.infer<typeof ticketFormSchema>>({
     resolver: zodResolver(ticketFormSchema),
     defaultValues: { subject: '', message: '' },
   });
+
+  useEffect(() => {
+    const savedData = localStorage.getItem(storageKey);
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        form.reset(parsed);
+        toast({ title: 'Draft Restored', description: 'Your unsaved ticket has been restored.' });
+      } catch(e) {
+        console.error("Failed to parse saved ticket data", e);
+      }
+    }
+  }, [form, toast]);
+
+  useEffect(() => {
+    const subscription = form.watch((value) => {
+      localStorage.setItem(storageKey, JSON.stringify(value));
+    });
+    return () => subscription.unsubscribe();
+  }, [form, storageKey]);
+
 
   const onSubmit = async (values: z.infer<typeof ticketFormSchema>) => {
     if (!user || !token) return;
@@ -179,6 +214,7 @@ function UserView({ tickets, onTicketSubmitted }: { tickets: SupportTicket[], on
       if (!response.ok) throw new Error("Failed to submit ticket.");
       toast({ title: "Ticket Submitted", description: "Our admin team will get back to you shortly." });
       form.reset();
+      localStorage.removeItem(storageKey);
       onTicketSubmitted();
     } catch (e) {
       toast({ variant: 'destructive', title: 'Error', description: "Could not submit your ticket." });
