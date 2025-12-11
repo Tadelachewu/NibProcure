@@ -223,29 +223,27 @@ export function AwardReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   
-                  // New, more robust client-side isActionable logic
-                  const isActionable = useMemo(() => {
-                    if (!user) return false;
-                    
-                    const userRoles = (user.roles as any[])?.map(r => r.name);
-                    
-                    // Direct assignment always wins
-                    if (req.currentApproverId === user.id) return true;
-                    
-                    // Check for committee-based approval
-                    if (req.status.startsWith('Pending_')) {
-                      const requiredRole = req.status.replace('Pending_', '');
-                      if (userRoles?.includes(requiredRole)) return true;
-                    }
-                    
-                    // Specific case for Procurement Manager on declined awards
-                    if (req.status === 'Award_Declined' && userRoles?.includes('Procurement_Manager')) {
-                        // This logic could be more specific if needed, but for now, this allows them to act.
-                        return true;
-                    }
-
-                    return false;
-                  }, [user, req.status, req.currentApproverId]);
+                  let isActionable = false;
+                  if (user) {
+                      const userRoles = (user.roles as any[])?.map(r => r.name);
+                      
+                      // Direct assignment always wins
+                      if (req.currentApproverId === user.id) {
+                          isActionable = true;
+                      } 
+                      // Check for committee-based approval
+                      else if (req.status.startsWith('Pending_')) {
+                          const requiredRole = req.status.replace('Pending_', '');
+                          if (userRoles?.includes(requiredRole)) {
+                              isActionable = true;
+                          }
+                      }
+                      
+                      // Specific case for Procurement Manager on declined awards
+                      if (req.status === 'Award_Declined' && userRoles?.includes('Manager_Procurement_Division')) {
+                          isActionable = true;
+                      }
+                  }
 
 
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
