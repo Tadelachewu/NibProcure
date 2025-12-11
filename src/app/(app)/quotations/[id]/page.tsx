@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -2753,7 +2754,8 @@ export default function QuotationDetailsPage() {
   const showAwardingCenter = (requisition.status === 'Scoring_Complete') && isAuthorized;
   const hasDeclinedItems = (requisition.items || []).some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
   const hasFailedItems = (requisition.items || []).some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Failed_to_Award'));
-
+  const awardIsDeclined = requisition.status === 'Award_Declined';
+  const singleVendorDeclinedQuote = (requisition.rfqSettings as any)?.awardStrategy !== 'item' && quotations.find(q => q.status === 'Declined');
 
   return (
     <div className="space-y-6">
@@ -2966,20 +2968,20 @@ export default function QuotationDetailsPage() {
           )
         )}
         
-        {(showAwardingCenter || hasDeclinedItems || hasFailedItems) && isAuthorized && (
+        {(showAwardingCenter || awardIsDeclined) && isAuthorized && (
             <Card className="mt-6">
             <CardHeader>
                 <CardTitle>Awarding Center</CardTitle>
                 <CardDescription>
                 {showAwardingCenter && 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
-                {(hasDeclinedItems || hasFailedItems) && 'An award was declined or failed. You may now promote a standby vendor or restart the RFQ for the failed items.'}
+                {awardIsDeclined && 'An award was declined. You may now promote a standby vendor or restart the RFQ for any failed items.'}
                 </CardDescription>
-                {(requisition.quotations?.some(q => q.rejectionReason) && (requisition.rfqSettings as any)?.awardStrategy === 'all') && (
+                {singleVendorDeclinedQuote?.rejectionReason && (
                     <Alert variant="destructive" className="mt-2">
                         <AlertTriangle className="h-4 w-4" />
                         <AlertTitle>Vendor Rejection Reason</AlertTitle>
                         <AlertDescription>
-                            "{requisition.quotations.find(q => q.rejectionReason)?.rejectionReason}"
+                            "{singleVendorDeclinedQuote.rejectionReason}"
                         </AlertDescription>
                     </Alert>
                 )}
@@ -3176,6 +3178,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
