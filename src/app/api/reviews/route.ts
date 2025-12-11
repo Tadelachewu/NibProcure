@@ -1,6 +1,4 @@
 
-'use server';
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -37,7 +35,7 @@ export async function GET(request: Request) {
     }
 
     // Fetch all requisitions that match the initial broad criteria
-    const potentiallyReviewableRequisitions = await prisma.purchaseRequisition.findMany({
+    const requisitionsForUser = await prisma.purchaseRequisition.findMany({
         where: {
             OR: orConditions
         },
@@ -59,29 +57,7 @@ export async function GET(request: Request) {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Client-side filtering to determine what's TRULY actionable for the current user
-    const finalRequisitions = potentiallyReviewableRequisitions.filter(req => {
-        const userRoles = (actor.roles as any[]);
-        // Direct assignment check
-        if (req.currentApproverId === userId) {
-            return true;
-        }
-        // Committee check
-        if (req.status.startsWith('Pending_')) {
-            const requiredRole = req.status.replace('Pending_', '');
-            if (userRoles.includes(requiredRole)) {
-                return true;
-            }
-        }
-        // If an admin/PO, they see everything that matches the broad query
-        if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
-            return true;
-        }
-
-        return false;
-    });
-
-    const transactionIds = finalRequisitions.map(r => r.transactionId).filter(Boolean) as string[];
+    const transactionIds = requisitionsForUser.map(r => r.transactionId).filter(Boolean) as string[];
     const auditLogs = await prisma.auditLog.findMany({
       where: {
         transactionId: { in: transactionIds }
@@ -108,7 +84,7 @@ export async function GET(request: Request) {
       return acc;
     }, {} as Record<string, any[]>);
 
-    const requisitionsWithDetails = finalRequisitions.map(req => ({
+    const requisitionsWithDetails = requisitionsForUser.map(req => ({
       ...req,
       auditTrail: logsByTransaction[req.transactionId!] || []
     }));
