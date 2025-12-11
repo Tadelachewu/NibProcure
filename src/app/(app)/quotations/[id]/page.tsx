@@ -518,7 +518,7 @@ const committeeFormSchema = z.object({
 type CommitteeFormValues = z.infer<typeof committeeFormSchema>;
 
 const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, onOpenChange, isAuthorized }: { requisition: PurchaseRequisition; onCommitteeUpdated: () => void; open: boolean; onOpenChange: (open: boolean) => void; isAuthorized: boolean; }) => {
-    const { user, allUsers } = useAuth();
+    const { user, allUsers, fetchAllUsers } = useAuth();
     const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>(
@@ -602,6 +602,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             toast({ title: 'Committee Updated!', description: 'The evaluation committee has been updated.' });
             onOpenChange(false);
             onCommitteeUpdated();
+            await fetchAllUsers(); // Re-fetch users to get updated roles
         } catch (error) {
              toast({
                 variant: 'destructive',
@@ -2145,10 +2146,12 @@ const CommitteeActions = ({
     user,
     requisition,
     quotations,
+    onFinalScoresSubmitted,
 }: {
     user: User,
     requisition: PurchaseRequisition,
     quotations: Quotation[],
+    onFinalScoresSubmitted: () => void,
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
@@ -2176,6 +2179,7 @@ const CommitteeActions = ({
                 throw new Error(errorData.error || 'Failed to submit scores');
             }
             toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
+            onFinalScoresSubmitted();
         } catch (error) {
              toast({
                 variant: 'destructive',
@@ -2186,6 +2190,10 @@ const CommitteeActions = ({
             setIsSubmitting(false);
         }
     };
+
+    if (!(user.roles as any[])?.some(r => r.name === 'Committee_Member')) {
+        return null;
+    }
 
     return (
         <Card>
@@ -2284,7 +2292,7 @@ const NotifyVendorDialog = ({
                 </div>
                 <DialogFooter>
                     <Button variant="ghost" onClick={onClose}>Cancel</Button>
-                    <Button onClick={() => onConfirm(finalDeadline)}>Confirm &amp; Notify</Button>
+                    <Button onClick={() => onConfirm(finalDeadline)}>Confirm & Notify</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -2371,11 +2379,11 @@ export default function QuotationDetailsPage() {
 
 
   const isAssignedCommitteeMember = useMemo(() => {
-      if (!user || !role || role !== 'Committee_Member' || !requisition) {
+      if (!user || !(user.roles as any[])?.some(r => r.name === 'Committee_Member') || !requisition) {
           return false;
       }
       return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
-  }, [user, role, requisition]);
+  }, [user, requisition]);
   
   const isReviewer = useMemo(() => {
     if (!user || !role || !requisition) return false;
@@ -2405,13 +2413,13 @@ export default function QuotationDetailsPage() {
   }, [requisition, isAccepted, isDeadlinePassed]);
   
   const { pendingQuotes, scoredQuotes } = useMemo(() => {
-    if (!user || role !== 'Committee_Member' ) return { pendingQuotes: quotations, scoredQuotes: [] };
+    if (!user || !(user.roles as any[])?.some(r => r.name === 'Committee_Member') ) return { pendingQuotes: quotations, scoredQuotes: [] };
     const pending = quotations.filter(q => !q.scores?.some(s => s.scorerId === user.id));
     const scored = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id));
     return { pendingQuotes: pending, scoredQuotes: scored };
-  }, [quotations, user, role]);
+  }, [quotations, user]);
   
-  const quotesForDisplay = (user && role === 'Committee_Member' && committeeTab === 'pending') ? pendingQuotes : (user && role === 'Committee_Member' && committeeTab === 'scored') ? scoredQuotes : quotations;
+  const quotesForDisplay = (user && (user.roles as any[])?.some(r => r.name === 'Committee_Member') && committeeTab === 'pending') ? pendingQuotes : (user && (user.roles as any[])?.some(r => r.name === 'Committee_Member') && committeeTab === 'scored') ? scoredQuotes : quotations;
   const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
   
   const itemStatuses = useMemo(() => {
@@ -2889,7 +2897,7 @@ export default function QuotationDetailsPage() {
                             </div>
                         ) : (
                              <Tabs value={committeeTab} onValueChange={(value) => setCommitteeTab(value as any)} defaultValue="pending">
-                                {user && role === 'Committee_Member' && <TabsList className="mb-4">
+                                {user && (user.roles as any[])?.some(r => r.name === 'Committee_Member') && <TabsList className="mb-4">
                                     <TabsTrigger value="pending">Pending Your Score ({pendingQuotes.length})</TabsTrigger>
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
@@ -2945,6 +2953,7 @@ export default function QuotationDetailsPage() {
                 user={user}
                 requisition={requisition}
                 quotations={quotations}
+                onFinalScoresSubmitted={fetchRequisitionAndQuotes}
              />
         )}
 
@@ -3168,6 +3177,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
