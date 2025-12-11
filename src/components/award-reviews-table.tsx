@@ -58,7 +58,7 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/t
 const PAGE_SIZE = 10;
 
 export function AwardReviewsTable() {
-  const [requisitions, setRequisitions] = useState<(PurchaseRequisition & { isActionable?: boolean })[]>([]);
+  const [requisitions, setRequisitions] = useState<(PurchaseRequisition)[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, token } = useAuth();
@@ -102,7 +102,7 @@ export function AwardReviewsTable() {
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for award review');
       
-      const data: (PurchaseRequisition & { isActionable?: boolean })[] = await response.json();
+      const data: (PurchaseRequisition)[] = await response.json();
       setRequisitions(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
@@ -222,7 +222,31 @@ export function AwardReviewsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
-                  const isActionable = req.isActionable ?? false;
+                  
+                  // New, more robust client-side isActionable logic
+                  const isActionable = useMemo(() => {
+                    if (!user) return false;
+                    
+                    const userRoles = (user.roles as any[])?.map(r => r.name);
+                    
+                    // Direct assignment always wins
+                    if (req.currentApproverId === user.id) return true;
+                    
+                    // Check for committee-based approval
+                    if (req.status.startsWith('Pending_')) {
+                      const requiredRole = req.status.replace('Pending_', '');
+                      if (userRoles?.includes(requiredRole)) return true;
+                    }
+                    
+                    // Specific case for Procurement Manager on declined awards
+                    if (req.status === 'Award_Declined' && userRoles?.includes('Procurement_Manager')) {
+                        // This logic could be more specific if needed, but for now, this allows them to act.
+                        return true;
+                    }
+
+                    return false;
+                  }, [user, req.status, req.currentApproverId]);
+
 
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');
@@ -401,4 +425,3 @@ export function AwardReviewsTable() {
     </>
   );
 }
-
