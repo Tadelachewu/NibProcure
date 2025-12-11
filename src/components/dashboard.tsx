@@ -24,6 +24,7 @@ import {
   Trophy,
   Users,
   Wallet,
+  Edit,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { Invoice, PurchaseRequisition } from '@/lib/types';
@@ -302,6 +303,63 @@ function ReceivingDashboard() {
     )
 }
 
+function CommitteeDashboard() {
+    const { user, token } = useAuth();
+    const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
+    const [loading, setLoading] = useState(true);
+    const router = useRouter();
+
+    useEffect(() => {
+        if (!user || !token) return;
+        setLoading(true);
+        fetch(`/api/requisitions?forQuoting=true`, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(res => res.json())
+            .then(data => {
+                const assignedReqs = data.filter((req: PurchaseRequisition) => 
+                    req.financialCommitteeMemberIds?.includes(user.id) ||
+                    req.technicalCommitteeMemberIds?.includes(user.id)
+                );
+                setRequisitions(assignedReqs);
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [user, token]);
+
+    const stats = useMemo(() => {
+        const pendingScore = requisitions.filter(r => 
+            (r.status === 'Scoring_In_Progress' || (r.status === 'Accepting_Quotes' && r.deadline && new Date() > new Date(r.deadline))) &&
+            !(r.committeeAssignments?.find(a => a.userId === user?.id)?.scoresSubmitted)
+        ).length;
+        
+        const scored = requisitions.filter(r => 
+            r.committeeAssignments?.some(a => a.userId === user?.id && a.scoresSubmitted)
+        ).length;
+        
+        return { pendingScore, scored };
+    }, [requisitions, user]);
+
+    if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+
+    return (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <StatCard 
+                title="Pending Your Score" 
+                value={stats.pendingScore.toString()} 
+                description="Requisitions awaiting your evaluation." 
+                icon={<Edit className="h-4 w-4 text-muted-foreground" />} 
+                onClick={() => router.push('/quotations')} 
+                cta="Go to Scoring"
+                variant={stats.pendingScore > 0 ? 'default' : 'default'}
+            />
+            <StatCard 
+                title="Scored by You" 
+                value={stats.scored.toString()} 
+                description="Requisitions you have already evaluated." 
+                icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />} 
+            />
+        </div>
+    );
+}
 
 export function Dashboard() {
   const { role, user } = useAuth();
@@ -310,6 +368,7 @@ export function Dashboard() {
     switch (role) {
       case 'Requester': return <RequesterDashboard />;
       case 'Approver': return <ApproverDashboard />;
+      case 'Committee_Member': return <CommitteeDashboard />;
       case 'Committee_A_Member':
       case 'Committee_B_Member':
       case 'Manager_Procurement_Division':
