@@ -2752,10 +2752,7 @@ export default function QuotationDetailsPage() {
   const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
   
   const showAwardingCenter = (requisition.status === 'Scoring_Complete') && isAuthorized;
-  const hasDeclinedItems = (requisition.items || []).some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Declined'));
-  const hasFailedItems = (requisition.items || []).some(item => (item.perItemAwardDetails as any[])?.some(d => d.status === 'Failed_to_Award'));
   const awardIsDeclined = requisition.status === 'Award_Declined';
-  const singleVendorDeclinedQuote = (requisition.rfqSettings as any)?.awardStrategy !== 'item' && quotations.find(q => q.status === 'Declined');
 
   return (
     <div className="space-y-6">
@@ -2976,15 +2973,6 @@ export default function QuotationDetailsPage() {
                 {showAwardingCenter && 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
                 {awardIsDeclined && 'An award was declined. You may now promote a standby vendor or restart the RFQ for any failed items.'}
                 </CardDescription>
-                {singleVendorDeclinedQuote?.rejectionReason && (
-                    <Alert variant="destructive" className="mt-2">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Vendor Rejection Reason</AlertTitle>
-                        <AlertDescription>
-                            "{singleVendorDeclinedQuote.rejectionReason}"
-                        </AlertDescription>
-                    </Alert>
-                )}
             </CardHeader>
             <CardFooter className="gap-4">
                 <AwardStandbyButton
@@ -3008,20 +2996,22 @@ export default function QuotationDetailsPage() {
                     />
                     </Dialog>
 
-                    <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
-                    <DialogTrigger asChild>
-                        <Button variant="secondary" disabled={isFinalizing}>
-                        Award by Best Offer (Per Item)
-                        </Button>
-                    </DialogTrigger>
-                    <BestItemAwardDialog
-                        requisition={requisition}
-                        quotations={quotations}
-                        onFinalize={handleFinalizeScores}
-                        isOpen={isBestItemAwardCenterOpen}
-                        onClose={() => setBestItemAwardCenterOpen(false)}
-                    />
-                    </Dialog>
+                    {requisition.items.length > 1 && (
+                        <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="secondary" disabled={isFinalizing}>
+                            Award by Best Offer (Per Item)
+                            </Button>
+                        </DialogTrigger>
+                        <BestItemAwardDialog
+                            requisition={requisition}
+                            quotations={quotations}
+                            onFinalize={handleFinalizeScores}
+                            isOpen={isBestItemAwardCenterOpen}
+                            onClose={() => setBestItemAwardCenterOpen(false)}
+                        />
+                        </Dialog>
+                    )}
                 </>
                 )}
 
@@ -3178,6 +3168,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
