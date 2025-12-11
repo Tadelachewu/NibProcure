@@ -223,19 +223,7 @@ export function AwardReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   
-                  const userRoles = (user?.roles as any[])?.map(r => r.name) || [];
-                  let isActionable = false;
-                  if(user && req.status) {
-                      if(req.currentApproverId === user.id) {
-                          isActionable = true;
-                      } else if (req.status.startsWith('Pending_')) {
-                          const requiredRole = req.status.replace('Pending_', '');
-                          if (userRoles.includes(requiredRole)) {
-                              isActionable = true;
-                          }
-                      }
-                  }
-
+                  let isActionable = req.isActionable ?? false;
 
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');

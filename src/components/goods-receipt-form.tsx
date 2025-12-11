@@ -115,14 +115,17 @@ export function GoodsReceiptForm() {
       try {
         const parsedData = JSON.parse(savedData);
         if (parsedData.purchaseOrderId) {
-            handlePOChange(parsedData.purchaseOrderId, parsedData.items);
+            // We need to wait for POs to be fetched before we can properly restore
+            if (purchaseOrders.length > 0) {
+              handlePOChange(parsedData.purchaseOrderId, parsedData.items);
+              toast({ title: 'Draft Restored', description: 'Your previous goods receipt entry has been restored.' });
+            }
         }
-        toast({ title: 'Draft Restored', description: 'Your previous goods receipt entry has been restored.' });
       } catch (e) {
         console.error("Failed to parse saved GRN data", e);
       }
     }
-  }, []);
+  }, [purchaseOrders]); // Depend on purchaseOrders to ensure they are loaded
 
   useEffect(() => {
     const subscription = form.watch((value) => {
