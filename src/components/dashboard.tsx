@@ -329,17 +329,19 @@ function CommitteeDashboard() {
     const stats = useMemo(() => {
         if (!user) return { pendingScore: 0, scored: 0 };
         
-        const pendingScore = requisitions.filter(r => {
+        const pendingForScoring = requisitions.filter(r => {
             const assignment = r.committeeAssignments?.find(a => a.userId === user.id);
+            const isScoringComplete = assignment?.scoresSubmitted ?? false;
+            // A requisition is pending score if the quotation deadline has passed AND the committee member has not submitted their scores.
             const deadlinePassed = r.deadline ? new Date() > new Date(r.deadline) : false;
-            return deadlinePassed && (!assignment || !assignment.scoresSubmitted);
+            return deadlinePassed && !isScoringComplete;
         }).length;
         
-        const scored = requisitions.filter(r => 
+        const alreadyScored = requisitions.filter(r => 
             r.committeeAssignments?.some(a => a.userId === user.id && a.scoresSubmitted)
         ).length;
         
-        return { pendingScore, scored };
+        return { pendingScore: pendingForScoring, scored: alreadyScored };
     }, [requisitions, user]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
