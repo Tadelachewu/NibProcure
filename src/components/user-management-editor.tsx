@@ -52,6 +52,7 @@ import { Badge } from './ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from './ui/command';
 import { cn } from '@/lib/utils';
+import { ScrollArea } from './ui/scroll-area';
 
 const userFormSchema = z.object({
   name: z.string().min(2, "Name is required."),
@@ -338,22 +339,24 @@ export function UserManagementEditor() {
                                 <Command>
                                 <CommandInput placeholder="Search roles..." />
                                 <CommandEmpty>No roles found.</CommandEmpty>
-                                <CommandGroup>
-                                {roles.map(role => (
-                                    <CommandItem
-                                        key={role}
-                                        onSelect={() => {
-                                            const newRoles = field.value.includes(role)
-                                            ? field.value.filter(r => r !== role)
-                                            : [...field.value, role];
-                                            field.onChange(newRoles);
-                                        }}
-                                    >
-                                    <Check className={cn("mr-2 h-4 w-4", field.value.includes(role) ? "opacity-100" : "opacity-0")}/>
-                                    {role.replace(/_/g, ' ')}
-                                    </CommandItem>
-                                ))}
-                                </CommandGroup>
+                                <ScrollArea className="h-48">
+                                  <CommandGroup>
+                                  {roles.map(role => (
+                                      <CommandItem
+                                          key={role}
+                                          onSelect={() => {
+                                              const newRoles = field.value.includes(role)
+                                              ? field.value.filter(r => r !== role)
+                                              : [...field.value, role];
+                                              field.onChange(newRoles);
+                                          }}
+                                      >
+                                      <Check className={cn("mr-2 h-4 w-4", field.value.includes(role) ? "opacity-100" : "opacity-0")}/>
+                                      {role.replace(/_/g, ' ')}
+                                      </CommandItem>
+                                  ))}
+                                  </CommandGroup>
+                                </ScrollArea>
                                 </Command>
                             </PopoverContent>
                         </Popover>
