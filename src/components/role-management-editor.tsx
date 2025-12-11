@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Card,
   CardContent,
@@ -54,6 +54,8 @@ export function RoleManagementEditor() {
   const { toast } = useToast();
   const { user, fetchAllSettings } = useAuth();
   
+  const storageKey = useMemo(() => `role-form-${roleToEdit?.id || 'new'}`, [roleToEdit]);
+
   const fetchRoles = async () => {
     setIsLoading(true);
     try {
@@ -71,6 +73,28 @@ export function RoleManagementEditor() {
   useEffect(() => {
     fetchRoles();
   }, []);
+
+  useEffect(() => {
+    if (isDialogOpen) {
+      const savedData = localStorage.getItem(storageKey);
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData);
+          setRoleName(parsed.roleName || (roleToEdit?.name.replace(/_/g, ' ') || ''));
+          setRoleDescription(parsed.roleDescription || (roleToEdit?.description || ''));
+        } catch (e) {
+          console.error("Failed to parse role form data", e);
+        }
+      }
+    }
+  }, [isDialogOpen, storageKey, roleToEdit]);
+
+  useEffect(() => {
+    if (isDialogOpen) {
+      localStorage.setItem(storageKey, JSON.stringify({ roleName, roleDescription }));
+    }
+  }, [roleName, roleDescription, isDialogOpen, storageKey]);
+
 
   const handleFormSubmit = async () => {
     if (!roleName.trim()) {
@@ -106,6 +130,7 @@ export function RoleManagementEditor() {
             description: `The role "${roleName}" has been successfully ${isEditing ? 'updated' : 'added'}.`,
         });
         
+        localStorage.removeItem(storageKey);
         setDialogOpen(false);
         await fetchRoles(); // Re-fetch the list of roles
         await fetchAllSettings(); // Re-fetch settings to update permissions context
@@ -185,7 +210,7 @@ export function RoleManagementEditor() {
                 Define, edit, and delete user roles in the application.
                 </CardDescription>
             </div>
-             <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) setRoleToEdit(null); setDialogOpen(open);}}>
+             <Dialog open={isDialogOpen} onOpenChange={(open) => { if (!open) { setRoleToEdit(null); localStorage.removeItem(storageKey); } setDialogOpen(open);}}>
                 <DialogTrigger asChild>
                     <Button onClick={() => openDialog()}><PlusCircle className="mr-2"/> Add New Role</Button>
                 </DialogTrigger>

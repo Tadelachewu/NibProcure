@@ -90,6 +90,32 @@ export function UserManagementEditor() {
     },
   });
   
+  const storageKey = useMemo(() => `user-form-${userToEdit?.id || 'new'}`, [userToEdit]);
+
+  useEffect(() => {
+    if (isDialogOpen) {
+      const savedData = localStorage.getItem(storageKey);
+      if (savedData) {
+        try {
+          form.reset(JSON.parse(savedData));
+          toast({ title: 'Draft Restored', description: 'Your unsaved user data has been restored.' });
+        } catch (e) {
+          console.error("Failed to parse user form data", e);
+        }
+      }
+    }
+  }, [isDialogOpen, storageKey, form, toast]);
+
+  useEffect(() => {
+    if (isDialogOpen) {
+      const subscription = form.watch((value) => {
+        localStorage.setItem(storageKey, JSON.stringify(value));
+      });
+      return () => subscription.unsubscribe();
+    }
+  }, [isDialogOpen, form, storageKey]);
+
+
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -139,6 +165,7 @@ export function UserManagementEditor() {
         title: `User ${isEditing ? 'Updated' : 'Created'}`,
         description: `The user has been successfully ${isEditing ? 'updated' : 'created'}.`,
       });
+      localStorage.removeItem(storageKey);
       setDialogOpen(false);
       setUserToEdit(null);
       form.reset({ name: '', email: '', roles: [], departmentId: '', password: '' });
@@ -306,7 +333,7 @@ export function UserManagementEditor() {
             </div>
         )}
       </CardContent>
-       <Dialog open={isDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) { setUserToEdit(null); form.reset(); } setDialogOpen(isOpen); }}>
+       <Dialog open={isDialogOpen} onOpenChange={(isOpen) => { if (!isOpen) { setUserToEdit(null); form.reset(); localStorage.removeItem(storageKey); } setDialogOpen(isOpen); }}>
         <DialogContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-4">

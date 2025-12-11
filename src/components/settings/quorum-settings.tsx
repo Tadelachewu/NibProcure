@@ -17,13 +17,30 @@ export function QuorumSettings() {
     
     const [rfqQuorum, setRfqQuorum] = useState<number>(3);
     const [committeeQuorum, setCommitteeQuorum] = useState<number>(3);
+    const storageKey = 'quorum-settings-form';
+
 
     useEffect(() => {
-        const rfqSetting = settings.find(s => s.key === 'rfqQuorum');
-        const committeeSetting = settings.find(s => s.key === 'committeeQuorum');
-        if (rfqSetting) setRfqQuorum(Number(rfqSetting.value));
-        if (committeeSetting) setCommitteeQuorum(Number(committeeSetting.value));
-    }, [settings]);
+        const savedData = localStorage.getItem(storageKey);
+        if(savedData) {
+            try {
+                const parsed = JSON.parse(savedData);
+                setRfqQuorum(parsed.rfqQuorum);
+                setCommitteeQuorum(parsed.committeeQuorum);
+                toast({ title: 'Draft Restored', description: 'Your unsaved quorum settings have been restored.'});
+            } catch(e) { console.error(e) }
+        } else {
+            const rfqSetting = settings.find(s => s.key === 'rfqQuorum');
+            const committeeSetting = settings.find(s => s.key === 'committeeQuorum');
+            if (rfqSetting) setRfqQuorum(Number(rfqSetting.value));
+            if (committeeSetting) setCommitteeQuorum(Number(committeeSetting.value));
+        }
+    }, [settings, toast]);
+    
+    useEffect(() => {
+        localStorage.setItem(storageKey, JSON.stringify({ rfqQuorum, committeeQuorum }));
+    }, [rfqQuorum, committeeQuorum]);
+
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -32,6 +49,7 @@ export function QuorumSettings() {
                 updateSetting('rfqQuorum', rfqQuorum),
                 updateSetting('committeeQuorum', committeeQuorum),
             ]);
+            localStorage.removeItem(storageKey);
             toast({
                 title: 'Settings Saved',
                 description: 'Quorum configurations have been updated.',
@@ -94,4 +112,3 @@ export function QuorumSettings() {
         </Card>
     )
 }
-

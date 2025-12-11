@@ -42,11 +42,27 @@ export function CommitteeSettings() {
     const [isAddCommitteeOpen, setAddCommitteeOpen] = useState(false);
     const [newCommitteeName, setNewCommitteeName] = useState('');
     const { user: actor } = useAuth();
-
+    const storageKey = 'committee-settings-form';
 
     useEffect(() => {
-        setLocalConfig(committeeConfig);
-        // Initialize search and filter states for all committees
+        const savedData = localStorage.getItem(storageKey);
+        if (savedData) {
+            try {
+                const parsed = JSON.parse(savedData);
+                if(Object.keys(parsed).length > 0) {
+                    setLocalConfig(parsed);
+                    toast({ title: 'Draft Restored', description: 'Your unsaved changes to committee settings have been restored.'});
+                } else {
+                    setLocalConfig(committeeConfig);
+                }
+            } catch (e) {
+                console.error("Failed to parse committee settings data", e);
+                setLocalConfig(committeeConfig);
+            }
+        } else {
+            setLocalConfig(committeeConfig);
+        }
+        
         const initialSearchs: Record<string, string> = {};
         const initialFilters: Record<string, string> = {};
         Object.keys(committeeConfig).forEach(key => {
@@ -55,7 +71,14 @@ export function CommitteeSettings() {
         });
         setSearchTerms(initialSearchs);
         setDepartmentFilters(initialFilters);
-    }, [committeeConfig]);
+    }, [committeeConfig, toast]);
+
+    useEffect(() => {
+        if(Object.keys(localConfig).length > 0) {
+            localStorage.setItem(storageKey, JSON.stringify(localConfig));
+        }
+    }, [localConfig]);
+
 
     useEffect(() => {
         const fetchDepts = async () => {
@@ -111,6 +134,7 @@ export function CommitteeSettings() {
 
         try {
             await updateCommitteeConfig(localConfig);
+            localStorage.removeItem(storageKey);
             toast({
                 title: 'Settings Saved',
                 description: 'Committee configurations have been updated.',

@@ -19,10 +19,32 @@ export function ApprovalMatrixEditor() {
     const [localThresholds, setLocalThresholds] = useState<ApprovalThreshold[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const { toast } = useToast();
+    const storageKey = 'approval-matrix-form';
 
     useEffect(() => {
-        setLocalThresholds(JSON.parse(JSON.stringify(approvalThresholds)));
-    }, [approvalThresholds]);
+        const savedData = localStorage.getItem(storageKey);
+        if (savedData) {
+            try {
+                const parsed = JSON.parse(savedData);
+                if(Array.isArray(parsed) && parsed.length > 0) {
+                    setLocalThresholds(parsed);
+                    toast({ title: 'Draft Restored', description: 'Your unsaved changes to the approval matrix have been restored.'});
+                } else {
+                    setLocalThresholds(JSON.parse(JSON.stringify(approvalThresholds)));
+                }
+            } catch (e) {
+                console.error("Failed to parse saved approval matrix data", e);
+                setLocalThresholds(JSON.parse(JSON.stringify(approvalThresholds)));
+            }
+        } else {
+            setLocalThresholds(JSON.parse(JSON.stringify(approvalThresholds)));
+        }
+    }, [approvalThresholds, toast]);
+    
+    useEffect(() => {
+        localStorage.setItem(storageKey, JSON.stringify(localThresholds));
+    }, [localThresholds]);
+
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -95,6 +117,7 @@ export function ApprovalMatrixEditor() {
         // --- END VALIDATION LOGIC ---
 
         await updateApprovalThresholds(localThresholds);
+        localStorage.removeItem(storageKey);
         toast({
             title: 'Settings Saved',
             description: 'Approval matrix has been updated.',
