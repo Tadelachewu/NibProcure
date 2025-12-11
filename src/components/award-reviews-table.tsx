@@ -214,7 +214,7 @@ export function AwardReviewsTable() {
                 <TableHead>Title</TableHead>
                 <TableHead>Award Value</TableHead>
                 <TableHead>Required Review</TableHead>
-                <TableHead>Created At</TableHead>
+                <TableHead>Justification</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -241,6 +241,7 @@ export function AwardReviewsTable() {
                   }
 
                   const declinedReason = getDeclinedReason();
+                  const finalizationMinute = req.minutes?.find(m => m.decisionBody === 'Award Finalization');
 
                   return (
                     <TableRow key={req.id}>
@@ -285,7 +286,26 @@ export function AwardReviewsTable() {
                         </TableCell>
                         <TableCell className="font-semibold">{req.totalPrice.toLocaleString()} ETB</TableCell>
                         <TableCell><Badge variant="secondary">{req.status.replace(/_/g, ' ')}</Badge></TableCell>
-                        <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
+                        <TableCell>
+                           {finalizationMinute ? (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button asChild variant="link" className="p-0 h-auto">
+                                                <a href={finalizationMinute.documentUrl} target="_blank" rel="noopener noreferrer">
+                                                    View Minute
+                                                </a>
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p className="max-w-xs">Justification: {finalizationMinute.justification}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            ) : (
+                                <span className="text-xs text-muted-foreground">N/A</span>
+                            )}
+                        </TableCell>
                         <TableCell>
                         <div className="flex gap-2">
                               <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
@@ -381,3 +401,4 @@ export function AwardReviewsTable() {
     </>
   );
 }
+
