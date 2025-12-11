@@ -25,6 +25,7 @@ import {
   Users,
   Wallet,
   Edit,
+  CheckCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { Invoice, PurchaseRequisition } from '@/lib/types';
