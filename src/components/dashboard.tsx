@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -201,7 +200,7 @@ function ProcurementOfficerDashboard() {
     useEffect(() => {
         setLoading(true);
         Promise.all([
-            fetch('/api/requisitions?forQuoting=true').then(res => res.json()),
+            fetch('/api/requisitions?forQuoting=true&status=PreApproved').then(res => res.json()),
             fetch('/api/invoices').then(res => res.json()),
         ]).then(results => {
             const [requisitionsData, invoicesData] = results;
@@ -213,18 +212,21 @@ function ProcurementOfficerDashboard() {
     }, []);
 
     const stats = useMemo(() => {
-        const readyForRfq = data.requisitions.filter(r => r.status === 'PreApproved').length;
-        const acceptingQuotes = data.requisitions.filter(r => r.status === 'Accepting_Quotes').length;
-        const inCommitteeScoring = data.requisitions.filter(r => r.status === 'Scoring_In_Progress').length;
-        const readyToAward = data.requisitions.filter(r => r.status === 'Scoring_Complete').length;
-        const pendingFinalReview = data.requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
-        const awardDeclined = data.requisitions.filter(r => r.status === 'Award_Declined').length;
+        const requisitions = data.requisitions || [];
+        const invoices = data.invoices || [];
+
+        const readyForRfq = requisitions.filter(r => r.status === 'PreApproved').length;
+        const acceptingQuotes = requisitions.filter(r => r.status === 'Accepting_Quotes').length;
+        const inCommitteeScoring = requisitions.filter(r => r.status === 'Scoring_In_Progress').length;
+        const readyToAward = requisitions.filter(r => r.status === 'Scoring_Complete').length;
+        const pendingFinalReview = requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
+        const awardDeclined = requisitions.filter(r => r.status === 'Award_Declined').length;
         
-        const paidInvoicesValue = data.invoices
+        const paidInvoicesValue = invoices
             .filter(i => i.status === 'Paid')
             .reduce((sum, i) => sum + i.totalAmount, 0);
 
-        const unpaidInvoicesValue = data.invoices
+        const unpaidInvoicesValue = invoices
             .filter(i => i.status !== 'Paid')
             .reduce((sum, i) => sum + i.totalAmount, 0);
 

@@ -1,4 +1,3 @@
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -33,9 +32,13 @@ export async function GET(request: Request) {
         const userId = userPayload.id;
         
         const orConditions: any[] = [
+          // The user is the direct current approver for a pending item, EXCLUDING the initial pre-approval.
           { currentApproverId: userId, status: { startsWith: 'Pending_', not: 'Pending_Approval' } },
+          // The status matches a committee role the user has.
           { status: { in: userRoles.map(r => `Pending_${r.name}`).filter(s => s !== 'Pending_Approval') } },
+          // The user has already signed a minute for this requisition
           { minutes: { some: { signatures: { some: { signerId: userId } } } } },
+          // The requisition is in a state of decline or partial closure, which might still have items needing action.
           { status: { in: ['Award_Declined', 'Partially_Closed'] } },
         ];
         
@@ -80,6 +83,10 @@ export async function GET(request: Request) {
         ];
         
         const rfqLifecycleStatuses = [...baseRfqLifecycleStatuses, ...allPendingStatuses];
+        
+        if (statusParam) {
+            rfqLifecycleStatuses.push(...statusParam.split(',').map(s => s.trim().replace(/ /g, '_')) as RequisitionStatus[]);
+        }
 
         const userRoles = userPayload?.roles || [];
 
@@ -208,10 +215,9 @@ export async function POST(request: Request) {
     }
     
     const transactionResult = await prisma.$transaction(async (tx) => {
-        // Step 1: Create the requisition with a temporary or placeholder transactionId
         const newRequisition = await tx.purchaseRequisition.create({
             data: {
-                transactionId: 'temp', // Placeholder
+                transactionId: 'placeholder', // Placeholder value
                 requester: { connect: { id: actor.id } },
                 department: { connect: { id: department.id } },
                 title: body.title,
@@ -250,14 +256,12 @@ export async function POST(request: Request) {
             },
         });
 
-        // Step 2: Update the requisition with its own ID as the transactionId
         const finalRequisition = await tx.purchaseRequisition.update({
             where: { id: newRequisition.id },
             data: { transactionId: newRequisition.id },
             include: { items: true, customQuestions: true, evaluationCriteria: true }
         });
 
-        // Step 3: Create the audit log
         await tx.auditLog.create({
             data: {
                 transactionId: finalRequisition.id,
