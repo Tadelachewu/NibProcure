@@ -68,22 +68,23 @@ export async function POST(
                 if (isPerItem) {
                     isFullyComplete = requisition.items.every(item => {
                         const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                        // If an item never went to award (e.g., was added later and not part of the process), it's not "blocking" closure.
                         if (details.length === 0) return true;
 
                         const acceptedDetail = details.find(d => d.status === 'Accepted');
                         if (acceptedDetail) {
-                            // Find the PO containing this accepted item
+                            // Item was accepted. Find its PO and check if its invoice is paid.
                             const poForItem = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
-                            if (!poForItem) return false; // No PO means not paid
+                            if (!poForItem) return false;
                             
-                            // Find the specific invoice for this PO and check if it's paid
                             const invoiceForItem = poForItem.invoices.find(inv => inv.purchaseOrderId === poForItem.id);
                             return !!invoiceForItem && invoiceForItem.status === 'Paid';
                         }
                         
-                        // If not accepted, check if it's in another terminal state.
-                        const isTerminallyFailedOrRestarted = details.some(d => d.status === 'Failed_to_Award' || d.status === 'Restarted');
-                        return isTerminallyFailedOrRestarted;
+                        // If not accepted, the only other "terminal" state is 'Restarted'. 
+                        // 'Failed_to_Award' is not terminal because it requires action.
+                        const isRestarted = details.some(d => d.status === 'Restarted');
+                        return isRestarted;
                     });
 
                 } else {
