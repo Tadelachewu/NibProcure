@@ -63,7 +63,7 @@ export function RequisitionsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, role } = useAuth();
+  const { user, role, token } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -76,9 +76,15 @@ export function RequisitionsTable() {
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
 
   const fetchRequisitions = useCallback(async () => {
+    if (!token) {
+        setLoading(false);
+        return;
+    }
     try {
       setLoading(true);
-      const response = await fetch('/api/requisitions');
+      const response = await fetch('/api/requisitions', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch requisitions');
       }
@@ -89,7 +95,7 @@ export function RequisitionsTable() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     fetchRequisitions();
@@ -102,7 +108,7 @@ export function RequisitionsTable() {
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...req, id: req.id, status: 'Pending_Approval', userId: user.id }),
+        body: JSON.stringify({ ...req, id: req.id, status: 'Pending Approval', userId: user.id }),
       });
       if (!response.ok) {
           const errorData = await response.json();
@@ -125,7 +131,7 @@ export function RequisitionsTable() {
   const handleDeleteRequisition = async (id: string) => {
     if (!user) return;
     try {
-        const response = await fetch(`/api/requisitions/${id}`, {
+        const response = await fetch(`/api/requisitions/${id}/delete`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: user.id }),
@@ -209,7 +215,7 @@ export function RequisitionsTable() {
   }
 
   if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (error) return <div className="text-destructive">Error: {error}</div>;
+  if (error) return <div className="text-destructive">{error}</div>;
 
   return (
     <>
