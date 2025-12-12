@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, TrophyIcon, Upload } from 'lucide-react';
+import { CalendarIcon, TrophyIcon, Upload, AlertTriangle } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -18,6 +18,7 @@ import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
 import { ScrollArea } from './ui/scroll-area';
+import { Alert, AlertTitle } from './ui/alert';
 
 
 export const AwardCenterDialog = ({
@@ -74,6 +75,10 @@ export const AwardCenterDialog = ({
             score: winnerQuote.finalAverageScore || 0 
         };
     }, [eligibleQuotes]);
+    
+    const declinedWinner = useMemo(() => {
+        return quotations.find(q => q.status === 'Declined' && q.rejectionReason);
+    }, [quotations]);
 
 
     const handleConfirmAward = async () => {
@@ -123,6 +128,15 @@ export const AwardCenterDialog = ({
             
             <ScrollArea className="flex-1 -mx-6 px-6">
                 <div className="space-y-6 py-4">
+                    {declinedWinner && (
+                        <Alert variant="destructive">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>Previous Award Declined</AlertTitle>
+                            <AlertDescription>
+                                The previous winner, <strong>{declinedWinner.vendorName}</strong>, declined the award with the following reason: <em>"{declinedWinner.rejectionReason}"</em>
+                            </AlertDescription>
+                        </Alert>
+                    )}
                     <Card>
                         <CardHeader>
                             <CardTitle>Best Overall Vendor</CardTitle>
