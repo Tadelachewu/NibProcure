@@ -5,8 +5,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 import { UserRole, PerItemAwardDetail, Minute } from '@/lib/types';
+import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-service';
 
-export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
@@ -171,4 +171,141 @@ export async function GET(request: Request) {
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
+}
+
+export async function POST(request: Request) {
+    try {
+        const actor = await getActorFromToken(request);
+        if (!actor) {
+            return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+        }
+
+        const body = await request.json();
+        const { requisitionId, decision, justification, attendeeIds } = body;
+        
+        const requisition = await prisma.purchaseRequisition.findUnique({
+             where: { id: requisitionId },
+             include: { minutes: { include: { signatures: true } } }
+        });
+
+        if (!requisition) {
+            return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
+        }
+
+        const updatedRequisition = await prisma.$transaction(async (tx) => {
+            let nextStatus: string;
+            let nextApproverId: string | null;
+            let auditAction: 'APPROVE_AWARD_STEP' | 'REJECT_AWARD_STEP';
+            let auditDetails: string;
+
+            const decisionBody = requisition.status.replace(/_/g, ' ');
+
+            // Check if user has already acted on this step
+            const hasAlreadyActed = requisition.minutes.some(minute => 
+                minute.decisionBody === decisionBody &&
+                minute.signatures.some(sig => sig.signerId === actor.id)
+            );
+            
+            if (hasAlreadyActed) {
+                 throw new Error("You have already submitted a decision for this approval step.");
+            }
+
+            // Create the minute first
+            const newMinute = await tx.minute.create({
+                data: {
+                    requisitionId: requisitionId,
+                    authorId: actor.id,
+                    decision: decision,
+                    decisionBody: decisionBody,
+                    justification: justification,
+                    type: 'system_generated',
+                    attendees: {
+                        connect: attendeeIds.map((id: string) => ({ id }))
+                    }
+                }
+            });
+
+            // Create signature for the actor
+            await tx.signature.create({
+                data: {
+                    minuteId: newMinute.id,
+                    signerId: actor.id,
+                    signerName: actor.name,
+                    signerRole: (actor.roles as any[])?.map(r => r.name).join(', ') || '',
+                    decision: decision,
+                    comment: justification
+                }
+            });
+
+            // If the role is committee-based, we need to check if quorum is met to proceed
+            if (requisition.status.startsWith('Pending_Committee')) {
+                 const requiredRole = requisition.status.replace('Pending_', '');
+                 const committeeUsers = await tx.user.findMany({ where: { roles: { some: { name: requiredRole } } } });
+                 const committeeUserIds = committeeUsers.map(u => u.id);
+
+                 const signaturesForThisStep = await tx.signature.findMany({
+                     where: {
+                         minute: {
+                             requisitionId: requisitionId,
+                             decisionBody: decisionBody,
+                         },
+                         signerId: { in: committeeUserIds }
+                     }
+                 });
+                 
+                 const quorum = 2; // This should come from settings
+                 if (signaturesForThisStep.length < quorum) {
+                     // Quorum not met, so don't change requisition status yet
+                     return requisition;
+                 }
+            }
+
+
+            if (decision === 'APPROVED') {
+                const result = await getNextApprovalStep(tx, requisition, actor);
+                nextStatus = result.nextStatus;
+                nextApproverId = result.nextApproverId;
+                auditDetails = result.auditDetails;
+                auditAction = 'APPROVE_AWARD_STEP';
+            } else { // REJECTED
+                const result = await getPreviousApprovalStep(tx, requisition, actor, justification);
+                nextStatus = result.previousStatus;
+                nextApproverId = result.previousApproverId;
+                auditDetails = result.auditDetails;
+                auditAction = 'REJECT_AWARD_STEP';
+            }
+
+            const finalUpdate = await tx.purchaseRequisition.update({
+                where: { id: requisitionId },
+                data: {
+                    status: nextStatus as any,
+                    currentApproverId: nextApproverId,
+                    approverComment: justification,
+                },
+            });
+            
+             await tx.auditLog.create({
+                data: {
+                    transactionId: requisition.transactionId,
+                    user: { connect: { id: actor.id } },
+                    timestamp: new Date(),
+                    action: auditAction,
+                    entity: 'Requisition',
+                    entityId: requisitionId,
+                    details: auditDetails,
+                }
+            });
+
+            return finalUpdate;
+        });
+
+        return NextResponse.json(updatedRequisition);
+
+    } catch (error) {
+        console.error('Failed to process award review:', error);
+        if (error instanceof Error) {
+            return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+        }
+        return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    }
 }
