@@ -88,7 +88,7 @@ export async function GET(request: Request) {
 
         const userRoles = userPayload?.roles || [];
 
-        if (userRoles.includes('Committee_Member')) {
+        if ((userRoles as any[]).includes('Committee_Member')) {
             whereClause = {
                 status: { in: rfqLifecycleStatuses },
                 OR: [
@@ -378,7 +378,7 @@ export async function POST(request: Request) {
     if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
       const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
       if (setting.type === 'specific_roles') {
-        const userRoles = actor.roles.map(r => r.name);
+        const userRoles = (actor.roles as any[]).map(r => r.name);
         const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
         if (!canCreate) {
           return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
@@ -394,6 +394,7 @@ export async function POST(request: Request) {
     if (!department) {
       return NextResponse.json({ error: 'Department not found' }, { status: 404 });
     }
+
     const transactionResult = await prisma.$transaction(async (tx) => {
       const newRequisition = await tx.purchaseRequisition.create({
         data: {

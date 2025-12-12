@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 import { UserRole, PerItemAwardDetail, Minute } from '@/lib/types';
+import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -171,4 +172,97 @@ export async function GET(request: Request) {
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
+}
+
+export async function POST(request: Request) {
+    try {
+        const actor = await getActorFromToken(request);
+        if (!actor) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
+
+        const body = await request.json();
+        const { requisitionId, decision, userId, comment, minute } = body;
+
+        const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
+        if (!requisition) {
+            return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
+        }
+
+        if (decision !== 'APPROVED' && decision !== 'REJECTED') {
+             return NextResponse.json({ error: 'Invalid decision provided.' }, { status: 400 });
+        }
+        
+        const isAuthorizedToAct = (requisition.currentApproverId === userId) || 
+                                  ((actor.roles as UserRole[]).some(r => requisition.status === `Pending_${r}`));
+
+        if (!isAuthorizedToAct) {
+            return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
+        }
+
+        const updatedRequisition = await prisma.$transaction(async (tx) => {
+            let dataToUpdate: any = {};
+            let auditAction = '';
+            let auditDetails = '';
+
+            if (decision === 'REJECTED') {
+                const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, actor, comment);
+                dataToUpdate.status = previousStatus;
+                dataToUpdate.currentApproverId = previousApproverId;
+                auditAction = 'REJECT_AWARD_STEP';
+                auditDetails = serviceAuditDetails;
+            } else { // APPROVED
+                const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, actor);
+                dataToUpdate.status = nextStatus;
+                dataToUpdate.currentApproverId = nextApproverId;
+                auditAction = 'APPROVE_AWARD_STEP';
+                auditDetails = serviceAuditDetails;
+            }
+
+            const req = await tx.purchaseRequisition.update({
+                where: { id: requisitionId },
+                data: {
+                    status: dataToUpdate.status,
+                    currentApprover: dataToUpdate.currentApproverId ? { connect: { id: dataToUpdate.currentApproverId } } : { disconnect: true },
+                    approverComment: comment,
+                },
+            });
+
+            if (minute && minute.justification) {
+                const createdMinute = await tx.minute.create({
+                    data: {
+                        requisition: { connect: { id: requisition.id } },
+                        author: { connect: { id: actor.id } },
+                        decision: decision,
+                        decisionBody: minute.decisionBody,
+                        justification: minute.justification,
+                        type: 'system_generated',
+                    }
+                });
+                auditDetails += ` Minute recorded as ${createdMinute.id}.`;
+            }
+
+            await tx.auditLog.create({
+                data: {
+                    transactionId: req.transactionId,
+                    user: { connect: { id: actor.id } },
+                    timestamp: new Date(),
+                    action: auditAction,
+                    entity: 'Requisition',
+                    entityId: requisitionId,
+                    details: auditDetails,
+                }
+            });
+
+            return req;
+        });
+
+        return NextResponse.json(updatedRequisition);
+    } catch (error) {
+        console.error("Failed to process award review:", error);
+        if (error instanceof Error) {
+            return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+        }
+        return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+    }
 }

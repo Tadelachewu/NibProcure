@@ -147,12 +147,12 @@ export function AwardReviewsTable() {
     }
 
     try {
-      const response = await fetch(`/api/requisitions`, {
-        method: 'PATCH',
+      const response = await fetch(`/api/reviews`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            id: selectedRequisition.id, 
-            status: actionType === 'approve' ? 'Approved' : 'Rejected', 
+            requisitionId: selectedRequisition.id,
+            decision: actionType === 'approve' ? 'APPROVED' : 'REJECTED', 
             userId: user.id, 
             comment: justification,
             minute,
