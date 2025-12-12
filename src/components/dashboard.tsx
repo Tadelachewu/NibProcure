@@ -201,7 +201,7 @@ function ProcurementOfficerDashboard() {
     useEffect(() => {
         setLoading(true);
         Promise.all([
-            fetch('/api/requisitions').then(res => res.json()),
+            fetch('/api/requisitions?forQuoting=true').then(res => res.json()),
             fetch('/api/invoices').then(res => res.json()),
         ]).then(results => {
             const [requisitionsData, invoicesData] = results;
