@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -38,12 +39,14 @@ export async function POST(
     let isAuthorized = false;
     const userRoles = (user.roles as any[]).map(r => r.name);
     
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+    if (userRoles.includes('Admin') || userRoles.includes('Committee')) {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userId?: string };
         if (setting.type === 'specific') {
             isAuthorized = setting.userId === userId;
         } else { // 'all' case
-            isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+            isAuthorized = userRoles.includes('Procurement_Officer');
         }
     }
 
@@ -51,8 +54,27 @@ export async function POST(
         return NextResponse.json({ error: 'Unauthorized to assign committees based on system settings.' }, { status: 403 });
     }
     
+    const newAllMemberIds = new Set([...(financialCommitteeMemberIds || []), ...(technicalCommitteeMemberIds || [])]);
+    
     // Start a transaction to ensure atomicity
     const transactionResult = await prisma.$transaction(async (tx) => {
+        
+        // Add "Committee_Member" role to new members
+        const committeeRole = await tx.role.findUnique({ where: { name: 'Committee_Member' } });
+        if (!committeeRole) {
+            throw new Error("Committee_Member role not found. Please seed the database.");
+        }
+
+        for (const memberId of newAllMemberIds) {
+            await tx.user.update({
+                where: { id: memberId },
+                data: {
+                    roles: {
+                        connect: { id: committeeRole.id }
+                    }
+                }
+            });
+        }
 
         const updatedRequisition = await tx.purchaseRequisition.update({
         where: { id },
@@ -70,7 +92,6 @@ export async function POST(
         }
         });
 
-        const newAllMemberIds = new Set([...(financialCommitteeMemberIds || []), ...(technicalCommitteeMemberIds || [])]);
         const existingAssignments = await tx.committeeAssignment.findMany({
             where: { requisitionId: id },
         });
@@ -100,8 +121,6 @@ export async function POST(
             });
         }
         
-        // Unchanged members' status is preserved automatically by not touching them.
-
         await tx.auditLog.create({
             data: {
                 transactionId: requisition.transactionId,
