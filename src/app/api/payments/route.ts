@@ -50,7 +50,15 @@ export async function POST(
         if (invoiceToUpdate.po?.requisitionId) {
             const requisition = await tx.purchaseRequisition.findUnique({
                 where: { id: invoiceToUpdate.po.requisitionId },
-                include: { items: true, purchaseOrders: { include: { invoices: true }}}
+                include: { 
+                    items: true, 
+                    purchaseOrders: { 
+                        include: { 
+                            invoices: true,
+                            items: true, // Include PO items
+                        }
+                    }
+                }
             });
             
             if (requisition) {
