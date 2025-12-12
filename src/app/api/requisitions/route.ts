@@ -391,6 +391,17 @@ export async function PATCH(
         
         console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
         updatedRequisition = await prisma.$transaction(async (tx) => {
+            const committeeName = requisition.status.replace('Pending_', '').replace(/_/g, ' ');
+
+            await tx.review.create({
+              data: {
+                requisitionId: requisition.id,
+                reviewerId: user.id,
+                decision: newStatus as 'Approved' | 'Rejected',
+                comments: comment,
+                committee: committeeName,
+              }
+            });
 
             if (newStatus === 'Rejected') {
                 const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
