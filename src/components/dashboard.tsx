@@ -203,8 +203,12 @@ function ProcurementOfficerDashboard() {
         Promise.all([
             fetch('/api/requisitions').then(res => res.json()),
             fetch('/api/invoices').then(res => res.json()),
-        ]).then(([requisitions, invoices]) => {
-            setData({ requisitions, invoices });
+        ]).then(results => {
+            const [requisitionsData, invoicesData] = results;
+            setData({
+                requisitions: Array.isArray(requisitionsData) ? requisitionsData : [],
+                invoices: Array.isArray(invoicesData) ? invoicesData : [],
+            });
         }).catch(console.error).finally(() => setLoading(false));
     }, []);
 
