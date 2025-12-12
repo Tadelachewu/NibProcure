@@ -382,6 +382,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         const updatedRequisition = await tx.purchaseRequisition.findUnique({ where: {id: requisitionId}, include: { items: true }});
         if (!updatedRequisition) throw new Error("Could not refetch requisition for value calculation.");
 
+        // Recalculate total value based only on newly promoted items
         let newTotalValue = 0;
         for (const item of updatedRequisition.items) {
              const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
@@ -398,7 +399,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             data: {
                 status: nextStatus as any,
                 currentApproverId: nextApproverId,
-                totalPrice: newTotalValue,
+                totalPrice: newTotalValue, // Use the newly calculated total
             }
         });
         
@@ -452,7 +453,8 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             return { message: 'No more standby vendors available. Requisition has returned to Scoring Complete status.'};
         }
         
-        const newTotalValue = nextStandby.items.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+        // Recalculate total value based on the promoted standby quote's price.
+        const newTotalValue = nextStandby.totalPrice;
         
         const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: newTotalValue }, actor);
         
