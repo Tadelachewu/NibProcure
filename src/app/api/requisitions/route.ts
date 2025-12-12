@@ -66,7 +66,7 @@ export async function GET(request: Request) {
                 ]
             },
             { quotations: { some: { vendorId: userPayload.vendorId } } },
-            { items: { some: { perItemAwardDetails: { path: '$[*].vendorId', array_contains: userPayload.vendorId } } } }
+            { items: { some: { perItemAwardDetails: { path: ['$', '*', 'vendorId'], array_contains: userPayload.vendorId } } } }
         ];
 
     } else if (forQuoting) {
