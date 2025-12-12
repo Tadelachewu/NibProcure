@@ -55,7 +55,7 @@ export async function POST(
                     purchaseOrders: { 
                         include: { 
                             invoices: true,
-                            items: true, // Include PO items
+                            items: true,
                         }
                     }
                 }
@@ -66,23 +66,24 @@ export async function POST(
                 let isFullyComplete = false;
 
                 if (isPerItem) {
-                    // For per-item, every item must be in a terminal state (Accepted, Failed, or Restarted)
                     isFullyComplete = requisition.items.every(item => {
                         const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-                        if (details.length === 0) return true; // If an item never went to award, it's considered "complete" for this check
-                        
-                        // Check if an item is considered resolved.
-                        const isResolved = details.some(d => ['Accepted', 'Failed_to_Award', 'Restarted'].includes(d.status));
-                        
-                        // If it's resolved and Accepted, we need to make sure its corresponding invoice is paid.
-                        if (details.some(d => d.status === 'Accepted')) {
-                             const acceptedPO = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
-                             const isPaid = acceptedPO?.invoices.some(inv => inv.status === 'Paid');
-                             return isPaid;
-                        }
+                        if (details.length === 0) return true;
 
-                        // If it's not in an 'Accepted' state, being Failed or Restarted is enough to be complete.
-                        return isResolved && !details.some(d => d.status === 'Accepted');
+                        const acceptedDetail = details.find(d => d.status === 'Accepted');
+                        if (acceptedDetail) {
+                            // Find the PO containing this accepted item
+                            const poForItem = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
+                            if (!poForItem) return false; // No PO means not paid
+                            
+                            // Find the specific invoice for this PO and check if it's paid
+                            const invoiceForItem = poForItem.invoices.find(inv => inv.purchaseOrderId === poForItem.id);
+                            return !!invoiceForItem && invoiceForItem.status === 'Paid';
+                        }
+                        
+                        // If not accepted, check if it's in another terminal state.
+                        const isTerminallyFailedOrRestarted = details.some(d => d.status === 'Failed_to_Award' || d.status === 'Restarted');
+                        return isTerminallyFailedOrRestarted;
                     });
 
                 } else {
