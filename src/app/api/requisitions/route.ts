@@ -33,18 +33,23 @@ export async function GET(request: Request) {
         const userId = userPayload.id;
         
         const orConditions: any[] = [
+          // The user is the direct current approver for a pending item, EXCLUDING the initial pre-approval.
           { currentApproverId: userId, status: { startsWith: 'Pending_', not: 'Pending_Approval' } },
-          { status: { in: userRoles.map(r => `Pending_${r.name}`).filter(s => s !== 'Pending_Approval') } },
+          // The status matches a committee role the user has.
+          { status: { in: userRoles.map(r => `Pending_${r}`).filter(s => s !== 'Pending_Approval') } },
+          // The user has already signed a minute for this requisition
           { minutes: { some: { signatures: { some: { signerId: userId } } } } },
+           // The requisition is in a state of decline or partial closure, which might still have items needing action.
           { status: { in: ['Award_Declined', 'Partially_Closed'] } },
         ];
         
-        if (userRoles.some(r => r.name === 'Admin' || r.name === 'Procurement_Officer')) {
+        if (userRoles.some(r => r === 'Admin' || r === 'Procurement_Officer')) {
             const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
             const allPossiblePendingStatuses = allSystemRoles
                 .map(r => `Pending_${r.name}`)
-                .filter(s => s !== 'Pending_Approval');
+                .filter(s => s !== 'Pending_Approval'); // Exclude initial approval status
             orConditions.push({ status: { in: allPossiblePendingStatuses } });
+            // Also show items ready for notification and those declined/partially closed
             orConditions.push({ status: 'PostApproved' });
         }
         
@@ -107,7 +112,7 @@ export async function GET(request: Request) {
         ];
       }
       
-      if (userPayload.roles.includes('Requester') && !statusParam && !approverId) {
+      if ((userPayload.roles as any[]).includes('Requester') && !statusParam && !approverId) {
         whereClause.requesterId = userPayload.id;
       }
     }
@@ -429,11 +434,14 @@ export async function POST(request: Request) {
           } : undefined,
         },
       });
+
+      // Now update the requisition with its own ID as the transactionId
       const finalRequisition = await tx.purchaseRequisition.update({
         where: { id: newRequisition.id },
         data: { transactionId: newRequisition.id },
         include: { items: true, customQuestions: true, evaluationCriteria: true }
       });
+
       await tx.auditLog.create({
         data: {
           transactionId: finalRequisition.id,
