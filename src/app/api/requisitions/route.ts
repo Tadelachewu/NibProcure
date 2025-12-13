@@ -269,17 +269,20 @@ export async function PATCH(
     }
 
     const requisition = await prisma.purchaseRequisition.findUnique({ 
-        where: { id },
-        include: { 
-            department: true, 
-            requester: true, 
-            items: true, 
-            quotations: { include: { items: true, scores: { include: { itemScores: true } } } },
-            minutes: {
-              orderBy: { createdAt: 'desc' },
-              take: 1
-            }
-        }
+      where: { id },
+      include: { 
+        department: true, 
+        requester: true, 
+        items: true, 
+        quotations: { include: { items: true, scores: { include: { itemScores: true } } } },
+        minutes: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        },
+        // include committee membership so we can allow committee actions on per-item award flows
+        financialCommitteeMembers: { select: { id: true } },
+        technicalCommitteeMembers: { select: { id: true } },
+      }
     });
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
@@ -380,9 +383,70 @@ export async function PATCH(
              return NextResponse.json({ error: 'Invalid action. Only approve or reject is allowed at this stage.' }, { status: 400 });
         }
         
-        const isAuthorizedToAct = (requisition.currentApproverId === userId) || 
-                                  (user.roles as any[]).some(r => requisition.status === `Pending_${r.name}`) ||
-                                  (user.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer');
+        let isAuthorizedToAct = (requisition.currentApproverId === userId) || 
+                      (user.roles as any[]).some(r => requisition.status === `Pending_${r.name}`) ||
+                      (user.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer');
+
+        // Relax authorization for per-item award strategy: if the requisition is in Award_Declined
+        // but there are still per-item awards pending, allow committee members (financial/technical)
+        // to act so they can approve/reject remaining items. This avoids blocking approvals while
+        // preserving the main status flow.
+        try {
+          const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
+          const hasPendingPerItemAwards = requisition.items.some((item: any) => {
+            const details = (item.perItemAwardDetails as any[]) || [];
+            return details.some(d => d.status === 'Pending_Award');
+          });
+
+          if (!isAuthorizedToAct && requisition.status === 'Award_Declined' && awardStrategy === 'item' && hasPendingPerItemAwards) {
+            const fcIds = (requisition.financialCommitteeMembers || []).map((m: any) => m.id);
+            const tcIds = (requisition.technicalCommitteeMembers || []).map((m: any) => m.id);
+            if (fcIds.includes(userId) || tcIds.includes(userId) || (user.roles as any[]).some(r => (r.name as string).includes('Committee'))) {
+              isAuthorizedToAct = true;
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to evaluate per-item committee authorization fallback:', e);
+        }
+
+        // Additionally: allow any user whose role appears in the approval matrix tier for this
+        // requisition value to act. This ensures members of any approval step can take action
+        // even if the status naming doesn't exactly match (robustness for matrix-driven flows).
+        try {
+          // compute effective total (for per-item flows, consider only pending per-item awards)
+          let effectiveTotal = requisition.totalPrice || 0;
+          const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
+          if (requisition.status === 'Award_Declined' && awardStrategy === 'item') {
+            let newTotal = 0;
+            for (const item of requisition.items) {
+              const details = (item.perItemAwardDetails as any[]) || [];
+              const pending = details.find(d => d.status === 'Pending_Award');
+              if (pending) {
+                newTotal += (pending.unitPrice ?? item.unitPrice) * (item.quantity ?? 1);
+              }
+            }
+            effectiveTotal = newTotal;
+          }
+
+          const approvalMatrix = await prisma.approvalThreshold.findMany({
+            include: { steps: { include: { role: { select: { name: true } } }, orderBy: { order: 'asc' } } },
+            orderBy: { min: 'asc' }
+          });
+
+          const relevantTier = approvalMatrix.find((tier: any) =>
+            (effectiveTotal >= tier.min) && (tier.max === null || effectiveTotal <= tier.max)
+          );
+
+          if (relevantTier) {
+            const tierRoleNames = (relevantTier.steps || []).map((s: any) => s.role.name);
+            const userRoleNames = (user.roles as any[]).map(r => r.name);
+            if (!isAuthorizedToAct && userRoleNames.some((rn: string) => tierRoleNames.includes(rn))) {
+              isAuthorizedToAct = true;
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to evaluate approval matrix membership for authorization:', err);
+        }
 
         if (!isAuthorizedToAct) {
             console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
@@ -400,7 +464,28 @@ export async function PATCH(
                 auditDetails = serviceAuditDetails;
                 auditAction = 'REJECT_AWARD_STEP';
             } else { // Approved
-                const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
+              // If we're in a per-item award flow and the overall requisition is 'Award_Declined',
+              // compute an adjusted totalPrice using only remaining pending per-item awards so the
+              // approval matrix routes correctly for the remaining items.
+              let effectiveRequisition = requisition;
+              try {
+                const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
+                if (requisition.status === 'Award_Declined' && awardStrategy === 'item') {
+                  let newTotal = 0;
+                  for (const item of requisition.items) {
+                    const details = (item.perItemAwardDetails as any[]) || [];
+                    const pending = details.find(d => d.status === 'Pending_Award');
+                    if (pending) {
+                      newTotal += (pending.unitPrice || pending.unitPrice === 0 ? pending.unitPrice : item.unitPrice) * (item.quantity || 1);
+                    }
+                  }
+                  effectiveRequisition = { ...requisition, totalPrice: newTotal } as any;
+                }
+              } catch (e) {
+                console.warn('Failed to compute adjusted total for per-item approval routing:', e);
+              }
+
+              const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, effectiveRequisition, user);
                 dataToUpdate.status = nextStatus;
                 dataToUpdate.currentApproverId = nextApproverId;
                 dataToUpdate.approverComment = comment;
