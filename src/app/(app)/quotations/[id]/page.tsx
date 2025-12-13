@@ -314,8 +314,8 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                                     <AlertCircle className="h-4 w-4 text-destructive inline-block ml-2 cursor-help" />
                                                 </TooltipTrigger>
                                                 <TooltipContent>
-                                                    <div className="space-y-2">
-                                                        <p className="font-semibold">Reason(s) for Decline:</p>
+                                                    <div className="space-y-2 p-2 max-w-xs">
+                                                        <p className="font-semibold">Reason for Decline:</p>
                                                         {isPerItemStrategy && declinedItemAwards.length > 0 ? (
                                                             declinedItemAwards.map((award, index) => (
                                                                 <div key={index}>
@@ -505,14 +505,6 @@ const committeeFormSchema = z.object({
   committeePurpose: z.string().min(10, "Purpose is required."),
   financialCommitteeMemberIds: z.array(z.string()).min(1, "At least one financial member is required."),
   technicalCommitteeMemberIds: z.array(z.string()).optional(),
-}).refine(data => {
-    if (!data.technicalCommitteeMemberIds) return true; // No overlap check needed if it's optional and not provided
-    const financialIds = new Set(data.financialCommitteeMemberIds);
-    const hasOverlap = data.technicalCommitteeMemberIds.some(id => financialIds.has(id));
-    return !hasOverlap;
-}, {
-    message: "A member cannot be on both financial and technical committees.",
-    path: ["financialCommitteeMemberIds"],
 });
 
 type CommitteeFormValues = z.infer<typeof committeeFormSchema>;
@@ -642,16 +634,13 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
 
     const MemberSelection = ({ type }: { type: 'financial' | 'technical' }) => {
         const [search, setSearch] = useState("");
-        const otherType = type === 'financial' ? 'technical' : 'financial';
-        const otherCommitteeIds = new Set(form.watch(`${otherType}CommitteeMemberIds`));
-
+        
         const availableMembers = useMemo(() => {
             const lowercasedSearch = search.toLowerCase();
             return committeeMembers.filter(member =>
-                !otherCommitteeIds.has(member.id) &&
                 (member.name.toLowerCase().includes(lowercasedSearch) || member.email.toLowerCase().includes(lowercasedSearch))
             );
-        }, [committeeMembers, search, otherCommitteeIds]);
+        }, [committeeMembers, search]);
 
         return (
             <div className="space-y-2">
@@ -3180,6 +3169,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 

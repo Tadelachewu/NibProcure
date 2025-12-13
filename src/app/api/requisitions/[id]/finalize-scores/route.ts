@@ -1,10 +1,48 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User, UserRole, PerItemAwardDetail, QuoteItem, Quotation } from '@/lib/types';
+import { User, UserRole, PerItemAwardDetail, QuoteItem, Quotation, EvaluationCriteria } from '@/lib/types';
 import { getNextApprovalStep } from '@/services/award-service';
+
+function calculateItemScoreForVendor(
+    quote: Quotation & { items: QuoteItem[], scores: any[] },
+    reqItem: { id: string },
+    evaluationCriteria: EvaluationCriteria
+): { championBid: QuoteItem | null, championScore: number } {
+    
+    const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
+    if (proposalsForItem.length === 0) {
+        return { championBid: null, championScore: 0 };
+    }
+
+    let championBid: QuoteItem | null = null;
+    let championScore = -1;
+
+    for (const proposal of proposalsForItem) {
+        let totalItemScore = 0;
+        let scoreCount = 0;
+        
+        quote.scores?.forEach(scoreSet => {
+            const itemScore = scoreSet.itemScores.find((is: any) => is.quoteItemId === proposal.id);
+            if (itemScore) {
+                totalItemScore += itemScore.finalScore;
+                scoreCount++;
+            }
+        });
+
+        const averageScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+        
+        if (averageScore > championScore) {
+            championScore = averageScore;
+            championBid = proposal;
+        }
+    }
+
+    return { championBid, championScore };
+}
 
 
 export async function POST(
@@ -56,17 +94,14 @@ export async function POST(
                 include: {
                     items: true,
                     evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } },
-                    quotations: { include: { scores: true }}
+                    quotations: { include: { scores: { include: { itemScores: true } }, items: true } }
                 }
             });
-            if (!requisition) {
-                throw new Error("Requisition not found.");
+            if (!requisition || !requisition.evaluationCriteria) {
+                throw new Error("Requisition or its evaluation criteria not found.");
             }
 
-            const allQuotes = await tx.quotation.findMany({
-                where: { requisitionId: requisitionId },
-                include: { items: true, scores: { include: { itemScores: {include: {scores: true}} } } },
-            });
+            const allQuotes = requisition.quotations;
 
             if (allQuotes.length === 0) {
                 throw new Error("No quotes found to process for this requisition.");
@@ -77,9 +112,17 @@ export async function POST(
             if (awardStrategy === 'all') {
                 const winningVendorId = Object.keys(awards)[0];
                 const winnerQuote = allQuotes.find(q => q.vendorId === winningVendorId);
-                if (winnerQuote) {
-                    totalAwardValue = winnerQuote.totalPrice;
+
+                if (winnerQuote && requisition.evaluationCriteria) {
+                    totalAwardValue = requisition.items.reduce((sum, reqItem) => {
+                        const { championBid } = calculateItemScoreForVendor(winnerQuote, reqItem, requisition.evaluationCriteria!);
+                        if (championBid) {
+                            return sum + (championBid.unitPrice * championBid.quantity);
+                        }
+                        return sum;
+                    }, 0);
                 }
+
             } else if (awardStrategy === 'item') {
                 const winningQuoteItemIds = Object.values(awards).map((award: any) => award.rankedBids[0].quoteItemId);
                 
@@ -121,7 +164,12 @@ export async function POST(
                         }
                     });
                 }
-                const itemIdsToAward = winningQuote.items.map(i => i.id);
+                const championBids = requisition.items.map(reqItem => {
+                   const { championBid } = calculateItemScoreForVendor(winningQuote, reqItem, requisition.evaluationCriteria!);
+                   return championBid;
+                }).filter(Boolean) as QuoteItem[];
+
+                const itemIdsToAward = championBids.map(i => i.id);
                 await tx.purchaseRequisition.update({
                     where: { id: requisitionId },
                     data: { awardedQuoteItemIds: itemIdsToAward }
