@@ -204,20 +204,22 @@ export function ReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   
-                  let isActionable = false;
-                  if (user && req.status) {
+                    // Prefer server-provided actionability flag (populated by /api/reviews),
+                    // but fall back to client-side checks for compatibility.
+                    let isActionable = (req as any).isActionable ?? false;
+                    if (!isActionable && user && req.status) {
                       const userRoles = (user.roles as any[]).map(r => r.name);
                       
                       if (req.currentApproverId === user.id) {
-                          isActionable = true;
+                        isActionable = true;
                       } 
                       else if (req.status.startsWith('Pending_')) {
-                          const requiredRoleForStatus = req.status.replace('Pending_', '');
-                          if (userRoles.includes(requiredRoleForStatus)) {
-                            isActionable = true;
-                          }
+                        const requiredRoleForStatus = req.status.replace('Pending_', '');
+                        if (userRoles.includes(requiredRoleForStatus)) {
+                        isActionable = true;
+                        }
                       }
-                  }
+                    }
 
 
                   return (

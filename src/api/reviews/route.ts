@@ -84,13 +84,17 @@ export async function GET(request: Request) {
                     },
                 }
             },
-            minutes: {
+        minutes: {
             include: {
                 author: true,
                 attendees: true,
                 signatures: true,
             }
             }
+        ,
+        // include committee membership so we can decide actionability for per-item award flows
+        financialCommitteeMembers: { select: { id: true } },
+        technicalCommitteeMembers: { select: { id: true } },
       },
       orderBy: {
         createdAt: 'desc',
@@ -142,17 +146,71 @@ export async function GET(request: Request) {
         minute.signatures.some(sig => sig.signerId === userId)
       );
 
-      if (!hasAlreadyActed) {
+        if (!hasAlreadyActed) {
           if (req.currentApproverId === userId) {
-            isActionable = true;
+          isActionable = true;
           } else if (req.status.startsWith('Pending_')) {
-            const requiredRole = req.status.replace('Pending_', '');
-            if (userRoles.includes(requiredRole as UserRole)) {
-              // This is a committee-level approval, so it's actionable if the user is part of that committee.
-              isActionable = true;
-            }
+          const requiredRole = req.status.replace('Pending_', '');
+          if (userRoles.includes(requiredRole as UserRole)) {
+            // This is a committee-level approval, so it's actionable if the user is part of that committee.
+            isActionable = true;
           }
-      }
+          }
+
+          // Allow action when requisition is in Award_Declined but there are still per-item pending awards
+          // and the user is part of the financial/technical committee or appears in the approval matrix tier.
+          try {
+            if (!isActionable && req.status === 'Award_Declined') {
+              const awardStrategy = (req as any).rfqSettings?.awardStrategy;
+              const hasPendingPerItemAwards = (req.items || []).some((item: any) => {
+                const details = (item.perItemAwardDetails as any[]) || [];
+                return details.some(d => d.status === 'Pending_Award');
+              });
+
+              if (awardStrategy === 'item' && hasPendingPerItemAwards) {
+                const fcIds = (req.financialCommitteeMembers || []).map((m: any) => m.id);
+                const tcIds = (req.technicalCommitteeMembers || []).map((m: any) => m.id);
+                if (fcIds.includes(userId) || tcIds.includes(userId)) {
+                  isActionable = true;
+                } else {
+                  // fallback: check approval matrix membership for remaining pending total
+                  let effectiveTotal = req.totalPrice || 0;
+                  try {
+                    let newTotal = 0;
+                    for (const item of req.items) {
+                      const details = (item.perItemAwardDetails as any[]) || [];
+                      const pending = details.find(d => d.status === 'Pending_Award');
+                      if (pending) {
+                        newTotal += (pending.unitPrice ?? item.unitPrice) * (item.quantity ?? 1);
+                      }
+                    }
+                    effectiveTotal = newTotal;
+                  } catch (e) {
+                    // ignore and fallback to original total
+                  }
+
+                  const approvalMatrix = await prisma.approvalThreshold.findMany({
+                    include: { steps: { include: { role: { select: { name: true } } }, orderBy: { order: 'asc' } } },
+                    orderBy: { min: 'asc' }
+                  });
+
+                  const relevantTier = approvalMatrix.find((tier: any) =>
+                    (effectiveTotal >= tier.min) && (tier.max === null || effectiveTotal <= tier.max)
+                  );
+
+                  if (relevantTier) {
+                    const tierRoleNames = (relevantTier.steps || []).map((s: any) => s.role.name);
+                    if ((userRoles as string[]).some(rn => tierRoleNames.includes(rn))) {
+                      isActionable = true;
+                    }
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to evaluate per-item actionability in reviews API:', e);
+          }
+        }
       
       return {
         ...req,
