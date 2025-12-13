@@ -90,7 +90,10 @@ export async function GET(request: Request) {
                 attendees: true,
                 signatures: true,
             }
-            }
+            },
+            // include committee membership so we can decide actionability for per-item award flows
+            financialCommitteeMembers: { select: { id: true } },
+            technicalCommitteeMembers: { select: { id: true } },
       },
       orderBy: {
         createdAt: 'desc',
@@ -132,34 +135,119 @@ export async function GET(request: Request) {
       return acc;
     }, {} as Record<string, any[]>);
 
-    const requisitionsWithDetails = detailedRequisitions.map(req => {
+    const requisitionsWithDetails: any[] = [];
+    for (const req of detailedRequisitions) {
       let isActionable = false;
       const currentDecisionBody = req.status.replace(/_/g, ' ');
 
       // Check if user has already signed a minute for this specific decision body/status
-      const hasAlreadyActed = req.minutes.some(minute => 
-        minute.decisionBody === currentDecisionBody &&
-        minute.signatures.some(sig => sig.signerId === userId)
+      const hasAlreadyActed = req.minutes.some((minute: any) => 
+      minute.decisionBody === currentDecisionBody &&
+      minute.signatures.some((sig: any) => sig.signerId === userId)
       );
 
       if (!hasAlreadyActed) {
-          if (req.currentApproverId === userId) {
-            isActionable = true;
-          } else if (req.status.startsWith('Pending_')) {
-            const requiredRole = req.status.replace('Pending_', '');
-            if (userRoles.includes(requiredRole as UserRole)) {
-              // This is a committee-level approval, so it's actionable if the user is part of that committee.
-              isActionable = true;
+        if (req.currentApproverId === userId) {
+        isActionable = true;
+        } else if (req.status.startsWith('Pending_')) {
+        const requiredRole = req.status.replace('Pending_', '');
+        if (userRoles.includes(requiredRole as UserRole)) {
+          // This is a committee-level approval, so it's actionable if the user is part of that committee.
+          isActionable = true;
+        }
+        }
+
+        // Allow action when requisition is in Award_Declined but there are still per-item pending awards
+        // and the user is part of the financial/technical committee or appears in the approval matrix tier.
+        try {
+          if (!isActionable && req.status === 'Award_Declined') {
+            const awardStrategy = (req as any).rfqSettings?.awardStrategy;
+            const hasPendingPerItemAwards = (req.items || []).some((item: any) => {
+              const details = (item.perItemAwardDetails as any[]) || [];
+              return details.some(d => d.status === 'Pending_AWARD' || d.status === 'Pending_Award');
+            });
+
+            if (awardStrategy === 'item' && hasPendingPerItemAwards) {
+              const fcIds = (req.financialCommitteeMembers || []).map((m: any) => m.id);
+              const tcIds = (req.technicalCommitteeMembers || []).map((m: any) => m.id);
+              if (fcIds.includes(userId) || tcIds.includes(userId)) {
+                isActionable = true;
+              } else {
+                // fallback: check approval matrix membership for remaining pending total
+                let effectiveTotal = req.totalPrice || 0;
+                try {
+                  let newTotal = 0;
+                  for (const item of req.items) {
+                    const details = (item.perItemAwardDetails as any[]) || [];
+                    const pending = details.find(d => d.status === 'Pending_Award');
+                    if (pending) {
+                      newTotal += (pending.unitPrice ?? item.unitPrice) * (item.quantity ?? 1);
+                    }
+                  }
+                  effectiveTotal = newTotal;
+                } catch (e) {
+                  // ignore and fallback to original total
+                }
+
+                const approvalMatrix = await prisma.approvalThreshold.findMany({
+                  include: { steps: { include: { role: { select: { name: true } } }, orderBy: { order: 'asc' } } },
+                  orderBy: { min: 'asc' }
+                });
+
+                const relevantTier = approvalMatrix.find((tier: any) =>
+                  (effectiveTotal >= tier.min) && (tier.max === null || effectiveTotal <= tier.max)
+                );
+
+                if (relevantTier) {
+                  const tierRoleNames = (relevantTier.steps || []).map((s: any) => s.role.name);
+                  if ((userRoles as string[]).some(rn => tierRoleNames.includes(rn))) {
+                    isActionable = true;
+                  }
+                }
+              }
             }
           }
+        } catch (e) {
+          console.warn('Failed to evaluate per-item actionability in reviews API:', e);
+        }
       }
       
-      return {
+      // Determine if promote-standby or restart-rfq actions should be exposed
+      let canPromoteStandby = false;
+      let canRestartRfq = false;
+      try {
+        // Check per-item award details
+        for (const item of (req.items || [])) {
+          const details = (item.perItemAwardDetails || []) as any[];
+          const hasDeclined = details.some(d => d.status === 'Declined');
+          const hasStandby = details.some(d => d.status === 'Standby');
+          const hasFailed = details.some(d => d.status === 'Failed_to_Award');
+
+          if ((hasDeclined && hasStandby) || hasStandby) {
+            canPromoteStandby = true;
+          }
+          if (hasFailed || hasDeclined) {
+            canRestartRfq = true;
+          }
+        }
+
+        // Also check quotations for standby/failed/declined statuses
+        for (const q of (req.quotations || [])) {
+          if (q.status === 'Standby') canPromoteStandby = true;
+          if (q.status === 'Failed' || q.status === 'Declined') canRestartRfq = true;
+        }
+      } catch (e) {
+        console.warn('Failed to compute promote/restart flags:', e);
+      }
+
+      requisitionsWithDetails.push({
         ...req,
         isActionable,
+        canPromoteStandby,
+        canRestartRfq,
         auditTrail: logsByTransaction[req.transactionId!] || []
-      };
-    });
+      });
+    }
 
     return NextResponse.json(requisitionsWithDetails);
   } catch (error) {

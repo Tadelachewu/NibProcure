@@ -31,6 +31,7 @@ import {
   Loader2,
   X,
   FileText,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -248,6 +249,48 @@ export function ReviewsTable() {
                                 {isLoadingAction && actionType === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className="mr-2 h-4 w-4" />} 
                                 Reject
                             </Button>
+                              {req.canPromoteStandby && (
+                                <Button variant="secondary" size="sm" onClick={async () => {
+                                    if (!user) return;
+                                    setActiveActionId(req.id);
+                                    try {
+                                        const res = await fetch(`/api/requisitions/${req.id}/promote-standby`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ userId: user.id })
+                                        });
+                                        const data = await res.json();
+                                        if (!res.ok) throw new Error(data.error || 'Failed to promote standby');
+                                        toast({ title: 'Standby promoted', description: data.message || 'Standby vendor promoted.' });
+                                        fetchRequisitions(true);
+                                    } catch (e) {
+                                        toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Unknown error' });
+                                    } finally { setActiveActionId(null); }
+                                }}>
+                                  <RefreshCw className="mr-2 h-4 w-4" /> Promote Standby
+                                </Button>
+                              )}
+                              {req.canRestartRfq && (
+                                <Button variant="outline" size="sm" onClick={async () => {
+                                    if (!user) return;
+                                    setActiveActionId(req.id);
+                                    try {
+                                        const res = await fetch(`/api/requisitions/${req.id}/manage-rfq`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ userId: user.id, action: 'restart', reason: 'Restart requested from reviews UI' })
+                                        });
+                                        const data = await res.json();
+                                        if (!res.ok) throw new Error(data.error || 'Failed to restart RFQ');
+                                        toast({ title: 'RFQ restarted', description: data.message || 'RFQ has been restarted.' });
+                                        fetchRequisitions(true);
+                                    } catch (e) {
+                                        toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Unknown error' });
+                                    } finally { setActiveActionId(null); }
+                                }}>
+                                  <RefreshCw className="mr-2 h-4 w-4" /> Restart RFQ
+                                </Button>
+                              )}
                         </div>
                         </TableCell>
                     </TableRow>
