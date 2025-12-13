@@ -63,6 +63,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
+import { RestartRfqDialog } from '@/components/restart-rfq-dialog';
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -2752,13 +2753,23 @@ export default function QuotationDetailsPage() {
             />
         )}
         
-        {(requisition.status === 'Award_Declined' || requisition.status === 'Scoring_Complete') && (role === 'Procurement_Officer' || role === 'Admin') && (
-             <AwardStandbyButton 
-                requisition={requisition}
-                quotations={quotations}
-                onFinalize={handleFinalizeScores}
-                isFinalizing={isFinalizing}
-            />
+        {(role === 'Procurement_Officer' || role === 'Admin') && (
+             <div className="mt-6">
+                 <AwardStandbyButton
+                    requisition={requisition}
+                    quotations={quotations}
+                    onPromote={handleAwardChange}
+                    isChangingAward={isChangingAward}
+                 />
+
+                 <div className="mt-2">
+                    <RestartRfqDialog
+                        requisition={requisition}
+                        vendors={vendors}
+                        onRfqRestarted={fetchRequisitionAndQuotes}
+                    />
+                 </div>
+             </div>
         )}
 
         {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
