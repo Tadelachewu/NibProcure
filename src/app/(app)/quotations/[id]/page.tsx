@@ -2754,6 +2754,16 @@ export default function QuotationDetailsPage() {
   const showAwardingCenter = (requisition.status === 'Scoring_Complete') && isAuthorized;
   const awardIsDeclined = requisition.status === 'Award_Declined';
 
+  const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+  const hasDeclinedWithStandby = isPerItemStrategy && requisition.items.some(item => {
+      const details = (item.perItemAwardDetails as any[]) || [];
+      return details.some(d => d.status === 'Declined') && details.some(d => d.status === 'Standby');
+  });
+  const hasFailedOrDeclined = isPerItemStrategy && requisition.items.some(item => {
+      const details = (item.perItemAwardDetails as any[]) || [];
+      return details.some(d => d.status === 'Declined' || d.status === 'Failed_to_Award');
+  });
+
   return (
     <div className="space-y-6">
        <div className="flex items-center justify-between">
@@ -2965,13 +2975,15 @@ export default function QuotationDetailsPage() {
           )
         )}
         
-        {(showAwardingCenter || awardIsDeclined) && isAuthorized && (
+        {(showAwardingCenter || awardIsDeclined || (isPerItemStrategy && (hasDeclinedWithStandby || hasFailedOrDeclined))) && isAuthorized && (
             <Card className="mt-6">
             <CardHeader>
                 <CardTitle>Awarding Center</CardTitle>
                 <CardDescription>
                 {showAwardingCenter && 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
                 {awardIsDeclined && 'An award was declined. You may now promote a standby vendor or restart the RFQ for any failed items.'}
+                {isPerItemStrategy && hasDeclinedWithStandby && 'Per-item awards: declined items with standby detected — you may promote standby vendors.'}
+                {isPerItemStrategy && hasFailedOrDeclined && 'Per-item awards: failed or declined items detected — you may restart RFQs for those items.'}
                 </CardDescription>
             </CardHeader>
             <CardFooter className="gap-4">
