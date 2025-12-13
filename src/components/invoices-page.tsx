@@ -663,7 +663,7 @@ export function InvoicesPage() {
                   const matchResult = matchResults[invoice.id];
                   const po = allPOs.find(p => p.id === invoice.purchaseOrderId);
                   const isGrnDisputed = po?.receipts?.some(r => r.status === 'Disputed') ?? false;
-                  const isActionDisabled = !matchResult || matchResult.status !== 'Matched';
+                  const isActionDisabled = !matchResult || matchResult.status !== 'Matched' || isGrnDisputed;
                   const isActionLoading = activeAction === invoice.id;
                   
                   return (
@@ -718,12 +718,15 @@ export function InvoicesPage() {
                                 <DisputeDialog onConfirm={(reason) => handleAction(invoice.id, 'Disputed', reason)} disabled={isGrnDisputed} />
                             </>
                         )}
-                        {invoice.status === 'Approved_for_Payment' && (
+                        {invoice.status === 'Approved_for_Payment' && !isGrnDisputed && (
                             <PaymentDialog
                                 invoice={invoice}
                                 onConfirm={handlePayment}
                                 isLoading={isActionLoading}
                              />
+                        )}
+                        {invoice.status === 'Approved_for_Payment' && isGrnDisputed && (
+                            <div className="text-sm text-destructive">Payment blocked: associated goods receipt is disputed.</div>
                         )}
                          {invoice.status === 'Paid' && invoice.paymentDate && (
                              <div className="flex items-center text-sm text-green-600">

@@ -24,7 +24,7 @@ export async function POST(
 
     const invoiceToUpdate = await prisma.invoice.findUnique({ 
         where: { id: invoiceId },
-        include: { po: true }
+        include: { po: { include: { receipts: true } } }
     });
     if (!invoiceToUpdate) {
         return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
@@ -32,6 +32,11 @@ export async function POST(
     
     if (invoiceToUpdate.status !== 'Approved_for_Payment') {
         return NextResponse.json({ error: 'Invoice must be approved before payment.' }, { status: 400 });
+    }
+
+    // Prevent payment when the related PO has a disputed goods receipt
+    if (invoiceToUpdate.po?.receipts?.some(r => r.status === 'Disputed')) {
+        return NextResponse.json({ error: 'Cannot process payment: associated goods receipt is disputed.' }, { status: 400 });
     }
     
     const transactionResult = await prisma.$transaction(async (tx) => {

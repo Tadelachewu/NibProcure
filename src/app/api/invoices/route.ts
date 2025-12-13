@@ -9,6 +9,14 @@ export async function GET() {
   try {
     const invoices = await prisma.invoice.findMany({
       orderBy: { invoiceDate: 'desc' },
+      include: {
+        items: true,
+        po: {
+          include: {
+            receipts: true,
+          }
+        }
+      }
     });
     return NextResponse.json(invoices);
   } catch (error) {

@@ -221,7 +221,7 @@ function ProcurementOfficerDashboard() {
             .reduce((sum, i) => sum + i.totalAmount, 0);
 
         const unpaidInvoicesValue = data.invoices
-            .filter(i => i.status !== 'Paid')
+            .filter(i => i.status !== 'Paid' && !(i.po?.receipts?.some((r: any) => r.status === 'Disputed')))
             .reduce((sum, i) => sum + i.totalAmount, 0);
 
         return { readyForRfq, acceptingQuotes, inCommitteeScoring, readyToAward, pendingFinalReview, awardDeclined, paidInvoicesValue, unpaidInvoicesValue };
@@ -261,7 +261,7 @@ function FinanceDashboard() {
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
         const disputed = invoices.filter(i => i.status === 'Disputed').length;
         const paidValue = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
-        const unpaidValue = invoices.filter(i => i.status !== 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
+        const unpaidValue = invoices.filter(i => i.status !== 'Paid' && !(i.po?.receipts?.some((r: any) => r.status === 'Disputed'))).reduce((sum, i) => sum + i.totalAmount, 0);
         return { pending, approved, disputed, paidValue, unpaidValue };
     }, [invoices]);
 
