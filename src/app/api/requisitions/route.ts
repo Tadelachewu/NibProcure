@@ -463,7 +463,6 @@ export async function PATCH(
                 reviewerId: user.id,
                 decision: newStatus as 'Approved' | 'Rejected',
                 comment: comment,
-                committee: committeeName,
               }
             });
 
