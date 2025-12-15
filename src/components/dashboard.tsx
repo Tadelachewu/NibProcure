@@ -211,7 +211,16 @@ function ProcurementOfficerDashboard() {
     const stats = useMemo(() => {
         const readyForRfq = data.requisitions.filter(r => r.status === 'PreApproved').length;
         const acceptingQuotes = data.requisitions.filter(r => r.status === 'Accepting_Quotes').length;
-        const inCommitteeScoring = data.requisitions.filter(r => r.status === 'Scoring_In_Progress').length;
+        const inCommitteeScoring = data.requisitions.filter(r => {
+            const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
+            const hasCommittee = Boolean(r.committeeName);
+            const terminalStatuses = ['Closed','Fulfilled','Partially_Closed','Scoring_Complete','Awarded','PostApproved','PO_Created'];
+            if (terminalStatuses.includes(r.status)) return false;
+            if (r.status === 'Scoring_In_Progress') return true;
+            // If vendor deadline passed and a committee is assigned, treat it as in scoring (including overdue)
+            if (deadlinePassed && hasCommittee) return true;
+            return false;
+        }).length;
         const readyToAward = data.requisitions.filter(r => r.status === 'Scoring_Complete').length;
         const pendingFinalReview = data.requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
         const awardDeclined = data.requisitions.filter(r => r.status === 'Award_Declined').length;
@@ -329,16 +338,18 @@ function CommitteeDashboard() {
     }, [user, token]);
 
     const stats = useMemo(() => {
+        // Pending: assigned to this user, scoring currently active, and user hasn't submitted scores yet
         const pendingScore = requisitions.filter(r => {
-            const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
-            const hasScored = r.committeeAssignments?.some(a => a.userId === user?.id && a.scoresSubmitted);
-            return deadlinePassed && !hasScored;
+            const assigned = r.committeeAssignments?.some((a: any) => a.userId === user?.id);
+            const hasScored = r.committeeAssignments?.some((a: any) => a.userId === user?.id && a.scoresSubmitted);
+            const inScoring = r.status === 'Scoring_In_Progress' || (r.deadline ? !isPast(new Date(r.deadline)) : false);
+            return Boolean(assigned) && !hasScored && inScoring;
         }).length;
-        
+
         const scored = requisitions.filter(r => 
-            r.committeeAssignments?.some(a => a.userId === user?.id && a.scoresSubmitted)
+            r.committeeAssignments?.some((a: any) => a.userId === user?.id && a.scoresSubmitted)
         ).length;
-        
+
         return { pendingScore, scored };
     }, [requisitions, user]);
 
