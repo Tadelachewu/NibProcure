@@ -327,10 +327,11 @@ function CommitteeDashboard() {
             .then(res => res.json())
             .then((data: PurchaseRequisition[]) => {
                 // Filter client-side to find only requisitions assigned to this committee member
-                const assignedReqs = data.filter((req: PurchaseRequisition) => 
-                    req.financialCommitteeMemberIds?.includes(user.id) ||
-                    req.technicalCommitteeMemberIds?.includes(user.id)
-                );
+                const assignedReqs = data.filter((req: PurchaseRequisition) => {
+                    const finIds = req.financialCommitteeMemberIds ?? (req as any).financialCommitteeMembers?.map((m: any) => m.id) ?? [];
+                    const techIds = req.technicalCommitteeMemberIds ?? (req as any).technicalCommitteeMembers?.map((m: any) => m.id) ?? [];
+                    return finIds.includes(user.id) || techIds.includes(user.id);
+                });
                 setRequisitions(assignedReqs);
             })
             .catch(console.error)
