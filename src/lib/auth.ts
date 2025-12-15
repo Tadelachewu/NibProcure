@@ -8,7 +8,7 @@ import { prisma } from './prisma';
  * This is safe to use on the client-side as it only reads the token's payload.
  * The signature should always be verified on the server/middleware.
  */
-export function decodeJwt<T>(token: string): T | null {
+export function decodeJwt<T>(token: string): (T & { exp: number }) | null {
   try {
     const base64Url = token.split('.')[1];
     if (!base64Url) return null;
@@ -23,7 +23,7 @@ export function decodeJwt<T>(token: string): T | null {
         .join('')
     );
 
-    return JSON.parse(jsonPayload) as T;
+    return JSON.parse(jsonPayload) as T & { exp: number };
   } catch (error) {
     console.error("Failed to decode JWT:", error);
     return null;
@@ -59,7 +59,7 @@ export async function getActorFromToken(request: Request): Promise<User | null> 
     if (!decoded || !decoded.id) return null;
 
     const user = await prisma.user.findUnique({
-        where: { id: decoded.id },
+        where: { id: decoded.id as string },
         include: { roles: true, department: true }
     });
     

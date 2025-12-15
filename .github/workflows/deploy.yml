@@ -1,3 +1,4 @@
+
 name: Deploy Next.js to IIS Remotely
 
 on:
@@ -25,9 +26,6 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-    - name: Build Next.js app
-      run: npm run build
-
     - name: Prisma Migrations & Seed
       run: |
         echo "Applying Prisma migrations..."
@@ -37,6 +35,9 @@ jobs:
         echo "Seeding database..."
         npm run db:seed:force
       shell: pwsh
+
+    - name: Build Next.js app
+      run: npm run build
 
     - name: Deploy to IIS via PowerShell Remoting
       shell: pwsh
