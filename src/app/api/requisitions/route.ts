@@ -462,7 +462,7 @@ export async function PATCH(
                 requisitionId: requisition.id,
                 reviewerId: user.id,
                 decision: newStatus as 'Approved' | 'Rejected',
-                comments: comment,
+                comment: comment,
                 committee: committeeName,
               }
             });
