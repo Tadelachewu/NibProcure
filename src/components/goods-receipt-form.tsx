@@ -55,6 +55,7 @@ const receiptFormSchema = z.object({
     });
   }, {
       message: "A reason (in the notes field) is required when an item is marked as Damaged or Incorrect.",
+      path: ["items"],
   }),
 });
 
@@ -87,20 +88,26 @@ export function GoodsReceiptForm() {
 
   const activePOs = useMemo(() => {
     return allPOs.filter(po => {
-      // Rule 1: Must be in a state where receiving is expected.
-      const isReceivableStatus = ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_'));
-      
-      // Rule 2: It can be received again if its *latest* GRN was disputed by Finance.
       const latestReceipt = po.receipts?.sort((a,b) => new Date(b.receivedDate).getTime() - new Date(a.receivedDate).getTime())[0];
-      const isFinanceDisputed = latestReceipt?.status === 'Disputed';
+      
+      // A PO is active if it's been returned by finance for re-verification.
+      if (latestReceipt?.status === 'Disputed') {
+        return true;
+      }
 
-      if (isFinanceDisputed) return true;
+      // A PO is active if it's in a receivable state...
+      const isReceivableStatus = ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_'));
+      if (!isReceivableStatus) {
+        return false;
+      }
+      
+      // ...AND it does NOT have a receiving-side dispute (damaged/incorrect items logged).
+      const hasReceivingSideDispute = po.receipts?.some(r => r.items.some(i => i.condition !== 'Good')) ?? false;
+      if (hasReceivingSideDispute) {
+        return false;
+      }
 
-      // Rule 3: Exclude if it has any previous receipt containing items marked as 'Damaged' or 'Incorrect'.
-      const hasInitialReceivingDispute = po.receipts?.some(r => r.items.some(i => i.condition === 'Damaged' || i.condition === 'Incorrect')) ?? false;
-      if (hasInitialReceivingDispute) return false;
-
-      return isReceivableStatus;
+      return true;
     });
   }, [allPOs]);
 
@@ -130,10 +137,10 @@ export function GoodsReceiptForm() {
   
   useEffect(() => {
     const savedData = localStorage.getItem(storageKey);
-    if (savedData) {
+    if (savedData && allPOs.length > 0) {
       try {
         const parsedData = JSON.parse(savedData);
-        if (parsedData.purchaseOrderId && allPOs.length > 0) {
+        if (parsedData.purchaseOrderId) {
             handlePOChange(parsedData.purchaseOrderId, parsedData.items);
             toast({ title: 'Draft Restored', description: 'Your previous goods receipt entry has been restored.' });
         }
@@ -284,7 +291,7 @@ export function GoodsReceiptForm() {
                                         render={({ field }) => (
                                             <FormItem>
                                             <FormLabel>Condition</FormLabel>
-                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSelectedPODisputedByFinance}>
                                                 <FormControl>
                                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                                 </FormControl>

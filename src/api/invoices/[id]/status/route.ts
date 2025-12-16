@@ -78,7 +78,8 @@ export async function PATCH(
             action: 'UPDATE_INVOICE_STATUS',
             entity: 'Invoice',
             entityId: invoiceId,
-            details: `Updated invoice status from "${oldStatus}" to "${status}".`,
+            details: `Updated invoice status from "${oldStatus}" to "${status}". ${reason ? `Reason: "${reason}"` : ''}`.trim(),
+            transactionId: updatedInvoice.transactionId,
         }
     });
 

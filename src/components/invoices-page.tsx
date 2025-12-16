@@ -548,8 +548,8 @@ export function InvoicesPage() {
   const filteredInvoices = useMemo(() => {
     return invoices.filter(invoice => {
       const po = allPOs.find(p => p.id === invoice.purchaseOrderId);
-      const hasDisputedReceipt = po?.receipts?.some(r => r.status === 'Disputed') ?? false;
-      return !hasDisputedReceipt;
+      const hasDisputedReceiptByFinance = po?.receipts?.some(r => r.status === 'Disputed') ?? false;
+      return !hasDisputedReceiptByFinance;
     });
   }, [invoices, allPOs]);
   
@@ -572,7 +572,7 @@ export function InvoicesPage() {
           const response = await fetch(`/api/invoices/${invoiceId}/status`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({ status, reason, returnToReceiving: true }),
+              body: JSON.stringify({ status, reason, returnToReceiving: status === 'Disputed' }),
           });
           if (!response.ok) throw new Error(`Failed to mark invoice as ${status}.`);
           toast({ title: "Success", description: `Invoice has been marked as ${status}.`});
@@ -669,9 +669,7 @@ export function InvoicesPage() {
               {paginatedInvoices.length > 0 ? (
                 paginatedInvoices.map((invoice, index) => {
                   const matchResult = matchResults[invoice.id];
-                  const po = allPOs.find(p => p.id === invoice.purchaseOrderId);
-                  const isGrnDisputed = po?.receipts?.some(r => r.status === 'Disputed') ?? false;
-                  const isActionDisabled = !matchResult || matchResult.status !== 'Matched' || isGrnDisputed;
+                  const isActionDisabled = !matchResult || matchResult.status !== 'Matched';
                   const isActionLoading = activeAction === invoice.id;
                   
                   return (
@@ -710,12 +708,7 @@ export function InvoicesPage() {
                                                 </Button>
                                             </span>
                                         </TooltipTrigger>
-                                        {isGrnDisputed && (
-                                            <TooltipContent>
-                                                <p>Cannot approve: Associated goods receipt is disputed.</p>
-                                            </TooltipContent>
-                                        )}
-                                        {matchResult?.status !== 'Matched' && !isGrnDisputed && (
+                                        {isActionDisabled && (
                                             <TooltipContent>
                                                 <p>Cannot approve: 3-way match has not passed.</p>
                                             </TooltipContent>
