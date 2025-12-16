@@ -17,7 +17,7 @@ export async function PATCH(
     
     const invoiceId = params.id;
     const body = await request.json();
-    const { status } = body;
+    const { status, reason, returnToReceiving } = body;
 
     const validStatuses = ['Approved for Payment', 'Disputed'];
     if (!validStatuses.includes(status)) {
@@ -30,10 +30,46 @@ export async function PATCH(
     }
 
     const oldStatus = invoiceToUpdate.status;
+    const updateData: any = { status: status.replace(/ /g, '_') };
+    if (status === 'Disputed' && reason) {
+      updateData.disputeReason = reason;
+    }
+
     const updatedInvoice = await prisma.invoice.update({
-        where: { id: invoiceId },
-        data: { status: status.replace(/ /g, '_') as any }
+      where: { id: invoiceId },
+      data: updateData
     });
+
+    // If finance chose to return the invoice to receiving, mark the latest GRN for the PO as Disputed
+    if (status === 'Disputed' && returnToReceiving) {
+      try {
+        const latestGrn = await prisma.goodsReceiptNote.findFirst({
+          where: { purchaseOrderId: invoiceToUpdate.purchaseOrderId },
+          orderBy: { receivedDate: 'desc' },
+          include: { items: true }
+        });
+
+        if (latestGrn) {
+          await prisma.goodsReceiptNote.update({
+            where: { id: latestGrn.id },
+            data: { status: 'Disputed' }
+          });
+          await prisma.auditLog.create({
+            data: {
+              user: { connect: { id: actor.id } },
+              timestamp: new Date(),
+              action: 'RETURN_TO_RECEIVING',
+              entity: 'GoodsReceiptNote',
+              entityId: latestGrn.id,
+              details: `Finance returned invoice ${invoiceId} to receiving. Reason: "${reason || 'No reason provided.'}"`,
+              transactionId: invoiceToUpdate.transactionId || undefined
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Failed to mark GRN as disputed when returning to receiving:', err);
+      }
+    }
     
     await prisma.auditLog.create({
         data: {
