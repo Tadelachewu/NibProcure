@@ -493,7 +493,7 @@ export function InvoicesPage() {
   const [actionType, setActionType] = useState<'approve' | 'dispute' | null>(null);
 
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   const fetchAllData = useCallback(async () => {
     setLoading(true);
@@ -544,12 +544,20 @@ export function InvoicesPage() {
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter(invoice => {
+      const po = allPOs.find(p => p.id === invoice.purchaseOrderId);
+      const hasDisputedReceipt = po?.receipts?.some(r => r.status === 'Disputed') ?? false;
+      return !hasDisputedReceipt;
+    });
+  }, [invoices, allPOs]);
   
-  const totalPages = Math.ceil(invoices.length / PAGE_SIZE);
+  const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
   const paginatedInvoices = useMemo(() => {
     const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return invoices.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [invoices, currentPage]);
+    return filteredInvoices.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredInvoices, currentPage]);
 
   const handleInvoiceAdded = () => {
     setFormOpen(false);
@@ -563,8 +571,8 @@ export function InvoicesPage() {
       try {
           const response = await fetch(`/api/invoices/${invoiceId}/status`, {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
-              body: JSON.stringify({ status, userId: user.id, reason }),
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ status, reason, returnToReceiving: true }),
           });
           if (!response.ok) throw new Error(`Failed to mark invoice as ${status}.`);
           toast({ title: "Success", description: `Invoice has been marked as ${status}.`});
@@ -582,13 +590,13 @@ export function InvoicesPage() {
   }
 
   const handlePayment = async (invoiceId: string, paymentEvidenceUrl: string) => {
-    if (!user) return;
+    if (!user || !token) return;
      setActiveAction(invoiceId);
      try {
         const response = await fetch(`/api/payments`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
-            body: JSON.stringify({ invoiceId, userId: user.id, paymentEvidenceUrl })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ invoiceId, paymentEvidenceUrl })
         });
         if (!response.ok) {
             const errorData = await response.json();
@@ -715,18 +723,15 @@ export function InvoicesPage() {
                                     </Tooltip>
                                 </TooltipProvider>
 
-                                <DisputeDialog onConfirm={(reason) => handleAction(invoice.id, 'Disputed', reason)} disabled={isGrnDisputed} />
+                                <DisputeDialog onConfirm={(reason) => handleAction(invoice.id, 'Disputed', reason)} />
                             </>
                         )}
-                        {invoice.status === 'Approved_for_Payment' && !isGrnDisputed && (
+                        {invoice.status === 'Approved_for_Payment' && (
                             <PaymentDialog
                                 invoice={invoice}
                                 onConfirm={handlePayment}
                                 isLoading={isActionLoading}
                              />
-                        )}
-                        {invoice.status === 'Approved_for_Payment' && isGrnDisputed && (
-                            <div className="text-sm text-destructive">Payment blocked: associated goods receipt is disputed.</div>
                         )}
                          {invoice.status === 'Paid' && invoice.paymentDate && (
                              <div className="flex items-center text-sm text-green-600">
@@ -749,7 +754,7 @@ export function InvoicesPage() {
         </div>
          <div className="flex items-center justify-between mt-4">
           <div className="text-sm text-muted-foreground">
-             Page {currentPage} of {totalPages} ({invoices.length} total invoices)
+             Page {currentPage} of {totalPages} ({filteredInvoices.length} total invoices)
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
@@ -777,7 +782,7 @@ function DisputeDialog({ onConfirm, disabled }: { onConfirm: (reason: string) =>
                 <AlertDialogHeader>
                     <AlertDialogTitle>Dispute Invoice</AlertDialogTitle>
                     <AlertDialogDescription>
-                        Please provide a clear reason for disputing this invoice. This will notify the relevant parties and pause payment processing.
+                        This will mark the invoice as disputed and automatically flag the related Goods Receipt Note for re-verification.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <div className="py-4">

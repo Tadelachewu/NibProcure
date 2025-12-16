@@ -141,7 +141,7 @@ export function GoodsReceiptForm() {
       const response = await fetch('/api/purchase-orders');
       const data: PurchaseOrder[] = await response.json();
       const openPOs = data.filter(po => 
-        ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered', 'Disputed'].includes(po.status.replace(/ /g, '_')) ||
+        ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_')) ||
         po.receipts?.some(r => r.status === 'Disputed')
       );
       setPurchaseOrders(openPOs);
@@ -234,7 +234,7 @@ export function GoodsReceiptForm() {
                         <AlertTriangle className="h-4 w-4"/>
                         <AlertTitle>This Order is Disputed</AlertTitle>
                         <AlertDescription>
-                            The invoice for this purchase order was disputed. Please carefully re-verify the received quantities and conditions, then re-submit this form to confirm the correct details.
+                            An invoice for this order was disputed, likely due to a receiving error. Please carefully re-verify quantities and conditions, then submit this form to confirm the correct details.
                         </AlertDescription>
                     </Alert>
                 )}

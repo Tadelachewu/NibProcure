@@ -24,7 +24,7 @@ export async function POST(
 
     const invoiceToUpdate = await prisma.invoice.findUnique({ 
         where: { id: invoiceId },
-        include: { po: true }
+        include: { po: { include: { receipts: true } } }
     });
     if (!invoiceToUpdate) {
         return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
@@ -32,6 +32,11 @@ export async function POST(
     
     if (invoiceToUpdate.status !== 'Approved_for_Payment') {
         return NextResponse.json({ error: 'Invoice must be approved before payment.' }, { status: 400 });
+    }
+
+    // Prevent payment when the related PO has a disputed goods receipt
+    if (invoiceToUpdate.po?.receipts?.some(r => r.status === 'Disputed')) {
+        return NextResponse.json({ error: 'Cannot process payment: associated goods receipt is disputed.' }, { status: 400 });
     }
     
     const transactionResult = await prisma.$transaction(async (tx) => {
@@ -50,7 +55,15 @@ export async function POST(
         if (invoiceToUpdate.po?.requisitionId) {
             const requisition = await tx.purchaseRequisition.findUnique({
                 where: { id: invoiceToUpdate.po.requisitionId },
-                include: { items: true, purchaseOrders: { include: { invoices: true }}}
+                include: { 
+                    items: true, 
+                    purchaseOrders: { 
+                        include: { 
+                            invoices: true,
+                            items: true,
+                        }
+                    }
+                }
             });
             
             if (requisition) {
@@ -58,23 +71,25 @@ export async function POST(
                 let isFullyComplete = false;
 
                 if (isPerItem) {
-                    // For per-item, every item must be in a terminal state (Accepted, Failed, or Restarted)
                     isFullyComplete = requisition.items.every(item => {
                         const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-                        if (details.length === 0) return true; // If an item never went to award, it's considered "complete" for this check
-                        
-                        // Check if an item is considered resolved.
-                        const isResolved = details.some(d => ['Accepted', 'Failed_to_Award', 'Restarted'].includes(d.status));
-                        
-                        // If it's resolved and Accepted, we need to make sure its corresponding invoice is paid.
-                        if (details.some(d => d.status === 'Accepted')) {
-                             const acceptedPO = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
-                             const isPaid = acceptedPO?.invoices.some(inv => inv.status === 'Paid');
-                             return isPaid;
-                        }
+                        // If an item never went to award (e.g., was added later and not part of the process), it's not "blocking" closure.
+                        if (details.length === 0) return true;
 
-                        // If it's not in an 'Accepted' state, being Failed or Restarted is enough to be complete.
-                        return isResolved && !details.some(d => d.status === 'Accepted');
+                        const acceptedDetail = details.find(d => d.status === 'Accepted');
+                        if (acceptedDetail) {
+                            // Item was accepted. Find its PO and check if its invoice is paid.
+                            const poForItem = requisition.purchaseOrders.find(po => po.items.some(poi => poi.requisitionItemId === item.id));
+                            if (!poForItem) return false;
+                            
+                            const invoiceForItem = poForItem.invoices.find(inv => inv.purchaseOrderId === poForItem.id);
+                            return !!invoiceForItem && invoiceForItem.status === 'Paid';
+                        }
+                        
+                        // If not accepted, the only other "terminal" state is 'Restarted'. 
+                        // 'Failed_to_Award' is not terminal because it requires action.
+                        const isRestarted = details.some(d => d.status === 'Restarted');
+                        return isRestarted;
                     });
 
                 } else {
