@@ -266,7 +266,13 @@ function FinanceDashboard() {
     }, []);
 
     const stats = useMemo(() => {
-        const pending = invoices.filter(i => i.status === 'Pending').length;
+        const pending = invoices.filter(i => {
+            if (i.status !== 'Pending') return false;
+            const hasDamagedOrIncorrect = (i.po?.receipts || []).some((r: any) =>
+                (r.items || []).some((it: any) => it.condition === 'Damaged' || it.condition === 'Incorrect')
+            );
+            return !hasDamagedOrIncorrect;
+        }).length;
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
         const disputed = invoices.filter(i => i.status === 'Disputed').length;
         const paidValue = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
