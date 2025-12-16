@@ -38,6 +38,7 @@ import { format } from 'date-fns';
 
 const receiptFormSchema = z.object({
   purchaseOrderId: z.string().min(1, "Purchase Order is required."),
+  isResubmission: z.boolean().default(false),
   items: z.array(z.object({
     poItemId: z.string(),
     name: z.string(),
@@ -48,6 +49,7 @@ const receiptFormSchema = z.object({
   })).min(1, "At least one item must be received.")
   .refine(items => {
     return items.every(item => {
+        // Notes are required only if the item is explicitly marked as defective
         if (item.condition === 'Damaged' || item.condition === 'Incorrect') {
             return item.notes && item.notes.trim().length > 0;
         }
@@ -63,7 +65,7 @@ type ReceiptFormValues = z.infer<typeof receiptFormSchema>;
 
 export function GoodsReceiptForm() {
   const [allPOs, setAllPOs] = useState<PurchaseOrder[]>([]);
-  const [disputedReceipts, setDisputedReceipts] = useState<GoodsReceiptNote[]>([]);
+  const [allReceipts, setAllReceipts] = useState<GoodsReceiptNote[]>([]);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
@@ -75,6 +77,7 @@ export function GoodsReceiptForm() {
     resolver: zodResolver(receiptFormSchema),
     defaultValues: {
         purchaseOrderId: "",
+        isResubmission: false,
         items: [],
     },
   });
@@ -90,32 +93,35 @@ export function GoodsReceiptForm() {
     return allPOs.filter(po => {
       const latestReceipt = po.receipts?.sort((a,b) => new Date(b.receivedDate).getTime() - new Date(a.receivedDate).getTime())[0];
       
-      // A PO is active if it's been returned by finance for re-verification.
+      // Condition 1: A finance-initiated dispute requires re-verification.
       if (latestReceipt?.status === 'Disputed') {
         return true;
       }
-
-      // A PO is active if it's in a receivable state...
+      
+      // Condition 2: It's in a receivable state for an initial receipt.
       const isReceivableStatus = ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_'));
       if (!isReceivableStatus) {
         return false;
       }
       
-      // ...AND it does NOT have a receiving-side dispute (damaged/incorrect items logged).
-      const hasReceivingSideDispute = po.receipts?.some(r => r.items.some(i => i.condition !== 'Good')) ?? false;
-      if (hasReceivingSideDispute) {
+      // Exclude if it has EVER had an item marked damaged/incorrect by receiving.
+      const hasReceivingSideRejection = allReceipts.some(r => r.purchaseOrderId === po.id && r.items.some(i => i.condition !== 'Good'));
+      if (hasReceivingSideRejection) {
         return false;
       }
 
       return true;
     });
-  }, [allPOs]);
+  }, [allPOs, allReceipts]);
 
   const handlePOChange = (poId: string, restoredItems?: any[]) => {
     form.setValue('purchaseOrderId', poId);
     const po = allPOs.find(p => p.id === poId);
     if (po) {
         setSelectedPO(po);
+        const isDisputedByFinance = po.receipts?.some(r => r.status === 'Disputed');
+        form.setValue('isResubmission', isDisputedByFinance);
+
         if (restoredItems && restoredItems.length > 0) {
             replace(restoredItems);
         } else {
@@ -123,7 +129,7 @@ export function GoodsReceiptForm() {
                 poItemId: item.id,
                 name: item.name,
                 quantityOrdered: item.quantity,
-                quantityReceived: 0,
+                quantityReceived: isDisputedByFinance ? 0 : item.receivedQuantity, // On resubmission, you confirm the new quantity. Otherwise show what's already there.
                 condition: 'Good' as const,
                 notes: "",
             }));
@@ -135,39 +141,17 @@ export function GoodsReceiptForm() {
     }
   }
   
-  useEffect(() => {
-    const savedData = localStorage.getItem(storageKey);
-    if (savedData && allPOs.length > 0) {
-      try {
-        const parsedData = JSON.parse(savedData);
-        if (parsedData.purchaseOrderId) {
-            handlePOChange(parsedData.purchaseOrderId, parsedData.items);
-            toast({ title: 'Draft Restored', description: 'Your previous goods receipt entry has been restored.' });
-        }
-      } catch (e) {
-        console.error("Failed to parse saved GRN data", e);
-      }
-    }
-  }, [allPOs]); // Depend on allPOs to ensure they are loaded
-
-  useEffect(() => {
-    const subscription = form.watch((value) => {
-      localStorage.setItem(storageKey, JSON.stringify(value));
-    });
-    return () => subscription.unsubscribe();
-  }, [form, storageKey]);
-
-
-  const fetchPOs = useCallback(async () => {
+  const fetchPOsAndReceipts = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/purchase-orders');
-      const data: PurchaseOrder[] = await response.json();
-      setAllPOs(data);
-
-      const allReceiptsResponse = await fetch('/api/receipts');
-      const allReceiptsData: GoodsReceiptNote[] = await allReceiptsResponse.json();
-      setDisputedReceipts(allReceiptsData.filter(r => r.items.some(i => i.condition !== 'Good')));
+      const [poResponse, receiptsResponse] = await Promise.all([
+        fetch('/api/purchase-orders'),
+        fetch('/api/receipts')
+      ]);
+      const poData: PurchaseOrder[] = await poResponse.json();
+      const receiptsData: GoodsReceiptNote[] = await receiptsResponse.json();
+      setAllPOs(poData);
+      setAllReceipts(receiptsData);
       
     } catch (error) {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
@@ -177,8 +161,8 @@ export function GoodsReceiptForm() {
   }, [toast]);
 
   useEffect(() => {
-    fetchPOs();
-  }, [fetchPOs]);
+    fetchPOsAndReceipts();
+  }, [fetchPOsAndReceipts]);
 
 
   const onSubmit = async (values: ReceiptFormValues) => {
@@ -204,7 +188,7 @@ export function GoodsReceiptForm() {
         form.reset();
         setSelectedPO(null);
         replace([]);
-        await fetchPOs(); // Refresh PO list
+        await fetchPOsAndReceipts(); // Refresh PO list
       } catch (error) {
          toast({
             variant: 'destructive',
@@ -216,11 +200,11 @@ export function GoodsReceiptForm() {
       }
   };
 
-  const isSelectedPODisputedByFinance = useMemo(() => {
-    if (!selectedPO) return false;
-    const latestReceipt = selectedPO.receipts?.sort((a,b) => new Date(b.receivedDate).getTime() - new Date(a.receivedDate).getTime())[0];
-    return latestReceipt?.status === 'Disputed';
-  }, [selectedPO]);
+  const isResubmissionFlow = form.watch('isResubmission');
+
+  const disputedReceiptsHistory = useMemo(() => {
+      return allReceipts.filter(r => r.items.some(i => i.condition !== 'Good'));
+  }, [allReceipts]);
   
   return (
     <div className="space-y-6">
@@ -255,7 +239,7 @@ export function GoodsReceiptForm() {
                 
                 {selectedPO && (
                     <>
-                    {isSelectedPODisputedByFinance && (
+                    {isResubmissionFlow && (
                         <Alert variant="destructive">
                             <AlertTriangle className="h-4 w-4"/>
                             <AlertTitle>This Order was Disputed by Finance</AlertTitle>
@@ -291,7 +275,7 @@ export function GoodsReceiptForm() {
                                         render={({ field }) => (
                                             <FormItem>
                                             <FormLabel>Condition</FormLabel>
-                                            <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSelectedPODisputedByFinance}>
+                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
                                                 <FormControl>
                                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                                 </FormControl>
@@ -330,7 +314,7 @@ export function GoodsReceiptForm() {
                  <CardFooter>
                     <Button type="submit" disabled={isSubmitting}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackageCheck className="mr-2 h-4 w-4" />}
-                        {isSelectedPODisputedByFinance ? 'Confirm & Re-Submit Receipt' : 'Log Received Goods'}
+                        {isResubmissionFlow ? 'Confirm & Re-Submit Receipt' : 'Log Received Goods'}
                     </Button>
                 </CardFooter>
               )}
@@ -341,7 +325,7 @@ export function GoodsReceiptForm() {
         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><History className="h-5 w-5"/> Disputed Receipts History</CardTitle>
-                <CardDescription>A log of all goods receipts that included damaged or incorrect items.</CardDescription>
+                <CardDescription>A read-only log of all goods receipts that initially included damaged or incorrect items.</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>
@@ -355,7 +339,7 @@ export function GoodsReceiptForm() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {disputedReceipts.length > 0 ? disputedReceipts.map(grn => {
+                        {disputedReceiptsHistory.length > 0 ? disputedReceiptsHistory.map(grn => {
                             const disputedItem = grn.items.find(i => i.condition !== 'Good');
                             const po = allPOs.find(p => p.id === grn.purchaseOrderId);
                             const poItem = po?.items.find(pi => pi.id === disputedItem?.poItemId);

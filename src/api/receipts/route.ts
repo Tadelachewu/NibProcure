@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { purchaseOrderId, items: receivedItems } = body;
+  const { purchaseOrderId, items: receivedItems, isResubmission } = body;
 
   try {
     const txResult = await prisma.$transaction(async (tx) => {
@@ -54,14 +54,12 @@ export async function POST(request: Request) {
         const defectiveItems = receivedItems.filter((item: any) => item.condition === 'Damaged' || item.condition === 'Incorrect');
         const hasDefectiveItems = defectiveItems.length > 0;
         
-        // This is the primary mechanism for handling receiving-end disputes.
-        // The GRN status is 'Processed' by default unless disputed by Finance.
         const newReceipt = await tx.goodsReceiptNote.create({
           data: {
               transactionId: po.transactionId,
               purchaseOrder: { connect: { id: purchaseOrderId } },
               receivedBy: { connect: { id: actor.id } },
-              status: 'Processed', 
+              status: isResubmission ? 'Resubmitted' : 'Processed', 
               items: {
                   create: receivedItems.map((item: any) => ({
                       poItemId: item.poItemId,
@@ -72,6 +70,19 @@ export async function POST(request: Request) {
               }
           }
         });
+        
+        if (isResubmission) {
+            // Find the previously disputed GRN and mark it as resolved/superceded
+             await tx.goodsReceiptNote.updateMany({
+                where: {
+                    purchaseOrderId: purchaseOrderId,
+                    status: 'Disputed',
+                },
+                data: {
+                    status: 'Resolved'
+                }
+            });
+        }
 
         let allItemsDelivered = true;
         for (const poItem of po.items) {
@@ -105,12 +116,11 @@ export async function POST(request: Request) {
                 action: 'RECEIVE_GOODS',
                 entity: 'PurchaseOrder',
                 entityId: po.id,
-                details: `Created Goods Receipt Note ${newReceipt.id}. PO status: ${newPOStatus.replace(/_/g, ' ')}.`,
+                details: `${isResubmission ? 'Resubmitted' : 'Created'} Goods Receipt Note ${newReceipt.id}. PO status: ${newPOStatus.replace(/_/g, ' ')}.`,
             }
         });
         
-        // If there are defective items, call the award rejection service.
-        if (hasDefectiveItems) {
+        if (hasDefectiveItems && !isResubmission) {
             const quoteForVendor = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
             if(quoteForVendor) {
                 const declinedReqItemIds = defectiveItems.map((item: any) => {

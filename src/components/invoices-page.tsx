@@ -484,7 +484,6 @@ const MatchingStatusBadge = ({ result, onRefresh }: { result: MatchingResult | n
 
 export function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [allPOs, setAllPOs] = useState<PurchaseOrder[]>([]);
   const [matchResults, setMatchResults] = useState<Record<string, MatchingResult | null>>({});
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
@@ -501,13 +500,7 @@ export function InvoicesPage() {
       const invResponse = await fetch('/api/invoices');
       if (!invResponse.ok) throw new Error('Failed to fetch invoices');
       const invData: Invoice[] = await invResponse.json();
-      
-      const poResponse = await fetch('/api/purchase-orders');
-      if (!poResponse.ok) throw new Error('Failed to fetch POs');
-      const poData: PurchaseOrder[] = await poResponse.json();
-
       setInvoices(invData);
-      setAllPOs(poData);
       
       const initialMatchResults: Record<string, null> = {};
       invData.forEach(inv => {
@@ -547,11 +540,13 @@ export function InvoicesPage() {
 
   const filteredInvoices = useMemo(() => {
     return invoices.filter(invoice => {
-      const po = allPOs.find(p => p.id === invoice.purchaseOrderId);
-      const hasDisputedReceiptByFinance = po?.receipts?.some(r => r.status === 'Disputed') ?? false;
-      return !hasDisputedReceiptByFinance;
+        // Exclude invoices where the related GRN has been disputed by finance and is awaiting re-verification
+        const po = invoice.po;
+        if (!po || !po.receipts) return true;
+        const hasDisputedReceipt = po.receipts.some(r => r.status === 'Disputed');
+        return !hasDisputedReceipt;
     });
-  }, [invoices, allPOs]);
+  }, [invoices]);
   
   const totalPages = Math.ceil(filteredInvoices.length / PAGE_SIZE);
   const paginatedInvoices = useMemo(() => {
