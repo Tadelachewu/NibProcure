@@ -364,6 +364,7 @@ export type GoodsReceiptNote = {
     receivedDate: Date;
     items: ReceiptItem[];
     photos?: { name: string; url: string }[];
+  status?: string; // e.g. 'Processed' | 'Disputed'
 }
 
 export type InvoiceItem = {
@@ -374,7 +375,7 @@ export type InvoiceItem = {
   totalPrice: number;
 };
 
-export type InvoiceStatus = 'Pending' | 'Approved_for_Payment' | 'Paid' | 'Disputed';
+export type InvoiceStatus = 'Pending' | 'Approved_for_Payment' | 'Paid' | 'Disputed' | 'Returned' | 'Declined';
 
 export type Invoice = {
   id: string;
