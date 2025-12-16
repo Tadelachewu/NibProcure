@@ -28,7 +28,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { Invoice, PurchaseRequisition } from '@/lib/types';
+import { Invoice, PurchaseOrder, PurchaseRequisition } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from './ui/table';
 import { Badge } from './ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
@@ -268,15 +268,20 @@ function FinanceDashboard() {
     const stats = useMemo(() => {
         const pending = invoices.filter(i => {
             if (i.status !== 'Pending') return false;
-            const hasDamagedOrIncorrect = (i.po?.receipts || []).some((r: any) =>
-                (r.items || []).some((it: any) => it.condition === 'Damaged' || it.condition === 'Incorrect')
-            );
-            return !hasDamagedOrIncorrect;
+            // Exclude if any related GRN is disputed
+            const hasDisputedReceipt = i.po?.receipts?.some((r: any) => r.status === 'Disputed') ?? false;
+            return !hasDisputedReceipt;
         }).length;
+
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
         const disputed = invoices.filter(i => i.status === 'Disputed').length;
+        
         const paidValue = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
-        const unpaidValue = invoices.filter(i => i.status !== 'Paid' && !(i.po?.receipts?.some((r: any) => r.status === 'Disputed'))).reduce((sum, i) => sum + i.totalAmount, 0);
+        
+        const unpaidValue = invoices.filter(i => 
+            i.status !== 'Paid' && !(i.po?.receipts?.some((r: any) => r.status === 'Disputed'))
+        ).reduce((sum, i) => sum + i.totalAmount, 0);
+
         return { pending, approved, disputed, paidValue, unpaidValue };
     }, [invoices]);
 
