@@ -55,7 +55,6 @@ const receiptFormSchema = z.object({
   }, {
       message: "A reason (in the notes field) is required when an item is marked as Damaged or Incorrect.",
       // This path is a bit tricky for array fields. We'll show a general error.
-      // A more complex setup could target specific items.
   }),
 });
 
@@ -192,9 +191,12 @@ export function GoodsReceiptForm() {
       }
   };
 
-  const isSelectedPODisputed = useMemo(() => {
+  const isSelectedPODisputedByFinance = useMemo(() => {
     if (!selectedPO) return false;
-    return selectedPO.receipts?.some(r => r.status === 'Disputed') ?? false;
+    // A PO is disputed by finance if its latest GRN has the 'Disputed' status.
+    // This status is ONLY set by the finance flow.
+    const latestReceipt = selectedPO.receipts?.sort((a,b) => new Date(b.receivedDate).getTime() - new Date(a.receivedDate).getTime())[0];
+    return latestReceipt?.status === 'Disputed';
   }, [selectedPO]);
   
   return (
@@ -229,12 +231,12 @@ export function GoodsReceiptForm() {
             
             {selectedPO && (
                 <>
-                {isSelectedPODisputed && (
+                {isSelectedPODisputedByFinance && (
                     <Alert variant="destructive">
                         <AlertTriangle className="h-4 w-4"/>
-                        <AlertTitle>This Order is Disputed</AlertTitle>
+                        <AlertTitle>This Order was Disputed by Finance</AlertTitle>
                         <AlertDescription>
-                            An invoice for this order was disputed, likely due to a receiving error. Please carefully re-verify quantities and conditions, then submit this form to confirm the correct details.
+                            An invoice for this order was disputed. Please carefully re-verify quantities and conditions, then re-submit this form to confirm the correct details.
                         </AlertDescription>
                     </Alert>
                 )}
@@ -304,7 +306,7 @@ export function GoodsReceiptForm() {
              <CardFooter>
                 <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackageCheck className="mr-2 h-4 w-4" />}
-                    {isSelectedPODisputed ? 'Confirm & Re-Submit Receipt' : 'Log Received Goods'}
+                    {isSelectedPODisputedByFinance ? 'Confirm & Re-Submit Receipt' : 'Log Received Goods'}
                 </Button>
             </CardFooter>
           )}

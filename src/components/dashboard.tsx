@@ -268,8 +268,8 @@ function FinanceDashboard() {
     const stats = useMemo(() => {
         const pending = invoices.filter(i => {
             if (i.status !== 'Pending') return false;
-            // Exclude if any related GRN is disputed
-            const hasDisputedReceipt = i.po?.receipts?.some((r: any) => r.status === 'Disputed') ?? false;
+            // Exclude if any related GRN is disputed by Finance
+            const hasDisputedReceipt = i.po?.receipts?.some(r => r.status === 'Disputed') ?? false;
             return !hasDisputedReceipt;
         }).length;
 
@@ -279,7 +279,7 @@ function FinanceDashboard() {
         const paidValue = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
         
         const unpaidValue = invoices.filter(i => 
-            i.status !== 'Paid' && !(i.po?.receipts?.some((r: any) => r.status === 'Disputed'))
+            i.status !== 'Paid' && !(i.po?.receipts?.some(r => r.status === 'Disputed'))
         ).reduce((sum, i) => sum + i.totalAmount, 0);
 
         return { pending, approved, disputed, paidValue, unpaidValue };

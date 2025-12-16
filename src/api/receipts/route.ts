@@ -4,34 +4,46 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
+import { POItem } from '@prisma/client';
+import { handleAwardRejection } from '@/services/award-service';
 
 export async function POST(request: Request) {
+  const actor = await getActorFromToken(request);
+  if (!actor || !(actor.roles as string[]).includes('Receiving')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { purchaseOrderId, items: receivedItems } = body;
+
   try {
-    const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Receiving')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    const body = await request.json();
-    const { purchaseOrderId, items } = body;
-
     const txResult = await prisma.$transaction(async (tx) => {
         const po = await tx.purchaseOrder.findUnique({ 
             where: { id: purchaseOrderId },
-            include: { items: true }
+            include: { 
+              items: true,
+              requisition: { include: { items: true, quotations: { include: { items: true } } } },
+              vendor: { include: { user: true } }
+            }
         });
 
-        if (!po) {
-          throw new Error('Purchase Order not found');
+        if (!po || !po.requisition || !po.vendor) {
+          throw new Error('Purchase Order, associated requisition, or vendor not found');
         }
 
+        const defectiveItems = receivedItems.filter((item: any) => item.condition === 'Damaged' || item.condition === 'Incorrect');
+        const hasDefectiveItems = defectiveItems.length > 0;
+        
+        // Always create the GRN to log what was physically received.
+        // The GRN status is 'Processed' by default. It can only be changed to 'Disputed' by the Finance department flow.
         const newReceipt = await tx.goodsReceiptNote.create({
           data: {
               transactionId: po.transactionId,
               purchaseOrder: { connect: { id: purchaseOrderId } },
               receivedBy: { connect: { id: actor.id } },
+              status: 'Processed', // GRNs are always 'Processed' initially.
               items: {
-                  create: items.map((item: any) => ({
+                  create: receivedItems.map((item: any) => ({
                       poItemId: item.poItemId,
                       quantityReceived: item.quantityReceived,
                       condition: item.condition.replace(/ /g, '_'),
@@ -43,7 +55,7 @@ export async function POST(request: Request) {
 
         let allItemsDelivered = true;
         for (const poItem of po.items) {
-            const receivedItem = items.find((i: { poItemId: string; }) => i.poItemId === poItem.id);
+            const receivedItem = receivedItems.find((i: { poItemId: string; }) => i.poItemId === poItem.id);
             let newReceivedQuantity = poItem.receivedQuantity;
             if (receivedItem) {
                 newReceivedQuantity += receivedItem.quantityReceived;
@@ -65,17 +77,7 @@ export async function POST(request: Request) {
             data: { status: newPOStatus }
         });
         
-        if (newPOStatus === 'Delivered') {
-            await tx.quotation.updateMany({
-                where: {
-                    requisitionId: po.requisitionId,
-                    status: 'Standby'
-                },
-                data: { status: 'Rejected' }
-            });
-        }
-
-        await prisma.auditLog.create({
+        await tx.auditLog.create({
             data: {
                 transactionId: po.transactionId,
                 user: { connect: { id: actor.id } },
@@ -86,6 +88,22 @@ export async function POST(request: Request) {
                 details: `Created Goods Receipt Note ${newReceipt.id}. PO status: ${newPOStatus.replace(/_/g, ' ')}.`,
             }
         });
+        
+        // If there are defective items, call the award rejection service.
+        // This is now the primary mechanism for handling receiving-end disputes.
+        if (hasDefectiveItems) {
+            const quoteForVendor = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
+            if(quoteForVendor) {
+                const declinedReqItemIds = defectiveItems.map((item: any) => {
+                    const poItem = po.items.find(p => p.id === item.poItemId);
+                    return poItem?.requisitionItemId;
+                }).filter(Boolean);
+
+                const firstReason = defectiveItems[0].notes || 'Goods received were damaged or incorrect.';
+
+                await handleAwardRejection(tx, quoteForVendor, po.requisition, po.vendor.user!, declinedReqItemIds, 'Receiving', firstReason);
+            }
+        }
 
         return newReceipt;
     });
