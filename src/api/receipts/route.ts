@@ -7,6 +7,26 @@ import { getActorFromToken } from '@/lib/auth';
 import { POItem } from '@prisma/client';
 import { handleAwardRejection } from '@/services/award-service';
 
+
+export async function GET() {
+    try {
+        const receipts = await prisma.goodsReceiptNote.findMany({
+            include: {
+                receivedBy: true,
+                items: true,
+            },
+            orderBy: {
+                receivedDate: 'desc',
+            }
+        });
+        return NextResponse.json(receipts);
+    } catch(e) {
+        console.error("Failed to fetch receipts:", e);
+        return NextResponse.json({ error: "Failed to fetch receipts." }, { status: 500 });
+    }
+}
+
+
 export async function POST(request: Request) {
   const actor = await getActorFromToken(request);
   if (!actor || !(actor.roles as string[]).includes('Receiving')) {
@@ -34,14 +54,14 @@ export async function POST(request: Request) {
         const defectiveItems = receivedItems.filter((item: any) => item.condition === 'Damaged' || item.condition === 'Incorrect');
         const hasDefectiveItems = defectiveItems.length > 0;
         
-        // Always create the GRN to log what was physically received.
-        // The GRN status is 'Processed' by default. It can only be changed to 'Disputed' by the Finance department flow.
+        // This is the primary mechanism for handling receiving-end disputes.
+        // The GRN status is 'Processed' by default unless disputed by Finance.
         const newReceipt = await tx.goodsReceiptNote.create({
           data: {
               transactionId: po.transactionId,
               purchaseOrder: { connect: { id: purchaseOrderId } },
               receivedBy: { connect: { id: actor.id } },
-              status: 'Processed', // GRNs are always 'Processed' initially.
+              status: 'Processed', 
               items: {
                   create: receivedItems.map((item: any) => ({
                       poItemId: item.poItemId,
@@ -90,7 +110,6 @@ export async function POST(request: Request) {
         });
         
         // If there are defective items, call the award rejection service.
-        // This is now the primary mechanism for handling receiving-end disputes.
         if (hasDefectiveItems) {
             const quoteForVendor = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
             if(quoteForVendor) {

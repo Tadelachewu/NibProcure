@@ -19,19 +19,21 @@ import {
   SelectValue,
 } from './ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PackageCheck } from 'lucide-react';
+import { Loader2, PackageCheck, AlertTriangle, History } from 'lucide-react';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
-import { PurchaseOrder } from '@/lib/types';
+import { PurchaseOrder, GoodsReceiptNote } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import { Input } from './ui/input';
 import { Separator } from './ui/separator';
 import { Textarea } from './ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { Badge } from './ui/badge';
+import { format } from 'date-fns';
 
 
 const receiptFormSchema = z.object({
@@ -45,7 +47,6 @@ const receiptFormSchema = z.object({
     notes: z.string().optional(),
   })).min(1, "At least one item must be received.")
   .refine(items => {
-    // For every item, if condition is 'Damaged' or 'Incorrect', notes must be provided.
     return items.every(item => {
         if (item.condition === 'Damaged' || item.condition === 'Incorrect') {
             return item.notes && item.notes.trim().length > 0;
@@ -54,14 +55,14 @@ const receiptFormSchema = z.object({
     });
   }, {
       message: "A reason (in the notes field) is required when an item is marked as Damaged or Incorrect.",
-      // This path is a bit tricky for array fields. We'll show a general error.
   }),
 });
 
 type ReceiptFormValues = z.infer<typeof receiptFormSchema>;
 
 export function GoodsReceiptForm() {
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [allPOs, setAllPOs] = useState<PurchaseOrder[]>([]);
+  const [disputedReceipts, setDisputedReceipts] = useState<GoodsReceiptNote[]>([]);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
@@ -84,9 +85,28 @@ export function GoodsReceiptForm() {
   
   const watchedItems = useWatch({ control: form.control, name: 'items'});
 
+  const activePOs = useMemo(() => {
+    return allPOs.filter(po => {
+      // Rule 1: Must be in a state where receiving is expected.
+      const isReceivableStatus = ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_'));
+      
+      // Rule 2: It can be received again if its *latest* GRN was disputed by Finance.
+      const latestReceipt = po.receipts?.sort((a,b) => new Date(b.receivedDate).getTime() - new Date(a.receivedDate).getTime())[0];
+      const isFinanceDisputed = latestReceipt?.status === 'Disputed';
+
+      if (isFinanceDisputed) return true;
+
+      // Rule 3: Exclude if it has any previous receipt containing items marked as 'Damaged' or 'Incorrect'.
+      const hasInitialReceivingDispute = po.receipts?.some(r => r.items.some(i => i.condition === 'Damaged' || i.condition === 'Incorrect')) ?? false;
+      if (hasInitialReceivingDispute) return false;
+
+      return isReceivableStatus;
+    });
+  }, [allPOs]);
+
   const handlePOChange = (poId: string, restoredItems?: any[]) => {
     form.setValue('purchaseOrderId', poId);
-    const po = purchaseOrders.find(p => p.id === poId);
+    const po = allPOs.find(p => p.id === poId);
     if (po) {
         setSelectedPO(po);
         if (restoredItems && restoredItems.length > 0) {
@@ -113,18 +133,15 @@ export function GoodsReceiptForm() {
     if (savedData) {
       try {
         const parsedData = JSON.parse(savedData);
-        if (parsedData.purchaseOrderId) {
-            // We need to wait for POs to be fetched before we can properly restore
-            if (purchaseOrders.length > 0) {
-              handlePOChange(parsedData.purchaseOrderId, parsedData.items);
-              toast({ title: 'Draft Restored', description: 'Your previous goods receipt entry has been restored.' });
-            }
+        if (parsedData.purchaseOrderId && allPOs.length > 0) {
+            handlePOChange(parsedData.purchaseOrderId, parsedData.items);
+            toast({ title: 'Draft Restored', description: 'Your previous goods receipt entry has been restored.' });
         }
       } catch (e) {
         console.error("Failed to parse saved GRN data", e);
       }
     }
-  }, [purchaseOrders]); // Depend on purchaseOrders to ensure they are loaded
+  }, [allPOs]); // Depend on allPOs to ensure they are loaded
 
   useEffect(() => {
     const subscription = form.watch((value) => {
@@ -139,13 +156,14 @@ export function GoodsReceiptForm() {
     try {
       const response = await fetch('/api/purchase-orders');
       const data: PurchaseOrder[] = await response.json();
-      const openPOs = data.filter(po => 
-        ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_')) ||
-        po.receipts?.some(r => r.status === 'Disputed')
-      );
-      setPurchaseOrders(openPOs);
+      setAllPOs(data);
+
+      const allReceiptsResponse = await fetch('/api/receipts');
+      const allReceiptsData: GoodsReceiptNote[] = await allReceiptsResponse.json();
+      setDisputedReceipts(allReceiptsData.filter(r => r.items.some(i => i.condition !== 'Good')));
+      
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch purchase orders.' });
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
     } finally {
       setLoading(false);
     }
@@ -193,125 +211,169 @@ export function GoodsReceiptForm() {
 
   const isSelectedPODisputedByFinance = useMemo(() => {
     if (!selectedPO) return false;
-    // A PO is disputed by finance if its latest GRN has the 'Disputed' status.
-    // This status is ONLY set by the finance flow.
     const latestReceipt = selectedPO.receipts?.sort((a,b) => new Date(b.receivedDate).getTime() - new Date(a.receivedDate).getTime())[0];
     return latestReceipt?.status === 'Disputed';
   }, [selectedPO]);
   
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Receive Goods</CardTitle>
-        <CardDescription>Log incoming items against a purchase order.</CardDescription>
-      </CardHeader>
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <CardContent className="space-y-6">
-            <FormField
-                control={form.control}
-                name="purchaseOrderId"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>Select Purchase Order</FormLabel>
-                    <Select onValueChange={(value) => handlePOChange(value)} value={field.value}>
-                        <FormControl>
-                        <SelectTrigger className="w-full md:w-1/2">
-                            <SelectValue placeholder={loading ? "Loading POs..." : "Select a PO to receive against"} />
-                        </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                        {purchaseOrders.map(po => <SelectItem key={po.id} value={po.id}>{po.id} - {po.requisitionTitle}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-            
-            {selectedPO && (
-                <>
-                {isSelectedPODisputedByFinance && (
-                    <Alert variant="destructive">
-                        <AlertTriangle className="h-4 w-4"/>
-                        <AlertTitle>This Order was Disputed by Finance</AlertTitle>
-                        <AlertDescription>
-                            An invoice for this order was disputed. Please carefully re-verify quantities and conditions, then re-submit this form to confirm the correct details.
-                        </AlertDescription>
-                    </Alert>
-                )}
-                <Separator />
-                <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
-                    <h3 className="text-lg font-medium">Items to Receive</h3>
-                    {fields.map((field, index) => {
-                        const itemIsDefective = watchedItems?.[index]?.condition === 'Damaged' || watchedItems?.[index]?.condition === 'Incorrect';
-                        return (
-                        <Card key={field.id} className={cn("p-4", itemIsDefective && "border-destructive/50 ring-2 ring-destructive/20")}>
-                            <p className="font-semibold mb-2">{field.name}</p>
-                            <p className="text-sm text-muted-foreground mb-4">Ordered: {field.quantityOrdered}</p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <FormField
-                                    control={form.control}
-                                    name={`items.${index}.quantityReceived`}
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Quantity Received</FormLabel>
-                                            <FormControl><Input type="number" {...field} /></FormControl>
+    <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Receive Goods</CardTitle>
+            <CardDescription>Log incoming items against a purchase order.</CardDescription>
+          </CardHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)}>
+              <CardContent className="space-y-6">
+                <FormField
+                    control={form.control}
+                    name="purchaseOrderId"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Select a PO to receive against</FormLabel>
+                        <Select onValueChange={(value) => handlePOChange(value)} value={field.value}>
+                            <FormControl>
+                            <SelectTrigger className="w-full md:w-1/2">
+                                <SelectValue placeholder={loading ? "Loading POs..." : "Select an actionable PO"} />
+                            </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                            {activePOs.map(po => <SelectItem key={po.id} value={po.id}>{po.id} - {po.requisitionTitle}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
+                
+                {selectedPO && (
+                    <>
+                    {isSelectedPODisputedByFinance && (
+                        <Alert variant="destructive">
+                            <AlertTriangle className="h-4 w-4"/>
+                            <AlertTitle>This Order was Disputed by Finance</AlertTitle>
+                            <AlertDescription>
+                                An invoice for this order was disputed. Please carefully re-verify quantities and conditions, then re-submit this form to confirm the correct details.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                    <Separator />
+                    <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+                        <h3 className="text-lg font-medium">Items to Receive</h3>
+                        {fields.map((field, index) => {
+                            const itemIsDefective = watchedItems?.[index]?.condition === 'Damaged' || watchedItems?.[index]?.condition === 'Incorrect';
+                            return (
+                            <Card key={field.id} className={cn("p-4", itemIsDefective && "border-destructive/50 ring-2 ring-destructive/20")}>
+                                <p className="font-semibold mb-2">{field.name}</p>
+                                <p className="text-sm text-muted-foreground mb-4">Ordered: {field.quantityOrdered}</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <FormField
+                                        control={form.control}
+                                        name={`items.${index}.quantityReceived`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Quantity Received</FormLabel>
+                                                <FormControl><Input type="number" {...field} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name={`items.${index}.condition`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                            <FormLabel>Condition</FormLabel>
+                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                <FormControl>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="Good">Good</SelectItem>
+                                                    <SelectItem value="Damaged">Damaged</SelectItem>
+                                                    <SelectItem value="Incorrect">Incorrect</SelectItem>
+                                                </SelectContent>
+                                            </Select>
                                             <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                <FormField
-                                    control={form.control}
-                                    name={`items.${index}.condition`}
-                                    render={({ field }) => (
-                                        <FormItem>
-                                        <FormLabel>Condition</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <FormControl>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="Good">Good</SelectItem>
-                                                <SelectItem value="Damaged">Damaged</SelectItem>
-                                                <SelectItem value="Incorrect">Incorrect</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                 <FormField
-                                    control={form.control}
-                                    name={`items.${index}.notes`}
-                                    render={({ field }) => (
-                                        <FormItem className="md:col-span-2">
-                                            <FormLabel>Item Notes {itemIsDefective && <span className="text-destructive">*</span>}</FormLabel>
-                                            <FormControl>
-                                                <Textarea placeholder={itemIsDefective ? "Reason for damaged/incorrect status is required..." : "e.g. Box was dented but item is fine"} {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            </div>
-                        </Card>
-                    )})}
-                </div>
-                </>
-            )}
+                                            </FormItem>
+                                        )}
+                                    />
+                                     <FormField
+                                        control={form.control}
+                                        name={`items.${index}.notes`}
+                                        render={({ field }) => (
+                                            <FormItem className="md:col-span-2">
+                                                <FormLabel>Item Notes {itemIsDefective && <span className="text-destructive">*</span>}</FormLabel>
+                                                <FormControl>
+                                                    <Textarea placeholder={itemIsDefective ? "Reason for damaged/incorrect status is required..." : "e.g. Box was dented but item is fine"} {...field} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
+                            </Card>
+                        )})}
+                    </div>
+                    </>
+                )}
 
-          </CardContent>
-          {selectedPO && (
-             <CardFooter>
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackageCheck className="mr-2 h-4 w-4" />}
-                    {isSelectedPODisputedByFinance ? 'Confirm & Re-Submit Receipt' : 'Log Received Goods'}
-                </Button>
-            </CardFooter>
-          )}
-        </form>
-      </Form>
-    </Card>
+              </CardContent>
+              {selectedPO && (
+                 <CardFooter>
+                    <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackageCheck className="mr-2 h-4 w-4" />}
+                        {isSelectedPODisputedByFinance ? 'Confirm & Re-Submit Receipt' : 'Log Received Goods'}
+                    </Button>
+                </CardFooter>
+              )}
+            </form>
+          </Form>
+        </Card>
+        
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><History className="h-5 w-5"/> Disputed Receipts History</CardTitle>
+                <CardDescription>A log of all goods receipts that included damaged or incorrect items.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>GRN ID</TableHead>
+                            <TableHead>PO ID</TableHead>
+                            <TableHead>Received Date</TableHead>
+                            <TableHead>Disputed Item(s)</TableHead>
+                            <TableHead>Reason</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {disputedReceipts.length > 0 ? disputedReceipts.map(grn => {
+                            const disputedItem = grn.items.find(i => i.condition !== 'Good');
+                            const po = allPOs.find(p => p.id === grn.purchaseOrderId);
+                            const poItem = po?.items.find(pi => pi.id === disputedItem?.poItemId);
+
+                            return (
+                                <TableRow key={grn.id}>
+                                    <TableCell>{grn.id}</TableCell>
+                                    <TableCell>{grn.purchaseOrderId}</TableCell>
+                                    <TableCell>{format(new Date(grn.receivedDate), 'PP')}</TableCell>
+                                    <TableCell>{poItem?.name || 'N/A'}</TableCell>
+                                    <TableCell>
+                                        <Badge variant="destructive">{disputedItem?.condition}</Badge>
+                                        <p className="text-xs text-muted-foreground mt-1">{disputedItem?.notes}</p>
+                                    </TableCell>
+                                </TableRow>
+                            )
+                        }) : (
+                            <TableRow>
+                                <TableCell colSpan={5} className="text-center h-24">No disputed receipts found.</TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    </div>
   );
 }
