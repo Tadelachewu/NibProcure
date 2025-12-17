@@ -231,6 +231,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: quote.answers || requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: quote.cpoDocumentUrl || '',
             experienceDocumentUrl: quote.experienceDocumentUrl || '',
+            summaryDocumentUrl: quote.summaryDocumentUrl || '',
             bidDocumentUrl: quote.bidDocumentUrl || '',
         } : {
             notes: "",
@@ -246,6 +247,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: '',
             experienceDocumentUrl: '',
+            summaryDocumentUrl: '',
             bidDocumentUrl: '',
         },
     });
@@ -898,6 +900,17 @@ export default function VendorRequisitionPage() {
             </CardHeader>
             <CardContent className="space-y-4">
                 
+                {quote.summaryDocumentUrl && (
+                    <div className="text-sm">
+                        <h3 className="font-semibold">Bid Summary Document</h3>
+                        <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
+                            <a href={quote.summaryDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-primary"/>
+                                <span>{quote.summaryDocumentUrl.split('/').pop()}</span>
+                            </a>
+                        </div>
+                    </div>
+                )}
                 {quote.cpoDocumentUrl && (
                      <div className="text-sm">
                         <h3 className="font-semibold">CPO Document</h3>
@@ -916,17 +929,6 @@ export default function VendorRequisitionPage() {
                              <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
                                 <FileText className="h-4 w-4 text-primary"/>
                                 <span>{quote.experienceDocumentUrl.split('/').pop()}</span>
-                            </a>
-                        </div>
-                    </div>
-                )}
-                {quote.summaryDocumentUrl && (
-                    <div className="text-sm">
-                        <h3 className="font-semibold">Bid Summary Document</h3>
-                        <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
-                            <a href={quote.summaryDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-primary"/>
-                                <span>{quote.summaryDocumentUrl.split('/').pop()}</span>
                             </a>
                         </div>
                     </div>
@@ -1106,12 +1108,12 @@ export default function VendorRequisitionPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Requisition Details</CardTitle>
-                        <CardDescription>
-                            <div>ID: {requisition.id}</div>
+                        <div className="text-sm text-muted-foreground">
+                            <p>ID: {requisition.id}</p>
                             {requisition.deadline && (
-                                <div className="text-xs text-destructive mt-1">Quotation Deadline: {format(new Date(requisition.deadline), 'PPpp')}</div>
+                                <p className="text-xs text-destructive mt-1">Quotation Deadline: {format(new Date(requisition.deadline), 'PPpp')}</p>
                             )}
-                        </CardDescription>
+                        </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {requisition.cpoAmount && requisition.cpoAmount > 0 && (
