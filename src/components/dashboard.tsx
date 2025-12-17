@@ -204,8 +204,14 @@ function ProcurementOfficerDashboard() {
             fetch('/api/requisitions').then(res => res.json()),
             fetch('/api/invoices').then(res => res.json()),
         ]).then(([requisitions, invoices]) => {
-            setData({ requisitions, invoices });
-        }).catch(console.error).finally(() => setLoading(false));
+            setData({ 
+                requisitions: Array.isArray(requisitions) ? requisitions : [],
+                invoices: Array.isArray(invoices) ? invoices : []
+            });
+        }).catch(error => {
+            console.error("Failed to fetch dashboard data:", error);
+            setData({ requisitions: [], invoices: [] }); // Set default empty state on error
+        }).finally(() => setLoading(false));
     }, []);
 
     const stats = useMemo(() => {
@@ -260,8 +266,11 @@ function FinanceDashboard() {
      useEffect(() => {
         setLoading(true);
         fetch('/api/invoices').then(res => res.json())
-            .then(data => setInvoices(data))
-            .catch(console.error)
+            .then(data => setInvoices(Array.isArray(data) ? data : []))
+            .catch(error => {
+                console.error("Failed to fetch invoices:", error);
+                setInvoices([]);
+            })
             .finally(() => setLoading(false));
     }, []);
 

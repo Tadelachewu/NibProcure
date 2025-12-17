@@ -509,13 +509,21 @@ export function InvoicesPage() {
       setInvoices(invData);
       setAllPOs(poData);
       
+      // Filter out invoices where the GRN is disputed before showing them
+      const activeInvoices = invData.filter(inv => {
+          const po = poData.find(p => p.id === inv.purchaseOrderId);
+          const isGrnDisputed = po?.receipts?.some(r => r.status === 'Disputed');
+          return !isGrnDisputed;
+      });
+      setInvoices(activeInvoices);
+
       const initialMatchResults: Record<string, null> = {};
-      invData.forEach(inv => {
+      activeInvoices.forEach(inv => {
           initialMatchResults[inv.id] = null;
       });
       setMatchResults(initialMatchResults);
 
-      const matchPromises = invData.map(inv =>
+      const matchPromises = activeInvoices.map(inv =>
         fetch(`/api/matching?invoiceId=${inv.id}`)
           .then(res => res.ok ? res.json() : null)
           .then(data => ({ id: inv.id, data }))
