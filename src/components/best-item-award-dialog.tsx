@@ -11,7 +11,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '.
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, HelpCircle, Trophy, Crown, Medal, Upload, FileText, UserCog, Calculator } from 'lucide-react';
+import { CalendarIcon, HelpCircle, Upload, FileText, UserCog, Calculator } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -20,87 +20,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
 import Link from 'next/link';
-
-const ItemBreakdownDialog = ({ itemWinners }: { itemWinners: any[] }) => {
-    
-    const getRankIcon = (rank: number) => {
-        switch (rank) {
-            case 1: return <Crown className="h-4 w-4 text-amber-400" />;
-            case 2: return <Trophy className="h-4 w-4 text-slate-400" />;
-            case 3: return <Medal className="h-4 w-4 text-amber-600" />;
-            default: return <span className="text-xs text-muted-foreground font-mono">{rank}</span>;
-        }
-    }
-
-    return (
-        <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
-            <DialogHeader>
-                <DialogTitle>Award Calculation Breakdown</DialogTitle>
-                <DialogDescription>
-                    This report shows how the winning vendor for each item was determined by comparing the "champion bid" from each vendor.
-                </DialogDescription>
-            </DialogHeader>
-            <div className="flex-1 overflow-hidden">
-                 <ScrollArea className="h-full pr-4">
-                    <div className="space-y-6">
-                        {itemWinners.map(item => (
-                            <Card key={item.requisitionItemId}>
-                                <CardHeader>
-                                    <CardTitle>Item: {item.name}</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Rank</TableHead>
-                                                <TableHead>Vendor</TableHead>
-                                                <TableHead>Proposed Item</TableHead>
-                                                <TableHead>Documents</TableHead>
-                                                <TableHead className="text-right">Calculated Score</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {item.rankedBids.length > 0 ? item.rankedBids.map((bid: any, index: number) => (
-                                                <TableRow key={bid.vendorId} className={index === 0 ? 'bg-green-500/10' : ''}>
-                                                    <TableCell className="font-bold flex items-center gap-2">{getRankIcon(index + 1)}</TableCell>
-                                                    <TableCell>{bid.vendorName}</TableCell>
-                                                    <TableCell>{bid.proposedItemName}</TableCell>
-                                                     <TableCell>
-                                                        <div className="flex gap-2">
-                                                            {bid.bidDocumentUrl && (
-                                                                <Button asChild variant="link" size="sm" className="h-auto p-0">
-                                                                    <a href={bid.bidDocumentUrl} target="_blank" rel="noopener noreferrer"><FileText className="h-4 w-4" /></a>
-                                                                </Button>
-                                                            )}
-                                                            {bid.experienceDocumentUrl && (
-                                                                <Button asChild variant="link" size="sm" className="h-auto p-0">
-                                                                    <a href={bid.experienceDocumentUrl} target="_blank" rel="noopener noreferrer"><UserCog className="h-4 w-4" /></a>
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="text-right font-mono">{bid.score.toFixed(2)}</TableCell>
-                                                </TableRow>
-                                            )) : (
-                                                <TableRow>
-                                                    <TableCell colSpan={5} className="text-center">No bids for this item.</TableCell>
-                                                </TableRow>
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                 </ScrollArea>
-            </div>
-            <DialogFooter>
-                 <DialogClose asChild><Button>Close</Button></DialogClose>
-            </DialogFooter>
-        </DialogContent>
-    )
-}
-
+import { getRankIcon } from '@/lib/utils';
 
 export const BestItemAwardDialog = ({
     requisition,
@@ -118,7 +38,6 @@ export const BestItemAwardDialog = ({
     const { toast } = useToast();
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
     const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
-    const [isBreakdownOpen, setBreakdownOpen] = useState(false);
     const [minuteFile, setMinuteFile] = useState<File | null>(null);
     const [minuteJustification, setMinuteJustification] = useState('');
 
@@ -244,7 +163,7 @@ export const BestItemAwardDialog = ({
 
 
     return (
-        <>
+        <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Award by Best Offer (Per Item)</DialogTitle>
@@ -259,13 +178,15 @@ export const BestItemAwardDialog = ({
                             <CardHeader>
                                 <CardTitle className="flex items-center justify-between">
                                     <span>Winning Bids per Item</span>
-                                     <Button variant="secondary" size="sm" onClick={() => setBreakdownOpen(true)}>
-                                        <HelpCircle className="mr-2 h-4 w-4" />
-                                        Show Calculation Breakdown
+                                    <Button variant="secondary" size="sm" asChild>
+                                        <Link href={`/requisitions/${requisition.id}/award-details`} target="_blank">
+                                            <Calculator className="mr-2 h-4 w-4" />
+                                            Show Full Calculation
+                                        </Link>
                                     </Button>
                                 </CardTitle>
                                 <CardDescription>
-                                    Each item is awarded to the vendor with the highest score for that item. Standby vendors are also shown.
+                                    Each item is awarded to the vendor with the highest score. Standby vendors are also ranked.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
@@ -344,13 +265,6 @@ export const BestItemAwardDialog = ({
                 </ScrollArea>
 
                 <DialogFooter className="pt-4 border-t">
-                     <Button variant="secondary" size="sm" asChild>
-                        <Link href={`/requisitions/${requisition.id}/award-details`} target="_blank">
-                            <Calculator className="mr-2 h-4 w-4" />
-                            Show Calculation
-                        </Link>
-                    </Button>
-                    <div className="flex-grow"></div>
                     <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
                     <AlertDialog>
                         <AlertDialogTrigger asChild><Button>Finalize & Send Awards</Button></AlertDialogTrigger>
@@ -369,9 +283,6 @@ export const BestItemAwardDialog = ({
                     </AlertDialog>
                 </DialogFooter>
             </DialogContent>
-            <Dialog open={isBreakdownOpen} onOpenChange={setBreakdownOpen}>
-                <ItemBreakdownDialog itemWinners={itemWinners} />
-            </Dialog>
-        </>
+        </Dialog>
     );
 };

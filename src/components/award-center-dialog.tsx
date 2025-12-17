@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, TrophyIcon, Upload, AlertTriangle, FileText, UserCog, Calculator } from 'lucide-react';
+import { CalendarIcon, Upload, FileText, UserCog, Calculator } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -18,7 +18,6 @@ import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
 import { ScrollArea } from './ui/scroll-area';
-import { Alert, AlertTitle } from './ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { getRankIcon } from '@/lib/utils';
 import Link from 'next/link';
@@ -129,7 +128,7 @@ export const AwardCenterDialog = ({
                                 <Button variant="secondary" size="sm" asChild>
                                     <Link href={`/requisitions/${requisition.id}/award-details`} target="_blank">
                                         <Calculator className="mr-2 h-4 w-4" />
-                                        Show Calculation
+                                        Show Full Calculation
                                     </Link>
                                 </Button>
                             </CardTitle>
