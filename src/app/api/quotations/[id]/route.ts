@@ -83,7 +83,7 @@ export async function PATCH(
         const isAwardProcessStarted = await prisma.quotation.count({
             where: {
                 requisitionId: quote.requisitionId,
-                status: { in: ['Awarded', 'Standby', 'Accepted', 'Declined', 'Failed'] }
+                status: { in: ['Awarded', 'Standby', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded'] }
             }
         }) > 0;
 
@@ -112,7 +112,7 @@ export async function PATCH(
                 notes,
                 cpoDocumentUrl,
                 experienceDocumentUrl,
-                bidDocumentUrl, // Add this line
+                bidDocumentUrl,
                 items: {
                     create: items.map((item: any) => ({
                         requisitionItemId: item.requisitionItemId,
@@ -141,6 +141,7 @@ export async function PATCH(
                 entity: 'Quotation',
                 entityId: quoteId,
                 details: `Updated quote for requisition ${quote.requisitionId}.`,
+                transactionId: quote.requisitionId,
             }
         });
 

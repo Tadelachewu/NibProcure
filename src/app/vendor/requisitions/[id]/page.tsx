@@ -947,6 +947,23 @@ export default function VendorRequisitionPage() {
                                     <p className="text-muted-foreground italic">{item.brandDetails}</p>
                                 </div>
                             )}
+                             {item.imageUrl && (
+                                <div className="mt-2 pt-2 border-t">
+                                    <p className="font-bold text-xs">Image:</p>
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <div className="relative h-24 w-full mt-1 rounded-md overflow-hidden cursor-pointer">
+                                                <Image src={item.imageUrl} alt={item.name} fill style={{objectFit:"contain"}}/>
+                                            </div>
+                                        </DialogTrigger>
+                                        <DialogContent className="max-w-2xl">
+                                            <div className="relative h-[60vh]">
+                                                <Image src={item.imageUrl} alt={item.name} fill style={{objectFit:"contain"}}/>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
+                                </div>
+                            )}
                         </Card>
                     )) : (
                         <div className="text-sm text-muted-foreground text-center p-4">No specific items awarded from this quote.</div>
@@ -1109,7 +1126,9 @@ export default function VendorRequisitionPage() {
                         <div className="text-sm text-muted-foreground">
                             ID: {requisition.id}
                             {requisition.deadline && (
-                                <div className="text-xs text-destructive mt-1">Quotation Deadline: {format(new Date(requisition.deadline), 'PPpp')}</div>
+                                <div className="text-xs text-destructive mt-1">
+                                    Quotation Deadline: {format(new Date(requisition.deadline), 'PPpp')}
+                                </div>
                             )}
                         </div>
                     </CardHeader>
