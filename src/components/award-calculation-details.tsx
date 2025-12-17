@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { PurchaseRequisition, Quotation, EvaluationCriteria, QuoteItem } from '@/lib/types';
+import { PurchaseRequisition, Quotation, EvaluationCriteria, QuoteItem, CommitteeScoreSet, ItemScore, Score as ScoreType } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
@@ -12,15 +12,27 @@ import { AlertCircle, ArrowRight, Calculator, Check, Crown, HelpCircle, Medal, T
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Button } from './ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { ScrollArea } from './ui/scroll-area';
 
 
 // --- TYPE DEFINITIONS ---
+interface RawScoreDetail {
+    criterionId: string;
+    criterionName: string;
+    scorer: { id: string; name: string };
+    score: number;
+    comment?: string;
+}
+
 interface CalculatedScore {
     criterionId: string;
     criterionName: string;
-    score: number;
     weight: number;
+    // New properties for detailed breakdown
+    averageScore: number;
     weightedScore: number;
+    rawScores: RawScoreDetail[];
 }
 interface CalculatedItem {
     quoteItemId: string;
@@ -51,58 +63,62 @@ interface CalculatedQuote {
 // --- CALCULATION HELPERS ---
 
 /**
- * Calculates the score for a single criterion.
+ * Calculates the score for a single criterion, including raw scores from each scorer.
  */
 function calculateCriterionScore(
     criterion: { id: string; name: string; weight: number },
-    scores: { criterionId: string, score: number }[]
+    allItemScores: (ItemScore & { scoreSet: CommitteeScoreSet & { scorer: {id: string, name: string}} })[]
 ): CalculatedScore {
-    const foundScore = scores.find(s => s.criterionId === criterion.id);
-    const score = foundScore?.score || 0;
+
+    const rawScores: RawScoreDetail[] = [];
+    let totalScore = 0;
+    let scorerCount = 0;
+
+    allItemScores.forEach(itemScore => {
+        const scoreEntry = (itemScore.scores as ScoreType[]).find(s => s.financialCriterionId === criterion.id || s.technicalCriterionId === criterion.id);
+        if (scoreEntry) {
+            rawScores.push({
+                criterionId: criterion.id,
+                criterionName: criterion.name,
+                scorer: { id: itemScore.scoreSet.scorerId, name: itemScore.scoreSet.scorer.name },
+                score: scoreEntry.score,
+                comment: scoreEntry.comment,
+            });
+            totalScore += scoreEntry.score;
+            scorerCount++;
+        }
+    });
+
+    const averageScore = scorerCount > 0 ? totalScore / scorerCount : 0;
+
     return {
         criterionId: criterion.id,
         criterionName: criterion.name,
-        score,
         weight: criterion.weight,
-        weightedScore: score * (criterion.weight / 100),
+        averageScore,
+        weightedScore: averageScore * (criterion.weight / 100),
+        rawScores,
     };
 }
 
+
 /**
- * Calculates all scores for a single quote item.
+ * Calculates all scores for a single quote item, now including raw score details.
  */
 function calculateItemScores(
     quoteItem: QuoteItem,
     evaluationCriteria: EvaluationCriteria,
-    scores: any[] // From Prisma: CommitteeScoreSet with nested scores
+    allScoreSetsForQuote: (CommitteeScoreSet & { scorer: {id: string, name: string}, itemScores: (ItemScore & { scores: ScoreType[] })[]})[]
 ): CalculatedItem {
-    const allFinancialScores: { [key: string]: number[] } = {};
-    const allTechnicalScores: { [key: string]: number[] } = {};
 
-    scores.forEach(scoreSet => {
-        const itemScore = scoreSet.itemScores.find((is: any) => is.quoteItemId === quoteItem.id);
-        if (itemScore) {
-            itemScore.scores.forEach((s: any) => {
-                if (s.type === 'FINANCIAL' && s.financialCriterionId) {
-                    if (!allFinancialScores[s.financialCriterionId]) allFinancialScores[s.financialCriterionId] = [];
-                    allFinancialScores[s.financialCriterionId].push(s.score);
-                } else if (s.type === 'TECHNICAL' && s.technicalCriterionId) {
-                    if (!allTechnicalScores[s.technicalCriterionId]) allTechnicalScores[s.technicalCriterionId] = [];
-                    allTechnicalScores[s.technicalCriterionId].push(s.score);
-                }
-            });
-        }
-    });
-
-    const avgScores = (scoreMap: { [key: string]: number[] }) => {
-        return Object.entries(scoreMap).map(([criterionId, scores]) => ({
-            criterionId,
-            score: scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0,
-        }));
-    };
+    // Get all ItemScore records for this specific quoteItem across all scorers
+    const relevantItemScores = allScoreSetsForQuote.map(scoreSet => {
+        const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === quoteItem.id);
+        return itemScore ? { ...itemScore, scoreSet: { ...scoreSet } } : null;
+    }).filter((is): is is (ItemScore & { scoreSet: CommitteeScoreSet & { scorer: {id: string, name: string}} }) => is !== null);
     
-    const financialScores = evaluationCriteria.financialCriteria.map(c => calculateCriterionScore(c, avgScores(allFinancialScores)));
-    const technicalScores = evaluationCriteria.technicalCriteria.map(c => calculateCriterionScore(c, avgScores(allTechnicalScores)));
+    const financialScores = evaluationCriteria.financialCriteria.map(c => calculateCriterionScore(c, relevantItemScores));
+    const technicalScores = evaluationCriteria.technicalCriteria.map(c => calculateCriterionScore(c, relevantItemScores));
     
     const totalFinancialScore = financialScores.reduce((acc, s) => acc + s.weightedScore, 0);
     const totalTechnicalScore = technicalScores.reduce((acc, s) => acc + s.weightedScore, 0);
@@ -143,7 +159,7 @@ function useAwardCalculations(requisition: PurchaseRequisition, quotations: Quot
                 if (proposalsForItem.length === 0) continue;
 
                 const calculatedProposals = proposalsForItem.map(proposal => 
-                    calculateItemScores(proposal, evaluationCriteria, quote.scores || [])
+                    calculateItemScores(proposal, evaluationCriteria, (quote.scores as any[]) || [])
                 );
 
                 const championBid = [...calculatedProposals].sort((a, b) => b.finalItemScore - a.finalItemScore)[0];
@@ -182,7 +198,7 @@ function useAwardCalculations(requisition: PurchaseRequisition, quotations: Quot
                         vendorName: quote.vendorName,
                         quoteItemId: item.id,
                         itemName: item.name,
-                        calculation: calculateItemScores(item, evaluationCriteria, quote.scores || [])
+                        calculation: calculateItemScores(item, evaluationCriteria, (quote.scores as any[]) || [])
                     }))
             ).sort((a,b) => b.calculation.finalItemScore - a.calculation.finalItemScore);
 
@@ -199,16 +215,44 @@ function useAwardCalculations(requisition: PurchaseRequisition, quotations: Quot
 }
 
 // --- UI COMPONENTS ---
+const RawScoresTable = ({ scores, title }: { scores: RawScoreDetail[], title: string }) => (
+    <div className="space-y-1">
+        <h5 className="font-semibold text-xs">{title}</h5>
+        <div className="border rounded-md bg-muted/30">
+        <Table>
+            <TableBody>
+            {scores.map((s, i) => (
+                <TableRow key={`${s.scorer.id}-${i}`}>
+                    <TableCell className="p-2">
+                        <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6">
+                                <AvatarImage src={`https://picsum.photos/seed/${s.scorer.id}/24/24`} />
+                                <AvatarFallback>{s.scorer.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <span className="text-xs font-medium">{s.scorer.name}</span>
+                        </div>
+                    </TableCell>
+                    <TableCell className="p-2 text-right font-mono text-xs">{s.score}/100</TableCell>
+                    <TableCell className="p-2 text-xs italic text-muted-foreground">"{s.comment || 'No comment'}"</TableCell>
+                </TableRow>
+            ))}
+            </TableBody>
+        </Table>
+        </div>
+    </div>
+);
+
 
 const ScoreBreakdownDialog = ({ calculation, evaluationCriteria }: { calculation: CalculatedItem, evaluationCriteria: EvaluationCriteria }) => {
     return (
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
             <DialogHeader>
                 <DialogTitle>Score Breakdown: {calculation.itemName}</DialogTitle>
                 <DialogDescription>
-                    This shows how the final score of <span className="font-bold text-primary">{calculation.finalItemScore.toFixed(2)}</span> was calculated.
+                    This shows how the final score of <span className="font-bold text-primary">{calculation.finalItemScore.toFixed(2)}</span> was calculated from raw committee scores.
                 </DialogDescription>
             </DialogHeader>
+            <ScrollArea className="flex-1 -mx-6 px-6">
             <div className="space-y-6 py-4">
                  <ScoreTable title="Financial Evaluation" scores={calculation.financialScores} weight={evaluationCriteria.financialWeight} totalScore={calculation.totalFinancialScore} />
                  <ScoreTable title="Technical Evaluation" scores={calculation.technicalScores} weight={evaluationCriteria.technicalWeight} totalScore={calculation.totalTechnicalScore} />
@@ -220,8 +264,9 @@ const ScoreBreakdownDialog = ({ calculation, evaluationCriteria }: { calculation
                     </p>
                 </div>
             </div>
+            </ScrollArea>
             <DialogFooter>
-                <Button variant="outline" asChild><DialogTrigger>Close</DialogTrigger></Button>
+                <Button variant="outline" asChild><DialogClose>Close</DialogClose></Button>
             </DialogFooter>
         </DialogContent>
     )
@@ -229,28 +274,22 @@ const ScoreBreakdownDialog = ({ calculation, evaluationCriteria }: { calculation
 
 const ScoreTable = ({ title, scores, weight, totalScore }: { title: string, scores: CalculatedScore[], weight: number, totalScore: number }) => (
     <div>
-        <h4 className="font-semibold text-base mb-1">{title} (Overall Weight: {weight}%)</h4>
-        <div className="border rounded-md">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Criterion</TableHead>
-                        <TableHead className="text-right">Avg. Score</TableHead>
-                        <TableHead className="text-right">Weight</TableHead>
-                        <TableHead className="text-right">Weighted Score</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {scores.map(s => (
-                        <TableRow key={s.criterionId}>
-                            <TableCell>{s.criterionName}</TableCell>
-                            <TableCell className="text-right font-mono">{s.score.toFixed(2)}</TableCell>
-                            <TableCell className="text-right font-mono">{s.weight}%</TableCell>
-                            <TableCell className="text-right font-mono font-bold">{s.weightedScore.toFixed(2)}</TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
+        <h4 className="font-semibold text-base mb-2">{title} (Overall Weight: {weight}%)</h4>
+        <div className="space-y-4">
+            {scores.map(s => (
+                <details key={s.criterionId} className="p-3 border rounded-lg bg-muted/50 open:bg-background open:ring-1 open:ring-border">
+                    <summary className="font-medium text-sm cursor-pointer flex justify-between items-center">
+                        <span>{s.criterionName} (Criterion Weight: {s.weight}%)</span>
+                        <span className="font-mono text-base">Avg. Score: {s.averageScore.toFixed(2)}</span>
+                    </summary>
+                    <div className="mt-4 pl-4 border-l-2">
+                        <RawScoresTable scores={s.rawScores} title="Raw Scores" />
+                         <p className="text-right text-xs mt-2 pr-2">
+                            Weighted Score: {s.averageScore.toFixed(2)} &times; {s.weight}% = <span className="font-bold">{s.weightedScore.toFixed(2)}</span>
+                         </p>
+                    </div>
+                </details>
+            ))}
         </div>
         <div className="text-right mt-2 pr-4">
             <p className="text-sm">Sub-total (Score &times; Weight): <span className="font-bold font-mono">{totalScore.toFixed(2)}</span></p>
@@ -324,11 +363,10 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                         <RankIcon rank={vendor.rank!} />
                                         <span>{vendor.vendorName}</span>
                                     </div>
-                                    <DialogTrigger asChild>
-                                        <Button variant={vendor.rank === 1 ? 'default' : 'secondary'} size="sm" onClick={() => setSelectedCalculation(vendor.itemBids.flatMap(b => b.allProposals)[0])}>
-                                            Final Score: {vendor.finalVendorScore.toFixed(2)}
-                                        </Button>
-                                    </DialogTrigger>
+                                    <div className="text-right">
+                                         <p className="text-2xl font-bold">{vendor.finalVendorScore.toFixed(2)}</p>
+                                         <p className="text-xs text-muted-foreground">Final Score</p>
+                                    </div>
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
@@ -422,3 +460,5 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
         </Dialog>
     )
 }
+
+    
