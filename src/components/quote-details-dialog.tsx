@@ -15,7 +15,7 @@ import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
 import { Separator } from './ui/separator';
 import { Badge } from './ui/badge';
-import { FileText } from 'lucide-react';
+import { FileText, UserCog } from 'lucide-react';
 import Image from 'next/image';
 
 interface QuoteDetailsDialogProps {
@@ -113,7 +113,7 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                                         )}
                                         {quote.experienceDocumentUrl && (
                                             <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer">
-                                                <Button variant="outline"><FileText className="mr-2"/> Experience Document</Button>
+                                                <Button variant="outline"><UserCog className="mr-2"/> Experience Document</Button>
                                             </a>
                                         )}
                                      </div>

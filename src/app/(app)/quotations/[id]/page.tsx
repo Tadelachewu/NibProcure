@@ -345,6 +345,13 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                     </a>
                                 </Button>
                             )}
+                             {quote.experienceDocumentUrl && (
+                                <Button asChild variant="outline" size="sm" className="w-full">
+                                    <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer">
+                                        <UserCog className="mr-2 h-4 w-4"/> View Experience Document
+                                    </a>
+                                </Button>
+                            )}
                              {(isDeadlinePassed || quote.cpoDocumentUrl) ? (
                                 <>
                                     {hidePrices ? (
@@ -1452,6 +1459,9 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                                 </div>
                             </DialogTrigger>
                             <DialogContent className="max-w-4xl h-[80vh]">
+                                <DialogHeader>
+                                <DialogTitle>{quoteItem.name}</DialogTitle>
+                                </DialogHeader>
                                 <div className="relative w-full h-full">
                                 <Image src={quoteItem.imageUrl} alt={quoteItem.name} fill style={{objectFit:"contain"}} />
                                 </div>
@@ -1684,13 +1694,22 @@ const ScoringDialog = ({
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0 flex flex-col">
                 <ScrollArea className="flex-1 pr-4 -mr-4">
                      <div className="space-y-6">
-                        {quote.bidDocumentUrl && (
-                             <Button asChild variant="outline" size="sm" className="w-full">
-                                <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer">
-                                    <FileText className="mr-2 h-4 w-4"/> View Bid Document
-                                </a>
-                            </Button>
-                        )}
+                        <div className="flex gap-2">
+                             {quote.bidDocumentUrl && (
+                                 <Button asChild variant="outline" size="sm" className="w-full">
+                                     <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer">
+                                         <FileText className="mr-2 h-4 w-4"/> View Bid Document
+                                     </a>
+                                 </Button>
+                             )}
+                            {quote.experienceDocumentUrl && (
+                                <Button asChild variant="outline" size="sm" className="w-full">
+                                    <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer">
+                                        <UserCog className="mr-2 h-4 w-4"/> View Experience Document
+                                    </a>
+                                </Button>
+                            )}
+                        </div>
                         {quote.answers && quote.answers.length > 0 && (
                             <Card className="bg-muted/30">
                                 <CardHeader><CardTitle>Vendor's Answers to Custom Questions</CardTitle></CardHeader>
@@ -2139,157 +2158,6 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                         {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4"/>}
                         Print / Export PDF
                     </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-};
-
-
-const CommitteeActions = ({
-    user,
-    requisition,
-    quotations,
-}: {
-    user: User,
-    requisition: PurchaseRequisition,
-    quotations: Quotation[],
-}) => {
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const { toast } = useToast();
-
-    const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
-    const allQuotesScored = quotations.length > 0 && userScoredQuotesCount === quotations.length;
-
-    const assignment = useMemo(() => {
-        return user.committeeAssignments?.find(a => a.requisitionId === requisition.id);
-    }, [user.committeeAssignments, requisition.id]);
-
-    const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
-
-    const handleSubmitScores = async () => {
-        setIsSubmitting(true);
-        try {
-            const response = await fetch(`/api/requisitions/${requisition.id}/submit-scores`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to submit scores');
-            }
-            toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
-        } catch (error) {
-             toast({
-                variant: 'destructive',
-                title: 'Error',
-                description: error instanceof Error ? error.message : 'An unknown error occurred.',
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Committee Actions</CardTitle>
-                <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {quotations.length} quotes.</p>
-            </CardContent>
-            <CardFooter>
-                 <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button disabled={!allQuotesScored || isSubmitting || scoresAlreadyFinalized}>
-                            {scoresAlreadyFinalized ? <CheckCircle className="mr-2 h-4 w-4" /> : (isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />)}
-                            {scoresAlreadyFinalized ? 'Scores Submitted' : 'Submit Final Scores'}
-                        </Button>
-                    </AlertDialogTrigger>
-                    {!scoresAlreadyFinalized && (
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Are you sure you want to submit?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    This will finalize your scores for this requisition. You will not be able to make further changes.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    )}
-                </AlertDialog>
-            </CardFooter>
-        </Card>
-    );
-};
-
-const NotifyVendorDialog = ({
-    isOpen,
-    onClose,
-    onConfirm,
-}: {
-    isOpen: boolean;
-    onClose: () => void;
-    onConfirm: (deadline?: Date) => void;
-}) => {
-    const [deadlineDate, setDeadlineDate] = useState<Date | undefined>();
-    const [deadlineTime, setDeadlineTime] = useState('17:00');
-
-    const finalDeadline = useMemo(() => {
-        if (!deadlineDate) return undefined;
-        const [hours, minutes] = deadlineTime.split(':').map(Number);
-        return setMinutes(setHours(deadlineDate, hours), minutes);
-    }, [deadlineDate, deadlineTime]);
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Notify Vendor and Set Deadline</DialogTitle>
-                    <DialogDescription>
-                        Confirm to send the award notification. You can optionally set a new response deadline for the vendor.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-2">
-                    <Label>Vendor Response Deadline (Optional)</Label>
-                    <div className="flex gap-2">
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    variant={"outline"}
-                                    className={cn("w-full justify-start text-left font-normal", !deadlineDate && "text-muted-foreground")}
-                                >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {deadlineDate ? format(deadlineDate, "PPP") : <span>Set a new deadline</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                    mode="single"
-                                    selected={deadlineDate}
-                                    onSelect={setDeadlineDate}
-                                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                                    initialFocus
-                                />
-                            </PopoverContent>
-                        </Popover>
-                        <Input
-                            type="time"
-                            className="w-32"
-                            value={deadlineTime}
-                            onChange={(e) => setDeadlineTime(e.target.value)}
-                        />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="ghost" onClick={onClose}>Cancel</Button>
-                    <Button onClick={() => onConfirm(finalDeadline)}>Confirm &amp; Notify</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -3185,6 +3053,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
