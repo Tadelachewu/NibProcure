@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, TrophyIcon, Upload, AlertTriangle, FileText, UserCog } from 'lucide-react';
+import { CalendarIcon, TrophyIcon, Upload, AlertTriangle, FileText, UserCog, Calculator } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -19,6 +19,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
 import { ScrollArea } from './ui/scroll-area';
 import { Alert, AlertTitle } from './ui/alert';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { getRankIcon } from '@/lib/utils';
+import Link from 'next/link';
 
 
 export const AwardCenterDialog = ({
@@ -55,33 +58,16 @@ export const AwardCenterDialog = ({
         if (!eligibleQuotes || eligibleQuotes.length === 0) {
             return null;
         }
-
-        // Sort quotes by the final average score in descending order
         const sortedQuotes = [...eligibleQuotes].sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
-
-        const winnerQuote = sortedQuotes[0];
-
-        if (!winnerQuote) {
-            return null;
-        }
-
-        return { 
-            vendorId: winnerQuote.vendorId,
-            vendorName: winnerQuote.vendorName,
-            bidDocumentUrl: winnerQuote.bidDocumentUrl,
-            experienceDocumentUrl: winnerQuote.experienceDocumentUrl,
-            items: winnerQuote.items.map(item => ({
-                requisitionItemId: item.requisitionItemId,
-                quoteItemId: item.id
-            })),
-            score: winnerQuote.finalAverageScore || 0 
-        };
+        return sortedQuotes.length > 0 ? sortedQuotes[0] : null;
     }, [eligibleQuotes]);
-    
-    const declinedWinner = useMemo(() => {
-        return quotations.find(q => q.status === 'Declined' && q.rejectionReason);
-    }, [quotations]);
 
+    const standbyVendors = useMemo(() => {
+        if (!eligibleQuotes || eligibleQuotes.length < 2) return [];
+        return [...eligibleQuotes]
+            .sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0))
+            .slice(1, 3); // Get 2nd and 3rd place
+    }, [eligibleQuotes]);
 
     const handleConfirmAward = async () => {
         let minuteDocumentUrl: string | undefined = undefined;
@@ -92,6 +78,10 @@ export const AwardCenterDialog = ({
         }
         if (!minuteJustification.trim()) {
             toast({ variant: 'destructive', title: 'Error', description: 'A justification/summary is required for the minute.' });
+            return;
+        }
+        if (!overallWinner) {
+            toast({ variant: 'destructive', title: 'Error', description: 'No winning vendor could be determined.' });
             return;
         }
         try {
@@ -109,20 +99,21 @@ export const AwardCenterDialog = ({
         
         let awards: { [vendorId: string]: { vendorName: string, items: { requisitionItemId: string, quoteItemId: string }[] } } = {};
         
-        if (overallWinner?.vendorId) {
-            awards[overallWinner.vendorId] = { 
-                vendorName: overallWinner.vendorName!, 
-                items: overallWinner.items!
-            };
-        }
-
+        awards[overallWinner.vendorId] = { 
+            vendorName: overallWinner.vendorName!, 
+            items: overallWinner.items.map(item => ({
+                requisitionItemId: item.requisitionItemId,
+                quoteItemId: item.id
+            }))
+        };
+        
         onFinalize('all', awards, awardResponseDeadline, minuteDocumentUrl, minuteJustification);
         onClose();
     }
 
 
     return (
-        <DialogContent className="max-w-2xl h-[90vh] flex flex-col">
+        <DialogContent className="max-w-3xl h-[90vh] flex flex-col">
             <DialogHeader>
                 <DialogTitle>Award to Single Best Vendor</DialogTitle>
                 <DialogDescription>Review the recommended winner and finalize the award for requisition {requisition.id}.</DialogDescription>
@@ -130,41 +121,54 @@ export const AwardCenterDialog = ({
             
             <ScrollArea className="flex-1 -mx-6 px-6">
                 <div className="space-y-6 py-4">
-                    {declinedWinner && (
-                        <Alert variant="destructive">
-                            <AlertTriangle className="h-4 w-4" />
-                            <AlertTitle>Previous Award Declined</AlertTitle>
-                            <AlertDescription>
-                                The previous winner, <strong>{declinedWinner.vendorName}</strong>, declined the award with the following reason: <em>"{declinedWinner.rejectionReason}"</em>
-                            </AlertDescription>
-                        </Alert>
-                    )}
+                    
                     <Card>
                         <CardHeader>
-                            <CardTitle>Best Overall Vendor</CardTitle>
-                            <CardDescription>This strategy awards all items to the single vendor with the highest average score across all scored items.</CardDescription>
+                            <CardTitle className="flex items-center justify-between">
+                                <span>Ranking Summary</span>
+                                <Button variant="secondary" size="sm" asChild>
+                                    <Link href={`/requisitions/${requisition.id}/award-details`} target="_blank">
+                                        <Calculator className="mr-2 h-4 w-4" />
+                                        Show Calculation
+                                    </Link>
+                                </Button>
+                            </CardTitle>
+                            <CardDescription>
+                                Vendors are ranked by the highest final average score. The winner receives the award, and the next two are put on standby.
+                            </CardDescription>
                         </CardHeader>
-                        <CardContent className="text-center p-8">
-                            <TrophyIcon className="h-12 w-12 text-amber-400 mx-auto mb-4"/>
-                            <p className="text-muted-foreground">Recommended Overall Winner:</p>
-                            <p className="text-2xl font-bold">{overallWinner?.vendorName || 'N/A'}</p>
-                            <p className="font-mono text-primary">{overallWinner?.score > 0 ? `${overallWinner.score.toFixed(2)} average score` : 'N/A'}</p>
-                             <div className="mt-4 flex justify-center gap-2">
-                                {overallWinner?.bidDocumentUrl && (
-                                    <Button asChild variant="secondary" size="sm">
-                                        <a href={overallWinner.bidDocumentUrl} target="_blank" rel="noopener noreferrer">
-                                            <FileText className="mr-2 h-4 w-4" /> View Bid Document
-                                        </a>
-                                    </Button>
-                                )}
-                                {overallWinner?.experienceDocumentUrl && (
-                                    <Button asChild variant="secondary" size="sm">
-                                        <a href={overallWinner.experienceDocumentUrl} target="_blank" rel="noopener noreferrer">
-                                            <UserCog className="mr-2 h-4 w-4" /> View Experience
-                                        </a>
-                                    </Button>
-                                )}
-                            </div>
+                        <CardContent>
+                             <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Rank</TableHead>
+                                        <TableHead>Vendor</TableHead>
+                                        <TableHead>Final Score</TableHead>
+                                        <TableHead>Total Price</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {overallWinner && (
+                                        <TableRow className="bg-green-500/10">
+                                            <TableCell className="font-bold flex items-center gap-2">{getRankIcon(1)} Winner</TableCell>
+                                            <TableCell>{overallWinner.vendorName}</TableCell>
+                                            <TableCell className="font-mono">{overallWinner.finalAverageScore?.toFixed(2)}</TableCell>
+                                            <TableCell className="font-mono">{overallWinner.totalPrice.toLocaleString()} ETB</TableCell>
+                                        </TableRow>
+                                    )}
+                                    {standbyVendors.map((vendor, index) => (
+                                         <TableRow key={vendor.id}>
+                                            <TableCell className="font-bold flex items-center gap-2">{getRankIcon(index + 2)} Standby</TableCell>
+                                            <TableCell>{vendor.vendorName}</TableCell>
+                                            <TableCell className="font-mono">{vendor.finalAverageScore?.toFixed(2)}</TableCell>
+                                            <TableCell className="font-mono">{vendor.totalPrice.toLocaleString()} ETB</TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {(!overallWinner && standbyVendors.length === 0) && (
+                                        <TableRow><TableCell colSpan={4} className="text-center h-24">No eligible vendors to rank.</TableCell></TableRow>
+                                    )}
+                                </TableBody>
+                             </Table>
                         </CardContent>
                     </Card>
 

@@ -11,7 +11,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '.
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, HelpCircle, Trophy, Crown, Medal, Upload, FileText, UserCog } from 'lucide-react';
+import { CalendarIcon, HelpCircle, Trophy, Crown, Medal, Upload, FileText, UserCog, Calculator } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -19,6 +19,7 @@ import { PurchaseRequisition, Quotation, QuoteItem } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
+import Link from 'next/link';
 
 const ItemBreakdownDialog = ({ itemWinners }: { itemWinners: any[] }) => {
     
@@ -255,7 +256,19 @@ export const BestItemAwardDialog = ({
                 <ScrollArea className="flex-1 -mx-6 px-6">
                     <div className="space-y-6 py-4">
                         <Card>
-                            <CardContent className="pt-6">
+                            <CardHeader>
+                                <CardTitle className="flex items-center justify-between">
+                                    <span>Winning Bids per Item</span>
+                                     <Button variant="secondary" size="sm" onClick={() => setBreakdownOpen(true)}>
+                                        <HelpCircle className="mr-2 h-4 w-4" />
+                                        Show Calculation Breakdown
+                                    </Button>
+                                </CardTitle>
+                                <CardDescription>
+                                    Each item is awarded to the vendor with the highest score for that item. Standby vendors are also shown.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -331,8 +344,11 @@ export const BestItemAwardDialog = ({
                 </ScrollArea>
 
                 <DialogFooter className="pt-4 border-t">
-                    <Button variant="outline" onClick={() => setBreakdownOpen(true)}>
-                        <HelpCircle className="mr-2 h-4 w-4" /> Show Calculation
+                     <Button variant="secondary" size="sm" asChild>
+                        <Link href={`/requisitions/${requisition.id}/award-details`} target="_blank">
+                            <Calculator className="mr-2 h-4 w-4" />
+                            Show Calculation
+                        </Link>
                     </Button>
                     <div className="flex-grow"></div>
                     <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
