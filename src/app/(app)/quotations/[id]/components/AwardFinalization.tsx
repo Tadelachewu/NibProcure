@@ -9,6 +9,7 @@ import { Loader2 } from 'lucide-react';
 import { ContractManagement } from './ContractManagement';
 import { NotifyVendorDialog } from './NotifyVendorDialog';
 import { QuoteComparison } from './QuoteComparison';
+import { DialogTrigger } from '@/components/ui/dialog';
 
 export function AwardFinalization({
   requisition,
