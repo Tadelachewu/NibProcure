@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, AlertTriangle } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -1792,24 +1792,25 @@ const ScoringDialog = ({
 const CommitteeActions = ({
     user,
     requisition,
-    quotations,
     onFinalScoresSubmitted,
 }: {
     user: User,
     requisition: PurchaseRequisition,
-    quotations: Quotation[],
     onFinalScoresSubmitted: () => void,
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
     
-    const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
-    const allQuotesScored = quotations.length > 0 && userScoredQuotesCount === quotations.length;
+    // Check if the user is part of any committee for this requisition
+    const isCommitteeUser = (user.roles as any[])?.some(r => r.includes('Committee'));
+    if (!isCommitteeUser) {
+        return null;
+    }
     
-    const assignment = useMemo(() => {
-        return user.committeeAssignments?.find(a => a.requisitionId === requisition.id);
-    }, [user.committeeAssignments, requisition.id]);
+    const userScoredQuotesCount = requisition.quotations?.filter(q => q.scores?.some(s => s.scorerId === user.id)).length || 0;
+    const allQuotesScored = (requisition.quotations?.length || 0) > 0 && userScoredQuotesCount === requisition.quotations?.length;
     
+    const assignment = user.committeeAssignments?.find(a => a.requisitionId === requisition.id);
     const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
 
     const handleSubmitScores = async () => {
@@ -1837,11 +1838,6 @@ const CommitteeActions = ({
             setIsSubmitting(false);
         }
     };
-    
-    const isCommitteeUser = (user.roles as string[])?.some(r => r.includes('Committee'));
-    if (!isCommitteeUser) {
-        return null;
-    }
 
     if (scoresAlreadyFinalized) {
         return (
@@ -1867,7 +1863,7 @@ const CommitteeActions = ({
                 <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
             </CardHeader>
             <CardContent>
-                <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {quotations.length} quotes.</p>
+                <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {requisition.quotations?.length || 0} quotes.</p>
             </CardContent>
             <CardFooter>
                 <AlertDialog>
@@ -2905,7 +2901,7 @@ export default function QuotationDetailsPage() {
             isAuthorized={isAuthorized}
         />
 
-        {(currentStep !== 'rfq' || readyForCommitteeAssignment) && canManageCommittees && (
+        {(currentStep !== 'rfq' || readyForCommitteeAssignment) && canManageCommittees && currentStep !== 'award' && currentStep !== 'finalize' && currentStep !== 'completed' && (
             <EvaluationCommitteeManagement
                 requisition={requisition}
                 onCommitteeUpdated={fetchRequisitionAndQuotes}
@@ -2998,31 +2994,23 @@ export default function QuotationDetailsPage() {
                 </Card>
             </>
         )}
-
-        {isAssignedCommitteeMember && (currentStep === 'committee' || currentStep === 'award') && (
-             <CommitteeActions
-                user={user}
+        
+        <CommitteeActions
+            user={user}
+            requisition={requisition}
+            onFinalScoresSubmitted={fetchRequisitionAndQuotes}
+        />
+        
+        {isAuthorized && (isScoringComplete || requisition.status.startsWith('Scoring_')) && (
+            <ScoringProgressTracker
                 requisition={requisition}
                 quotations={quotations}
-                onFinalScoresSubmitted={fetchRequisitionAndQuotes}
-             />
-        )}
-
-        {role && (user.roles as string[]).some(r => r.includes('Committee')) && (
-          (
-            (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Award_Declined') &&
-            isAuthorized
-          ) && (
-              <ScoringProgressTracker
-                  requisition={requisition}
-                  quotations={quotations}
-                  allUsers={allUsers}
-                  onSuccess={fetchRequisitionAndQuotes}
-                  onCommitteeUpdate={setCommitteeDialogOpen}
-                  isFinalizing={isFinalizing}
-                  isAuthorized={isAuthorized}
-              />
-          )
+                allUsers={allUsers}
+                onSuccess={fetchRequisitionAndQuotes}
+                onCommitteeUpdate={setCommitteeDialogOpen}
+                isFinalizing={isFinalizing}
+                isAuthorized={isAuthorized}
+            />
         )}
         
         {(showAwardingCenter || awardIsDeclined || (isPerItemStrategy && (hasDeclinedWithStandby || hasFailedOrDeclined))) && isAuthorized && (
@@ -3228,6 +3216,3 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
-
-    
-
