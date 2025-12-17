@@ -11,7 +11,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '.
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, HelpCircle, Trophy, Crown, Medal, Upload } from 'lucide-react';
+import { CalendarIcon, HelpCircle, Trophy, Crown, Medal, Upload, FileText } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -54,6 +54,7 @@ const ItemBreakdownDialog = ({ itemWinners }: { itemWinners: any[] }) => {
                                                 <TableHead>Rank</TableHead>
                                                 <TableHead>Vendor</TableHead>
                                                 <TableHead>Proposed Item</TableHead>
+                                                <TableHead>Bid Document</TableHead>
                                                 <TableHead className="text-right">Calculated Score</TableHead>
                                             </TableRow>
                                         </TableHeader>
@@ -63,11 +64,20 @@ const ItemBreakdownDialog = ({ itemWinners }: { itemWinners: any[] }) => {
                                                     <TableCell className="font-bold flex items-center gap-2">{getRankIcon(index + 1)}</TableCell>
                                                     <TableCell>{bid.vendorName}</TableCell>
                                                     <TableCell>{bid.proposedItemName}</TableCell>
+                                                    <TableCell>
+                                                        {bid.bidDocumentUrl ? (
+                                                            <Button asChild variant="link" size="sm" className="h-auto p-0">
+                                                                <a href={bid.bidDocumentUrl} target="_blank" rel="noopener noreferrer">View Doc</a>
+                                                            </Button>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">N/A</span>
+                                                        )}
+                                                    </TableCell>
                                                     <TableCell className="text-right font-mono">{bid.score.toFixed(2)}</TableCell>
                                                 </TableRow>
                                             )) : (
                                                 <TableRow>
-                                                    <TableCell colSpan={4} className="text-center">No bids for this item.</TableCell>
+                                                    <TableCell colSpan={5} className="text-center">No bids for this item.</TableCell>
                                                 </TableRow>
                                             )}
                                         </TableBody>
@@ -158,6 +168,7 @@ export const BestItemAwardDialog = ({
                     quotationId: quote.id,
                     proposedItemName: bestProposalForItem.name,
                     unitPrice: bestProposalForItem.unitPrice,
+                    bidDocumentUrl: quote.bidDocumentUrl,
                     score: bestItemScore
                 };
             }).filter((bid): bid is NonNullable<typeof bid> => bid !== null);

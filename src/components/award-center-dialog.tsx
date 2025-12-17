@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, TrophyIcon, Upload, AlertTriangle } from 'lucide-react';
+import { CalendarIcon, TrophyIcon, Upload, AlertTriangle, FileText } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
@@ -68,6 +68,7 @@ export const AwardCenterDialog = ({
         return { 
             vendorId: winnerQuote.vendorId,
             vendorName: winnerQuote.vendorName,
+            bidDocumentUrl: winnerQuote.bidDocumentUrl,
             items: winnerQuote.items.map(item => ({
                 requisitionItemId: item.requisitionItemId,
                 quoteItemId: item.id
@@ -147,6 +148,13 @@ export const AwardCenterDialog = ({
                             <p className="text-muted-foreground">Recommended Overall Winner:</p>
                             <p className="text-2xl font-bold">{overallWinner?.vendorName || 'N/A'}</p>
                             <p className="font-mono text-primary">{overallWinner?.score > 0 ? `${overallWinner.score.toFixed(2)} average score` : 'N/A'}</p>
+                            {overallWinner?.bidDocumentUrl && (
+                                <Button asChild variant="secondary" size="sm" className="mt-4">
+                                    <a href={overallWinner.bidDocumentUrl} target="_blank" rel="noopener noreferrer">
+                                        <FileText className="mr-2 h-4 w-4" /> View Bid Document
+                                    </a>
+                                </Button>
+                            )}
                         </CardContent>
                     </Card>
 

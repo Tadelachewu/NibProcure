@@ -338,6 +338,13 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="flex-grow space-y-4">
+                            {quote.bidDocumentUrl && (
+                                <Button asChild variant="outline" size="sm" className="w-full">
+                                    <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer">
+                                        <FileText className="mr-2 h-4 w-4"/> View Bid Document
+                                    </a>
+                                </Button>
+                            )}
                              {(isDeadlinePassed || quote.cpoDocumentUrl) ? (
                                 <>
                                     {hidePrices ? (
@@ -1293,7 +1300,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
             </CardFooter>
         </Card>
     );
-};
+}
 
 const ManageRFQ = ({
     requisition,
@@ -1655,7 +1662,9 @@ const ScoringDialog = ({
     if (!existingScore && isScoringDeadlinePassed) {
         return (
             <DialogContent>
-                <DialogHeader><DialogTitle>Scoring Deadline Passed</DialogTitle></DialogHeader>
+                <DialogHeader>
+                    <DialogTitle>Scoring Deadline Passed</DialogTitle>
+                </DialogHeader>
                 <div className="py-4 text-center">
                     <TimerOff className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <p className="text-muted-foreground">The deadline for scoring this quotation has passed.</p>
@@ -1675,6 +1684,13 @@ const ScoringDialog = ({
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0 flex flex-col">
                 <ScrollArea className="flex-1 pr-4 -mr-4">
                      <div className="space-y-6">
+                        {quote.bidDocumentUrl && (
+                             <Button asChild variant="outline" size="sm" className="w-full">
+                                <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer">
+                                    <FileText className="mr-2 h-4 w-4"/> View Bid Document
+                                </a>
+                            </Button>
+                        )}
                         {quote.answers && quote.answers.length > 0 && (
                             <Card className="bg-muted/30">
                                 <CardHeader><CardTitle>Vendor's Answers to Custom Questions</CardTitle></CardHeader>
@@ -3169,6 +3185,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
