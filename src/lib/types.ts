@@ -1,4 +1,5 @@
 
+
 export type UserRole =
   | 'Requester'
   | 'Approver'
@@ -312,6 +313,8 @@ export type Quotation = {
     scores?: CommitteeScoreSet[];
     cpoDocumentUrl?: string;
     experienceDocumentUrl?: string;
+    bidDocumentUrl?: string;
+    summaryDocumentUrl?: string;
 };
 
 export type POItem = {
