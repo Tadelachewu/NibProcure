@@ -216,7 +216,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
     const [isSubmitting, setSubmitting] = useState(false);
     const { toast } = useToast();
     const isEditMode = !!quote;
-    const storageKey = `quote-form-${requisition.id}`;
+    const storageKey = isEditMode ? `quote-form-edit-${requisition.id}` : `quote-form-new-${requisition.id}`;
 
     const form = useForm<z.infer<typeof quoteFormSchema>>({
         resolver: zodResolver(quoteFormSchema),
@@ -252,7 +252,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
 
     useEffect(() => {
         const savedData = localStorage.getItem(storageKey);
-        if (savedData && !isEditMode) { // Only restore for new quotes
+        if (savedData) {
             try {
                 const parsedData = JSON.parse(savedData);
                 form.reset(parsedData);
@@ -261,16 +261,14 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                 console.error("Failed to parse saved form data", e);
             }
         }
-    }, [storageKey, form, toast, isEditMode]);
+    }, [storageKey, form, toast]);
 
     useEffect(() => {
         const subscription = form.watch((value) => {
-            if (!isEditMode) {
-                 localStorage.setItem(storageKey, JSON.stringify(value));
-            }
+            localStorage.setItem(storageKey, JSON.stringify(value));
         });
         return () => subscription.unsubscribe();
-    }, [form, storageKey, isEditMode]);
+    }, [form, storageKey]);
 
 
      const { fields, append, remove } = useFieldArray({
@@ -957,6 +955,9 @@ export default function VendorRequisitionPage() {
                                             </div>
                                         </DialogTrigger>
                                         <DialogContent className="max-w-2xl">
+                                            <DialogHeader>
+                                                <DialogTitle>{item.name}</DialogTitle>
+                                            </DialogHeader>
                                             <div className="relative h-[60vh]">
                                                 <Image src={item.imageUrl} alt={item.name} fill style={{objectFit:"contain"}}/>
                                             </div>
@@ -1201,3 +1202,5 @@ export default function VendorRequisitionPage() {
         </div>
     )
 }
+
+```
