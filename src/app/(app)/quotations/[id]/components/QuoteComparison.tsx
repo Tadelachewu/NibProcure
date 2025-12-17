@@ -10,8 +10,9 @@ import { formatDistanceToNow, isPast } from 'date-fns';
 import { Edit2, Check, TimerOff, FileText, BadgeHelp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getRankIcon } from '@/lib/utils';
-import { ScoringDialog } from './ScoringDialog'; // Assuming this will be extracted
+import { ScoringDialog } from './ScoringDialog';
 import { useAuth } from '@/contexts/auth-context';
+import { Dialog } from '@/components/ui/dialog';
 
 export const QuoteComparison = ({
   requisition,
