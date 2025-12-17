@@ -1790,6 +1790,111 @@ const ScoringDialog = ({
     );
 };
 
+const CommitteeActions = ({
+    user,
+    requisition,
+    quotations,
+    onFinalScoresSubmitted,
+}: {
+    user: User,
+    requisition: PurchaseRequisition,
+    quotations: Quotation[],
+    onFinalScoresSubmitted: () => void,
+}) => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const { toast } = useToast();
+    
+    const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
+    const allQuotesScored = quotations.length > 0 && userScoredQuotesCount === quotations.length;
+    
+    const assignment = useMemo(() => {
+        return user.committeeAssignments?.find(a => a.requisitionId === requisition.id);
+    }, [user.committeeAssignments, requisition.id]);
+    
+    const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
+
+    const handleSubmitScores = async () => {
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`/api/requisitions/${requisition.id}/submit-scores`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to submit scores');
+            }
+            toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
+            onFinalScoresSubmitted();
+        } catch (error) {
+             toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (user.role !== 'Committee_Member') {
+        return null;
+    }
+
+    if (scoresAlreadyFinalized) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Committee Actions</CardTitle>
+                    <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button variant="outline" disabled>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Scores Submitted
+                    </Button>
+                </CardContent>
+            </Card>
+        )
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Committee Actions</CardTitle>
+                <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {quotations.length} quotes.</p>
+            </CardContent>
+            <CardFooter>
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button disabled={!allQuotesScored || isSubmitting}>
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Submit Final Scores
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure you want to submit?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will finalize your scores for this requisition. You will not be able to make further changes.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </CardFooter>
+        </Card>
+    );
+};
+
 const ScoringProgressTracker = ({
   requisition,
   quotations,
@@ -2164,6 +2269,74 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     );
 };
     
+const NotifyVendorDialog = ({
+    isOpen,
+    onClose,
+    onConfirm,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: (deadline?: Date) => void;
+}) => {
+    const [deadlineDate, setDeadlineDate] = useState<Date | undefined>();
+    const [deadlineTime, setDeadlineTime] = useState('17:00');
+
+    const finalDeadline = useMemo(() => {
+        if (!deadlineDate) return undefined;
+        const [hours, minutes] = deadlineTime.split(':').map(Number);
+        return setMinutes(setHours(deadlineDate, hours), minutes);
+    }, [deadlineDate, deadlineTime]);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Notify Vendor and Set Deadline</DialogTitle>
+                    <DialogDescription>
+                        Confirm to send the award notification. You can optionally set a new response deadline for the vendor.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-2">
+                    <Label>Vendor Response Deadline (Optional)</Label>
+                    <div className="flex gap-2">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn("w-full justify-start text-left font-normal", !deadlineDate && "text-muted-foreground")}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {deadlineDate ? format(deadlineDate, "PPP") : <span>Set a new deadline</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                    mode="single"
+                                    selected={deadlineDate}
+                                    onSelect={setDeadlineDate}
+                                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+                        <Input
+                            type="time"
+                            className="w-32"
+                            value={deadlineTime}
+                            onChange={(e) => setDeadlineTime(e.target.value)}
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={onClose}>Cancel</Button>
+                    <Button onClick={() => onConfirm(finalDeadline)}>Confirm & Notify</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+
 export default function QuotationDetailsPage() {
   const router = useRouter();
   const params = useParams();
@@ -2828,6 +3001,7 @@ export default function QuotationDetailsPage() {
                 user={user}
                 requisition={requisition}
                 quotations={quotations}
+                onFinalScoresSubmitted={fetchRequisitionAndQuotes}
              />
         )}
 
@@ -3053,6 +3227,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
