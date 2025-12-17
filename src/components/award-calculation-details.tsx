@@ -10,7 +10,7 @@ import { Separator } from './ui/separator';
 import { cn } from '@/lib/utils';
 import { AlertCircle, ArrowRight, Calculator, Check, Crown, HelpCircle, Medal, Trophy, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from './ui/dialog';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { ScrollArea } from './ui/scroll-area';
@@ -460,5 +460,3 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
         </Dialog>
     )
 }
-
-    
