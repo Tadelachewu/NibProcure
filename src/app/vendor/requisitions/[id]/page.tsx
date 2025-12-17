@@ -46,6 +46,8 @@ const quoteFormSchema = z.object({
   })).optional(),
   cpoDocumentUrl: z.string().optional(),
   experienceDocumentUrl: z.string().optional(),
+  summaryDocumentUrl: z.string().optional(),
+  bidDocumentUrl: z.string().optional(),
 }).refine(
     (data, ctx) => {
         return true;
@@ -229,6 +231,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: quote.answers || requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: quote.cpoDocumentUrl || '',
             experienceDocumentUrl: quote.experienceDocumentUrl || '',
+            bidDocumentUrl: quote.bidDocumentUrl || '',
         } : {
             notes: "",
             items: requisition.items.map(item => ({
@@ -243,6 +246,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: '',
             experienceDocumentUrl: '',
+            bidDocumentUrl: '',
         },
     });
 
@@ -454,6 +458,28 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                              />
                         )}
 
+                        <FormField
+                            control={form.control}
+                            name="bidDocumentUrl"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Bid Summary Document (Optional)</FormLabel>
+                                <FormControl>
+                                    <Input type="file" accept=".pdf" onChange={async (e) => {
+                                        if (e.target.files?.[0]) {
+                                            const path = await handleFileUpload(e.target.files[0]);
+                                            if (path) field.onChange(path);
+                                        }
+                                    }} />
+                                </FormControl>
+                                <FormDescription>
+                                    Upload your official bid summary document here.
+                                </FormDescription>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
                         <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
                              {originalItems.map(originalItem => {
                                  const itemsForThisReqItem = fields.filter(f => f.requisitionItemId === originalItem.id);
@@ -664,6 +690,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
     );
 }
 
+// ... rest of the file
 const DeclineReasonDialog = ({ onConfirm }: { onConfirm: (reason: string) => void }) => {
     const [reason, setReason] = useState('');
     return (
@@ -889,6 +916,17 @@ export default function VendorRequisitionPage() {
                              <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
                                 <FileText className="h-4 w-4 text-primary"/>
                                 <span>{quote.experienceDocumentUrl.split('/').pop()}</span>
+                            </a>
+                        </div>
+                    </div>
+                )}
+                {quote.bidDocumentUrl && (
+                    <div className="text-sm">
+                        <h3 className="font-semibold">Bid Summary Document</h3>
+                        <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
+                            <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-primary"/>
+                                <span>{quote.bidDocumentUrl.split('/').pop()}</span>
                             </a>
                         </div>
                     </div>

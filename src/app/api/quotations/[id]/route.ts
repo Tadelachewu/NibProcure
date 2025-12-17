@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -112,7 +111,7 @@ export async function PATCH(
                 notes,
                 cpoDocumentUrl,
                 experienceDocumentUrl,
-                bidDocumentUrl,
+                bidDocumentUrl, // Add this line
                 items: {
                     create: items.map((item: any) => ({
                         requisitionItemId: item.requisitionItemId,
