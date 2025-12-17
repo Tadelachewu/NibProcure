@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PurchaseOrder, PurchaseRequisition, Quotation, QuoteItem, PerItemAwardDetail } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
@@ -460,7 +460,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
 
                         <FormField
                             control={form.control}
-                            name="bidDocumentUrl"
+                            name="summaryDocumentUrl"
                             render={({ field }) => (
                                 <FormItem>
                                 <FormLabel>Bid Summary Document (Optional)</FormLabel>
@@ -920,13 +920,13 @@ export default function VendorRequisitionPage() {
                         </div>
                     </div>
                 )}
-                {quote.bidDocumentUrl && (
+                {quote.summaryDocumentUrl && (
                     <div className="text-sm">
                         <h3 className="font-semibold">Bid Summary Document</h3>
                         <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
-                            <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                            <a href={quote.summaryDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
                                 <FileText className="h-4 w-4 text-primary"/>
-                                <span>{quote.bidDocumentUrl.split('/').pop()}</span>
+                                <span>{quote.summaryDocumentUrl.split('/').pop()}</span>
                             </a>
                         </div>
                     </div>
@@ -1107,9 +1107,9 @@ export default function VendorRequisitionPage() {
                     <CardHeader>
                         <CardTitle>Requisition Details</CardTitle>
                         <CardDescription>
-                            ID: {requisition.id}
-                             {requisition.deadline && (
-                                <p className="text-xs text-destructive mt-1">Quotation Deadline: {format(new Date(requisition.deadline), 'PPpp')}</p>
+                            <div>ID: {requisition.id}</div>
+                            {requisition.deadline && (
+                                <div className="text-xs text-destructive mt-1">Quotation Deadline: {format(new Date(requisition.deadline), 'PPpp')}</div>
                             )}
                         </CardDescription>
                     </CardHeader>
