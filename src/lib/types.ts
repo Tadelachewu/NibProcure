@@ -314,7 +314,6 @@ export type Quotation = {
     cpoDocumentUrl?: string;
     experienceDocumentUrl?: string;
     bidDocumentUrl?: string;
-    summaryDocumentUrl?: string;
 };
 
 export type POItem = {

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -46,7 +47,6 @@ const quoteFormSchema = z.object({
   })).optional(),
   cpoDocumentUrl: z.string().optional(),
   experienceDocumentUrl: z.string().optional(),
-  summaryDocumentUrl: z.string().optional(),
   bidDocumentUrl: z.string().optional(),
 }).refine(
     (data, ctx) => {
@@ -231,7 +231,6 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: quote.answers || requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: quote.cpoDocumentUrl || '',
             experienceDocumentUrl: quote.experienceDocumentUrl || '',
-            summaryDocumentUrl: quote.summaryDocumentUrl || '',
             bidDocumentUrl: quote.bidDocumentUrl || '',
         } : {
             notes: "",
@@ -247,7 +246,6 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             answers: requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
             cpoDocumentUrl: '',
             experienceDocumentUrl: '',
-            summaryDocumentUrl: '',
             bidDocumentUrl: '',
         },
     });
@@ -462,10 +460,10 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
 
                         <FormField
                             control={form.control}
-                            name="summaryDocumentUrl"
+                            name="bidDocumentUrl"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Bid Summary Document (Optional)</FormLabel>
+                                <FormLabel>Official Bid Document (Optional)</FormLabel>
                                 <FormControl>
                                     <Input type="file" accept=".pdf" onChange={async (e) => {
                                         if (e.target.files?.[0]) {
@@ -475,7 +473,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                     }} />
                                 </FormControl>
                                 <FormDescription>
-                                    Upload your official bid summary document here.
+                                    Upload your official bid document or a summary here.
                                 </FormDescription>
                                 <FormMessage />
                                 </FormItem>
@@ -900,13 +898,13 @@ export default function VendorRequisitionPage() {
             </CardHeader>
             <CardContent className="space-y-4">
                 
-                {quote.summaryDocumentUrl && (
+                {quote.bidDocumentUrl && (
                     <div className="text-sm">
-                        <h3 className="font-semibold">Bid Summary Document</h3>
+                        <h3 className="font-semibold">Official Bid Document</h3>
                         <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
-                            <a href={quote.summaryDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                            <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
                                 <FileText className="h-4 w-4 text-primary"/>
-                                <span>{quote.summaryDocumentUrl.split('/').pop()}</span>
+                                <span>{quote.bidDocumentUrl.split('/').pop()}</span>
                             </a>
                         </div>
                     </div>
@@ -1016,12 +1014,12 @@ export default function VendorRequisitionPage() {
                         <CardTitle className="text-green-600">Congratulations! You've Been Awarded!</CardTitle>
                         <CardDescription>
                             Please review and respond to the award below.
-                             {requisition.awardResponseDeadline && (
-                                <p className={cn("text-sm font-semibold mt-2 flex items-center gap-2", isResponseDeadlineExpired ? "text-destructive" : "text-amber-600")}>
+                            {requisition.awardResponseDeadline && (
+                                <div className={cn("text-sm font-semibold mt-2 flex items-center gap-2", isResponseDeadlineExpired ? "text-destructive" : "text-amber-600")}>
                                     <Timer className="h-4 w-4" />
                                     <span>Respond by: {format(new Date(requisition.awardResponseDeadline), 'PPpp')}</span>
-                                </p>
-                             )}
+                                </div>
+                            )}
                         </CardDescription>
                     </CardHeader>
                      <CardContent>
@@ -1109,9 +1107,9 @@ export default function VendorRequisitionPage() {
                     <CardHeader>
                         <CardTitle>Requisition Details</CardTitle>
                         <div className="text-sm text-muted-foreground">
-                            <p>ID: {requisition.id}</p>
+                            ID: {requisition.id}
                             {requisition.deadline && (
-                                <p className="text-xs text-destructive mt-1">Quotation Deadline: {format(new Date(requisition.deadline), 'PPpp')}</p>
+                                <div className="text-xs text-destructive mt-1">Quotation Deadline: {format(new Date(requisition.deadline), 'PPpp')}</div>
                             )}
                         </div>
                     </CardHeader>
