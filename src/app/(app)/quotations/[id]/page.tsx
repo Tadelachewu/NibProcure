@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Calculator, List, AlertTriangle } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -1838,8 +1838,8 @@ const CommitteeActions = ({
             setIsSubmitting(false);
         }
     };
-
-    const isCommitteeUser = (user.roles as any[])?.some(r => r.name.includes('Committee'));
+    
+    const isCommitteeUser = user.roles.some(r => r.includes('Committee'));
     if (!isCommitteeUser) {
         return null;
     }
@@ -2421,7 +2421,7 @@ export default function QuotationDetailsPage() {
       if (!user || !role || !requisition) {
           return false;
       }
-      const userRoles = user.roles.map(r => typeof r === 'string' ? r : r.name);
+      const userRoles = user.roles as UserRole[];
       if (!userRoles.some(r => r.includes('Committee'))) return false;
 
       return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
@@ -2455,13 +2455,13 @@ export default function QuotationDetailsPage() {
   }, [requisition, isAccepted, isDeadlinePassed]);
   
   const { pendingQuotes, scoredQuotes } = useMemo(() => {
-    if (!user || !user.roles.some(r => typeof r === 'string' ? r.includes('Committee') : r.name.includes('Committee')) ) return { pendingQuotes: quotations, scoredQuotes: [] };
+    if (!user || !user.roles.some(r => r.includes('Committee')) ) return { pendingQuotes: quotations, scoredQuotes: [] };
     const pending = quotations.filter(q => !q.scores?.some(s => s.scorerId === user.id));
     const scored = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id));
     return { pendingQuotes: pending, scoredQuotes: scored };
   }, [quotations, user]);
   
-  const quotesForDisplay = (user && user.roles.some(r => typeof r === 'string' ? r.includes('Committee') : r.name.includes('Committee')) && committeeTab === 'pending') ? pendingQuotes : (user && user.roles.some(r => typeof r === 'string' ? r.includes('Committee') : r.name.includes('Committee')) && committeeTab === 'scored') ? scoredQuotes : quotations;
+  const quotesForDisplay = (user && user.roles.some(r => r.includes('Committee')) && committeeTab === 'pending') ? pendingQuotes : (user && user.roles.some(r => r.includes('Committee')) && committeeTab === 'scored') ? scoredQuotes : quotations;
   const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
   
   const itemStatuses = useMemo(() => {
@@ -2631,7 +2631,7 @@ export default function QuotationDetailsPage() {
                         });
                     }
                 }
-            } else {
+            } else { // Single award
                  const awardedQuote = quotations.find(q => q.status === 'Awarded' || q.status === 'Pending_Award');
                  if (awardedQuote) {
                      needsRefetch = true;
@@ -2949,7 +2949,7 @@ export default function QuotationDetailsPage() {
                             </div>
                         ) : (
                              <Tabs value={committeeTab} onValueChange={(value) => setCommitteeTab(value as any)} defaultValue="pending">
-                                {user && user.roles.some(r => typeof r === 'string' ? r.includes('Committee') : r.name.includes('Committee')) && <TabsList className="mb-4">
+                                {user && user.roles.some(r => r.includes('Committee')) && <TabsList className="mb-4">
                                     <TabsTrigger value="pending">Pending Your Score ({pendingQuotes.length})</TabsTrigger>
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
@@ -3115,7 +3115,7 @@ export default function QuotationDetailsPage() {
             </Card>
         )}
 
-        {isAccepted && requisition.status !== 'PO_Created' && role && !user.roles.some(r => typeof r === 'string' ? r.includes('Committee') : r.name.includes('Committee')) && (
+        {isAccepted && requisition.status !== 'PO_Created' && role && !user.roles.some(r => r.includes('Committee')) && (
             <ContractManagement requisition={requisition} onContractFinalized={fetchRequisitionAndQuotes} />
         )}
          {requisition && (
@@ -3231,6 +3231,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 
