@@ -1126,11 +1126,9 @@ export default function VendorRequisitionPage() {
                         <CardTitle>Requisition Details</CardTitle>
                         <div className="text-sm text-muted-foreground">
                             ID: {requisition.id}
-                            {requisition.deadline && (
-                                <div className="text-xs text-destructive mt-1">
-                                    Quotation Deadline: {format(new Date(requisition.deadline), 'PPpp')}
-                                </div>
-                            )}
+                            <div className="text-xs text-destructive mt-1">
+                                Quotation Deadline: {requisition.deadline ? format(new Date(requisition.deadline), 'PPpp') : 'N/A'}
+                            </div>
                         </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -1202,5 +1200,3 @@ export default function VendorRequisitionPage() {
         </div>
     )
 }
-
-```
