@@ -268,7 +268,7 @@ function FinanceDashboard() {
     const stats = useMemo(() => {
         const pending = invoices.filter(i =>
             i.status === 'Pending' &&
-            !(i.po?.receipts?.some(r => r.status === 'Disputed'))
+            !(i.po?.receipts?.some((r: any) => r.status === 'Disputed'))
         ).length;
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
         const disputed = invoices.filter(i => i.status === 'Disputed').length;
@@ -332,7 +332,7 @@ function CommitteeDashboard() {
                 // Filter client-side to find only requisitions assigned to this committee member
                 const assignedReqs = data.filter((req: PurchaseRequisition) => {
                     const finIds = req.financialCommitteeMemberIds ?? (req as any).financialCommitteeMembers?.map((m: any) => m.id) ?? [];
-                    const techIds = req.technicalCommitteeMemberIds ?? (req as any).technicalCommitteeMembers?.map((m: any) ?? [];
+                    const techIds = req.technicalCommitteeMemberIds ?? (req as any).technicalCommitteeMembers?.map((m: any) => m.id) ?? [];
                     return finIds.includes(user.id) || techIds.includes(user.id);
                 });
                 setRequisitions(assignedReqs);
@@ -425,5 +425,3 @@ export function Dashboard() {
     </div>
   );
 }
-
-    
