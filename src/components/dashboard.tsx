@@ -350,10 +350,14 @@ function CommitteeDashboard() {
     const stats = useMemo(() => {
         // Pending: assigned to this user, scoring currently active, and user hasn't submitted scores yet
         const pendingScore = requisitions.filter(r => {
-            const assigned = r.committeeAssignments?.some((a: any) => a.userId === user?.id);
             const hasScored = r.committeeAssignments?.some((a: any) => a.userId === user?.id && a.scoresSubmitted);
-            const inScoring = r.status === 'Scoring_In_Progress' || (r.deadline ? !isPast(new Date(r.deadline)) : false);
-            return Boolean(assigned) && !hasScored && inScoring;
+            
+            // Corrected Logic: Scoring is active if the deadline has passed and the process is not yet finished.
+            const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
+            const isRelevantStatus = ['Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete'].includes(r.status);
+            const inScoring = deadlinePassed && isRelevantStatus;
+
+            return !hasScored && inScoring;
         }).length;
 
         const scored = requisitions.filter(r => 
