@@ -217,16 +217,7 @@ function ProcurementOfficerDashboard() {
     const stats = useMemo(() => {
         const readyForRfq = data.requisitions.filter(r => r.status === 'PreApproved').length;
         const acceptingQuotes = data.requisitions.filter(r => r.status === 'Accepting_Quotes').length;
-        const inCommitteeScoring = data.requisitions.filter(r => {
-            const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
-            const hasCommittee = Boolean(r.committeeName);
-            const terminalStatuses = ['Closed','Fulfilled','Partially_Closed','Scoring_Complete','Awarded','PostApproved','PO_Created'];
-            if (terminalStatuses.includes(r.status)) return false;
-            if (r.status === 'Scoring_In_Progress') return true;
-            // If vendor deadline passed and a committee is assigned, treat it as in scoring (including overdue)
-            if (deadlinePassed && hasCommittee) return true;
-            return false;
-        }).length;
+        const inCommitteeScoring = data.requisitions.filter(r => r.status === 'Scoring_In_Progress').length;
         const readyToAward = data.requisitions.filter(r => r.status === 'Scoring_Complete').length;
         const pendingFinalReview = data.requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
         const awardDeclined = data.requisitions.filter(r => r.status === 'Award_Declined').length;
@@ -275,7 +266,10 @@ function FinanceDashboard() {
     }, []);
 
     const stats = useMemo(() => {
-        const pending = invoices.filter(i => i.status === 'Pending').length;
+        const pending = invoices.filter(i =>
+            i.status === 'Pending' &&
+            !(i.po?.receipts?.some(r => r.status === 'Disputed'))
+        ).length;
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
         const disputed = invoices.filter(i => i.status === 'Disputed').length;
         const paidValue = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
@@ -338,7 +332,7 @@ function CommitteeDashboard() {
                 // Filter client-side to find only requisitions assigned to this committee member
                 const assignedReqs = data.filter((req: PurchaseRequisition) => {
                     const finIds = req.financialCommitteeMemberIds ?? (req as any).financialCommitteeMembers?.map((m: any) => m.id) ?? [];
-                    const techIds = req.technicalCommitteeMemberIds ?? (req as any).technicalCommitteeMembers?.map((m: any) => m.id) ?? [];
+                    const techIds = req.technicalCommitteeMemberIds ?? (req as any).technicalCommitteeMembers?.map((m: any) ?? [];
                     return finIds.includes(user.id) || techIds.includes(user.id);
                 });
                 setRequisitions(assignedReqs);
@@ -431,3 +425,5 @@ export function Dashboard() {
     </div>
   );
 }
+
+    
