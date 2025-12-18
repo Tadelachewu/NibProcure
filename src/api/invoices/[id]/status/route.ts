@@ -17,7 +17,7 @@ export async function PATCH(
     
     const invoiceId = params.id;
     const body = await request.json();
-    const { status } = body;
+    const { status, reason } = body;
 
     const validStatuses = ['Approved for Payment', 'Disputed'];
     if (!validStatuses.includes(status)) {
@@ -28,25 +28,52 @@ export async function PATCH(
     if (!invoiceToUpdate) {
         return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
-
-    const oldStatus = invoiceToUpdate.status;
-    const updatedInvoice = await prisma.invoice.update({
-        where: { id: invoiceId },
-        data: { status: status.replace(/ /g, '_') as any }
-    });
     
-    await prisma.auditLog.create({
-        data: {
-            user: { connect: { id: actor.id } },
-            timestamp: new Date(),
-            action: 'UPDATE_INVOICE_STATUS',
-            entity: 'Invoice',
-            entityId: invoiceId,
-            details: `Updated invoice status from "${oldStatus}" to "${status}".`,
+    const oldStatus = invoiceToUpdate.status;
+
+    const transactionResult = await prisma.$transaction(async (tx) => {
+      const updatedInvoice = await tx.invoice.update({
+          where: { id: invoiceId },
+          data: { 
+            status: status.replace(/ /g, '_') as any,
+            disputeReason: status === 'Disputed' ? reason : null,
+          }
+      });
+      
+      // If disputed, find the related GRN and update its status
+      if (status === 'Disputed') {
+        const po = await tx.purchaseOrder.findUnique({
+          where: { id: updatedInvoice.purchaseOrderId },
+          include: { receipts: true }
+        });
+        
+        if (po && po.receipts.length > 0) {
+          // Assuming the most recent receipt is the one to dispute
+          const receiptToDispute = po.receipts.sort((a, b) => new Date(b.receivedDate).getTime() - new Date(a.receivedDate).getTime())[0];
+          await tx.goodsReceiptNote.update({
+            where: { id: receiptToDispute.id },
+            data: { status: 'Disputed' }
+          });
         }
+      }
+
+      await tx.auditLog.create({
+          data: {
+              user: { connect: { id: actor.id } },
+              timestamp: new Date(),
+              action: 'UPDATE_INVOICE_STATUS',
+              entity: 'Invoice',
+              entityId: invoiceId,
+              details: `Updated invoice status from "${oldStatus.replace(/_/g, ' ')}" to "${status}". ${reason ? `Reason: ${reason}` : ''}`.trim(),
+              transactionId: updatedInvoice.transactionId,
+          }
+      });
+      
+      return updatedInvoice;
     });
 
-    return NextResponse.json(updatedInvoice);
+
+    return NextResponse.json(transactionResult);
   } catch (error) {
     console.error('Failed to update invoice status:', error);
     if (error instanceof Error) {

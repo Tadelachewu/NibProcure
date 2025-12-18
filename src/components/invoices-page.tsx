@@ -722,8 +722,6 @@ export function InvoicesPage() {
                                         )}
                                     </Tooltip>
                                 </TooltipProvider>
-
-                                <DisputeDialog onConfirm={(reason) => handleAction(invoice.id, 'Disputed', reason)} disabled={isGrnDisputed} />
                             </>
                         )}
                         {invoice.status === 'Approved_for_Payment' && !isGrnDisputed && (
