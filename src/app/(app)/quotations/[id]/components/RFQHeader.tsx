@@ -1,7 +1,8 @@
+
 'use client';
 
 import { PurchaseRequisition, EvaluationCriteria } from '@/lib/types';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Eye, ClipboardList } from 'lucide-react';
 import { useState } from 'react';
