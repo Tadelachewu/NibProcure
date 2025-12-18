@@ -310,7 +310,7 @@ function ReceivingDashboard() {
         const disputedIds = new Set(disputedPOs.map(p => p.id));
         
         const readyToReceiveCount = purchaseOrders.filter(po => 
-            ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status) &&
+            ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_')) &&
             !disputedIds.has(po.id)
         ).length;
 
