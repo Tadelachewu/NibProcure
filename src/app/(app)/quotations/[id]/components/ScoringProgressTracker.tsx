@@ -14,6 +14,7 @@ import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { ExtendDeadlineDialog } from '@/components/extend-deadline-dialog';
 import { OverdueReportDialog } from '@/components/overdue-report-dialog';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
+import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 
 export function ScoringProgressTracker({
   requisition,
