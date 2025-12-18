@@ -270,7 +270,10 @@ function FinanceDashboard() {
     }, []);
 
     const stats = useMemo(() => {
-        const pending = invoices.filter(i => i.status === 'Pending').length;
+        const pending = invoices.filter(i => 
+            i.status === 'Pending' && 
+            !(i.po?.receipts?.some(r => r.status === 'Disputed'))
+        ).length;
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
         const paidValue = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
         const unpaidValue = invoices.filter(i => i.status !== 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
@@ -307,8 +310,12 @@ function ReceivingDashboard() {
             ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status) && 
             !po.receipts?.some(r => r.status === 'Disputed')
         ).length;
+        
         const disputedCount = purchaseOrders.filter(po => po.receipts?.some(r => r.status === 'Disputed')).length;
-        return { readyToReceiveCount, disputedCount };
+        
+        const completedCount = purchaseOrders.filter(po => po.status === 'Delivered' && !po.receipts?.some(r => r.status === 'Disputed')).length;
+
+        return { readyToReceiveCount, disputedCount, completedCount };
     }, [purchaseOrders]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -316,7 +323,8 @@ function ReceivingDashboard() {
     return (
          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <StatCard title="Orders to Receive" value={stats.readyToReceiveCount.toString()} description="Purchase orders awaiting goods receipt" icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods')} cta="Log Incoming Goods"/>
-            <StatCard title="Disputed Receipts" value={stats.disputedCount.toString()} description="GRNs with incorrect or damaged items" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View Disputed Items" variant="destructive" />
+            <StatCard title="Disputed Receipts" value={stats.disputedCount.toString()} description="GRNs with incorrect or damaged items" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods')} cta="View Disputed Items" variant="destructive" />
+            <StatCard title="Completed Receipts" value={stats.completedCount.toString()} description="Orders successfully received and in good condition" icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods')} cta="View History"/>
         </div>
     )
 }
