@@ -4,7 +4,6 @@ import React from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 
 import { useQuotationData } from './hooks/useQuotationData';
 import { RFQHeader } from './components/RFQHeader';
@@ -12,7 +11,7 @@ import { RFQSetup } from './components/RFQSetup';
 import { QuoteEvaluation } from './components/QuoteEvaluation';
 import { AwardFinalization } from './components/AwardFinalization';
 
-export default function QuotationDetailsPage() {
+export default function QuotationPageClient() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
