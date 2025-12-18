@@ -258,7 +258,10 @@ function FinanceDashboard() {
      useEffect(() => {
         setLoading(true);
         fetch('/api/invoices').then(res => res.json())
-            .then(data => setInvoices(Array.isArray(data) ? data : []))
+            .then(data => {
+                const activeInvoices = Array.isArray(data) ? data.filter(inv => !(inv.po?.receipts?.some((r: any) => r.status === 'Disputed'))) : [];
+                setInvoices(activeInvoices);
+            })
             .catch(error => {
                 console.error("Failed to fetch invoices:", error);
                 setInvoices([]);
@@ -267,13 +270,10 @@ function FinanceDashboard() {
     }, []);
 
     const stats = useMemo(() => {
-        const pending = invoices.filter(i =>
-            i.status === 'Pending' &&
-            !(i.po?.receipts?.some((r: any) => r.status === 'Disputed'))
-        ).length;
+        const pending = invoices.filter(i => i.status === 'Pending').length;
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
         const paidValue = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
-        const unpaidValue = invoices.filter(i => i.status !== 'Paid' && !(i.po?.receipts?.some((r: any) => r.status === 'Disputed'))).reduce((sum, i) => sum + i.totalAmount, 0);
+        const unpaidValue = invoices.filter(i => i.status !== 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
         return { pending, approved, paidValue, unpaidValue };
     }, [invoices]);
 
@@ -303,7 +303,10 @@ function ReceivingDashboard() {
     }, []);
 
     const stats = useMemo(() => {
-        const readyToReceiveCount = purchaseOrders.filter(po => ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status)).length;
+        const readyToReceiveCount = purchaseOrders.filter(po => 
+            ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status) && 
+            !po.receipts?.some(r => r.status === 'Disputed')
+        ).length;
         const disputedCount = purchaseOrders.filter(po => po.receipts?.some(r => r.status === 'Disputed')).length;
         return { readyToReceiveCount, disputedCount };
     }, [purchaseOrders]);
