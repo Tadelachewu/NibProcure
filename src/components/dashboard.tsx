@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -276,7 +275,11 @@ function FinanceDashboard() {
         ).length;
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
         const paidValue = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
-        const unpaidValue = invoices.filter(i => i.status !== 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
+        
+        const unpaidValue = invoices.filter(i => 
+            i.status === 'Pending' || i.status === 'Approved_for_Payment'
+        ).reduce((sum, i) => sum + i.totalAmount, 0);
+
         return { pending, approved, paidValue, unpaidValue };
     }, [invoices]);
 
