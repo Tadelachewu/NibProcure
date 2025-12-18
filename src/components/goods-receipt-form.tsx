@@ -30,7 +30,7 @@ import { Input } from './ui/input';
 import { Separator } from './ui/separator';
 import { Textarea } from './ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { AlertTriangle, ChevronsRight, ChevronRight, ChevronLeft, ChevronsLeft, PackageX } from 'lucide-react';
+import { AlertTriangle, ChevronsRight, ChevronRight, ChevronLeft, ChevronsLeft, PackageX, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 
@@ -67,7 +67,8 @@ export function GoodsReceiptForm() {
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [disputedCurrentPage, setDisputedCurrentPage] = useState(1);
+  const [completedCurrentPage, setCompletedCurrentPage] = useState(1);
   const { toast } = useToast();
   const { user, token } = useAuth();
   const storageKey = 'goods-receipt-form';
@@ -87,27 +88,38 @@ export function GoodsReceiptForm() {
   
   const watchedItems = useWatch({ control: form.control, name: 'items'});
   
-  const { openablePOs, disputedPOs } = useMemo(() => {
+  const { openablePOs, disputedPOs, completedPOs } = useMemo(() => {
     const openable: PurchaseOrder[] = [];
     const disputed: PurchaseOrder[] = [];
+    const completed: PurchaseOrder[] = [];
 
     allPurchaseOrders.forEach(po => {
         const isDisputed = po.receipts?.some(r => r.status === 'Disputed');
+        const isPaid = po.invoices?.every(i => i.status === 'Paid');
+
         if (isDisputed) {
             disputed.push(po);
+        } else if (po.status === 'Delivered' && isPaid) {
+            completed.push(po);
         } else if (['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_'))) {
             openable.push(po);
         }
     });
 
-    return { openablePOs: openable, disputedPOs: disputed };
+    return { openablePOs: openable, disputedPOs: disputed, completedPOs: completed };
   }, [allPurchaseOrders]);
   
   const totalDisputedPages = Math.ceil(disputedPOs.length / 5);
   const paginatedDisputedPOs = useMemo(() => {
-    const startIndex = (currentPage - 1) * 5;
+    const startIndex = (disputedCurrentPage - 1) * 5;
     return disputedPOs.slice(startIndex, startIndex + 5);
-  }, [disputedPOs, currentPage]);
+  }, [disputedPOs, disputedCurrentPage]);
+
+  const totalCompletedPages = Math.ceil(completedPOs.length / 5);
+  const paginatedCompletedPOs = useMemo(() => {
+      const startIndex = (completedCurrentPage - 1) * 5;
+      return completedPOs.slice(startIndex, startIndex + 5);
+  }, [completedPOs, completedCurrentPage]);
 
 
   const handlePOChange = (poId: string, restoredItems?: any[]) => {
@@ -214,8 +226,8 @@ export function GoodsReceiptForm() {
 
   const isSelectedPODisputed = useMemo(() => {
     if (!selectedPO) return false;
-    return selectedPO.receipts?.some(r => r.status === 'Disputed') ?? false;
-  }, [selectedPO]);
+    return disputedPOs.some(p => p.id === selectedPO.id);
+  }, [selectedPO, disputedPOs]);
   
   return (
     <div className="space-y-8">
@@ -377,13 +389,70 @@ export function GoodsReceiptForm() {
            {totalDisputedPages > 1 && (
             <div className="flex items-center justify-between mt-4">
                 <div className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalDisputedPages}
+                    Page {disputedCurrentPage} of {totalDisputedPages}
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalDisputedPages, p + 1))} disabled={currentPage === totalDisputedPages}><ChevronRight /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalDisputedPages)} disabled={currentPage === totalDisputedPages}><ChevronsRight /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setDisputedCurrentPage(1)} disabled={disputedCurrentPage === 1}><ChevronsLeft /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setDisputedCurrentPage(p => Math.max(1, p - 1))} disabled={disputedCurrentPage === 1}><ChevronLeft /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setDisputedCurrentPage(p => Math.min(totalDisputedPages, p + 1))} disabled={disputedCurrentPage === totalDisputedPages}><ChevronRight /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setDisputedCurrentPage(totalDisputedPages)} disabled={disputedCurrentPage === totalDisputedPages}><ChevronsRight /></Button>
+                </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+       <Card>
+        <CardHeader>
+          <CardTitle>Completed Receipts History</CardTitle>
+          <CardDescription>
+            A history of successfully received and paid purchase orders.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="border rounded-md">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>PO Number</TableHead>
+                  <TableHead>Requisition</TableHead>
+                  <TableHead>Vendor</TableHead>
+                  <TableHead>Final Receipt Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedCompletedPOs.length > 0 ? (
+                  paginatedCompletedPOs.map(po => (
+                    <TableRow key={po.id}>
+                      <TableCell className="font-medium">{po.id}</TableCell>
+                      <TableCell>{po.requisitionTitle}</TableCell>
+                      <TableCell>{po.vendor.name}</TableCell>
+                      <TableCell>{po.receipts && po.receipts.length > 0 ? new Date(po.receipts[po.receipts.length - 1].receivedDate).toLocaleDateString() : 'N/A'}</TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="h-32 text-center">
+                       <div className="flex flex-col items-center gap-4">
+                            <CheckCircle className="h-12 w-12 text-muted-foreground/50" />
+                            <p className="text-muted-foreground">No completed receipts to display.</p>
+                       </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+           {totalCompletedPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+                <div className="text-sm text-muted-foreground">
+                    Page {completedCurrentPage} of {totalCompletedPages}
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" onClick={() => setCompletedCurrentPage(1)} disabled={completedCurrentPage === 1}><ChevronsLeft /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCompletedCurrentPage(p => Math.max(1, p - 1))} disabled={completedCurrentPage === 1}><ChevronLeft /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCompletedCurrentPage(p => Math.min(totalCompletedPages, p + 1))} disabled={completedCurrentPage === totalCompletedPages}><ChevronRight /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCompletedCurrentPage(totalCompletedPages)} disabled={completedCurrentPage === totalCompletedPages}><ChevronsRight /></Button>
                 </div>
             </div>
           )}
