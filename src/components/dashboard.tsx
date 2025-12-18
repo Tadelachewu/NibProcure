@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -28,7 +29,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { Invoice, PurchaseRequisition } from '@/lib/types';
+import { Invoice, PurchaseOrder, PurchaseRequisition } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from './ui/table';
 import { Badge } from './ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
@@ -271,19 +272,17 @@ function FinanceDashboard() {
             !(i.po?.receipts?.some((r: any) => r.status === 'Disputed'))
         ).length;
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
-        const disputed = invoices.filter(i => i.status === 'Disputed').length;
         const paidValue = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
         const unpaidValue = invoices.filter(i => i.status !== 'Paid' && !(i.po?.receipts?.some((r: any) => r.status === 'Disputed'))).reduce((sum, i) => sum + i.totalAmount, 0);
-        return { pending, approved, disputed, paidValue, unpaidValue };
+        return { pending, approved, paidValue, unpaidValue };
     }, [invoices]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
     return (
-         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Pending Invoices" value={stats.pending.toString()} description="Awaiting 3-way match and approval" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Review Invoices"/>
             <StatCard title="Ready for Payment" value={stats.approved.toString()} description="Approved invoices to be paid" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Process Payments"/>
-            <StatCard title="Disputed Invoices" value={stats.disputed.toString()} description="Invoices with discrepancies" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Resolve Disputes" variant="destructive"/>
             <StatCard title="Total Unpaid" value={`${stats.unpaidValue.toLocaleString()} ETB`} description="Value of pending/approved invoices" icon={<Wallet className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View Invoices" />
             <StatCard title="Total Paid" value={`${stats.paidValue.toLocaleString()} ETB`} description="Value of all successfully paid invoices" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View History" />
         </div>
@@ -303,15 +302,18 @@ function ReceivingDashboard() {
             .finally(() => setLoading(false));
     }, []);
 
-    const readyToReceiveCount = useMemo(() => {
-        return purchaseOrders.filter(po => ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status)).length;
+    const stats = useMemo(() => {
+        const readyToReceiveCount = purchaseOrders.filter(po => ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status)).length;
+        const disputedCount = purchaseOrders.filter(po => po.receipts?.some(r => r.status === 'Disputed')).length;
+        return { readyToReceiveCount, disputedCount };
     }, [purchaseOrders]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     
     return (
          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <StatCard title="Orders to Receive" value={readyToReceiveCount.toString()} description="Purchase orders awaiting goods receipt" icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods')} cta="Log Incoming Goods"/>
+            <StatCard title="Orders to Receive" value={stats.readyToReceiveCount.toString()} description="Purchase orders awaiting goods receipt" icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods')} cta="Log Incoming Goods"/>
+            <StatCard title="Disputed Receipts" value={stats.disputedCount.toString()} description="GRNs with incorrect or damaged items" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View Disputed Items" variant="destructive" />
         </div>
     )
 }
@@ -372,7 +374,7 @@ function CommitteeDashboard() {
                 icon={<Edit className="h-4 w-4 text-muted-foreground" />} 
                 onClick={() => router.push('/quotations?tab=pending')}
                 cta="Go to Scoring"
-                variant={stats.pendingScore > 0 ? 'default' : 'default'}
+                variant={stats.pendingScore > 0 ? "default" : "default"}
             />
             <StatCard 
                 title="Scored by You" 
