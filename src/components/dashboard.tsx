@@ -269,16 +269,19 @@ function FinanceDashboard() {
     }, []);
 
     const stats = useMemo(() => {
-        const pending = invoices.filter(i => 
-            i.status === 'Pending' && 
+        const pending = invoices.filter(i =>
+            i.status === 'Pending' &&
             !(i.po?.receipts?.some(r => r.status === 'Disputed'))
         ).length;
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
         const paidValue = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
         
-        const unpaidValue = invoices.filter(i => 
-            i.status === 'Pending' || i.status === 'Approved_for_Payment'
-        ).reduce((sum, i) => sum + i.totalAmount, 0);
+        const unpaidValue = invoices
+            .filter(i =>
+                (i.status === 'Pending' || i.status === 'Approved_for_Payment') &&
+                !(i.po?.receipts?.some((r: any) => r.status === 'Disputed'))
+            )
+            .reduce((sum, i) => sum + i.totalAmount, 0);
 
         return { pending, approved, paidValue, unpaidValue };
     }, [invoices]);
