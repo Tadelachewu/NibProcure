@@ -259,7 +259,7 @@ function FinanceDashboard() {
         setLoading(true);
         fetch('/api/invoices').then(res => res.json())
             .then(data => {
-                const activeInvoices = Array.isArray(data) ? data.filter(inv => !(inv.po?.receipts?.some((r: any) => r.status === 'Disputed'))) : [];
+                const activeInvoices = Array.isArray(data) ? data : [];
                 setInvoices(activeInvoices);
             })
             .catch(error => {
@@ -306,25 +306,26 @@ function ReceivingDashboard() {
     }, []);
 
     const stats = useMemo(() => {
+        const disputedPOs = purchaseOrders.filter(po => po.receipts?.some(r => r.status === 'Disputed'));
+        const disputedIds = new Set(disputedPOs.map(p => p.id));
+        
         const readyToReceiveCount = purchaseOrders.filter(po => 
-            ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status) && 
-            !po.receipts?.some(r => r.status === 'Disputed')
+            ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status) &&
+            !disputedIds.has(po.id)
         ).length;
-        
-        const disputedCount = purchaseOrders.filter(po => po.receipts?.some(r => r.status === 'Disputed')).length;
-        
-        const completedCount = purchaseOrders.filter(po => po.status === 'Delivered' && !po.receipts?.some(r => r.status === 'Disputed')).length;
 
-        return { readyToReceiveCount, disputedCount, completedCount };
+        const completedCount = purchaseOrders.filter(po => po.status === 'Delivered' && !disputedIds.has(po.id)).length;
+        
+        return { readyToReceiveCount, disputedCount: disputedPOs.length, completedCount };
     }, [purchaseOrders]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     
     return (
          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <StatCard title="Orders to Receive" value={stats.readyToReceiveCount.toString()} description="Purchase orders awaiting goods receipt" icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods')} cta="Log Incoming Goods"/>
-            <StatCard title="Disputed Receipts" value={stats.disputedCount.toString()} description="GRNs with incorrect or damaged items" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods')} cta="View Disputed Items" variant="destructive" />
-            <StatCard title="Completed Receipts" value={stats.completedCount.toString()} description="Orders successfully received and in good condition" icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods')} cta="View History"/>
+            <StatCard title="Orders to Receive" value={stats.readyToReceiveCount.toString()} description="Purchase orders awaiting goods receipt" icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods?view=form')} cta="Log Incoming Goods"/>
+            <StatCard title="Disputed Receipts" value={stats.disputedCount.toString()} description="GRNs with incorrect or damaged items" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods?view=disputed')} cta="View Disputed Items" variant="destructive" />
+            <StatCard title="Completed Receipts" value={stats.completedCount.toString()} description="Orders successfully received and in good condition" icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods?view=completed')} cta="View History"/>
         </div>
     )
 }

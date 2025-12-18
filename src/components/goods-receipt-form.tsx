@@ -1,7 +1,9 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Card,
   CardContent,
@@ -19,7 +21,7 @@ import {
   SelectValue,
 } from './ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PackageCheck } from 'lucide-react';
+import { Loader2, PackageCheck, ArrowLeft } from 'lucide-react';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -33,6 +35,7 @@ import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { AlertTriangle, ChevronsRight, ChevronRight, ChevronLeft, ChevronsLeft, PackageX, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 
 
 const receiptFormSchema = z.object({
@@ -61,17 +64,148 @@ const receiptFormSchema = z.object({
 });
 
 type ReceiptFormValues = z.infer<typeof receiptFormSchema>;
+type ViewMode = 'form' | 'disputed' | 'completed';
+
+
+const DisputedReceiptsView = ({ disputedPOs }: { disputedPOs: PurchaseOrder[] }) => {
+    const [currentPage, setCurrentPage] = useState(1);
+    const totalPages = Math.ceil(disputedPOs.length / 5);
+    const paginatedPOs = useMemo(() => {
+        const startIndex = (currentPage - 1) * 5;
+        return disputedPOs.slice(startIndex, startIndex + 5);
+    }, [disputedPOs, currentPage]);
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Disputed Receipts</CardTitle>
+                <CardDescription>
+                    These Purchase Orders have receipts with issues that need to be resolved before payment can be processed.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="border rounded-md">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>PO Number</TableHead>
+                                <TableHead>Requisition</TableHead>
+                                <TableHead>Vendor</TableHead>
+                                <TableHead>Last Receipt Date</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {paginatedPOs.length > 0 ? paginatedPOs.map(po => (
+                                <TableRow key={po.id}>
+                                    <TableCell className="font-medium">{po.id}</TableCell>
+                                    <TableCell>{po.requisitionTitle}</TableCell>
+                                    <TableCell>{po.vendor.name}</TableCell>
+                                    <TableCell>{po.receipts && po.receipts.length > 0 ? new Date(po.receipts[po.receipts.length - 1].receivedDate).toLocaleDateString() : 'N/A'}</TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="h-32 text-center">
+                                        <div className="flex flex-col items-center gap-4">
+                                            <PackageX className="h-12 w-12 text-muted-foreground/50" />
+                                            <p className="text-muted-foreground">No disputed receipts at this time.</p>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4">
+                        <div className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</div>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
+                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft /></Button>
+                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight /></Button>
+                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronsRight /></Button>
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
+
+const CompletedReceiptsView = ({ completedPOs }: { completedPOs: PurchaseOrder[] }) => {
+    const [currentPage, setCurrentPage] = useState(1);
+    const totalPages = Math.ceil(completedPOs.length / 5);
+    const paginatedPOs = useMemo(() => {
+        const startIndex = (currentPage - 1) * 5;
+        return completedPOs.slice(startIndex, startIndex + 5);
+    }, [completedPOs, currentPage]);
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Completed Receipts History</CardTitle>
+                <CardDescription>A history of successfully received and paid purchase orders.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="border rounded-md">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>PO Number</TableHead>
+                                <TableHead>Requisition</TableHead>
+                                <TableHead>Vendor</TableHead>
+                                <TableHead>Final Receipt Date</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {paginatedPOs.length > 0 ? paginatedPOs.map(po => (
+                                <TableRow key={po.id}>
+                                    <TableCell className="font-medium">{po.id}</TableCell>
+                                    <TableCell>{po.requisitionTitle}</TableCell>
+                                    <TableCell>{po.vendor.name}</TableCell>
+                                    <TableCell>{po.receipts && po.receipts.length > 0 ? new Date(po.receipts[po.receipts.length - 1].receivedDate).toLocaleDateString() : 'N/A'}</TableCell>
+                                </TableRow>
+                            )) : (
+                                <TableRow>
+                                    <TableCell colSpan={4} className="h-32 text-center">
+                                        <div className="flex flex-col items-center gap-4">
+                                            <CheckCircle className="h-12 w-12 text-muted-foreground/50" />
+                                            <p className="text-muted-foreground">No completed receipts to display.</p>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+                 {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4">
+                        <div className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</div>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
+                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft /></Button>
+                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight /></Button>
+                            <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronsRight /></Button>
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
+
 
 export function GoodsReceiptForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [allPurchaseOrders, setAllPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [selectedPO, setSelectedPO] = useState<PurchaseOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
-  const [disputedCurrentPage, setDisputedCurrentPage] = useState(1);
-  const [completedCurrentPage, setCompletedCurrentPage] = useState(1);
   const { toast } = useToast();
   const { user, token } = useAuth();
   const storageKey = 'goods-receipt-form';
+  const initialView = (searchParams.get('view') as ViewMode) || 'form';
+  const [viewMode, setViewMode] = useState<ViewMode>(initialView);
   
   const form = useForm<ReceiptFormValues>({
     resolver: zodResolver(receiptFormSchema),
@@ -108,19 +242,6 @@ export function GoodsReceiptForm() {
 
     return { openablePOs: openable, disputedPOs: disputed, completedPOs: completed };
   }, [allPurchaseOrders]);
-  
-  const totalDisputedPages = Math.ceil(disputedPOs.length / 5);
-  const paginatedDisputedPOs = useMemo(() => {
-    const startIndex = (disputedCurrentPage - 1) * 5;
-    return disputedPOs.slice(startIndex, startIndex + 5);
-  }, [disputedPOs, disputedCurrentPage]);
-
-  const totalCompletedPages = Math.ceil(completedPOs.length / 5);
-  const paginatedCompletedPOs = useMemo(() => {
-      const startIndex = (completedCurrentPage - 1) * 5;
-      return completedPOs.slice(startIndex, startIndex + 5);
-  }, [completedPOs, completedCurrentPage]);
-
 
   const handlePOChange = (poId: string, restoredItems?: any[]) => {
     form.setValue('purchaseOrderId', poId);
@@ -146,31 +267,6 @@ export function GoodsReceiptForm() {
     }
   }
   
-  useEffect(() => {
-    const savedData = localStorage.getItem(storageKey);
-    if (savedData) {
-      try {
-        const parsedData = JSON.parse(savedData);
-        if (parsedData.purchaseOrderId) {
-            if (openablePOs.length > 0) {
-              handlePOChange(parsedData.purchaseOrderId, parsedData.items);
-              toast({ title: 'Draft Restored', description: 'Your previous goods receipt entry has been restored.' });
-            }
-        }
-      } catch (e) {
-        console.error("Failed to parse saved GRN data", e);
-      }
-    }
-  }, [openablePOs]);
-
-  useEffect(() => {
-    const subscription = form.watch((value) => {
-      localStorage.setItem(storageKey, JSON.stringify(value));
-    });
-    return () => subscription.unsubscribe();
-  }, [form, storageKey]);
-
-
   const fetchPOs = useCallback(async () => {
     setLoading(true);
     try {
@@ -183,11 +279,15 @@ export function GoodsReceiptForm() {
       setLoading(false);
     }
   }, [toast]);
-
+  
   useEffect(() => {
     fetchPOs();
   }, [fetchPOs]);
 
+  useEffect(() => {
+    const view = (searchParams.get('view') as ViewMode) || 'form';
+    setViewMode(view);
+  }, [searchParams]);
 
   const onSubmit = async (values: ReceiptFormValues) => {
       if (!user || !token) return;
@@ -228,236 +328,140 @@ export function GoodsReceiptForm() {
     if (!selectedPO) return false;
     return disputedPOs.some(p => p.id === selectedPO.id);
   }, [selectedPO, disputedPOs]);
+
+  const handleTabChange = (value: ViewMode) => {
+      setViewMode(value);
+      router.push(`/receive-goods?view=${value}`);
+  }
   
   return (
     <div className="space-y-8">
-      <Card>
-        <CardHeader>
-          <CardTitle>Receive Goods</CardTitle>
-          <CardDescription>Log incoming items against a purchase order.</CardDescription>
-        </CardHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <CardContent className="space-y-6">
-              <FormField
-                  control={form.control}
-                  name="purchaseOrderId"
-                  render={({ field }) => (
-                      <FormItem>
-                      <FormLabel>Select Purchase Order</FormLabel>
-                      <Select onValueChange={(value) => handlePOChange(value)} value={field.value}>
-                          <FormControl>
-                          <SelectTrigger className="w-full md:w-1/2">
-                              <SelectValue placeholder={loading ? "Loading POs..." : "Select a PO to receive against"} />
-                          </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                          {openablePOs.map(po => <SelectItem key={po.id} value={po.id}>{po.id} - {po.requisitionTitle}</SelectItem>)}
-                          </SelectContent>
-                      </Select>
-                      <FormMessage />
-                      </FormItem>
-                  )}
-                  />
-              
-              {selectedPO && (
-                  <>
-                  {isSelectedPODisputed && (
-                      <Alert variant="destructive">
-                          <AlertTriangle className="h-4 w-4"/>
-                          <AlertTitle>This Order is Disputed</AlertTitle>
-                          <AlertDescription>
-                              The invoice for this purchase order was disputed. Please carefully re-verify the received quantities and conditions, then re-submit this form to confirm the correct details.
-                          </AlertDescription>
-                      </Alert>
-                  )}
-                  <Separator />
-                  <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
-                      <h3 className="text-lg font-medium">Items to Receive</h3>
-                      {fields.map((field, index) => {
-                          const itemIsDefective = watchedItems?.[index]?.condition === 'Damaged' || watchedItems?.[index]?.condition === 'Incorrect';
-                          return (
-                          <Card key={field.id} className={cn("p-4", itemIsDefective && "border-destructive/50 ring-2 ring-destructive/20")}>
-                              <p className="font-semibold mb-2">{field.name}</p>
-                              <p className="text-sm text-muted-foreground mb-4">Ordered: {field.quantityOrdered}</p>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <FormField
-                                      control={form.control}
-                                      name={`items.${index}.quantityReceived`}
-                                      render={({ field }) => (
-                                          <FormItem>
-                                              <FormLabel>Quantity Received</FormLabel>
-                                              <FormControl><Input type="number" {...field} /></FormControl>
-                                              <FormMessage />
-                                          </FormItem>
-                                      )}
-                                  />
-                                  <FormField
-                                      control={form.control}
-                                      name={`items.${index}.condition`}
-                                      render={({ field }) => (
-                                          <FormItem>
-                                          <FormLabel>Condition</FormLabel>
-                                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                              <FormControl>
-                                              <SelectTrigger><SelectValue /></SelectTrigger>
-                                              </FormControl>
-                                              <SelectContent>
-                                                  <SelectItem value="Good">Good</SelectItem>
-                                                  <SelectItem value="Damaged">Damaged</SelectItem>
-                                                  <SelectItem value="Incorrect">Incorrect</SelectItem>
-                                              </SelectContent>
-                                          </Select>
-                                          <FormMessage />
-                                          </FormItem>
-                                      )}
-                                  />
-                                  <FormField
-                                      control={form.control}
-                                      name={`items.${index}.notes`}
-                                      render={({ field }) => (
-                                          <FormItem className="md:col-span-2">
-                                              <FormLabel>Item Notes {itemIsDefective && <span className="text-destructive">*</span>}</FormLabel>
-                                              <FormControl>
-                                                  <Textarea placeholder={itemIsDefective ? "Reason for damaged/incorrect status is required..." : "e.g. Box was dented but item is fine"} {...field} />
-                                              </FormControl>
-                                              <FormMessage />
-                                          </FormItem>
-                                      )}
-                                  />
-                              </div>
-                          </Card>
-                      )})}
-                  </div>
-                  </>
-              )}
+        <Tabs value={viewMode} onValueChange={(v) => handleTabChange(v as ViewMode)}>
+            <TabsList>
+                <TabsTrigger value="form">Log Receipt</TabsTrigger>
+                <TabsTrigger value="disputed">Disputed Receipts</TabsTrigger>
+                <TabsTrigger value="completed">Completed History</TabsTrigger>
+            </TabsList>
+        </Tabs>
 
-            </CardContent>
-            {selectedPO && (
-              <CardFooter>
-                  <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackageCheck className="mr-2 h-4 w-4" />}
-                      {isSelectedPODisputed ? 'Confirm & Re-Submit Receipt' : 'Log Received Goods'}
-                  </Button>
-              </CardFooter>
-            )}
-          </form>
-        </Form>
-      </Card>
+        {viewMode === 'form' && (
+            <Card>
+                <CardHeader>
+                <CardTitle>Receive Goods</CardTitle>
+                <CardDescription>Log incoming items against a purchase order.</CardDescription>
+                </CardHeader>
+                <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)}>
+                    <CardContent className="space-y-6">
+                    <FormField
+                        control={form.control}
+                        name="purchaseOrderId"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Select Purchase Order</FormLabel>
+                            <Select onValueChange={(value) => handlePOChange(value)} value={field.value}>
+                                <FormControl>
+                                <SelectTrigger className="w-full md:w-1/2">
+                                    <SelectValue placeholder={loading ? "Loading POs..." : "Select a PO to receive against"} />
+                                </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                {openablePOs.map(po => <SelectItem key={po.id} value={po.id}>{po.id} - {po.requisitionTitle}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
+                    
+                    {selectedPO && (
+                        <>
+                        {isSelectedPODisputed && (
+                            <Alert variant="destructive">
+                                <AlertTriangle className="h-4 w-4"/>
+                                <AlertTitle>This Order is Disputed</AlertTitle>
+                                <AlertDescription>
+                                    The invoice for this purchase order was disputed. Please carefully re-verify the received quantities and conditions, then re-submit this form to confirm the correct details.
+                                </AlertDescription>
+                            </Alert>
+                        )}
+                        <Separator />
+                        <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+                            <h3 className="text-lg font-medium">Items to Receive</h3>
+                            {fields.map((field, index) => {
+                                const itemIsDefective = watchedItems?.[index]?.condition === 'Damaged' || watchedItems?.[index]?.condition === 'Incorrect';
+                                return (
+                                <Card key={field.id} className={cn("p-4", itemIsDefective && "border-destructive/50 ring-2 ring-destructive/20")}>
+                                    <p className="font-semibold mb-2">{field.name}</p>
+                                    <p className="text-sm text-muted-foreground mb-4">Ordered: {field.quantityOrdered}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <FormField
+                                            control={form.control}
+                                            name={`items.${index}.quantityReceived`}
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Quantity Received</FormLabel>
+                                                    <FormControl><Input type="number" {...field} /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name={`items.${index}.condition`}
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                <FormLabel>Condition</FormLabel>
+                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                                    <FormControl>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="Good">Good</SelectItem>
+                                                        <SelectItem value="Damaged">Damaged</SelectItem>
+                                                        <SelectItem value="Incorrect">Incorrect</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name={`items.${index}.notes`}
+                                            render={({ field }) => (
+                                                <FormItem className="md:col-span-2">
+                                                    <FormLabel>Item Notes {itemIsDefective && <span className="text-destructive">*</span>}</FormLabel>
+                                                    <FormControl>
+                                                        <Textarea placeholder={itemIsDefective ? "Reason for damaged/incorrect status is required..." : "e.g. Box was dented but item is fine"} {...field} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                </Card>
+                            )})}
+                        </div>
+                        </>
+                    )}
 
-       <Card>
-        <CardHeader>
-          <CardTitle>Disputed Receipts</CardTitle>
-          <CardDescription>
-            These Purchase Orders have receipts with issues (e.g., damaged or incorrect items) that need to be resolved.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>PO Number</TableHead>
-                  <TableHead>Requisition</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead>Last Receipt Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedDisputedPOs.length > 0 ? (
-                  paginatedDisputedPOs.map(po => (
-                    <TableRow key={po.id}>
-                      <TableCell className="font-medium">{po.id}</TableCell>
-                      <TableCell>{po.requisitionTitle}</TableCell>
-                      <TableCell>{po.vendor.name}</TableCell>
-                      <TableCell>{po.receipts && po.receipts.length > 0 ? new Date(po.receipts[po.receipts.length - 1].receivedDate).toLocaleDateString() : 'N/A'}</TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} className="h-32 text-center">
-                       <div className="flex flex-col items-center gap-4">
-                            <PackageX className="h-12 w-12 text-muted-foreground/50" />
-                            <p className="text-muted-foreground">No disputed receipts at this time.</p>
-                       </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-           {totalDisputedPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-muted-foreground">
-                    Page {disputedCurrentPage} of {totalDisputedPages}
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" onClick={() => setDisputedCurrentPage(1)} disabled={disputedCurrentPage === 1}><ChevronsLeft /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setDisputedCurrentPage(p => Math.max(1, p - 1))} disabled={disputedCurrentPage === 1}><ChevronLeft /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setDisputedCurrentPage(p => Math.min(totalDisputedPages, p + 1))} disabled={disputedCurrentPage === totalDisputedPages}><ChevronRight /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setDisputedCurrentPage(totalDisputedPages)} disabled={disputedCurrentPage === totalDisputedPages}><ChevronsRight /></Button>
-                </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      
-       <Card>
-        <CardHeader>
-          <CardTitle>Completed Receipts History</CardTitle>
-          <CardDescription>
-            A history of successfully received and paid purchase orders.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="border rounded-md">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>PO Number</TableHead>
-                  <TableHead>Requisition</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead>Final Receipt Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedCompletedPOs.length > 0 ? (
-                  paginatedCompletedPOs.map(po => (
-                    <TableRow key={po.id}>
-                      <TableCell className="font-medium">{po.id}</TableCell>
-                      <TableCell>{po.requisitionTitle}</TableCell>
-                      <TableCell>{po.vendor.name}</TableCell>
-                      <TableCell>{po.receipts && po.receipts.length > 0 ? new Date(po.receipts[po.receipts.length - 1].receivedDate).toLocaleDateString() : 'N/A'}</TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={4} className="h-32 text-center">
-                       <div className="flex flex-col items-center gap-4">
-                            <CheckCircle className="h-12 w-12 text-muted-foreground/50" />
-                            <p className="text-muted-foreground">No completed receipts to display.</p>
-                       </div>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-           {totalCompletedPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-muted-foreground">
-                    Page {completedCurrentPage} of {totalCompletedPages}
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" onClick={() => setCompletedCurrentPage(1)} disabled={completedCurrentPage === 1}><ChevronsLeft /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setCompletedCurrentPage(p => Math.max(1, p - 1))} disabled={completedCurrentPage === 1}><ChevronLeft /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setCompletedCurrentPage(p => Math.min(totalCompletedPages, p + 1))} disabled={completedCurrentPage === totalCompletedPages}><ChevronRight /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setCompletedCurrentPage(totalCompletedPages)} disabled={completedCurrentPage === totalCompletedPages}><ChevronsRight /></Button>
-                </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    </CardContent>
+                    {selectedPO && (
+                    <CardFooter>
+                        <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PackageCheck className="mr-2 h-4 w-4" />}
+                            {isSelectedPODisputed ? 'Confirm & Re-Submit Receipt' : 'Log Received Goods'}
+                        </Button>
+                    </CardFooter>
+                    )}
+                </form>
+                </Form>
+            </Card>
+        )}
+
+        {viewMode === 'disputed' && <DisputedReceiptsView disputedPOs={disputedPOs} />}
+        {viewMode === 'completed' && <CompletedReceiptsView completedPOs={completedPOs} />}
     </div>
   );
 }
