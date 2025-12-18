@@ -514,8 +514,8 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
 }
 
 const committeeFormSchema = z.object({
-  committeeName: z.string().min(3, "Committee name is required."),
-  committeePurpose: z.string().min(10, "Purpose is required."),
+  committeeName: z.string().min(2, "Committee name must be at least 2 characters long."),
+  committeePurpose: z.string().min(2, "Purpose must be at least 2 characters long."),
   financialCommitteeMemberIds: z.array(z.string()).min(1, "At least one financial member is required."),
   technicalCommitteeMemberIds: z.array(z.string()).optional(),
 });
