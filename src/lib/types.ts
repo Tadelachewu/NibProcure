@@ -252,7 +252,7 @@ export type QuoteAnswer = {
   answer: string;
 }
 
-export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'Rejected' | 'Standby' | 'Invoice_Submitted' | 'Failed' | 'Accepted' | 'Declined' | 'Pending_Award';
+export type QuotationStatus = 'Submitted' | 'Awarded' | 'Partially_Awarded' | 'Rejected' | 'Standby' | 'Invoice_Submitted' | 'Failed' | 'Accepted' | 'Declined' | 'Pending_Award' | 'Failed_to_Award';
 
 export type EvaluationCriterion = {
   id: string;

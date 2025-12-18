@@ -33,6 +33,34 @@ export async function GET(request: Request) {
   }
 
   try {
+    // ---- START: Automatic Status Transition Logic ----
+    const now = new Date();
+    // Find requisitions that are 'Accepting_Quotes' and whose deadline has passed.
+    const overdueForScoring = await prisma.purchaseRequisition.findMany({
+      where: {
+        status: 'Accepting_Quotes',
+        deadline: {
+          lte: now,
+        },
+      },
+    });
+
+    if (overdueForScoring.length > 0) {
+      const idsToUpdate = overdueForScoring.map(req => req.id);
+      await prisma.purchaseRequisition.updateMany({
+        where: {
+          id: {
+            in: idsToUpdate,
+          },
+        },
+        data: {
+          status: 'Scoring_In_Progress',
+        },
+      });
+      console.log(`Automatically transitioned ${idsToUpdate.length} requisitions to 'Scoring_In_Progress'.`);
+    }
+    // ---- END: Automatic Status Transition Logic ----
+
     let whereClause: any = {};
     
     if (forAwardReview === 'true' && userPayload) {
