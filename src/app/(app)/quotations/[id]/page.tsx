@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -25,8 +26,11 @@ export default function QuotationDetailsPage() {
     currentStep,
     isAuthorized,
     isDeadlinePassed,
+    isScoringDeadlinePassed,
     committeeQuorum,
     isAwarded,
+    isScoringComplete,
+    allUsers,
     fetchRequisitionAndQuotes,
   } = useQuotationData(id);
 
@@ -40,9 +44,9 @@ export default function QuotationDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <Button variant="outline" onClick={() => router.back()}>
+      <Button variant="outline" onClick={() => router.push('/quotations')}>
         <ArrowLeft className="mr-2 h-4 w-4" />
-        Back
+        Back to All Requisitions
       </Button>
 
       <RFQHeader requisition={requisition} currentStep={currentStep} />
@@ -55,11 +59,10 @@ export default function QuotationDetailsPage() {
           noBidsAndDeadlinePassed={noBidsAndDeadlinePassed}
           quorumNotMetAndDeadlinePassed={quorumNotMetAndDeadlinePassed}
           onRfqSent={fetchRequisitionAndQuotes}
-          onSuccess={fetchRequisitionAndQuotes}
         />
       )}
 
-      {(currentStep !== 'rfq' || readyForCommitteeAssignment) && (
+      {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
         <QuoteEvaluation
           requisition={requisition}
           quotations={quotations}
@@ -67,6 +70,11 @@ export default function QuotationDetailsPage() {
           isAuthorized={isAuthorized}
           readyForCommitteeAssignment={readyForCommitteeAssignment}
           onSuccess={fetchRequisitionAndQuotes}
+          isDeadlinePassed={isDeadlinePassed}
+          isScoringDeadlinePassed={isScoringDeadlinePassed}
+          isScoringComplete={isScoringComplete}
+          allUsers={allUsers}
+          vendors={vendors}
         />
       )}
       
