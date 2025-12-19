@@ -637,6 +637,27 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    const { evaluationCriteria } = body;
+
+    if (evaluationCriteria) {
+        const totalWeight = (evaluationCriteria.financialWeight || 0) + (evaluationCriteria.technicalWeight || 0);
+        if (totalWeight !== 100) {
+            return NextResponse.json({ error: `Overall financial and technical weights must sum to 100. Current sum: ${totalWeight}` }, { status: 400 });
+        }
+
+        const financialTotal = evaluationCriteria.financialCriteria?.reduce((acc: number, c: any) => acc + (Number(c.weight) || 0), 0);
+        if (financialTotal !== 100) {
+            return NextResponse.json({ error: `The weights of all financial criteria must sum to 100. Current sum: ${financialTotal}` }, { status: 400 });
+        }
+
+        const technicalTotal = evaluationCriteria.technicalCriteria?.reduce((acc: number, c: any) => acc + (Number(c.weight) || 0), 0);
+        if (technicalTotal !== 100) {
+            return NextResponse.json({ error: `The weights of all technical criteria must sum to 100. Current sum: ${technicalTotal}` }, { status: 400 });
+        }
+    }
+
+
     const totalPrice = body.items.reduce((acc: number, item: any) => {
       const price = item.unitPrice || 0;
       const quantity = item.quantity || 0;
