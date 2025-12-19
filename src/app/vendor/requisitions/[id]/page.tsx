@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -38,7 +37,7 @@ const quoteFormSchema = z.object({
     quantity: z.number(),
     unitPrice: z.coerce.number().min(0.01, "Price is required."),
     leadTimeDays: z.coerce.number().min(0, "Lead time is required."),
-    brandDetails: z.string().optional(),
+    brandDetails: z.string().min(1, "Brand/Model details are required."),
     imageUrl: z.string().optional(),
   })),
   answers: z.array(z.object({
@@ -505,7 +504,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                                         {isAlternative ? "Alternative Item Name" : "Item Name"} (Qty: {form.getValues(`items.${overallIndex}.quantity`)})
                                                                     </FormLabel>
                                                                     <FormControl>
-                                                                        <Input placeholder="e.g., MacBook Pro 16-inch or alternative" {...field} />
+                                                                        <Input placeholder="e.g., MacBook Pro 16-inch or alternative" {...field} readOnly={!isAlternative} />
                                                                     </FormControl>
                                                                     <FormMessage />
                                                                 </FormItem>
@@ -1200,3 +1199,5 @@ export default function VendorRequisitionPage() {
         </div>
     )
 }
+
+    
