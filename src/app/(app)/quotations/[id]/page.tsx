@@ -31,12 +31,12 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, AlertTriangle } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem, PerItemAwardDetail } from '@/lib/types';
+import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem, PerItemAwardDetail, UserRole } from '@/lib/types';
 import { format, formatDistanceToNow, isBefore, isPast, setHours, setMinutes } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -213,7 +213,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean }) => {
+const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean }) => {
     
     if (quotes.length === 0) {
         return (
@@ -271,7 +271,8 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
         }
     }
 
-    const isTechnicalOnlyScorer = role === 'Committee_Member' && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
+    const isCommitteeMember = (user.roles as UserRole[]).includes('Committee_Member');
+    const isTechnicalOnlyScorer = isCommitteeMember && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
     const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
 
     return (
@@ -404,10 +405,10 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             <Button className="w-full" variant="outline" onClick={() => onViewDetails(quote)}>
                                 <Eye className="mr-2 h-4 w-4" /> View Full Quote
                             </Button>
-                             {role === 'Committee_Member' && isDeadlinePassed && (
+                             {isCommitteeMember && isDeadlinePassed && (
                                 <Button className="w-full" variant={hasUserScored ? "secondary" : "default"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
-                                    {hasUserScored ? 'View Your Score' : 'Score this Quote'}
+                                    {hasUserScored ? 'View/Update Your Score' : 'Score this Quote'}
                                 </Button>
                             )}
                         </CardFooter>
@@ -1802,7 +1803,7 @@ const CommitteeActions = ({
     const { toast } = useToast();
     
     // Check if the user is part of any committee for this requisition
-    const isCommitteeUser = (user.roles as any[])?.some(r => r.includes('Committee'));
+    const isCommitteeUser = (user.roles as any[])?.some(r => r.name === 'Committee_Member');
     if (!isCommitteeUser) {
         return null;
     }
@@ -2366,12 +2367,12 @@ export default function QuotationDetailsPage() {
 
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
-    if (role === 'Admin' || role === 'Committee') return true;
+    if ((user.roles as UserRole[]).includes('Admin') || (user.roles as UserRole[]).includes('Committee')) return true;
     if (rfqSenderSetting.type === 'specific') {
       return user.id === rfqSenderSetting.userId;
     }
     if (rfqSenderSetting.type === 'all') {
-      return role === 'Procurement_Officer';
+      return (user.roles as UserRole[]).includes('Procurement_Officer');
     }
     return false;
   }, [user, role, rfqSenderSetting]);
@@ -2413,14 +2414,11 @@ export default function QuotationDetailsPage() {
 
 
   const isAssignedCommitteeMember = useMemo(() => {
-      if (!user || !role || !requisition) {
+      if (!user || !requisition) {
           return false;
       }
-      const userRoles = user.roles as UserRole[];
-      if (!userRoles.some(r => r.includes('Committee'))) return false;
-
-      return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
-  }, [user, role, requisition]);
+      return (user.roles as UserRole[]).some(r => r.includes('Committee_Member'));
+  }, [user, requisition]);
   
   const isReviewer = useMemo(() => {
     if (!user || !role || !requisition) return false;
@@ -2949,10 +2947,10 @@ export default function QuotationDetailsPage() {
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete}/>
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete}/>
                                 </TabsContent>
                              </Tabs>
                         )}
@@ -3102,7 +3100,7 @@ export default function QuotationDetailsPage() {
             </Card>
         )}
 
-        {isAccepted && requisition.status !== 'PO_Created' && role && !(user.roles as string[]).some(r => r.includes('Committee')) && (
+        {isAccepted && requisition.status !== 'PO_Created' && !(user.roles as UserRole[]).some(r => r.includes('Committee_Member')) && (
             <ContractManagement requisition={requisition} onContractFinalized={fetchRequisitionAndQuotes} />
         )}
          {requisition && (
@@ -3215,4 +3213,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         </Card>
     );
 };
+    
+
     
