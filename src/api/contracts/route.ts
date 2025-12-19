@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { ContractStatus, User } from '@/lib/types';
+import { ContractStatus } from '@/lib/types';
 import { getActorFromToken } from '@/lib/auth';
 
 
@@ -70,6 +70,7 @@ export async function POST(request: Request) {
 
         const newContract = await prisma.contract.create({
             data: {
+                contractNumber: `CN-${Math.random().toString(36).substring(2, 12).toUpperCase()}`, // Generate random contract number
                 requisition: { connect: { id: requisitionId } },
                 vendor: { connect: { id: vendorId } },
                 sender: { connect: { id: actor.id } },
