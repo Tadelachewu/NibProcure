@@ -104,6 +104,18 @@
   }
 }
 
+@layer utilities {
+  .text-gradient {
+    /* Fallback color */
+    color: hsl(var(--foreground));
+    /* Gradient */
+    background: linear-gradient(90deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
 @media print {
     body {
         background: white;

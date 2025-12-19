@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/auth-context';
 import { ThemeProvider } from '@/contexts/theme-context';
+import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'Nib InternationalBank',
@@ -27,7 +28,7 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
       </head>
-      <body className="font-body antialiased">
+      <body className={cn("font-body antialiased", "text-gradient")}>
         <ThemeProvider
             attribute="class"
             defaultTheme="system"
