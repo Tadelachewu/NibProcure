@@ -46,6 +46,10 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: cspHeader.replace(/\s{2,}/g, ' ').trim(),
           },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          }
         ],
       },
     ];
