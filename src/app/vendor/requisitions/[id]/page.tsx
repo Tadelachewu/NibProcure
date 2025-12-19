@@ -505,7 +505,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                                         {isAlternative ? "Alternative Item Name" : "Item Name"} (Qty: {form.getValues(`items.${overallIndex}.quantity`)})
                                                                     </FormLabel>
                                                                     <FormControl>
-                                                                        <Input placeholder="e.g., MacBook Pro 16-inch or alternative" {...field} />
+                                                                        <Input placeholder="e.g., MacBook Pro 16-inch or alternative" {...field} disabled={!isAlternative} />
                                                                     </FormControl>
                                                                     <FormMessage />
                                                                 </FormItem>
