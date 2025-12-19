@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -31,7 +30,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, AlertTriangle } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -213,7 +212,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean }) => {
+const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete, isAssignedCommitteeMember }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean, isAssignedCommitteeMember: boolean }) => {
     
     if (quotes.length === 0) {
         return (
@@ -404,10 +403,10 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             <Button className="w-full" variant="outline" onClick={() => onViewDetails(quote)}>
                                 <Eye className="mr-2 h-4 w-4" /> View Full Quote
                             </Button>
-                             {role === 'Committee_Member' && isDeadlinePassed && (
+                             {isAssignedCommitteeMember && isDeadlinePassed && (
                                 <Button className="w-full" variant={hasUserScored ? "secondary" : "default"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
-                                    {hasUserScored ? 'View Your Score' : 'Score this Quote'}
+                                    {hasUserScored ? 'View/Update Your Score' : 'Score this Quote'}
                                 </Button>
                             )}
                         </CardFooter>
@@ -1762,26 +1761,23 @@ const ScoringDialog = ({
                 </ScrollArea>
 
                 <DialogFooter className="pt-4 mt-4 border-t">
-                    {existingScore ? (
-                        <DialogClose asChild><Button>Close</Button></DialogClose>
-                    ) : (
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild><Button type="button">Submit Score</Button></AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirm Your Score</AlertDialogTitle>
-                                    <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Go Back & Edit</AlertDialogCancel>
-                                    <AlertDialogAction onClick={form.handleSubmit(onSubmit)} disabled={isSubmitting}>
-                                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Confirm & Submit
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    )}
+                    <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild><Button type="button" disabled={!!existingScore}>Submit Score</Button></AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Confirm Your Score</AlertDialogTitle>
+                                <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Go Back & Edit</AlertDialogCancel>
+                                <AlertDialogAction onClick={form.handleSubmit(onSubmit)} disabled={isSubmitting}>
+                                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Confirm & Submit
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 </DialogFooter>
             </form>
             </Form>
@@ -1793,17 +1789,17 @@ const CommitteeActions = ({
     user,
     requisition,
     onFinalScoresSubmitted,
+    isAssignedCommitteeMember,
 }: {
     user: User,
     requisition: PurchaseRequisition,
     onFinalScoresSubmitted: () => void,
+    isAssignedCommitteeMember: boolean;
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
     
-    // Check if the user is part of any committee for this requisition
-    const isCommitteeUser = (user.roles as any[])?.some(r => r.includes('Committee'));
-    if (!isCommitteeUser) {
+    if (!isAssignedCommitteeMember) {
         return null;
     }
     
@@ -2413,14 +2409,14 @@ export default function QuotationDetailsPage() {
 
 
   const isAssignedCommitteeMember = useMemo(() => {
-      if (!user || !role || !requisition) {
+      if (!user || !requisition) {
           return false;
       }
-      const userRoles = user.roles as UserRole[];
-      if (!userRoles.some(r => r.includes('Committee'))) return false;
+      const userRoles = (user.roles as any[]).map(r => r.name);
+      if (!userRoles.includes('Committee_Member')) return false;
 
       return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
-  }, [user, role, requisition]);
+  }, [user, requisition]);
   
   const isReviewer = useMemo(() => {
     if (!user || !role || !requisition) return false;
@@ -2944,15 +2940,15 @@ export default function QuotationDetailsPage() {
                             </div>
                         ) : (
                              <Tabs value={committeeTab} onValueChange={(value) => setCommitteeTab(value as any)} defaultValue="pending">
-                                {user && (user.roles as string[]).some(r => r.includes('Committee')) && <TabsList className="mb-4">
+                                {user && isAssignedCommitteeMember && <TabsList className="mb-4">
                                     <TabsTrigger value="pending">Pending Your Score ({pendingQuotes.length})</TabsTrigger>
                                     <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                 </TabsList>}
                                 <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} />
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember} />
                                 </TabsContent>
                                 <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete}/>
+                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember}/>
                                 </TabsContent>
                              </Tabs>
                         )}
@@ -2999,6 +2995,7 @@ export default function QuotationDetailsPage() {
             user={user}
             requisition={requisition}
             onFinalScoresSubmitted={fetchRequisitionAndQuotes}
+            isAssignedCommitteeMember={isAssignedCommitteeMember}
         />
         
         {isAuthorized && (isScoringComplete || requisition.status.startsWith('Scoring_')) && (
