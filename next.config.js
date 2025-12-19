@@ -25,9 +25,10 @@ const nextConfig = {
     ],
   },
   async headers() {
+    const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
     const cspHeader = `
       default-src 'self';
-      script-src 'self' 'unsafe-eval' 'unsafe-inline';
+      script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       img-src 'self' https://placehold.co https://picsum.photos data:;
       font-src 'self' https://fonts.gstatic.com;
@@ -45,6 +46,10 @@ const nextConfig = {
           {
             key: 'Content-Security-Policy',
             value: cspHeader.replace(/\s{2,}/g, ' ').trim(),
+          },
+          {
+            key: 'x-nonce',
+            value: nonce,
           },
           {
             key: 'X-Content-Type-Options',

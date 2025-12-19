@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/contexts/auth-context';
 import { ThemeProvider } from '@/contexts/theme-context';
+import { headers } from 'next/headers';
 
 export const metadata: Metadata = {
   title: 'Nib InternationalBank',
@@ -15,16 +16,26 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = headers().get('x-nonce') || '';
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link 
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" 
-          rel="stylesheet" 
-          integrity="sha384-VT5fPqL7tIgcR60YVnOOJ6H3C2ebMN6+qXn7C/c3i5d/K3gklG3Y3Y2soiSL2o2h"
+        <link
+          rel="preconnect"
+          href="https://fonts.googleapis.com"
+          nonce={nonce}
+        />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
+          nonce={nonce}
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+          rel="stylesheet"
+          nonce={nonce}
         />
       </head>
       <body className="font-body antialiased">
