@@ -125,7 +125,16 @@ export async function GET(request: Request) {
 
         const userRoles = userPayload?.roles.map(r => (r as any).name) || [];
 
-        if (userRoles.includes('Committee_Member')) {
+        // Check if user has Procurement_Officer or Admin role
+        const isProcurementOrAdmin = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+        
+        if (isProcurementOrAdmin) {
+            // Procurement and Admins see all requisitions in the lifecycle
+            whereClause = {
+                status: { in: rfqLifecycleStatuses }
+            };
+        } else if (userRoles.includes('Committee_Member')) {
+            // Committee members ONLY see requisitions they are assigned to
             whereClause = {
                 status: { in: rfqLifecycleStatuses },
                 OR: [
@@ -134,10 +143,10 @@ export async function GET(request: Request) {
                 ],
             };
         } else {
-            whereClause = {
-                status: { in: rfqLifecycleStatuses }
-            };
+            // Other roles (e.g., Approver, Requester) should not see anything on this page
+             whereClause = { id: '-1' }; // Effectively returns nothing
         }
+
     } else {
       if (statusParam) {
         const statuses = statusParam.split(',').map(s => s.trim().replace(/ /g, '_'));
