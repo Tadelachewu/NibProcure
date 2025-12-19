@@ -20,7 +20,12 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet" />
+        <link 
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" 
+          rel="stylesheet" 
+          integrity="sha384-VT5fPqL7tIgcR60YVnOOJ6H3C2ebMN6+qXn7C/c3i5d/K3gklG3Y3Y2soiSL2o2h"
+          crossOrigin="anonymous"
+        />
       </head>
       <body className="font-body antialiased">
         <ThemeProvider
