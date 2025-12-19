@@ -18,7 +18,7 @@ import {
   CardDescription,
 } from './ui/card';
 import { Button } from './ui/button';
-import { PurchaseRequisition } from '@/lib/types';
+import { PurchaseRequisition, User } from '@/lib/types';
 import { format } from 'date-fns';
 import {
   Check,
@@ -29,9 +29,11 @@ import {
   Eye,
   Inbox,
   Loader2,
+  Users,
   X,
   FileText,
-  RefreshCw,
+  AlertTriangle,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -48,11 +50,14 @@ import { Label } from './ui/label';
 import { ApprovalSummaryDialog } from './approval-summary-dialog';
 import { Badge } from './ui/badge';
 import Link from 'next/link';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/tooltip';
+
 
 const PAGE_SIZE = 10;
 
-export function ReviewsTable() {
-  const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
+export function AwardReviewsTable() {
+  const [requisitions, setRequisitions] = useState<(PurchaseRequisition & { isActionable?: boolean })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, token } = useAuth();
@@ -65,25 +70,38 @@ export function ReviewsTable() {
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (isActionDialogOpen && selectedRequisition) {
+        const savedComment = localStorage.getItem(`award-review-comment-${selectedRequisition.id}`);
+        if (savedComment) {
+            setJustification(savedComment);
+        }
+    } else {
+        setJustification('');
+    }
+  }, [isActionDialogOpen, selectedRequisition]);
 
-  const fetchRequisitions = useCallback(async (includeActioned = false) => {
+  useEffect(() => {
+      if (isActionDialogOpen && selectedRequisition) {
+          localStorage.setItem(`award-review-comment-${selectedRequisition.id}`, justification);
+      }
+  }, [justification, isActionDialogOpen, selectedRequisition]);
+
+
+  const fetchRequisitions = useCallback(async () => {
     if (!user || !token) {
       setLoading(false);
       return;
     }
     try {
       setLoading(true);
-      let apiUrl = '/api/reviews';
-      if (includeActioned) {
-        apiUrl += `?includeActionedFor=${user.id}`;
-      }
-      
-      const response = await fetch(apiUrl, {
+      const response = await fetch(`/api/reviews`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for award review');
       
-      const data: PurchaseRequisition[] = await response.json();
+      const data: (PurchaseRequisition & { isActionable?: boolean })[] = await response.json();
       setRequisitions(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
@@ -148,9 +166,8 @@ export function ReviewsTable() {
         title: "Success",
         description: `Award for requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
       });
-      
-      // Re-fetch the data, including the item just actioned on.
-      fetchRequisitions(true);
+      localStorage.removeItem(`award-review-comment-${selectedRequisition.id}`);
+      fetchRequisitions();
 
     } catch (error) {
       toast({
@@ -196,7 +213,7 @@ export function ReviewsTable() {
                 <TableHead>Title</TableHead>
                 <TableHead>Award Value</TableHead>
                 <TableHead>Required Review</TableHead>
-                <TableHead>Created At</TableHead>
+                <TableHead>Justification</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -205,32 +222,85 @@ export function ReviewsTable() {
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
                   
-                    // Prefer server-provided actionability flag (populated by /api/reviews),
-                    // but fall back to client-side checks for compatibility.
-                    let isActionable = (req as any).isActionable ?? false;
-                    if (!isActionable && user && req.status) {
-                      const userRoles = (user.roles as any[]).map(r => r.name);
-                      
-                      if (req.currentApproverId === user.id) {
-                        isActionable = true;
-                      } 
-                      else if (req.status.startsWith('Pending_')) {
-                        const requiredRoleForStatus = req.status.replace('Pending_', '');
-                        if (userRoles.includes(requiredRoleForStatus)) {
-                        isActionable = true;
-                        }
-                      }
-                    }
+                  let isActionable = req.isActionable ?? false;
 
+                  const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
+                  const isRejectionComment = lastCommentLog?.action.includes('REJECT');
+                  
+                  const getDeclinedReason = () => {
+                      if (req.status !== 'Award_Declined') return null;
+                      
+                      const perItemDecline = req.items
+                        .flatMap(item => item.perItemAwardDetails || [])
+                        .find(detail => detail.status === 'Declined' && detail.rejectionReason);
+
+                      if (perItemDecline) return perItemDecline.rejectionReason;
+
+                      const quoteDecline = req.quotations?.find(q => q.status === 'Declined' && q.rejectionReason);
+                      return quoteDecline?.rejectionReason || null;
+                  }
+
+                  const declinedReason = getDeclinedReason();
+                  
+                  const finalizationMinute = req.minutes?.find(m => m.decisionBody === 'Award Finalization');
 
                   return (
                     <TableRow key={req.id}>
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
                         <TableCell className="font-medium text-primary">{req.id}</TableCell>
-                        <TableCell>{req.title}</TableCell>
+                        <TableCell>
+                            <div className="flex flex-col gap-1">
+                                <span>{req.title}</span>
+                                <div className="flex items-center gap-2">
+                                {declinedReason && (
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Badge variant="destructive" className="cursor-help">
+                                                    <AlertTriangle className="h-3 w-3 mr-1.5" />
+                                                    Award Declined
+                                                </Badge>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p className="max-w-xs">Reason: {declinedReason}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                )}
+                                {req.approverComment && (
+                                     <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Badge variant={isRejectionComment ? "destructive" : "outline"} className="cursor-help">
+                                                     {isRejectionComment ? <AlertTriangle className="h-3 w-3 mr-1.5" /> : <MessageSquare className="h-3 w-3 mr-1.5" />}
+                                                    {isRejectionComment ? 'Prev. Rejection' : 'Prev. Comment'}
+                                                </Badge>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p className="max-w-xs">{req.approverComment}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                )}
+                                </div>
+                            </div>
+                        </TableCell>
                         <TableCell className="font-semibold">{req.totalPrice.toLocaleString()} ETB</TableCell>
                         <TableCell><Badge variant="secondary">{req.status.replace(/_/g, ' ')}</Badge></TableCell>
-                        <TableCell>{format(new Date(req.createdAt), 'PP')}</TableCell>
+                        <TableCell>
+                            {finalizationMinute ? (
+                                <div className="flex flex-col">
+                                    <span className="text-sm">{finalizationMinute.justification}</span>
+                                    {finalizationMinute.documentUrl && (
+                                        <Button asChild variant="link" size="sm" className="h-auto p-0 justify-start">
+                                            <a href={finalizationMinute.documentUrl} target="_blank" rel="noopener noreferrer">View Minute</a>
+                                        </Button>
+                                    )}
+                                </div>
+                            ) : (
+                                <span className="text-muted-foreground italic text-xs">No justification recorded.</span>
+                            )}
+                        </TableCell>
                         <TableCell>
                         <div className="flex gap-2">
                               <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
@@ -249,48 +319,6 @@ export function ReviewsTable() {
                                 {isLoadingAction && actionType === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className="mr-2 h-4 w-4" />} 
                                 Reject
                             </Button>
-                              {req.canPromoteStandby && (
-                                <Button variant="secondary" size="sm" onClick={async () => {
-                                    if (!user) return;
-                                    setActiveActionId(req.id);
-                                    try {
-                                        const res = await fetch(`/api/requisitions/${req.id}/promote-standby`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ userId: user.id })
-                                        });
-                                        const data = await res.json();
-                                        if (!res.ok) throw new Error(data.error || 'Failed to promote standby');
-                                        toast({ title: 'Standby promoted', description: data.message || 'Standby vendor promoted.' });
-                                        fetchRequisitions(true);
-                                    } catch (e) {
-                                        toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Unknown error' });
-                                    } finally { setActiveActionId(null); }
-                                }}>
-                                  <RefreshCw className="mr-2 h-4 w-4" /> Promote Standby
-                                </Button>
-                              )}
-                              {req.canRestartRfq && (
-                                <Button variant="outline" size="sm" onClick={async () => {
-                                    if (!user) return;
-                                    setActiveActionId(req.id);
-                                    try {
-                                        const res = await fetch(`/api/requisitions/${req.id}/manage-rfq`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ userId: user.id, action: 'restart', reason: 'Restart requested from reviews UI' })
-                                        });
-                                        const data = await res.json();
-                                        if (!res.ok) throw new Error(data.error || 'Failed to restart RFQ');
-                                        toast({ title: 'RFQ restarted', description: data.message || 'RFQ has been restarted.' });
-                                        fetchRequisitions(true);
-                                    } catch (e) {
-                                        toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Unknown error' });
-                                    } finally { setActiveActionId(null); }
-                                }}>
-                                  <RefreshCw className="mr-2 h-4 w-4" /> Restart RFQ
-                                </Button>
-                              )}
                         </div>
                         </TableCell>
                     </TableRow>
@@ -368,3 +396,4 @@ export function ReviewsTable() {
     </>
   );
 }
+
