@@ -26,12 +26,14 @@ const nextConfig = {
   },
   async headers() {
     const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+    // The 'unsafe-inline' is needed for styling, but scripts are protected by the nonce.
+    // Next.js's development server requires 'unsafe-eval' for Fast Refresh. In a production build, this could be removed.
     const cspHeader = `
       default-src 'self';
       script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-      img-src 'self' https://placehold.co https://picsum.photos data:;
       font-src 'self' https://fonts.gstatic.com;
+      img-src 'self' https://placehold.co https://picsum.photos data:;
       object-src 'none';
       base-uri 'self';
       form-action 'self';
@@ -56,22 +58,6 @@ const nextConfig = {
             value: 'nosniff',
           }
         ],
-      },
-    ];
-  },
-  async rewrites() {
-    return [
-      {
-        source: '/uploads',
-        destination: '/404',
-      },
-       {
-        source: '/uploads/:path((?!.*\\.\\w+).*)', // Match directory paths, not files
-        destination: '/404',
-      },
-      {
-        source: '/uploads/:path*',
-        destination: '/uploads/:path*',
       },
     ];
   },
