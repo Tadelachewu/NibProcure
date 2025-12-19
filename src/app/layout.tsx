@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
@@ -32,7 +33,6 @@ export default function RootLayout({
           rel="stylesheet"
           integrity="sha384-AB/lrCiUjxv3RC/rgYH0zXZL0iCKlSYMt5WHMDrk+D07iDHTnhzx0tQVGtWyMUZO"
           crossOrigin="anonymous"
-          nonce={nonce}
         />
       </head>
       <body className="font-body antialiased">
