@@ -24,11 +24,9 @@ const nextConfig = {
     ],
   },
   async headers() {
-    const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-    
     const cspHeader = `
       default-src 'self';
-      script-src 'self' 'nonce-${nonce}';
+      script-src 'self' 'unsafe-eval';
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       img-src 'self' https://placehold.co https://picsum.photos data:;
       font-src 'self' https://fonts.gstatic.com;
@@ -51,10 +49,6 @@ const nextConfig = {
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
-          },
-          {
-            key: 'x-nonce',
-            value: nonce,
           }
         ],
       },

@@ -17,14 +17,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const nonce = headers().get('x-nonce') || '';
-
   return (
     <html lang="en" suppressHydrationWarning>
-      <Head>
-        {/* Pass the nonce to Next.js scripts */}
-        <meta property="csp-nonce" content={nonce} />
-      </Head>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
