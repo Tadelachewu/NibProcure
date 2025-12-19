@@ -38,7 +38,7 @@ const quoteFormSchema = z.object({
     quantity: z.number(),
     unitPrice: z.coerce.number().min(0.01, "Price is required."),
     leadTimeDays: z.coerce.number().min(0, "Lead time is required."),
-    brandDetails: z.string().optional(),
+    brandDetails: z.string().min(1, "Brand/Model details are required."),
     imageUrl: z.string().optional(),
   })),
   answers: z.array(z.object({
