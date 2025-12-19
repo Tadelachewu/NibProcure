@@ -26,11 +26,15 @@ const nextConfig = {
   },
   async headers() {
     const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-    // The 'unsafe-inline' is needed for styling, but scripts are protected by the nonce.
-    // Next.js's development server requires 'unsafe-eval' for Fast Refresh. In a production build, this could be removed.
+    
+    // In development, Next.js's Fast Refresh requires 'unsafe-eval'.
+    // In production, this should be removed.
+    const isDev = process.env.NODE_ENV === 'development';
+    const scriptSrc = `'self' 'nonce-${nonce}' 'strict-dynamic' ${isDev ? "'unsafe-eval'" : ""}`;
+
     const cspHeader = `
       default-src 'self';
-      script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
+      script-src ${scriptSrc};
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       font-src 'self' https://fonts.gstatic.com;
       img-src 'self' https://placehold.co https://picsum.photos data:;
