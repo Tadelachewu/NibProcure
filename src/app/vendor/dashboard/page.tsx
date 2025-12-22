@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail, RequisitionItem, QuoteItem } from '@/lib/types';
+import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail, RequisitionItem, QuoteItem, Invoice } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert, List, AlertCircle } from 'lucide-react';
+import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert, List, AlertCircle, Landmark } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -25,6 +25,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 const OPEN_PAGE_SIZE = 9;
 const ACTIVE_PAGE_SIZE = 6;
+const INVOICE_PAGE_SIZE = 6;
 
 type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed' | 'Declined' | 'Delivery Issue' | 'Failed_to_Award' | 'Paid';
 
@@ -77,11 +78,13 @@ export default function VendorDashboardPage() {
     const router = useRouter();
     const { toast } = useToast();
     const [allRequisitions, setAllRequisitions] = useState<PurchaseRequisition[]>([]);
+    const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
     const [vendor, setVendor] = useState<Vendor | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [openCurrentPage, setOpenCurrentPage] = useState(1);
     const [activeCurrentPage, setActiveCurrentPage] = useState(1);
+    const [invoiceCurrentPage, setInvoiceCurrentPage] = useState(1);
 
     const fetchAllData = useCallback(async () => {
         if (!token || !user?.vendorId) {
@@ -92,7 +95,12 @@ export default function VendorDashboardPage() {
         setLoading(true);
         setError(null);
         try {
-            const vendorRes = await fetch(`/api/vendors`);
+            const [vendorRes, reqRes, invRes] = await Promise.all([
+                fetch(`/api/vendors`),
+                fetch('/api/requisitions?forVendor=true', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/invoices', { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+
             if(!vendorRes.ok) throw new Error('Could not fetch vendor details.');
             const allVendors: Vendor[] = await vendorRes.json();
             const currentVendor = allVendors.find(v => v.id === user.vendorId);
@@ -100,21 +108,22 @@ export default function VendorDashboardPage() {
 
             if (currentVendor?.kycStatus !== 'Verified') {
                 setAllRequisitions([]);
+                setAllInvoices([]);
                 setLoading(false);
                 return;
             }
 
-            const response = await fetch('/api/requisitions?forVendor=true', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) {
-                if (response.status === 403) {
-                     throw new Error('You do not have permission to view these resources.');
-                }
+            if (!reqRes.ok) {
+                if (reqRes.status === 403) throw new Error('You do not have permission to view requisitions.');
                 throw new Error('Failed to fetch requisitions.');
             }
-            const requisitionsData: PurchaseRequisition[] = await response.json();
+            const requisitionsData: PurchaseRequisition[] = await reqRes.json();
             
+            if (!invRes.ok) throw new Error('Failed to fetch invoices.');
+            const allInvoicesData: Invoice[] = await invRes.json();
+            const vendorInvoices = allInvoicesData.filter(inv => inv.vendorId === user.vendorId);
+            setAllInvoices(vendorInvoices);
+
             let needsRefetch = false;
             for (const req of requisitionsData) {
                 if (req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline))) {
@@ -273,6 +282,12 @@ export default function VendorDashboardPage() {
         return activeRequisitions.slice(startIndex, startIndex + ACTIVE_PAGE_SIZE);
     }, [activeRequisitions, activeCurrentPage]);
 
+    const invoiceTotalPages = Math.ceil(allInvoices.length / INVOICE_PAGE_SIZE);
+    const paginatedInvoices = useMemo(() => {
+        const startIndex = (invoiceCurrentPage - 1) * INVOICE_PAGE_SIZE;
+        return allInvoices.slice(startIndex, startIndex + INVOICE_PAGE_SIZE);
+    }, [allInvoices, invoiceCurrentPage]);
+
 
     return (
         <div className="space-y-8">
@@ -430,6 +445,62 @@ export default function VendorDashboardPage() {
                                                 <Button variant="outline" size="icon" onClick={() => setActiveCurrentPage(p => Math.max(1, p - 1))} disabled={activeCurrentPage === 1}><ChevronLeft /></Button>
                                                 <Button variant="outline" size="icon" onClick={() => setActiveCurrentPage(p => Math.min(activeTotalPages, p + 1))} disabled={activeCurrentPage === activeTotalPages}><ChevronRight /></Button>
                                                 <Button variant="outline" size="icon" onClick={() => setActiveCurrentPage(activeTotalPages)} disabled={activeCurrentPage === activeTotalPages}><ChevronsRight /></Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {allInvoices.length > 0 && (
+                                <div className="space-y-4 pt-8 border-t">
+                                    <Alert className="border-purple-500/50 text-purple-600">
+                                        <Landmark className="h-5 w-5 !text-purple-600" />
+                                        <AlertTitle className="text-xl font-bold">Your Submitted Invoices</AlertTitle>
+                                        <AlertDescription className="text-purple-600/90">
+                                            Track the status of your submitted invoices.
+                                        </AlertDescription>
+                                    </Alert>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {paginatedInvoices.map(invoice => (
+                                            <Card key={invoice.id}>
+                                                <CardHeader>
+                                                    <CardTitle className="text-lg">Invoice for PO: {invoice.purchaseOrderId}</CardTitle>
+                                                    <CardDescription>
+                                                        Submitted on {format(new Date(invoice.invoiceDate), 'PP')}
+                                                    </CardDescription>
+                                                </CardHeader>
+                                                <CardContent className="space-y-2">
+                                                    <div className="flex justify-between font-bold text-xl">
+                                                        <span>Total:</span>
+                                                        <span>{invoice.totalAmount.toLocaleString()} ETB</span>
+                                                    </div>
+                                                     <div className="flex justify-between items-center text-sm">
+                                                        <span className="text-muted-foreground">Status:</span>
+                                                        <Badge variant={invoice.status === 'Paid' ? 'default' : (invoice.status === 'Disputed' ? 'destructive' : 'secondary')}>
+                                                            {invoice.status.replace(/_/g, ' ')}
+                                                        </Badge>
+                                                    </div>
+                                                </CardContent>
+                                                <CardFooter>
+                                                     <Button asChild className="w-full" variant="outline">
+                                                        <Link href={`/vendor/requisitions/${allRequisitions.find(r => r.purchaseOrders?.some(po => po.id === invoice.purchaseOrderId))?.id}`}>
+                                                            View Details <ArrowRight className="ml-2 h-4 w-4" />
+                                                        </Link>
+                                                    </Button>
+                                                </CardFooter>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                     {invoiceTotalPages > 1 && (
+                                        <div className="flex items-center justify-between mt-4">
+                                            <div className="text-sm text-muted-foreground">
+                                                Page {invoiceCurrentPage} of {invoiceTotalPages}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Button variant="outline" size="icon" onClick={() => setInvoiceCurrentPage(1)} disabled={invoiceCurrentPage === 1}><ChevronsLeft /></Button>
+                                                <Button variant="outline" size="icon" onClick={() => setInvoiceCurrentPage(p => Math.max(1, p - 1))} disabled={invoiceCurrentPage === 1}><ChevronLeft /></Button>
+                                                <Button variant="outline" size="icon" onClick={() => setInvoiceCurrentPage(p => Math.min(invoiceTotalPages, p + 1))} disabled={invoiceCurrentPage === invoiceTotalPages}><ChevronRight /></Button>
+                                                <Button variant="outline" size="icon" onClick={() => setInvoiceCurrentPage(invoiceTotalPages)} disabled={invoiceCurrentPage === invoiceTotalPages}><ChevronsRight /></Button>
                                             </div>
                                         </div>
                                     )}
