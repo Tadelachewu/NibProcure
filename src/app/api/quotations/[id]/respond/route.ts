@@ -87,20 +87,19 @@ export async function POST(
                      console.log(`[RESPOND-AWARD] Updated perItemAwardDetails on requisition item ${reqItemToUpdate.id}.`);
                 }
 
-            } else { // Single vendor award or grouped per-item acceptance (fallback)
-                console.log('[RESPOND-AWARD] Handling single-vendor or grouped award acceptance.');
+            } else { // Single vendor award
+                console.log('[RESPOND-AWARD] Handling single-vendor award acceptance.');
                  await tx.quotation.update({
                     where: { id: quoteId },
                     data: { status: 'Accepted' }
                 });
                 
                 const awardedIds = new Set(requisition.awardedQuoteItemIds || []);
-                if (awardedIds.size > 0) {
-                  awardedQuoteItems = quote.items.filter(item => awardedIds.has(item.id));
-                } else {
-                  // Fallback for older awards or if awardedQuoteItemIds is not populated
-                  awardedQuoteItems = quote.items;
+                if (awardedIds.size === 0) {
+                    throw new Error("Could not determine champion bids for this award. Aborting PO creation.");
                 }
+                
+                awardedQuoteItems = quote.items.filter(item => awardedIds.has(item.id));
             }
 
             if (awardedQuoteItems.length === 0) {
