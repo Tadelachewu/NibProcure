@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -15,7 +14,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Loader2, Send, ArrowLeft, CheckCircle, FileText, BadgeInfo, FileUp, CircleCheck, Info, Edit, FileEdit, PlusCircle, Trash2, ThumbsDown, ThumbsUp, Timer, Image as ImageIcon, Download } from 'lucide-react';
+import { Loader2, Send, ArrowLeft, CheckCircle, FileText, BadgeInfo, FileUp, CircleCheck, Info, Edit, FileEdit, PlusCircle, Trash2, ThumbsDown, ThumbsUp, Timer, Image as ImageIcon, Download, AlertCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -1072,9 +1071,11 @@ export default function VendorRequisitionPage() {
                                             <Card key={itemAward.quoteItemId} className="p-4 bg-destructive/10 border-destructive/30">
                                                 <div className="flex justify-between items-center">
                                                     <p className="font-semibold line-through">{itemAward.reqItemName}</p>
-                                                    <Badge variant="destructive">Declined</Badge>
+                                                    <Badge variant="destructive">{(itemAward as any).rejectionReason?.startsWith('[Receiving]') ? 'Delivery Issue' : 'Declined'}</Badge>
                                                 </div>
-                                                <p className="text-xs text-destructive-foreground mt-2">Reason: {itemAward.rejectionReason || "Not provided."}</p>
+                                                {(itemAward as any).rejectionReason && (
+                                                    <p className="text-xs text-destructive-foreground mt-2 p-2 bg-destructive/20 rounded-md">Reason: {(itemAward as any).rejectionReason.replace('[Receiving] ', '').replace('[Vendor] ', '')}</p>
+                                                )}
                                             </Card>
                                         )
                                     }

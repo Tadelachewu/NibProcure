@@ -16,24 +16,26 @@ import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert, List } from 'lucide-react';
+import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert, List, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
 const OPEN_PAGE_SIZE = 9;
 const ACTIVE_PAGE_SIZE = 6;
 
-type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed' | 'Declined' | 'Failed_to_Award';
+type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed' | 'Declined' | 'Delivery Issue' | 'Failed_to_Award';
 
-const VendorStatusBadge = ({ status }: { status: RequisitionCardStatus }) => {
+const VendorStatusBadge = ({ status, reason }: { status: RequisitionCardStatus, reason?: string }) => {
   const statusInfo: Record<RequisitionCardStatus, {text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline', className: string}> = {
     'Awarded': { text: 'Awarded to You', variant: 'default', className: 'bg-green-600 hover:bg-green-700' },
     'Partially Awarded': { text: 'Partially Awarded', variant: 'default', className: 'bg-green-600 hover:bg-green-700' },
     'Accepted': { text: 'You Accepted', variant: 'default', className: 'bg-blue-600 hover:bg-blue-700' },
     'Invoice Submitted': { text: 'Invoice Submitted', variant: 'default', className: 'bg-purple-600 hover:bg-purple-700' },
     'Declined': { text: 'You Declined', variant: 'destructive', className: '' },
+    'Delivery Issue': { text: 'Delivery Issue', variant: 'destructive', className: '' },
     'Submitted': { text: 'Submitted', variant: 'secondary', className: '' },
     'Processing': { text: 'Processing', variant: 'secondary', className: '' },
     'Closed': { text: 'Closed', variant: 'outline', className: '' },
@@ -45,7 +47,27 @@ const VendorStatusBadge = ({ status }: { status: RequisitionCardStatus }) => {
 
   const { text, variant, className } = statusInfo[status] || { text: 'Unknown', variant: 'outline', className: '' };
 
-  return <Badge variant={variant} className={cn('absolute top-4 right-4', className)}>{text}</Badge>;
+  const badge = <Badge variant={variant} className={cn('absolute top-4 right-4', className)}>{text}</Badge>;
+
+  if (reason) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="relative">
+              {badge}
+              <AlertCircle className="absolute top-5 right-5 h-4 w-4 text-destructive-foreground opacity-80" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Reason: {reason}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return badge;
 };
 
 
@@ -147,64 +169,52 @@ export default function VendorDashboardPage() {
         fetchAllData();
     }, [fetchAllData]);
 
-    const getRequisitionCardStatus = useCallback((req: PurchaseRequisition): RequisitionCardStatus => {
-        if (!user?.vendorId) return 'Action Required';
+    const getRequisitionCardStatus = useCallback((req: PurchaseRequisition): { status: RequisitionCardStatus, reason?: string } => {
+        if (!user?.vendorId) return { status: 'Action Required' };
 
         const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
         const isPerItemAward = (req.rfqSettings as any)?.awardStrategy === 'item';
 
-        if (vendorQuote?.status === 'Awarded' && !isPerItemAward) {
-            return 'Awarded';
-        }
-        
-        if (vendorQuote) {
-            if (vendorQuote.status === 'Invoice_Submitted') return 'Invoice Submitted';
-            if (vendorQuote.status === 'Accepted') return 'Accepted';
-            if (vendorQuote.status === 'Declined') return 'Declined';
-        }
-
-        let vendorItemStatuses: PerItemAwardDetail[] = [];
         if (isPerItemAward) {
-            vendorItemStatuses = req.items.flatMap(item => 
-                (item.perItemAwardDetails as PerItemAwardDetail[] || [])
-                .filter(d => d.vendorId === user.vendorId)
+            const vendorItemDetails = req.items.flatMap(item => 
+                (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId)
             );
-        } else if (vendorQuote) { 
-            if (vendorQuote.status === 'Awarded') vendorItemStatuses.push({ status: 'Awarded' } as PerItemAwardDetail);
-            if (vendorQuote.status === 'Partially_Awarded') vendorItemStatuses.push({ status: 'Awarded' } as PerItemAwardDetail);
-            if (vendorQuote.status === 'Standby') vendorItemStatuses.push({ status: 'Standby' } as PerItemAwardDetail);
-        }
 
-        if (vendorItemStatuses.some(d => d.status === 'Accepted')) return 'Accepted';
-        if (vendorItemStatuses.some(d => d.status === 'Declined')) return 'Declined';
-        if (vendorItemStatuses.some(d => d.status === 'Awarded')) {
-             if (!isPerItemAward) {
-                return 'Awarded';
+            if (vendorItemDetails.some(d => d.status === 'Declined' && (d as any).rejectionReason?.startsWith('[Receiving]'))) {
+                const reasonDetail = vendorItemDetails.find(d => d.status === 'Declined' && (d as any).rejectionReason?.startsWith('[Receiving]'));
+                return { status: 'Delivery Issue', reason: (reasonDetail as any)?.rejectionReason?.replace('[Receiving] ', '') };
             }
-            const potentialAwards = req.items.flatMap(i => (i.perItemAwardDetails || [])).filter(d => d.vendorId === user.vendorId);
-            const wonAwards = potentialAwards.filter(d => d.status === 'Awarded' || d.status === 'Accepted');
-            
-            return wonAwards.length === potentialAwards.length ? 'Awarded' : 'Partially Awarded';
+            if (vendorItemDetails.some(d => d.status === 'Declined')) return { status: 'Declined' };
+            if (vendorItemDetails.some(d => d.status === 'Accepted')) return { status: 'Accepted' };
+            if (vendorItemDetails.some(d => d.status === 'Awarded')) {
+                const totalAwardsPossible = req.items.flatMap(i => (i.perItemAwardDetails || [])).filter(d => d.vendorId === user.vendorId).length;
+                const wonAwards = vendorItemDetails.filter(d => d.status === 'Awarded' || d.status === 'Accepted').length;
+                return { status: wonAwards === totalAwardsPossible ? 'Awarded' : 'Partially Awarded' };
+            }
+            if (vendorItemDetails.some(d => d.status === 'Standby')) return { status: 'Standby' };
         }
-        if (vendorItemStatuses.some(d => d.status === 'Standby')) return 'Standby';
-
+        
         if (vendorQuote) {
-             if (vendorQuote.status === 'Standby') return 'Standby';
+            if (vendorQuote.status === 'Invoice_Submitted') return { status: 'Invoice Submitted' };
+            if (vendorQuote.status === 'Accepted') return { status: 'Accepted' };
+            if (vendorQuote.status === 'Declined') return { status: 'Declined' };
+            if (vendorQuote.status === 'Awarded') return { status: 'Awarded' };
+            if (vendorQuote.status === 'Standby') return { status: 'Standby' };
+
             if (vendorQuote.status === 'Submitted') {
-                if (req.status === 'Closed' || req.status === 'Fulfilled') return 'Not Awarded';
-                if (req.quotations?.some(q => q.vendorId !== user.vendorId && ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status))) return 'Not Awarded';
-                return 'Submitted';
+                if (req.status === 'Closed' || req.status === 'Fulfilled') return { status: 'Not Awarded' };
+                if (req.quotations?.some(q => q.vendorId !== user.vendorId && ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status))) return { status: 'Not Awarded' };
+                return { status: 'Submitted' };
             }
         }
         
-        const isRelated = vendorQuote || vendorItemStatuses.length > 0;
-        if (!isRelated) {
-            return 'Action Required';
+        if (req.status === 'Accepting_Quotes') {
+            return { status: 'Action Required' };
         }
 
-        if (req.status === 'Closed' || req.status === 'Fulfilled') return 'Closed';
+        if (req.status === 'Closed' || req.status === 'Fulfilled') return { status: 'Closed' };
         
-        return 'Processing';
+        return { status: 'Processing' };
     }, [user]);
 
 
@@ -361,13 +371,13 @@ export default function VendorDashboardPage() {
                                     </Alert>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {paginatedActiveData.map(req => {
-                                            const status = getRequisitionCardStatus(req);
+                                            const { status, reason } = getRequisitionCardStatus(req);
                                             const isExpired = req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline)) && (status === 'Awarded' || status === 'Partially Awarded');
                                             const isActionable = status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted' || status === 'Invoice Submitted';
                                             
                                             return (
                                                 <Card key={req.id} className={cn("relative flex flex-col", (status === 'Awarded' || status === 'Partially Awarded') && "border-primary ring-2 ring-primary/50 bg-primary/5", isExpired && "opacity-60")}>
-                                                    <VendorStatusBadge status={status} />
+                                                    <VendorStatusBadge status={status} reason={reason} />
                                                     <CardHeader>
                                                         <CardTitle>{req.title}</CardTitle>
                                                         <CardDescription>From {req.department} Department</CardDescription>
@@ -419,5 +429,3 @@ export default function VendorDashboardPage() {
         </div>
     )
 }
-
-    
