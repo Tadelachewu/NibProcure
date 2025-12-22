@@ -310,6 +310,37 @@ export async function handleAwardRejection(
     }
 }
 
+function calculateChampionBidsForVendor(requisition: any, vendorQuote: any): QuoteItem[] {
+    if (!requisition.evaluationCriteria || !vendorQuote) {
+        return [];
+    }
+    return requisition.items.map((reqItem: any) => {
+        const proposalsForItem = vendorQuote.items.filter((item: any) => item.requisitionItemId === reqItem.id);
+        if (proposalsForItem.length === 0) return null;
+
+        let championBid: QuoteItem | null = null;
+        let bestScore = -1;
+
+        proposalsForItem.forEach((proposal: any) => {
+            let totalItemScore = 0;
+            let scoreCount = 0;
+            vendorQuote.scores?.forEach((scoreSet: any) => {
+                const itemScore = scoreSet.itemScores.find((is: any) => is.quoteItemId === proposal.id);
+                if (itemScore) {
+                    totalItemScore += itemScore.finalScore;
+                    scoreCount++;
+                }
+            });
+            const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+            if (avgScore > bestScore) {
+                bestScore = avgScore;
+                championBid = proposal;
+            }
+        });
+        return championBid;
+    }).filter(Boolean) as QuoteItem[];
+}
+
 
 export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisitionId: string, actor: any) {
     const requisition = await tx.purchaseRequisition.findUnique({
@@ -457,39 +488,9 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             return { message: 'No more standby vendors available. Requisition has returned to Scoring Complete status.'};
         }
         
-        if (!requisition.evaluationCriteria) {
-            throw new Error("Cannot promote standby and recalculate value without evaluation criteria on the requisition.");
-        }
+        const championBids = calculateChampionBidsForVendor(requisition, nextStandby);
+        const newTotalValue = championBids.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
 
-        // Recalculate value based on champion bids from the standby quote
-        const newTotalValue = requisition.items.reduce((sum, reqItem) => {
-            const proposalsForItem = nextStandby.items.filter(item => item.requisitionItemId === reqItem.id);
-            if (proposalsForItem.length === 0) return sum;
-
-            let championScore = -1;
-            let championPrice = 0;
-
-            proposalsForItem.forEach(proposal => {
-                let totalItemScore = 0;
-                let scoreCount = 0;
-                nextStandby.scores.forEach(scoreSet => {
-                    const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                    if(itemScore) {
-                        // This assumes finalScore is on the itemScore, which might need adjustment based on schema
-                        totalItemScore += (itemScore as any).finalScore; 
-                        scoreCount++;
-                    }
-                });
-                const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                if (avgScore > championScore) {
-                    championScore = avgScore;
-                    championPrice = proposal.unitPrice * proposal.quantity;
-                }
-            });
-            
-            return sum + championPrice;
-        }, 0);
-        
         const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: newTotalValue }, actor);
         
         await tx.purchaseRequisition.update({
@@ -498,7 +499,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                 status: nextStatus as any,
                 totalPrice: newTotalValue,
                 currentApproverId: nextApproverId,
-                awardedQuoteItemIds: nextStandby.items.map(i => i.id),
+                awardedQuoteItemIds: championBids.map(i => i.id), // *** THIS IS THE FIX ***
             }
         });
         
@@ -522,5 +523,3 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         return { message: `Promoted ${nextStandby.vendorName}. The award is now being routed for approval.` };
     }
 }
-
-    
