@@ -156,15 +156,18 @@ function InvoiceSubmissionForm({ po, onInvoiceSubmitted }: { po: PurchaseOrder; 
                     <Card className="bg-muted/50">
                         <CardHeader><CardTitle className="text-lg">Invoice Summary</CardTitle></CardHeader>
                         <CardContent>
-                            <div className="space-y-2 text-sm">
+                             <div className="space-y-2 text-sm">
                                 {po.items.map(item => (
-                                    <div key={item.id} className="flex justify-between">
-                                        <span>{item.name} x {item.quantity}</span>
-                                        <span>{item.totalPrice.toFixed(2)} ETB</span>
+                                    <div key={item.id} className="flex justify-between items-center">
+                                        <div>
+                                            <p className="font-semibold">{item.name}</p>
+                                            <p className="text-xs text-muted-foreground">{item.quantity} x {item.unitPrice.toFixed(2)} ETB</p>
+                                        </div>
+                                        <span className="font-semibold">{item.totalPrice.toFixed(2)} ETB</span>
                                     </div>
                                 ))}
                                 <Separator />
-                                <div className="flex justify-between font-bold">
+                                <div className="flex justify-between font-bold text-lg">
                                     <span>Total Amount</span>
                                     <span>{po.totalAmount.toFixed(2)} ETB</span>
                                 </div>
@@ -876,20 +879,12 @@ export default function VendorRequisitionPage() {
 
 
     const QuoteDisplayCard = ({ quote, itemsToShow, showActions }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean }) => {
-         const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-         const poForAcceptedItems = purchaseOrders.find(po => {
-            if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
-                const acceptedItemIds = awardedItems.filter(i => i.status === 'Accepted').map(i => i.quoteItemId);
-                return po.items.some(poi => itemsToShow.some(i => acceptedItemIds.includes(i.id) && (i.id === poi.requisitionItemId || i.name === poi.name)));
-            } else {
-                return po.requisitionId === requisition.id;
-            }
-         });
+        const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+        
+        // Correctly find ALL POs for this vendor and requisition
+        const allPOsForVendor = purchaseOrders.filter(po => po.vendor.id === user?.vendorId);
 
-         const hasSubmittedInvoice = poForAcceptedItems?.invoices && poForAcceptedItems.invoices.length > 0;
-         const paidInvoice = poForAcceptedItems?.invoices?.find(inv => inv.status === 'Paid');
-
-         return (
+        return (
          <Card>
             <CardHeader className="flex flex-row items-start justify-between">
                 <div>
@@ -990,37 +985,48 @@ export default function VendorRequisitionPage() {
                  <div className="text-right font-bold text-2xl">
                     Total Award Value: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
                  </div>
-                 {isAccepted && poForAcceptedItems && (
+                 
+                 {allPOsForVendor.length > 0 && (
                     <CardFooter className="p-0 pt-4 flex-col gap-2">
-                        {paidInvoice ? (
-                             <Alert variant="default" className="w-full">
-                                <CheckCircle className="h-4 w-4"/>
-                                <AlertTitle>Payment Confirmed</AlertTitle>
-                                <AlertDescription className="flex items-center justify-between">
-                                    <span>Invoice has been paid. Ref: {paidInvoice.paymentReference}</span>
-                                    {paidInvoice.paymentEvidenceUrl && (
-                                        <a href={paidInvoice.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
-                                            <Button variant="link" size="sm">View Evidence</Button>
-                                        </a>
-                                    )}
-                                </AlertDescription>
-                            </Alert>
-                        ) : (
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Button className="w-full" disabled={hasSubmittedInvoice}>
-                                        {hasSubmittedInvoice ? (
-                                            <><CircleCheck className="mr-2"/> Invoice Submitted for PO {poForAcceptedItems.id}</>
-                                        ) : (
-                                            <><FileUp className="mr-2"/> Submit Invoice for PO {poForAcceptedItems.id}</>
-                                        )}
-                                    </Button>
-                                </DialogTrigger>
-                                <InvoiceSubmissionForm po={poForAcceptedItems} onInvoiceSubmitted={() => { fetchRequisitionData(); }} />
-                            </Dialog>
-                        )}
+                       {allPOsForVendor.map(po => {
+                            const paidInvoice = po.invoices?.find(inv => inv.status === 'Paid');
+                            const hasSubmittedInvoice = !!po.invoices?.length;
+
+                            return (
+                                <div key={po.id} className="w-full">
+                                {paidInvoice ? (
+                                    <Alert variant="default" className="w-full">
+                                        <CheckCircle className="h-4 w-4"/>
+                                        <AlertTitle>Payment Confirmed for PO {po.id}</AlertTitle>
+                                        <AlertDescription className="flex items-center justify-between">
+                                            <span>Ref: {paidInvoice.paymentReference}</span>
+                                            {paidInvoice.paymentEvidenceUrl && (
+                                                <a href={paidInvoice.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
+                                                    <Button variant="link" size="sm">View Evidence</Button>
+                                                </a>
+                                            )}
+                                        </AlertDescription>
+                                    </Alert>
+                                ) : (
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <Button className="w-full" disabled={hasSubmittedInvoice}>
+                                                {hasSubmittedInvoice ? (
+                                                    <><CircleCheck className="mr-2"/> Invoice Submitted for PO {po.id}</>
+                                                ) : (
+                                                    <><FileUp className="mr-2"/> Submit Invoice for PO {po.id}</>
+                                                )}
+                                            </Button>
+                                        </DialogTrigger>
+                                        <InvoiceSubmissionForm po={po} onInvoiceSubmitted={() => { fetchRequisitionData(); }} />
+                                    </Dialog>
+                                )}
+                                </div>
+                            );
+                       })}
                     </CardFooter>
                  )}
+
                  {!showActions && (
                      <CardFooter className="p-0 pt-4">
                         <Alert variant="default" className="border-blue-500/50">

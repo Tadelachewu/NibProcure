@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { PerItemAwardDetail, User, UserRole } from '@/lib/types';
+import { PerItemAwardDetail, User, UserRole, QuoteItem } from '@/lib/types';
 import { handleAwardRejection } from '@/services/award-service';
 
 
@@ -32,7 +32,7 @@ export async function POST(
     const transactionResult = await prisma.$transaction(async (tx) => {
         const quote = await tx.quotation.findUnique({ 
             where: { id: quoteId },
-            include: { items: true, requisition: { include: { items: true } } }
+            include: { items: true, requisition: { include: { items: true, evaluationCriteria: true } } }
         });
 
         if (!quote || quote.vendorId !== user.vendorId) {
@@ -96,7 +96,7 @@ export async function POST(
                 
                 const awardedIds = new Set(requisition.awardedQuoteItemIds || []);
                 if (awardedIds.size === 0) {
-                    throw new Error("Could not determine champion bids for this award. Aborting PO creation.");
+                  throw new Error("Could not determine champion bids for this award. Aborting PO creation.");
                 }
                 
                 awardedQuoteItems = quote.items.filter(item => awardedIds.has(item.id));
