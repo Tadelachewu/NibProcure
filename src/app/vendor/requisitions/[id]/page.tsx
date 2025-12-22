@@ -148,23 +148,26 @@ function InvoiceSubmissionForm({ po, onInvoiceSubmitted }: { po: PurchaseOrder; 
             <DialogHeader>
                 <DialogTitle>Submit Invoice for PO: {po.id}</DialogTitle>
                 <DialogDescription>
-                    Please confirm the invoice details and upload your document.
+                    Please confirm the invoice details for the awarded items and upload your document.
                 </DialogDescription>
             </DialogHeader>
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                     <Card className="bg-muted/50">
-                        <CardHeader><CardTitle className="text-lg">Invoice Summary</CardTitle></CardHeader>
+                        <CardHeader><CardTitle className="text-lg">Invoice Summary (Champion Bids)</CardTitle></CardHeader>
                         <CardContent>
                             <div className="space-y-2 text-sm">
                                 {po.items.map(item => (
-                                    <div key={item.id} className="flex justify-between">
-                                        <span>{item.name} x {item.quantity}</span>
-                                        <span>{item.totalPrice.toFixed(2)} ETB</span>
+                                    <div key={item.id} className="flex justify-between items-start border-b pb-2 last:border-b-0 last:pb-0">
+                                        <div className="flex flex-col">
+                                          <span className="font-semibold">{item.name}</span>
+                                          <span className="text-muted-foreground text-xs">{item.quantity} x {item.unitPrice.toFixed(2)} ETB</span>
+                                        </div>
+                                        <span className="font-semibold">{item.totalPrice.toFixed(2)} ETB</span>
                                     </div>
                                 ))}
-                                <Separator />
-                                <div className="flex justify-between font-bold">
+                                <Separator className="my-2" />
+                                <div className="flex justify-between font-bold text-base">
                                     <span>Total Amount</span>
                                     <span>{po.totalAmount.toFixed(2)} ETB</span>
                                 </div>
@@ -877,17 +880,11 @@ export default function VendorRequisitionPage() {
 
     const QuoteDisplayCard = ({ quote, itemsToShow, showActions }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean }) => {
          const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-         const poForAcceptedItems = purchaseOrders.find(po => {
-            if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
-                const acceptedItemIds = awardedItems.filter(i => i.status === 'Accepted').map(i => i.quoteItemId);
-                return po.items.some(poi => itemsToShow.some(i => acceptedItemIds.includes(i.id) && (i.id === poi.requisitionItemId || i.name === poi.name)));
-            } else {
-                return po.requisitionId === requisition.id;
-            }
+         const poForAcceptedItems = purchaseOrders.filter(po => {
+            const poItemIds = new Set(po.items.map(i => i.requisitionItemId));
+            const acceptedQuoteItemIds = new Set(itemsToShow.map(i => i.requisitionItemId));
+            return [...poItemIds].some(id => acceptedQuoteItemIds.has(id));
          });
-
-         const hasSubmittedInvoice = poForAcceptedItems?.invoices && poForAcceptedItems.invoices.length > 0;
-         const paidInvoice = poForAcceptedItems?.invoices?.find(inv => inv.status === 'Paid');
 
          return (
          <Card>
@@ -990,35 +987,43 @@ export default function VendorRequisitionPage() {
                  <div className="text-right font-bold text-2xl">
                     Total Award Value: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
                  </div>
-                 {isAccepted && poForAcceptedItems && (
-                    <CardFooter className="p-0 pt-4 flex-col gap-2">
-                        {paidInvoice ? (
-                             <Alert variant="default" className="w-full">
-                                <CheckCircle className="h-4 w-4"/>
-                                <AlertTitle>Payment Confirmed</AlertTitle>
-                                <AlertDescription className="flex items-center justify-between">
-                                    <span>Invoice has been paid. Ref: {paidInvoice.paymentReference}</span>
-                                    {paidInvoice.paymentEvidenceUrl && (
-                                        <a href={paidInvoice.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
-                                            <Button variant="link" size="sm">View Evidence</Button>
-                                        </a>
-                                    )}
-                                </AlertDescription>
-                            </Alert>
-                        ) : (
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Button className="w-full" disabled={hasSubmittedInvoice}>
-                                        {hasSubmittedInvoice ? (
-                                            <><CircleCheck className="mr-2"/> Invoice Submitted for PO {poForAcceptedItems.id}</>
-                                        ) : (
-                                            <><FileUp className="mr-2"/> Submit Invoice for PO {poForAcceptedItems.id}</>
-                                        )}
-                                    </Button>
-                                </DialogTrigger>
-                                <InvoiceSubmissionForm po={poForAcceptedItems} onInvoiceSubmitted={() => { fetchRequisitionData(); }} />
-                            </Dialog>
-                        )}
+                 {isAccepted && poForAcceptedItems.length > 0 && (
+                     <CardFooter className="p-0 pt-4 flex-col gap-4 items-stretch">
+                         {poForAcceptedItems.map(po => {
+                             const paidInvoice = po.invoices?.find(inv => inv.status === 'Paid');
+                             const hasSubmittedInvoice = po.invoices && po.invoices.length > 0 && !paidInvoice;
+
+                             if (paidInvoice) {
+                                return (
+                                    <Alert key={po.id} variant="default">
+                                        <CheckCircle className="h-4 w-4"/>
+                                        <AlertTitle>Payment Confirmed for PO {po.id}</AlertTitle>
+                                        <AlertDescription className="flex items-center justify-between">
+                                            <span>Ref: {paidInvoice.paymentReference}</span>
+                                            {paidInvoice.paymentEvidenceUrl && (
+                                                <a href={paidInvoice.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
+                                                    <Button variant="link" size="sm">View Evidence</Button>
+                                                </a>
+                                            )}
+                                        </AlertDescription>
+                                    </Alert>
+                                )
+                             }
+                             return (
+                                 <Dialog key={po.id}>
+                                    <DialogTrigger asChild>
+                                        <Button className="w-full" disabled={hasSubmittedInvoice}>
+                                            {hasSubmittedInvoice ? (
+                                                <><CircleCheck className="mr-2"/> Invoice Submitted for PO {po.id}</>
+                                            ) : (
+                                                <><FileUp className="mr-2"/> Submit Invoice for PO {po.id}</>
+                                            )}
+                                        </Button>
+                                    </DialogTrigger>
+                                    <InvoiceSubmissionForm po={po} onInvoiceSubmitted={() => { fetchRequisitionData(); }} />
+                                </Dialog>
+                             )
+                         })}
                     </CardFooter>
                  )}
                  {!showActions && (
@@ -1164,7 +1169,7 @@ export default function VendorRequisitionPage() {
                  </Card>
             )}
 
-            {isAccepted && (
+            {isAccepted && !purchaseOrders.some(po => (po.invoices || []).some(inv => inv.status === 'Paid')) && (
                 <Alert variant="default" className="border-green-600 bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-200 dark:border-green-800">
                     <CheckCircle className="h-5 w-5 !text-green-600" />
                     <AlertTitle className="font-bold text-lg">Award Accepted!</AlertTitle>
