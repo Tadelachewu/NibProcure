@@ -32,7 +32,11 @@ export async function POST(
     const transactionResult = await prisma.$transaction(async (tx) => {
         const quote = await tx.quotation.findUnique({ 
             where: { id: quoteId },
-            include: { items: true, requisition: { include: { items: true } } }
+            include: { 
+              items: true, 
+              requisition: { include: { items: true, evaluationCriteria: true } },
+              scores: { include: { itemScores: true } }
+            }
         });
 
         if (!quote || quote.vendorId !== user.vendorId) {
@@ -94,13 +98,35 @@ export async function POST(
                     data: { status: 'Accepted' }
                 });
                 
-                const awardedIds = new Set(requisition.awardedQuoteItemIds || []);
-                if (awardedIds.size > 0) {
-                  awardedQuoteItems = quote.items.filter(item => awardedIds.has(item.id));
-                } else {
-                  // Fallback for older awards or if awardedQuoteItemIds is not populated
-                  awardedQuoteItems = quote.items;
+                const championBids: any[] = [];
+                for (const reqItem of requisition.items) {
+                    const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
+                    if (proposalsForItem.length === 0) continue;
+
+                    let championBid = proposalsForItem[0];
+                    if (proposalsForItem.length > 1) {
+                         // If there are multiple proposals (e.g., original and alternative), we need to determine the winner based on scores.
+                        let bestScore = -1;
+                        for (const proposal of proposalsForItem) {
+                            let totalItemScore = 0;
+                            let scoreCount = 0;
+                            quote.scores.forEach(scoreSet => {
+                                const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
+                                if (itemScore) {
+                                    totalItemScore += (itemScore as any).finalScore;
+                                    scoreCount++;
+                                }
+                            });
+                            const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                            if (avgScore > bestScore) {
+                                bestScore = avgScore;
+                                championBid = proposal;
+                            }
+                        }
+                    }
+                    championBids.push(championBid);
                 }
+                awardedQuoteItems = championBids;
             }
 
             if (awardedQuoteItems.length === 0) {
