@@ -21,12 +21,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const OPEN_PAGE_SIZE = 9;
 const ACTIVE_PAGE_SIZE = 6;
 
-type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed' | 'Declined' | 'Delivery Issue' | 'Failed_to_Award';
+type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed' | 'Declined' | 'Delivery Issue' | 'Failed_to_Award' | 'Paid';
 
 const VendorStatusBadge = ({ status, reason }: { status: RequisitionCardStatus, reason?: string }) => {
   const statusInfo: Record<RequisitionCardStatus, {text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline', className: string}> = {
@@ -34,6 +34,7 @@ const VendorStatusBadge = ({ status, reason }: { status: RequisitionCardStatus, 
     'Partially Awarded': { text: 'Partially Awarded', variant: 'default', className: 'bg-green-600 hover:bg-green-700' },
     'Accepted': { text: 'You Accepted', variant: 'default', className: 'bg-blue-600 hover:bg-blue-700' },
     'Invoice Submitted': { text: 'Invoice Submitted', variant: 'default', className: 'bg-purple-600 hover:bg-purple-700' },
+    'Paid': { text: 'Paid', variant: 'default', className: 'bg-emerald-600 hover:bg-emerald-700' },
     'Declined': { text: 'You Declined', variant: 'destructive', className: '' },
     'Delivery Issue': { text: 'Delivery Issue', variant: 'destructive', className: '' },
     'Submitted': { text: 'Submitted', variant: 'secondary', className: '' },
@@ -174,6 +175,11 @@ export default function VendorDashboardPage() {
 
         const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
         const isPerItemAward = (req.rfqSettings as any)?.awardStrategy === 'item';
+        
+        const poForVendor = req.purchaseOrders?.find(po => po.vendor.id === user.vendorId);
+        const isPaid = poForVendor?.invoices?.some(inv => inv.status === 'Paid');
+
+        if (isPaid) return { status: 'Paid' };
 
         if (isPerItemAward) {
             const vendorItemDetails = req.items.flatMap(item => 
