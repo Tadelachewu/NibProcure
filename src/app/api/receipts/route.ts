@@ -91,7 +91,7 @@ export async function POST(request: Request) {
         // If there are defective items, call the award rejection service
         if (hasDefectiveItems) {
             const quoteForVendor = po.requisition.quotations.find(q => q.vendorId === po.vendorId);
-            if(quoteForVendor) {
+            if(quoteForVendor && po.vendor.user) {
                 const declinedReqItemIds = defectiveItems.map((item: any) => {
                     const poItem = po.items.find(p => p.id === item.poItemId);
                     return poItem?.requisitionItemId;
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
 
                 const firstReason = defectiveItems[0].notes || 'Goods received were damaged or incorrect.';
 
-                await handleAwardRejection(tx, quoteForVendor, po.requisition, po.vendor.user!, declinedReqItemIds, 'Receiving', firstReason);
+                await handleAwardRejection(tx, quoteForVendor, po.requisition, po.vendor.user, declinedReqItemIds, 'Receiving', firstReason);
             }
         }
 

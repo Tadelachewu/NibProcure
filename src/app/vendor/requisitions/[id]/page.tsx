@@ -15,7 +15,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Loader2, Send, ArrowLeft, CheckCircle, FileText, BadgeInfo, FileUp, CircleCheck, Info, Edit, FileEdit, PlusCircle, Trash2, ThumbsDown, ThumbsUp, Timer, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Send, ArrowLeft, CheckCircle, FileText, BadgeInfo, FileUp, CircleCheck, Info, Edit, FileEdit, PlusCircle, Trash2, ThumbsDown, ThumbsUp, Timer, Image as ImageIcon, Download } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -38,7 +38,7 @@ const quoteFormSchema = z.object({
     quantity: z.number(),
     unitPrice: z.coerce.number().min(0.01, "Price is required."),
     leadTimeDays: z.coerce.number().min(0, "Lead time is required."),
-    brandDetails: z.string().optional(),
+    brandDetails: z.string().min(1, "Brand/Model details are required."),
     imageUrl: z.string().optional(),
   })),
   answers: z.array(z.object({
@@ -505,7 +505,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                                         {isAlternative ? "Alternative Item Name" : "Item Name"} (Qty: {form.getValues(`items.${overallIndex}.quantity`)})
                                                                     </FormLabel>
                                                                     <FormControl>
-                                                                        <Input placeholder="e.g., MacBook Pro 16-inch or alternative" {...field} />
+                                                                        <Input readOnly={!isAlternative} placeholder="e.g., MacBook Pro 16-inch or alternative" {...field} />
                                                                     </FormControl>
                                                                     <FormMessage />
                                                                 </FormItem>
@@ -689,13 +689,15 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
 }
 
 // ... rest of the file
-const DeclineReasonDialog = ({ onConfirm }: { onConfirm: (reason: string) => void }) => {
+const DeclineReasonDialog = ({ onConfirm, itemDeclining }: { onConfirm: (reason: string) => void, itemDeclining?: { name: string } | null }) => {
     const [reason, setReason] = useState('');
     return (
         <DialogContent>
             <DialogHeader>
                 <DialogTitle>Confirm Award Decline</DialogTitle>
-                <DialogDescription>Please provide a reason for declining this award. This feedback is valuable to the procurement team.</DialogDescription>
+                <DialogDescription>
+                    Please provide a reason for declining this award {itemDeclining ? `for item: ${itemDeclining.name}` : ''}. This feedback is valuable to the procurement team.
+                </DialogDescription>
             </DialogHeader>
             <div className="py-4">
                 <Label htmlFor="decline-reason">Reason for Declining</Label>
@@ -719,7 +721,7 @@ export default function VendorRequisitionPage() {
     const [error, setError] = useState<string | null>(null);
     const [submittedQuote, setSubmittedQuote] = useState<Quotation | null>(null);
     const [isEditingQuote, setIsEditingQuote] = useState(false);
-    const [declineState, setDeclineState] = useState<{ isOpen: boolean, quoteItemId?: string }>({ isOpen: false });
+    const [declineState, setDeclineState] = useState<{ isOpen: boolean, item?: PerItemAwardDetail & { reqItemName: string } }>({ isOpen: false });
 
     const params = useParams();
     const router = useRouter();
@@ -733,12 +735,12 @@ export default function VendorRequisitionPage() {
 
     const canEditQuote = submittedQuote?.status === 'Submitted' && !isAwardProcessStarted && !isDeadlinePassed && allowEdits;
 
-    const awardedItems = useMemo((): PerItemAwardDetail[] => {
+    const awardedItems = useMemo((): (PerItemAwardDetail & { reqItemName: string })[] => {
         if (!requisition || !user?.vendorId) return [];
         return requisition.items.flatMap(item => 
             (item.perItemAwardDetails || []).filter(detail => 
                 detail.vendorId === user.vendorId && (detail.status === 'Awarded' || detail.status === 'Accepted' || detail.status === 'Declined')
-            )
+            ).map(d => ({...d, reqItemName: item.name}))
         );
     }, [requisition, user]);
     
@@ -838,14 +840,14 @@ export default function VendorRequisitionPage() {
         fetchRequisitionData();
     }
     
-    const handleAwardResponse = async (action: 'accept' | 'reject', rejectionReason?: string, quoteItemId?: string) => {
+    const handleAwardResponse = async (action: 'accept' | 'reject', rejectionReason?: string, itemToActOn?: PerItemAwardDetail) => {
         if (!submittedQuote || !user) return;
         setIsResponding(true);
         try {
             const response = await fetch(`/api/quotations/${submittedQuote.id}/respond`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, action, rejectionReason, quoteItemId })
+                body: JSON.stringify({ userId: user.id, action, rejectionReason, quoteItemId: itemToActOn?.quoteItemId })
             });
 
             const result = await response.json();
@@ -876,8 +878,9 @@ export default function VendorRequisitionPage() {
 
     const QuoteDisplayCard = ({ quote, itemsToShow, showActions }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean }) => {
          const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-         const poForItem = purchaseOrders.find(po => po.items.some(poi => itemsToShow.some(i => i.id === poi.requisitionItemId || i.name === poi.name)));
-         const hasSubmittedInvoice = poForItem && (poForItem.invoices?.length || 0) > 0;
+         const poForAcceptedItems = purchaseOrders.find(po => po.items.some(poi => itemsToShow.some(i => i.id === poi.requisitionItemId || i.name === poi.name)));
+         const hasSubmittedInvoice = poForAcceptedItems?.invoices && poForAcceptedItems.invoices.length > 0;
+         const paidInvoice = poForAcceptedItems?.invoices?.find(inv => inv.status === 'Paid');
 
          return (
          <Card>
@@ -980,20 +983,35 @@ export default function VendorRequisitionPage() {
                  <div className="text-right font-bold text-2xl">
                     Total Award Value: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
                  </div>
-                 {isAccepted && poForItem && (
-                    <CardFooter className="p-0 pt-4">
-                        <Dialog>
-                            <DialogTrigger asChild>
-                                 <Button className="w-full" disabled={hasSubmittedInvoice}>
-                                    {hasSubmittedInvoice ? (
-                                        <><CircleCheck className="mr-2"/> Invoice Submitted for PO {poForItem.id}</>
-                                    ) : (
-                                        <><FileUp className="mr-2"/> Submit Invoice for PO {poForItem.id}</>
+                 {isAccepted && poForAcceptedItems && (
+                    <CardFooter className="p-0 pt-4 flex-col gap-2">
+                        {paidInvoice ? (
+                             <Alert variant="default" className="w-full">
+                                <CheckCircle className="h-4 w-4"/>
+                                <AlertTitle>Payment Confirmed</AlertTitle>
+                                <AlertDescription className="flex items-center justify-between">
+                                    <span>Invoice has been paid. Ref: {paidInvoice.paymentReference}</span>
+                                    {paidInvoice.paymentEvidenceUrl && (
+                                        <a href={paidInvoice.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
+                                            <Button variant="link" size="sm">View Evidence</Button>
+                                        </a>
                                     )}
-                                </Button>
-                            </DialogTrigger>
-                            <InvoiceSubmissionForm po={poForItem} onInvoiceSubmitted={() => { fetchRequisitionData(); }} />
-                        </Dialog>
+                                </AlertDescription>
+                            </Alert>
+                        ) : (
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Button className="w-full" disabled={hasSubmittedInvoice}>
+                                        {hasSubmittedInvoice ? (
+                                            <><CircleCheck className="mr-2"/> Invoice Submitted for PO {poForAcceptedItems.id}</>
+                                        ) : (
+                                            <><FileUp className="mr-2"/> Submit Invoice for PO {poForAcceptedItems.id}</>
+                                        )}
+                                    </Button>
+                                </DialogTrigger>
+                                <InvoiceSubmissionForm po={poForAcceptedItems} onInvoiceSubmitted={() => { fetchRequisitionData(); }} />
+                            </Dialog>
+                        )}
                     </CardFooter>
                  )}
                  {!showActions && (
@@ -1020,10 +1038,13 @@ export default function VendorRequisitionPage() {
             </Button>
             
             <Dialog open={declineState.isOpen} onOpenChange={(open) => !open && setDeclineState({isOpen: false})}>
-                <DeclineReasonDialog onConfirm={(reason) => {
-                    handleAwardResponse('reject', reason, declineState.quoteItemId);
-                    setDeclineState({isOpen: false});
-                }} />
+                <DeclineReasonDialog 
+                    itemDeclining={declineState.item}
+                    onConfirm={(reason) => {
+                        handleAwardResponse('reject', reason, declineState.item);
+                        setDeclineState({isOpen: false});
+                    }} 
+                />
             </Dialog>
 
             {hasPendingResponseItems && (
@@ -1043,8 +1064,32 @@ export default function VendorRequisitionPage() {
                      <CardContent>
                           {isPartiallyAwarded ? (
                              <div className="space-y-4">
-                                {awardedItems.filter(i => i.status === 'Awarded').map(itemAward => {
+                                {awardedItems.map(itemAward => {
                                     const quoteItem = submittedQuote?.items.find(i => i.id === itemAward.quoteItemId);
+                                    
+                                    if (itemAward.status === 'Declined') {
+                                        return (
+                                            <Card key={itemAward.quoteItemId} className="p-4 bg-destructive/10 border-destructive/30">
+                                                <div className="flex justify-between items-center">
+                                                    <p className="font-semibold line-through">{itemAward.reqItemName}</p>
+                                                    <Badge variant="destructive">Declined</Badge>
+                                                </div>
+                                                <p className="text-xs text-destructive-foreground mt-2">Reason: {itemAward.rejectionReason || "Not provided."}</p>
+                                            </Card>
+                                        )
+                                    }
+                                    
+                                    if (itemAward.status === 'Accepted') {
+                                         return (
+                                            <Card key={itemAward.quoteItemId} className="p-4 bg-green-500/10 border-green-500/30">
+                                                <div className="flex justify-between items-center">
+                                                    <p className="font-semibold">{itemAward.reqItemName}</p>
+                                                    <Badge variant="default" className="bg-green-600">Accepted</Badge>
+                                                </div>
+                                            </Card>
+                                        )
+                                    }
+
                                     return(
                                         <Card key={itemAward.quoteItemId} className="p-4">
                                             <div className="flex justify-between items-center">
@@ -1066,11 +1111,11 @@ export default function VendorRequisitionPage() {
                                                             </AlertDialogHeader>
                                                             <AlertDialogFooter>
                                                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={() => handleAwardResponse('accept', undefined, quoteItem?.id)}>Confirm</AlertDialogAction>
+                                                                <AlertDialogAction onClick={() => handleAwardResponse('accept', undefined, itemAward)}>Confirm</AlertDialogAction>
                                                             </AlertDialogFooter>
                                                         </AlertDialogContent>
                                                     </AlertDialog>
-                                                    <Button size="sm" variant="destructive" onClick={() => setDeclineState({isOpen: true, quoteItemId: quoteItem?.id})} disabled={isResponding || isResponseDeadlineExpired}>
+                                                    <Button size="sm" variant="destructive" onClick={() => setDeclineState({isOpen: true, item: itemAward})} disabled={isResponding || isResponseDeadlineExpired}>
                                                         <ThumbsDown className="mr-2 h-4 w-4" /> Decline
                                                     </Button>
                                                 </div>
