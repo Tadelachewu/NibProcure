@@ -176,26 +176,28 @@ export default function VendorDashboardPage() {
         const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
         const isPerItemAward = (req.rfqSettings as any)?.awardStrategy === 'item';
         
-        const poForVendor = req.purchaseOrders?.find(po => po.vendor.id === user.vendorId);
-        const isPaid = poForVendor?.invoices?.some(inv => inv.status === 'Paid');
+        const posForVendor = req.purchaseOrders?.filter(po => po.vendor.id === user.vendorId) || [];
+        const isAnyPaid = posForVendor.some(po => po.invoices?.some(inv => inv.status === 'Paid'));
 
-        if (isPaid) return { status: 'Paid' };
-        
-        // Universal Delivery Issue Check
-        if (poForVendor?.receipts?.some(r => r.status === 'Disputed')) {
-             return { status: 'Delivery Issue', reason: 'One or more items were marked as damaged or incorrect during receiving.' };
+        if (isAnyPaid) return { status: 'Paid' };
+
+        const isAnyDisputed = posForVendor.some(po => po.receipts?.some(r => r.status === 'Disputed'));
+        if (isAnyDisputed) {
+            const firstDisputedReceipt = posForVendor.flatMap(po => po.receipts || []).find(r => r.status === 'Disputed');
+            const firstDisputedItem = firstDisputedReceipt?.items.find(i => i.condition !== 'Good');
+            return { status: 'Delivery Issue', reason: firstDisputedItem?.notes || 'An item was marked as damaged or incorrect.' };
         }
-
+        
         if (isPerItemAward) {
             const vendorItemDetails = req.items.flatMap(item => 
                 (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId)
             );
 
-            if (vendorItemDetails.some(d => d.status === 'Declined' && (d as any).rejectionReason?.startsWith('[Receiving]'))) {
-                const reasonDetail = vendorItemDetails.find(d => d.status === 'Declined' && (d as any).rejectionReason?.startsWith('[Receiving]'));
-                return { status: 'Delivery Issue', reason: (reasonDetail as any)?.rejectionReason?.replace('[Receiving] ', '') };
+            if (vendorItemDetails.some(d => d.status === 'Declined')) {
+                const declinedDetail = vendorItemDetails.find(d => d.status === 'Declined');
+                return { status: 'Declined', reason: (declinedDetail as any)?.rejectionReason };
             }
-            if (vendorItemDetails.some(d => d.status === 'Declined')) return { status: 'Declined' };
+
             if (vendorItemDetails.some(d => d.status === 'Accepted')) return { status: 'Accepted' };
             if (vendorItemDetails.some(d => d.status === 'Awarded')) {
                 const totalAwardsPossible = req.items.flatMap(i => (i.perItemAwardDetails || [])).filter(d => d.vendorId === user.vendorId).length;
@@ -208,7 +210,7 @@ export default function VendorDashboardPage() {
         if (vendorQuote) {
             if (vendorQuote.status === 'Invoice_Submitted') return { status: 'Invoice Submitted' };
             if (vendorQuote.status === 'Accepted') return { status: 'Accepted' };
-            if (vendorQuote.status === 'Declined') return { status: 'Declined' };
+            if (vendorQuote.status === 'Declined') return { status: 'Declined', reason: vendorQuote.rejectionReason };
             if (vendorQuote.status === 'Awarded') return { status: 'Awarded' };
             if (vendorQuote.status === 'Standby') return { status: 'Standby' };
 
