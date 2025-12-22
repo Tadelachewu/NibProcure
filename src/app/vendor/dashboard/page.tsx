@@ -180,6 +180,11 @@ export default function VendorDashboardPage() {
         const isPaid = poForVendor?.invoices?.some(inv => inv.status === 'Paid');
 
         if (isPaid) return { status: 'Paid' };
+        
+        // Universal Delivery Issue Check
+        if (poForVendor?.receipts?.some(r => r.status === 'Disputed')) {
+             return { status: 'Delivery Issue', reason: 'One or more items were marked as damaged or incorrect during receiving.' };
+        }
 
         if (isPerItemAward) {
             const vendorItemDetails = req.items.flatMap(item => 

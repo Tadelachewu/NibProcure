@@ -877,7 +877,15 @@ export default function VendorRequisitionPage() {
 
     const QuoteDisplayCard = ({ quote, itemsToShow, showActions }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean }) => {
          const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-         const poForAcceptedItems = purchaseOrders.find(po => po.items.some(poi => itemsToShow.some(i => i.id === poi.requisitionItemId || i.name === poi.name)));
+         const poForAcceptedItems = purchaseOrders.find(po => {
+            if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
+                const acceptedItemIds = awardedItems.filter(i => i.status === 'Accepted').map(i => i.quoteItemId);
+                return po.items.some(poi => itemsToShow.some(i => acceptedItemIds.includes(i.id) && (i.id === poi.requisitionItemId || i.name === poi.name)));
+            } else {
+                return po.requisitionId === requisition.id;
+            }
+         });
+
          const hasSubmittedInvoice = poForAcceptedItems?.invoices && poForAcceptedItems.invoices.length > 0;
          const paidInvoice = poForAcceptedItems?.invoices?.find(inv => inv.status === 'Paid');
 
