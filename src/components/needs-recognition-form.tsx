@@ -249,7 +249,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
         };
 
         const status = isDraft ? 'Draft' : 'Pending_Approval';
-        const body = { ...formattedValues, id: existingRequisition?.id, status: status, userId: user?.id };
+        const body = { ...formattedValues, id: existingRequisition?.id, status: status, userId: user?.id, requesterId: user?.id };
         
         const response = await fetch('/api/requisitions', {
             method: isEditMode ? 'PATCH' : 'POST',
@@ -328,7 +328,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Department</FormLabel>
-                         <Select onValueChange={field.onChange} value={field.value} disabled={isEditMode}>
+                         <Select onValueChange={field.onChange} value={field.value} disabled>
                             <FormControl>
                             <SelectTrigger>
                                 <SelectValue placeholder="Select your department" />
