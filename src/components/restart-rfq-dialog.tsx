@@ -30,7 +30,7 @@ import { Card, CardContent } from './ui/card';
 
 export function RestartRfqDialog({
     requisition,
-    vendors,
+    vendors = [],
     onRfqRestarted
 }: {
     requisition: PurchaseRequisition;
@@ -69,9 +69,9 @@ export function RestartRfqDialog({
 
         setSubmitting(true);
         try {
-            const response = await fetch(`/api/requisitions/[id]/restart-item-rfq`, {
+            const response = await fetch(`/api/requisitions/restart-item-rfq`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     originalRequisitionId: requisition.id,
                     itemIds: selectedItems,
