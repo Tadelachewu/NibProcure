@@ -253,6 +253,27 @@ export async function GET(request: Request) {
   }
 }
 
+// Validation function for evaluation criteria
+const validateEvaluationCriteria = (criteria: any) => {
+    if (!criteria) {
+        return { isValid: false, message: 'Evaluation criteria are required.' };
+    }
+    const { financialWeight, technicalWeight, financialCriteria, technicalCriteria } = criteria;
+    if (financialWeight + technicalWeight !== 100) {
+        return { isValid: false, message: 'The sum of financial and technical weights must be 100%.' };
+    }
+    const financialSum = financialCriteria?.reduce((acc: number, c: any) => acc + (c.weight || 0), 0);
+    if (financialSum !== 100) {
+        return { isValid: false, message: 'The sum of weights for all financial criteria must be 100%.' };
+    }
+    const technicalSum = technicalCriteria?.reduce((acc: number, c: any) => acc + (c.weight || 0), 0);
+    if (technicalSum !== 100) {
+        return { isValid: false, message: 'The sum of weights for all technical criteria must be 100%.' };
+    }
+    return { isValid: true, message: '' };
+};
+
+
 export async function PATCH(
   request: Request,
 ) {
@@ -296,6 +317,11 @@ export async function PATCH(
     let updatedRequisition;
     
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && body.title) {
+        const { isValid, message } = validateEvaluationCriteria(body.evaluationCriteria);
+        if (!isValid) {
+            return NextResponse.json({ error: message }, { status: 400 });
+        }
+
         const totalPrice = body.items.reduce((acc: number, item: any) => {
             const price = item.unitPrice || 0;
             const quantity = item.quantity || 0;
@@ -637,6 +663,13 @@ export async function POST(request: Request) {
         }
       }
     }
+    
+    // Server-side validation for evaluation criteria
+    const { isValid, message } = validateEvaluationCriteria(body.evaluationCriteria);
+    if (!isValid) {
+        return NextResponse.json({ error: message }, { status: 400 });
+    }
+
     const totalPrice = body.items.reduce((acc: number, item: any) => {
       const price = item.unitPrice || 0;
       const quantity = item.quantity || 0;

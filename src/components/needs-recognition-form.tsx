@@ -395,87 +395,91 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
 
             <Separator />
 
-            <div>
-              <h3 className="text-lg font-medium mb-4">Items</h3>
-              <div className="space-y-6">
-                {fields.map((field, index) => (
-                  <div
-                    key={field.id}
-                    className="flex gap-4 items-start p-4 border rounded-lg relative"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.name`}
-                        render={({ field }) => (
-                          <FormItem className="md:col-span-3">
-                            <FormLabel>Item Name</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="e.g. MacBook Pro 16-inch"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.quantity`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Quantity</FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                       <FormField
-                        control={form.control}
-                        name={`items.${index}.description`}
-                        render={({ field }) => (
-                          <FormItem className="md:col-span-5">
-                            <FormLabel>Description (Optional)</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Add any specific details, model numbers, or specifications here..."
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
+            <Accordion type="single" collapsible defaultValue="items">
+              <AccordionItem value="items">
+                <AccordionTrigger className="text-lg font-medium">Items Requested</AccordionTrigger>
+                <AccordionContent className="pt-4 space-y-6">
+                   <div className="space-y-6">
+                    {fields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className="flex gap-4 items-start p-4 border rounded-lg relative"
+                      >
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
+                          <FormField
+                            control={form.control}
+                            name={`items.${index}.name`}
+                            render={({ field }) => (
+                              <FormItem className="md:col-span-3">
+                                <FormLabel>Item Name</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder="e.g. MacBook Pro 16-inch"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name={`items.${index}.quantity`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Quantity</FormLabel>
+                                <FormControl>
+                                  <Input type="number" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name={`items.${index}.description`}
+                            render={({ field }) => (
+                              <FormItem className="md:col-span-5">
+                                <FormLabel>Description (Optional)</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Add any specific details, model numbers, or specifications here..."
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          onClick={() => remove(index)}
+                          className="mt-6"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between items-center mt-4">
                     <Button
-                      type="button"
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => remove(index)}
-                      className="mt-6"
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                        append({ id: `ITEM-${Date.now()}`, name: '', quantity: 1, unitPrice: 0, description: '' })
+                        }
                     >
-                      <Trash2 className="h-4 w-4" />
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Add Item
                     </Button>
                   </div>
-                ))}
-              </div>
-               <div className="flex justify-between items-center mt-4">
-                 <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                    append({ id: `ITEM-${Date.now()}`, name: '', quantity: 1, unitPrice: 0, description: '' })
-                    }
-                >
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add Item
-                </Button>
-              </div>
-            </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
 
             <Separator />
             <Accordion type="multiple" className="w-full space-y-4">
