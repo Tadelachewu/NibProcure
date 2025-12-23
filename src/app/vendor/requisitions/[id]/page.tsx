@@ -874,29 +874,22 @@ export default function VendorRequisitionPage() {
     
         const poItemRequisitionIds = new Set(itemsToShow.map(item => item.requisitionItemId));
         
-        const relevantPOs = useMemo(() => {
-            if (!requisition.purchaseOrders) return [];
-            return requisition.purchaseOrders.filter(po => {
-                const poDetails = (requisition.purchaseOrders as PurchaseOrder[]).find(p => p.id === po.id);
-                if (!poDetails) return false;
-
-                if (poDetails.vendor.id !== user?.vendorId) return false;
-
-                if (isFullyAwarded) {
-                    return true;
-                }
-                
-                return poDetails.items.some(i => poItemRequisitionIds.has(i.requisitionItemId));
-            });
-        }, [requisition.purchaseOrders, user?.vendorId]);
-
         const allPOs = useMemo(() => requisition.purchaseOrders as PurchaseOrder[] || [], [requisition.purchaseOrders]);
+
+        const relevantPOs = useMemo(() => {
+            if (!allPOs) return [];
+            return allPOs.filter(po => {
+                if (po.vendor.id !== user?.vendorId) return false;
+                if (isFullyAwarded) return true;
+                return po.items.some(i => poItemRequisitionIds.has(i.requisitionItemId));
+            });
+        }, [allPOs, user?.vendorId, isFullyAwarded, poItemRequisitionIds]);
         
         const paidInvoices = useMemo(() => {
             return relevantPOs
-                .flatMap(po => (allPOs.find(p => p.id === po.id) as PurchaseOrder)?.invoices || [])
+                .flatMap(po => po.invoices || [])
                 .filter(inv => inv?.status === 'Paid');
-        }, [relevantPOs, allPOs]);
+        }, [relevantPOs]);
 
         return (
             <Card>
