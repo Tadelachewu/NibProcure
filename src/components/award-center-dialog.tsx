@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from './ui/dialog';
 import { Button } from './ui/button';
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from './ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -26,15 +26,14 @@ import Link from 'next/link';
 export const AwardCenterDialog = ({
     requisition,
     quotations,
-    onFinalize,
-    onClose
+    onFinalize
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteDocumentUrl?: string, minuteJustification?: string) => void;
-    onClose: () => void;
 }) => {
     const { toast } = useToast();
+    const [isOpen, setOpen] = useState(false);
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
     const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
     const [minuteFile, setMinuteFile] = useState<File | null>(null);
@@ -107,135 +106,145 @@ export const AwardCenterDialog = ({
         };
         
         onFinalize('all', awards, awardResponseDeadline, minuteDocumentUrl, minuteJustification);
-        onClose();
+        setOpen(false);
     }
 
 
     return (
-        <DialogContent className="max-w-3xl h-[90vh] flex flex-col">
-            <DialogHeader>
-                <DialogTitle>Award to Single Best Vendor</DialogTitle>
-                <DialogDescription>Review the recommended winner and finalize the award for requisition {requisition.id}.</DialogDescription>
-            </DialogHeader>
-            
-            <ScrollArea className="flex-1 -mx-6 px-6">
-                <div className="space-y-6 py-4">
-                    
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center justify-between">
-                                <span>Ranking Summary</span>
-                                <Button variant="secondary" size="sm" asChild>
-                                    <Link href={`/requisitions/${requisition.id}/award-details`} target="_blank">
-                                        <Calculator className="mr-2 h-4 w-4" />
-                                        Show Full Calculation
-                                    </Link>
-                                </Button>
-                            </CardTitle>
-                            <CardDescription>
-                                Vendors are ranked by the highest final average score. The winner receives the award, and the next two are put on standby.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                             <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Rank</TableHead>
-                                        <TableHead>Vendor</TableHead>
-                                        <TableHead>Final Score</TableHead>
-                                        <TableHead>Total Price</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {overallWinner && (
-                                        <TableRow className="bg-green-500/10">
-                                            <TableCell className="font-bold flex items-center gap-2">{getRankIcon(1)} Winner</TableCell>
-                                            <TableCell>{overallWinner.vendorName}</TableCell>
-                                            <TableCell className="font-mono">{overallWinner.finalAverageScore?.toFixed(2)}</TableCell>
-                                            <TableCell className="font-mono">{overallWinner.totalPrice.toLocaleString()} ETB</TableCell>
-                                        </TableRow>
-                                    )}
-                                    {standbyVendors.map((vendor, index) => (
-                                         <TableRow key={vendor.id}>
-                                            <TableCell className="font-bold flex items-center gap-2">{getRankIcon(index + 2)} Standby</TableCell>
-                                            <TableCell>{vendor.vendorName}</TableCell>
-                                            <TableCell className="font-mono">{vendor.finalAverageScore?.toFixed(2)}</TableCell>
-                                            <TableCell className="font-mono">{vendor.totalPrice.toLocaleString()} ETB</TableCell>
-                                        </TableRow>
-                                    ))}
-                                    {(!overallWinner && standbyVendors.length === 0) && (
-                                        <TableRow><TableCell colSpan={4} className="text-center h-24">No eligible vendors to rank.</TableCell></TableRow>
-                                    )}
-                                </TableBody>
-                             </Table>
-                        </CardContent>
-                    </Card>
-
-                    <div className="space-y-2">
-                        <Label>Vendor Response Deadline (Optional)</Label>
-                        <div className="flex gap-2">
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn(
-                                        "flex-1 justify-start text-left font-normal",
-                                        !awardResponseDeadlineDate && "text-muted-foreground"
-                                        )}
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
+        <Dialog open={isOpen} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                 <Card className="hover:bg-muted/50 cursor-pointer text-left">
+                    <CardHeader>
+                        <CardTitle>Award All to Single Vendor</CardTitle>
+                        <CardDescription>The system will recommend the vendor with the highest overall score.</CardDescription>
+                    </CardHeader>
+                </Card>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Award to Single Best Vendor</DialogTitle>
+                    <DialogDescription>Review the recommended winner and finalize the award for requisition {requisition.id}.</DialogDescription>
+                </DialogHeader>
+                
+                <ScrollArea className="flex-1 -mx-6 px-6">
+                    <div className="space-y-6 py-4">
+                        
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center justify-between">
+                                    <span>Ranking Summary</span>
+                                    <Button variant="secondary" size="sm" asChild>
+                                        <Link href={`/requisitions/${requisition.id}/award-details`} target="_blank">
+                                            <Calculator className="mr-2 h-4 w-4" />
+                                            Show Full Calculation
+                                        </Link>
                                     </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                        mode="single"
-                                        selected={awardResponseDeadlineDate}
-                                        onSelect={setAwardResponseDeadlineDate}
-                                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
-                                        initialFocus
-                                    />
-                                </PopoverContent>
-                            </Popover>
-                            <Input 
-                                type="time" 
-                                className="w-32"
-                                value={awardResponseDeadlineTime}
-                                onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
-                            />
+                                </CardTitle>
+                                <CardDescription>
+                                    Vendors are ranked by the highest final average score. The winner receives the award, and the next two are put on standby.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Rank</TableHead>
+                                            <TableHead>Vendor</TableHead>
+                                            <TableHead>Final Score</TableHead>
+                                            <TableHead>Total Price</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {overallWinner && (
+                                            <TableRow className="bg-green-500/10">
+                                                <TableCell className="font-bold flex items-center gap-2">{getRankIcon(1)} Winner</TableCell>
+                                                <TableCell>{overallWinner.vendorName}</TableCell>
+                                                <TableCell className="font-mono">{overallWinner.finalAverageScore?.toFixed(2)}</TableCell>
+                                                <TableCell className="font-mono">{overallWinner.totalPrice.toLocaleString()} ETB</TableCell>
+                                            </TableRow>
+                                        )}
+                                        {standbyVendors.map((vendor, index) => (
+                                            <TableRow key={vendor.id}>
+                                                <TableCell className="font-bold flex items-center gap-2">{getRankIcon(index + 2)} Standby</TableCell>
+                                                <TableCell>{vendor.vendorName}</TableCell>
+                                                <TableCell className="font-mono">{vendor.finalAverageScore?.toFixed(2)}</TableCell>
+                                                <TableCell className="font-mono">{vendor.totalPrice.toLocaleString()} ETB</TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {(!overallWinner && standbyVendors.length === 0) && (
+                                            <TableRow><TableCell colSpan={4} className="text-center h-24">No eligible vendors to rank.</TableCell></TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
+
+                        <div className="space-y-2">
+                            <Label>Vendor Response Deadline (Optional)</Label>
+                            <div className="flex gap-2">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                            "flex-1 justify-start text-left font-normal",
+                                            !awardResponseDeadlineDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                            mode="single"
+                                            selected={awardResponseDeadlineDate}
+                                            onSelect={setAwardResponseDeadlineDate}
+                                            disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                                <Input 
+                                    type="time" 
+                                    className="w-32"
+                                    value={awardResponseDeadlineTime}
+                                    onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <Label>Minute Recording</Label>
+                            <div className="p-4 border rounded-lg space-y-2">
+                                <Label htmlFor="minute-justification">Justification / Summary</Label>
+                                <Textarea id="minute-justification" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
+                                <Label htmlFor="minute-file">Official Minute Document (PDF)</Label>
+                                <Input id="minute-file" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
+                            </div>
                         </div>
                     </div>
+                </ScrollArea>
 
-                    <div className="space-y-4">
-                        <Label>Minute Recording</Label>
-                        <div className="p-4 border rounded-lg space-y-2">
-                            <Label htmlFor="minute-justification">Justification / Summary</Label>
-                            <Textarea id="minute-justification" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
-                            <Label htmlFor="minute-file">Official Minute Document (PDF)</Label>
-                            <Input id="minute-file" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
-                        </div>
-                    </div>
-                </div>
-            </ScrollArea>
-
-            <DialogFooter className="pt-4 border-t">
-                <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                <AlertDialog>
-                    <AlertDialogTrigger asChild><Button disabled={!overallWinner}>Finalize &amp; Send Award</Button></AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                        <AlertDialogTitle>Confirm Award Decision</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            You are about to finalize the award to <strong>{overallWinner?.vendorName}</strong>. This will initiate the final approval workflow.
-                        </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleConfirmAward}>Confirm</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </DialogFooter>
-        </DialogContent>
+                <DialogFooter className="pt-4 border-t">
+                    <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild><Button disabled={!overallWinner}>Finalize &amp; Send Award</Button></AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                            <AlertDialogTitle>Confirm Award Decision</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                You are about to finalize the award to <strong>{overallWinner?.vendorName}</strong>. This will initiate the final approval workflow.
+                            </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleConfirmAward}>Confirm</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 };

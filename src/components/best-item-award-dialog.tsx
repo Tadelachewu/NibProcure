@@ -25,17 +25,14 @@ import { getRankIcon } from '@/lib/utils';
 export const BestItemAwardDialog = ({
     requisition,
     quotations,
-    onFinalize,
-    isOpen,
-    onClose
+    onFinalize
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteDocumentUrl?: string, minuteJustification?: string) => void;
-    isOpen: boolean;
-    onClose: () => void;
 }) => {
     const { toast } = useToast();
+    const [isOpen, setOpen] = useState(false);
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
     const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
     const [minuteFile, setMinuteFile] = useState<File | null>(null);
@@ -158,12 +155,20 @@ export const BestItemAwardDialog = ({
         });
 
         onFinalize('item', awards, awardResponseDeadline, minuteDocumentUrl, minuteJustification);
-        onClose();
+        setOpen(false);
     }
 
 
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
+        <Dialog open={isOpen} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                 <Card className="hover:bg-muted/50 cursor-pointer text-left">
+                    <CardHeader>
+                        <CardTitle>Award by Best Offer (Per Item)</CardTitle>
+                        <CardDescription>Award each item to the vendor with the best offer for that specific item.</CardDescription>
+                    </CardHeader>
+                </Card>
+            </DialogTrigger>
             <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
                 <DialogHeader>
                     <DialogTitle>Award by Best Offer (Per Item)</DialogTitle>
