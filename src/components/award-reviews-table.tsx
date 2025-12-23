@@ -54,17 +54,15 @@ import { Badge } from './ui/badge';
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/tooltip';
-import { AwardStandbyButton } from './award-standby-button';
-import { RestartRfqDialog } from './restart-rfq-dialog';
 
 
 const PAGE_SIZE = 10;
 
 export function AwardReviewsTable() {
-  const [requisitions, setRequisitions] = useState<(PurchaseRequisition & { isActionable?: boolean, canPromoteStandby?: boolean, canRestartRfq?: boolean })[]>([]);
+  const [requisitions, setRequisitions] = useState<(PurchaseRequisition & { isActionable?: boolean })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, token, vendors } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -105,7 +103,7 @@ export function AwardReviewsTable() {
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for award review');
       
-      const data: (PurchaseRequisition & { isActionable?: boolean, canPromoteStandby?: boolean, canRestartRfq?: boolean })[] = await response.json();
+      const data: (PurchaseRequisition & { isActionable?: boolean })[] = await response.json();
       setRequisitions(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
@@ -230,21 +228,10 @@ export function AwardReviewsTable() {
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');
                   
-                  const getDeclinedReason = () => {
-                      if (req.status !== 'Award_Declined') return null;
-                      
-                      const perItemDecline = req.items
-                        .flatMap(item => item.perItemAwardDetails || [])
-                        .find(detail => detail.status === 'Declined' && detail.rejectionReason);
+                  const declinedReason = req.status === 'Award_Declined'
+                    ? req.quotations?.find(q => q.status === 'Declined')?.rejectionReason || 'Reason not specified'
+                    : null;
 
-                      if (perItemDecline) return perItemDecline.rejectionReason;
-
-                      const quoteDecline = req.quotations?.find(q => q.status === 'Declined' && q.rejectionReason);
-                      return quoteDecline?.rejectionReason || null;
-                  }
-
-                  const declinedReason = getDeclinedReason();
-                  
                   const finalizationMinute = req.minutes?.find(m => m.decisionBody === 'Award Finalization');
 
                   return (
@@ -340,8 +327,6 @@ export function AwardReviewsTable() {
                                     {!isActionable && <TooltipContent><p>Not your turn to reject.</p></TooltipContent>}
                                 </Tooltip>
                               </TooltipProvider>
-                                {req.canPromoteStandby && <AwardStandbyButton requisition={req} quotations={req.quotations || []} onPromote={fetchRequisitions} isChangingAward={isLoadingAction} />}
-                                {req.canRestartRfq && <RestartRfqDialog requisition={req} vendors={vendors} onRfqRestarted={fetchRequisitions} />}
                         </div>
                         </TableCell>
                     </TableRow>
