@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PurchaseOrder, PurchaseRequisition, Quotation, QuoteItem, PerItemAwardDetail } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
@@ -755,8 +755,8 @@ export default function VendorRequisitionPage() {
     const itemsToDisplayInQuoteCard = useMemo(() => {
         if (!submittedQuote) return [];
         
-        if (isFullyAwarded) {
-            const awardedItemIds = new Set(requisition!.awardedQuoteItemIds);
+        if (isFullyAwarded && requisition?.awardedQuoteItemIds) {
+            const awardedItemIds = new Set(requisition.awardedQuoteItemIds);
             return submittedQuote.items.filter(item => awardedItemIds.has(item.id));
         }
 
@@ -876,11 +876,14 @@ export default function VendorRequisitionPage() {
 
     const QuoteDisplayCard = ({ quote, itemsToShow, showActions }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean }) => {
         const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-
-        const relevantPOs = purchaseOrders.filter(po => {
-            const poItemRequisitionIds = new Set(po.items.map(i => i.requisitionItemId));
-            return itemsToShow.some(item => poItemRequisitionIds.has(item.requisitionItemId));
-        });
+    
+        const poItemRequisitionIds = new Set(itemsToShow.map(item => item.requisitionItemId));
+        
+        const relevantPOs = isFullyAwarded 
+            ? purchaseOrders.filter(po => po.requisitionId === requisition.id)
+            : purchaseOrders.filter(po => {
+                return po.items.some(i => poItemRequisitionIds.has(i.requisitionItemId));
+            });
 
         const hasSubmittedInvoice = relevantPOs.some(po => po.invoices && po.invoices.length > 0);
         const paidInvoices = relevantPOs.flatMap(po => po.invoices || []).filter(inv => inv.status === 'Paid');
