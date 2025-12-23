@@ -417,48 +417,51 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                     <CardTitle>Strategy 2: Best Offer (Per Item)</CardTitle>
                     <CardDescription>Compares all vendor proposals for each individual item and selects the highest-scoring bid for each.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                    {bestItemResults.map(item => (
-                        <Card key={item.itemName}>
-                            <CardHeader>
-                                 <CardTitle>Item: {item.itemName}</CardTitle>
-                                 <CardDescription>Comparison of all vendor bids for this item.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Rank</TableHead>
-                                            <TableHead>Vendor</TableHead>
-                                            <TableHead>Proposed Item Name</TableHead>
-                                            <TableHead className="text-right">Final Item Score</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {item.bids.map((bid, index) => (
-                                            <TableRow key={bid.vendorName + bid.itemName} className={cn(index === 0 && "bg-green-500/10")}>
-                                                <TableCell className="font-bold flex items-center gap-2"><RankIcon rank={index+1} /></TableCell>
-                                                <TableCell>{bid.vendorName}</TableCell>
-                                                <TableCell>{bid.itemName}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <DialogTrigger asChild>
-                                                         <Button variant="link" size="sm" onClick={() => setSelectedCalculation(bid.calculation)}>
-                                                            {bid.calculation.finalItemScore.toFixed(2)}
-                                                         </Button>
-                                                    </DialogTrigger>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                                {item.winner && 
-                                    <div className="mt-4 p-3 bg-primary/10 rounded-md text-center">
-                                        <p className="font-semibold">Winner for this item: <span className="text-primary">{item.winner.vendorName}</span></p>
+                <CardContent>
+                    <Accordion type="single" collapsible className="w-full space-y-4">
+                        {bestItemResults.map(item => (
+                            <AccordionItem key={item.itemName} value={item.itemName}>
+                                <AccordionTrigger>
+                                    <div className="flex justify-between items-center w-full pr-2">
+                                        <span>Item: {item.itemName}</span>
+                                        {item.winner && (
+                                            <Badge variant="default" className="text-xs">
+                                                Winner: {item.winner.vendorName} ({item.winner.calculation.finalItemScore.toFixed(2)} pts)
+                                            </Badge>
+                                        )}
                                     </div>
-                                }
-                            </CardContent>
-                        </Card>
-                    ))}
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Rank</TableHead>
+                                                <TableHead>Vendor</TableHead>
+                                                <TableHead>Proposed Item Name</TableHead>
+                                                <TableHead className="text-right">Final Item Score</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {item.bids.map((bid, index) => (
+                                                <TableRow key={bid.vendorName + bid.itemName} className={cn(index === 0 && "bg-green-500/10")}>
+                                                    <TableCell className="font-bold flex items-center gap-2"><RankIcon rank={index+1} /></TableCell>
+                                                    <TableCell>{bid.vendorName}</TableCell>
+                                                    <TableCell>{bid.itemName}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <DialogTrigger asChild>
+                                                             <Button variant="link" size="sm" onClick={() => setSelectedCalculation(bid.calculation)}>
+                                                                {bid.calculation.finalItemScore.toFixed(2)}
+                                                             </Button>
+                                                        </DialogTrigger>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </AccordionContent>
+                            </AccordionItem>
+                        ))}
+                    </Accordion>
                 </CardContent>
             </Card>
              {selectedCalculation && requisition.evaluationCriteria && (

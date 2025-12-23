@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import Image from 'next/image';
 import { Label } from '@/components/ui/label';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const quoteFormSchema = z.object({
   notes: z.string().optional(),
@@ -477,108 +478,112 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                             )}
                         />
 
-                        <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                        <Accordion type="multiple" className="w-full space-y-4" defaultValue={originalItems.map(item => item.id)}>
                              {originalItems.map(originalItem => {
                                  const itemsForThisReqItem = fields.filter(f => f.requisitionItemId === originalItem.id);
                                  return (
-                                     <div key={originalItem.id} className="p-4 border rounded-lg bg-muted/20">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h4 className="font-semibold">Requested Item: {originalItem.name} (Qty: {originalItem.quantity})</h4>
-                                            <Button type="button" variant="outline" size="sm" onClick={() => addAlternativeItem(originalItem)}>
-                                                <PlusCircle className="mr-2 h-4 w-4" /> Propose Alternative
-                                            </Button>
-                                        </div>
-                                         <div className="space-y-4 pl-4 border-l-2">
-                                         {itemsForThisReqItem.map((field, index) => {
-                                             const overallIndex = fields.findIndex(f => f.id === field.id);
-                                             const isAlternative = field.name !== originalItem.name;
-                                             return (
-                                                <Card key={field.id} className="p-4 relative bg-background">
-                                                    <div className="flex justify-between items-start">
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`items.${overallIndex}.name`}
-                                                            render={({ field }) => (
-                                                                <FormItem className="flex-1">
-                                                                    <FormLabel>
-                                                                        {isAlternative ? "Alternative Item Name" : "Item Name"} (Qty: {form.getValues(`items.${overallIndex}.quantity`)})
-                                                                    </FormLabel>
-                                                                    <FormControl>
-                                                                        <Input readOnly={!isAlternative} placeholder="e.g., MacBook Pro 16-inch or alternative" {...field} />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                        {isAlternative && (
-                                                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6 ml-2 mt-7" onClick={() => remove(overallIndex)}>
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`items.${overallIndex}.brandDetails`}
-                                                            render={({ field }) => (
-                                                                <FormItem className="md:col-span-2">
-                                                                    <FormLabel>Brand / Model Details</FormLabel>
-                                                                    <FormControl>
-                                                                        <Textarea placeholder="e.g., Dell XPS 15, HP Spectre x360..." {...field} />
-                                                                    </FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                         <FormField
-                                                            control={form.control}
-                                                            name={`items.${overallIndex}.imageUrl`}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                <FormLabel>Item Image (Optional)</FormLabel>
-                                                                <FormControl>
-                                                                    <Input type="file" accept="image/*" onChange={async (e) => {
-                                                                        if (e.target.files?.[0]) {
-                                                                            const path = await handleFileUpload(e.target.files[0]);
-                                                                            if (path) field.onChange(path);
-                                                                        }
-                                                                    }} />
-                                                                </FormControl>
-                                                                <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                         />
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`items.${overallIndex}.unitPrice`}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>Unit Price (ETB)</FormLabel>
-                                                                    <FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} /></FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`items.${overallIndex}.leadTimeDays`}
-                                                            render={({ field }) => (
-                                                                <FormItem>
-                                                                    <FormLabel>Lead Time (Days)</FormLabel>
-                                                                    <FormControl><Input type="number" {...field} /></FormControl>
-                                                                    <FormMessage />
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                    </div>
-                                                </Card>
-                                             )
-                                         })}
-                                         </div>
-                                     </div>
+                                     <AccordionItem key={originalItem.id} value={originalItem.id} className="border rounded-lg bg-muted/20 px-4">
+                                        <AccordionTrigger>
+                                            <div className="flex justify-between items-center w-full pr-2">
+                                                <h4 className="font-semibold">Requested Item: {originalItem.name} (Qty: {originalItem.quantity})</h4>
+                                                <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addAlternativeItem(originalItem); }}>
+                                                    <PlusCircle className="mr-2 h-4 w-4" /> Propose Alternative
+                                                </Button>
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent className="pt-2">
+                                            <div className="space-y-4 pl-4 border-l-2">
+                                                {itemsForThisReqItem.map((field, index) => {
+                                                    const overallIndex = fields.findIndex(f => f.id === field.id);
+                                                    const isAlternative = field.name !== originalItem.name;
+                                                    return (
+                                                        <Card key={field.id} className="p-4 relative bg-background">
+                                                            <div className="flex justify-between items-start">
+                                                                <FormField
+                                                                    control={form.control}
+                                                                    name={`items.${overallIndex}.name`}
+                                                                    render={({ field }) => (
+                                                                        <FormItem className="flex-1">
+                                                                            <FormLabel>
+                                                                                {isAlternative ? "Alternative Item Name" : "Item Name"} (Qty: {form.getValues(`items.${overallIndex}.quantity`)})
+                                                                            </FormLabel>
+                                                                            <FormControl>
+                                                                                <Input readOnly={!isAlternative} placeholder="e.g., MacBook Pro 16-inch or alternative" {...field} />
+                                                                            </FormControl>
+                                                                            <FormMessage />
+                                                                        </FormItem>
+                                                                    )}
+                                                                />
+                                                                {isAlternative && (
+                                                                    <Button type="button" variant="ghost" size="icon" className="h-6 w-6 ml-2 mt-7" onClick={() => remove(overallIndex)}>
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                                                <FormField
+                                                                    control={form.control}
+                                                                    name={`items.${overallIndex}.brandDetails`}
+                                                                    render={({ field }) => (
+                                                                        <FormItem className="md:col-span-2">
+                                                                            <FormLabel>Brand / Model Details</FormLabel>
+                                                                            <FormControl>
+                                                                                <Textarea placeholder="e.g., Dell XPS 15, HP Spectre x360..." {...field} />
+                                                                            </FormControl>
+                                                                            <FormMessage />
+                                                                        </FormItem>
+                                                                    )}
+                                                                />
+                                                                <FormField
+                                                                    control={form.control}
+                                                                    name={`items.${overallIndex}.imageUrl`}
+                                                                    render={({ field }) => (
+                                                                        <FormItem>
+                                                                        <FormLabel>Item Image (Optional)</FormLabel>
+                                                                        <FormControl>
+                                                                            <Input type="file" accept="image/*" onChange={async (e) => {
+                                                                                if (e.target.files?.[0]) {
+                                                                                    const path = await handleFileUpload(e.target.files[0]);
+                                                                                    if (path) field.onChange(path);
+                                                                                }
+                                                                            }} />
+                                                                        </FormControl>
+                                                                        <FormMessage />
+                                                                        </FormItem>
+                                                                    )}
+                                                                />
+                                                                <FormField
+                                                                    control={form.control}
+                                                                    name={`items.${overallIndex}.unitPrice`}
+                                                                    render={({ field }) => (
+                                                                        <FormItem>
+                                                                            <FormLabel>Unit Price (ETB)</FormLabel>
+                                                                            <FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} /></FormControl>
+                                                                            <FormMessage />
+                                                                        </FormItem>
+                                                                    )}
+                                                                />
+                                                                <FormField
+                                                                    control={form.control}
+                                                                    name={`items.${overallIndex}.leadTimeDays`}
+                                                                    render={({ field }) => (
+                                                                        <FormItem>
+                                                                            <FormLabel>Lead Time (Days)</FormLabel>
+                                                                            <FormControl><Input type="number" {...field} /></FormControl>
+                                                                            <FormMessage />
+                                                                        </FormItem>
+                                                                    )}
+                                                                />
+                                                            </div>
+                                                        </Card>
+                                                    )
+                                                })}
+                                            </div>
+                                         </AccordionContent>
+                                     </AccordionItem>
                                  )
                              })}
-                        </div>
+                        </Accordion>
 
 
                          {requisition.customQuestions && requisition.customQuestions.length > 0 && (
