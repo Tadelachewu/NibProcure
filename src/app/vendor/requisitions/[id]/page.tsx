@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PurchaseOrder, PurchaseRequisition, Quotation, QuoteItem, PerItemAwardDetail } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
@@ -755,7 +755,7 @@ export default function VendorRequisitionPage() {
     const itemsToDisplayInQuoteCard = useMemo(() => {
         if (!submittedQuote) return [];
         
-        if (isFullyAwarded && requisition!.awardedQuoteItemIds.length > 0) {
+        if (isFullyAwarded) {
             const awardedItemIds = new Set(requisition!.awardedQuoteItemIds);
             return submittedQuote.items.filter(item => awardedItemIds.has(item.id));
         }
@@ -875,175 +875,171 @@ export default function VendorRequisitionPage() {
 
 
     const QuoteDisplayCard = ({ quote, itemsToShow, showActions }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean }) => {
-         const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-         
-         const relevantPOs = purchaseOrders.filter(po => {
-            if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
-                const poRequisitionItemIds = new Set(po.items.map(i => i.requisitionItemId));
-                const itemsToShowIds = new Set(itemsToShow.map(i => i.requisitionItemId));
-                return [...poRequisitionItemIds].some(id => itemsToShowIds.has(id));
-            } else {
-                return po.requisitionId === requisition.id;
-            }
-         });
-         const hasSubmittedInvoice = relevantPOs.some(po => po.invoices && po.invoices.length > 0);
-         const paidInvoices = relevantPOs.flatMap(po => po.invoices || []).filter(inv => inv.status === 'Paid');
+        const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
 
-         return (
-         <Card>
-            <CardHeader className="flex flex-row items-start justify-between">
-                <div>
-                    <CardTitle>Your Submitted Quote</CardTitle>
-                    <CardDescription>
-                        Status: <Badge variant={quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded' ? 'default' : 'secondary'}>{quote.status.replace(/_/g, ' ')}</Badge>
-                    </CardDescription>
-                </div>
-                {canEditQuote && (
-                    <Button variant="outline" size="sm" onClick={() => setIsEditingQuote(true)}>
-                        <FileEdit className="mr-2 h-4 w-4" /> Edit Quote
-                    </Button>
-                )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-                
-                {quote.bidDocumentUrl && (
-                    <div className="text-sm">
-                        <h3 className="font-semibold">Official Bid Document</h3>
-                        <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
-                            <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-primary"/>
-                                <span>{quote.bidDocumentUrl.split('/').pop()}</span>
-                            </a>
-                        </div>
-                    </div>
-                )}
-                {quote.cpoDocumentUrl && (
-                     <div className="text-sm">
-                        <h3 className="font-semibold">CPO Document</h3>
-                        <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
-                            <a href={quote.cpoDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-primary"/>
-                                <span>{quote.cpoDocumentUrl.split('/').pop()}</span>
-                            </a>
-                        </div>
-                    </div>
-                )}
-                 {quote.experienceDocumentUrl && (
-                     <div className="text-sm">
-                        <h3 className="font-semibold">Experience Document</h3>
-                        <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
-                             <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-primary"/>
-                                <span>{quote.experienceDocumentUrl.split('/').pop()}</span>
-                            </a>
-                        </div>
-                    </div>
-                )}
-                <div className="space-y-2">
-                    {itemsToShow && itemsToShow.length > 0 ? itemsToShow.map((item, index) => (
-                        <Card key={`${item.requisitionItemId}-${index}`} className="p-3 bg-green-500/5 border-green-500/20">
-                            <div className="flex justify-between">
-                                <div>
-                                    <p className="font-semibold">{item.name} x {item.quantity}</p>
-                                    <p className="text-xs text-muted-foreground">Unit Price: {item.unitPrice.toFixed(2)} ETB</p>
-                                </div>
-                                <p className="font-semibold text-lg">{(item.unitPrice * item.quantity).toFixed(2)} ETB</p>
-                            </div>
-                            {item.brandDetails && (
-                                <div className="mt-2 text-xs border-t pt-2">
-                                    <p className="font-bold">Brand/Model Details:</p>
-                                    <p className="text-muted-foreground italic">{item.brandDetails}</p>
-                                </div>
-                            )}
-                             {item.imageUrl && (
-                                <div className="mt-2 pt-2 border-t">
-                                    <p className="font-bold text-xs">Image:</p>
-                                    <Dialog>
-                                        <DialogTrigger asChild>
-                                            <div className="relative h-24 w-full mt-1 rounded-md overflow-hidden cursor-pointer">
-                                                <Image src={item.imageUrl} alt={item.name} fill style={{objectFit:"contain"}}/>
-                                            </div>
-                                        </DialogTrigger>
-                                        <DialogContent className="max-w-2xl">
-                                            <DialogHeader>
-                                                <DialogTitle>{item.name}</DialogTitle>
-                                            </DialogHeader>
-                                            <div className="relative h-[60vh]">
-                                                <Image src={item.imageUrl} alt={item.name} fill style={{objectFit:"contain"}}/>
-                                            </div>
-                                        </DialogContent>
-                                    </Dialog>
-                                </div>
-                            )}
-                        </Card>
-                    )) : (
-                        <div className="text-sm text-muted-foreground text-center p-4">No specific items awarded from this quote.</div>
-                    )}
-                </div>
-                {quote.notes && (
+        const relevantPOs = purchaseOrders.filter(po => {
+            const poItemRequisitionIds = new Set(po.items.map(i => i.requisitionItemId));
+            return itemsToShow.some(item => poItemRequisitionIds.has(item.requisitionItemId));
+        });
+
+        const hasSubmittedInvoice = relevantPOs.some(po => po.invoices && po.invoices.length > 0);
+        const paidInvoices = relevantPOs.flatMap(po => po.invoices || []).filter(inv => inv.status === 'Paid');
+
+        return (
+            <Card>
+                <CardHeader className="flex flex-row items-start justify-between">
                     <div>
-                        <h3 className="font-semibold text-sm">Your Overall Notes</h3>
-                        <p className="text-muted-foreground text-sm p-3 border rounded-md bg-muted/50 italic">"{quote.notes}"</p>
+                        <CardTitle>Your Submitted Quote</CardTitle>
+                        <CardDescription>
+                            Status: <Badge variant={quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded' ? 'default' : 'secondary'}>{quote.status.replace(/_/g, ' ')}</Badge>
+                        </CardDescription>
                     </div>
-                )}
-                 <Separator />
-                 <div className="text-right font-bold text-2xl">
-                    Total Award Value: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
-                 </div>
-                 {isAccepted && relevantPOs.length > 0 && (
-                    <CardFooter className="p-0 pt-4 flex-col gap-2">
-                        {paidInvoices.length > 0 && (
-                             <Alert variant="default" className="w-full">
-                                <CheckCircle className="h-4 w-4"/>
-                                <AlertTitle>Payment Confirmed</AlertTitle>
-                                <AlertDescription className="space-y-2">
-                                    {paidInvoices.map(inv => (
-                                        <div key={inv.id} className="flex items-center justify-between">
-                                            <span>Invoice for PO {inv.purchaseOrderId} has been paid. Ref: {inv.paymentReference}</span>
-                                            {inv.paymentEvidenceUrl && (
-                                                <a href={inv.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
-                                                    <Button variant="link" size="sm">View Evidence</Button>
-                                                </a>
-                                            )}
-                                        </div>
-                                    ))}
+                    {canEditQuote && (
+                        <Button variant="outline" size="sm" onClick={() => setIsEditingQuote(true)}>
+                            <FileEdit className="mr-2 h-4 w-4" /> Edit Quote
+                        </Button>
+                    )}
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    
+                    {quote.bidDocumentUrl && (
+                        <div className="text-sm">
+                            <h3 className="font-semibold">Official Bid Document</h3>
+                            <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
+                                <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-primary"/>
+                                    <span>{quote.bidDocumentUrl.split('/').pop()}</span>
+                                </a>
+                            </div>
+                        </div>
+                    )}
+                    {quote.cpoDocumentUrl && (
+                         <div className="text-sm">
+                            <h3 className="font-semibold">CPO Document</h3>
+                            <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
+                                <a href={quote.cpoDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-primary"/>
+                                    <span>{quote.cpoDocumentUrl.split('/').pop()}</span>
+                                </a>
+                            </div>
+                        </div>
+                    )}
+                     {quote.experienceDocumentUrl && (
+                         <div className="text-sm">
+                            <h3 className="font-semibold">Experience Document</h3>
+                            <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
+                                 <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-primary"/>
+                                    <span>{quote.experienceDocumentUrl.split('/').pop()}</span>
+                                </a>
+                            </div>
+                        </div>
+                    )}
+                    <div className="space-y-2">
+                        {itemsToShow && itemsToShow.length > 0 ? itemsToShow.map((item, index) => (
+                            <Card key={`${item.requisitionItemId}-${index}`} className="p-3 bg-green-500/5 border-green-500/20">
+                                <div className="flex justify-between">
+                                    <div>
+                                        <p className="font-semibold">{item.name} x {item.quantity}</p>
+                                        <p className="text-xs text-muted-foreground">Unit Price: {item.unitPrice.toFixed(2)} ETB</p>
+                                    </div>
+                                    <p className="font-semibold text-lg">{(item.unitPrice * item.quantity).toFixed(2)} ETB</p>
+                                </div>
+                                {item.brandDetails && (
+                                    <div className="mt-2 text-xs border-t pt-2">
+                                        <p className="font-bold">Brand/Model Details:</p>
+                                        <p className="text-muted-foreground italic">{item.brandDetails}</p>
+                                    </div>
+                                )}
+                                 {item.imageUrl && (
+                                    <div className="mt-2 pt-2 border-t">
+                                        <p className="font-bold text-xs">Image:</p>
+                                        <Dialog>
+                                            <DialogTrigger asChild>
+                                                <div className="relative h-24 w-full mt-1 rounded-md overflow-hidden cursor-pointer">
+                                                    <Image src={item.imageUrl} alt={item.name} fill style={{objectFit:"contain"}}/>
+                                                </div>
+                                            </DialogTrigger>
+                                            <DialogContent className="max-w-2xl">
+                                                <DialogHeader>
+                                                    <DialogTitle>{item.name}</DialogTitle>
+                                                </DialogHeader>
+                                                <div className="relative h-[60vh]">
+                                                    <Image src={item.imageUrl} alt={item.name} fill style={{objectFit:"contain"}}/>
+                                                </div>
+                                            </DialogContent>
+                                        </Dialog>
+                                    </div>
+                                )}
+                            </Card>
+                        )) : (
+                            <div className="text-sm text-muted-foreground text-center p-4">No specific items awarded from this quote.</div>
+                        )}
+                    </div>
+                    {quote.notes && (
+                        <div>
+                            <h3 className="font-semibold text-sm">Your Overall Notes</h3>
+                            <p className="text-muted-foreground text-sm p-3 border rounded-md bg-muted/50 italic">"{quote.notes}"</p>
+                        </div>
+                    )}
+                     <Separator />
+                     <div className="text-right font-bold text-2xl">
+                        Total Award Value: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
+                     </div>
+                     {isAccepted && relevantPOs.length > 0 && (
+                        <CardFooter className="p-0 pt-4 flex-col gap-2">
+                            {paidInvoices.length > 0 && (
+                                 <Alert variant="default" className="w-full">
+                                    <CheckCircle className="h-4 w-4"/>
+                                    <AlertTitle>Payment Confirmed</AlertTitle>
+                                    <AlertDescription className="space-y-2">
+                                        {paidInvoices.map(inv => (
+                                            <div key={inv.id} className="flex items-center justify-between">
+                                                <span>Invoice for PO {inv.purchaseOrderId} has been paid. Ref: {inv.paymentReference}</span>
+                                                {inv.paymentEvidenceUrl && (
+                                                    <a href={inv.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
+                                                        <Button variant="link" size="sm">View Evidence</Button>
+                                                    </a>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+                            {relevantPOs.map(po => {
+                                const hasSubmittedInv = po.invoices && po.invoices.length > 0;
+                                const isPaid = po.invoices?.some(inv => inv.status === 'Paid');
+                                if(isPaid) return null;
+                                 return (
+                                    <Dialog key={po.id}>
+                                        <DialogTrigger asChild>
+                                            <Button className="w-full" disabled={hasSubmittedInv}>
+                                                {hasSubmittedInv ? (
+                                                    <><CircleCheck className="mr-2"/> Invoice Submitted for PO {po.id}</>
+                                                ) : (
+                                                    <><FileUp className="mr-2"/> Submit Invoice for PO {po.id}</>
+                                                )}
+                                            </Button>
+                                        </DialogTrigger>
+                                        <InvoiceSubmissionForm po={po} onInvoiceSubmitted={fetchRequisitionData} />
+                                    </Dialog>
+                                 )
+                            })}
+                        </CardFooter>
+                     )}
+                     {!showActions && (
+                         <CardFooter className="p-0 pt-4">
+                            <Alert variant="default" className="border-blue-500/50">
+                                <Info className="h-4 w-4 text-blue-500" />
+                                <AlertTitle>{ isStandby ? "You are on Standby" : "Quote Under Review" }</AlertTitle>
+                                <AlertDescription>
+                                    { isStandby ? "Your quote is a backup option. You will be notified if the primary vendor declines." : (canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.')}
                                 </AlertDescription>
                             </Alert>
-                        )}
-                        {relevantPOs.map(po => {
-                            const hasSubmittedInv = po.invoices && po.invoices.length > 0;
-                            const isPaid = po.invoices?.some(inv => inv.status === 'Paid');
-                            if(isPaid) return null;
-                             return (
-                                <Dialog key={po.id}>
-                                    <DialogTrigger asChild>
-                                        <Button className="w-full" disabled={hasSubmittedInv}>
-                                            {hasSubmittedInv ? (
-                                                <><CircleCheck className="mr-2"/> Invoice Submitted for PO {po.id}</>
-                                            ) : (
-                                                <><FileUp className="mr-2"/> Submit Invoice for PO {po.id}</>
-                                            )}
-                                        </Button>
-                                    </DialogTrigger>
-                                    <InvoiceSubmissionForm po={po} onInvoiceSubmitted={fetchRequisitionData} />
-                                </Dialog>
-                             )
-                        })}
-                    </CardFooter>
-                 )}
-                 {!showActions && (
-                     <CardFooter className="p-0 pt-4">
-                        <Alert variant="default" className="border-blue-500/50">
-                            <Info className="h-4 w-4 text-blue-500" />
-                            <AlertTitle>{ isStandby ? "You are on Standby" : "Quote Under Review" }</AlertTitle>
-                            <AlertDescription>
-                                { isStandby ? "Your quote is a backup option. You will be notified if the primary vendor declines." : (canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.')}
-                            </AlertDescription>
-                        </Alert>
-                     </CardFooter>
-                 )}
-            </CardContent>
-        </Card>
+                         </CardFooter>
+                     )}
+                </CardContent>
+            </Card>
         )
     };
 
