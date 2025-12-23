@@ -154,7 +154,7 @@ function InvoiceSubmissionForm({ po, onInvoiceSubmitted }: { po: PurchaseOrder; 
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                     <Card className="bg-muted/50">
-                        <CardHeader><CardTitle className="text-lg">Invoice Summary</CardTitle></CardHeader>
+                        <CardHeader><CardTitle className="text-lg">Items for this Invoice</CardTitle></CardHeader>
                         <CardContent>
                             <div className="space-y-2 text-sm">
                                 {po.items.map(item => (
@@ -687,7 +687,6 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
     );
 }
 
-// ... rest of the file
 const DeclineReasonDialog = ({ onConfirm, itemDeclining }: { onConfirm: (reason: string) => void, itemDeclining?: { name: string } | null }) => {
     const [reason, setReason] = useState('');
     return (
@@ -770,7 +769,7 @@ export default function VendorRequisitionPage() {
     }, [submittedQuote, isPartiallyAwarded, awardedItems, isFullyAwarded, requisition]);
 
     const hasPendingResponseItems = useMemo(() => {
-        if (isFullyAwarded) return true; // Full award is pending
+        if (isFullyAwarded) return true;
         return awardedItems.some(item => item.status === 'Awarded');
     }, [awardedItems, isFullyAwarded]);
 
@@ -790,7 +789,7 @@ export default function VendorRequisitionPage() {
     }, [requisition, user, isPartiallyAwarded]);
 
 
-    const fetchRequisitionData = async () => {
+    const fetchRequisitionData = useCallback(async () => {
         if (!id || !token || !user) return;
         
         setLoading(true);
@@ -828,11 +827,11 @@ export default function VendorRequisitionPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id, token, user]);
 
     useEffect(() => {
         fetchRequisitionData();
-    }, [id, token, user]);
+    }, [fetchRequisitionData]);
     
     const handleQuoteSubmitted = () => {
         setIsEditingQuote(false);
@@ -845,7 +844,7 @@ export default function VendorRequisitionPage() {
         try {
             const response = await fetch(`/api/quotations/${submittedQuote.id}/respond`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ userId: user.id, action, rejectionReason, quoteItemId: itemToActOn?.quoteItemId })
             });
 
@@ -877,17 +876,18 @@ export default function VendorRequisitionPage() {
 
     const QuoteDisplayCard = ({ quote, itemsToShow, showActions }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean }) => {
          const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-         const poForAcceptedItems = purchaseOrders.find(po => {
+         
+         const relevantPOs = purchaseOrders.filter(po => {
             if ((requisition.rfqSettings as any)?.awardStrategy === 'item') {
-                const acceptedItemIds = awardedItems.filter(i => i.status === 'Accepted').map(i => i.quoteItemId);
-                return po.items.some(poi => itemsToShow.some(i => acceptedItemIds.includes(i.id) && (i.id === poi.requisitionItemId || i.name === poi.name)));
+                const poRequisitionItemIds = new Set(po.items.map(i => i.requisitionItemId));
+                const itemsToShowIds = new Set(itemsToShow.map(i => i.requisitionItemId));
+                return [...poRequisitionItemIds].some(id => itemsToShowIds.has(id));
             } else {
                 return po.requisitionId === requisition.id;
             }
          });
-
-         const hasSubmittedInvoice = poForAcceptedItems?.invoices && poForAcceptedItems.invoices.length > 0;
-         const paidInvoice = poForAcceptedItems?.invoices?.find(inv => inv.status === 'Paid');
+         const hasSubmittedInvoice = relevantPOs.some(po => po.invoices && po.invoices.length > 0);
+         const paidInvoices = relevantPOs.flatMap(po => po.invoices || []).filter(inv => inv.status === 'Paid');
 
          return (
          <Card>
@@ -990,35 +990,45 @@ export default function VendorRequisitionPage() {
                  <div className="text-right font-bold text-2xl">
                     Total Award Value: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
                  </div>
-                 {isAccepted && poForAcceptedItems && (
+                 {isAccepted && relevantPOs.length > 0 && (
                     <CardFooter className="p-0 pt-4 flex-col gap-2">
-                        {paidInvoice ? (
+                        {paidInvoices.length > 0 && (
                              <Alert variant="default" className="w-full">
                                 <CheckCircle className="h-4 w-4"/>
                                 <AlertTitle>Payment Confirmed</AlertTitle>
-                                <AlertDescription className="flex items-center justify-between">
-                                    <span>Invoice has been paid. Ref: {paidInvoice.paymentReference}</span>
-                                    {paidInvoice.paymentEvidenceUrl && (
-                                        <a href={paidInvoice.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
-                                            <Button variant="link" size="sm">View Evidence</Button>
-                                        </a>
-                                    )}
+                                <AlertDescription className="space-y-2">
+                                    {paidInvoices.map(inv => (
+                                        <div key={inv.id} className="flex items-center justify-between">
+                                            <span>Invoice for PO {inv.purchaseOrderId} has been paid. Ref: {inv.paymentReference}</span>
+                                            {inv.paymentEvidenceUrl && (
+                                                <a href={inv.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
+                                                    <Button variant="link" size="sm">View Evidence</Button>
+                                                </a>
+                                            )}
+                                        </div>
+                                    ))}
                                 </AlertDescription>
                             </Alert>
-                        ) : (
-                            <Dialog>
-                                <DialogTrigger asChild>
-                                    <Button className="w-full" disabled={hasSubmittedInvoice}>
-                                        {hasSubmittedInvoice ? (
-                                            <><CircleCheck className="mr-2"/> Invoice Submitted for PO {poForAcceptedItems.id}</>
-                                        ) : (
-                                            <><FileUp className="mr-2"/> Submit Invoice for PO {poForAcceptedItems.id}</>
-                                        )}
-                                    </Button>
-                                </DialogTrigger>
-                                <InvoiceSubmissionForm po={poForAcceptedItems} onInvoiceSubmitted={() => { fetchRequisitionData(); }} />
-                            </Dialog>
                         )}
+                        {relevantPOs.map(po => {
+                            const hasSubmittedInv = po.invoices && po.invoices.length > 0;
+                            const isPaid = po.invoices?.some(inv => inv.status === 'Paid');
+                            if(isPaid) return null;
+                             return (
+                                <Dialog key={po.id}>
+                                    <DialogTrigger asChild>
+                                        <Button className="w-full" disabled={hasSubmittedInv}>
+                                            {hasSubmittedInv ? (
+                                                <><CircleCheck className="mr-2"/> Invoice Submitted for PO {po.id}</>
+                                            ) : (
+                                                <><FileUp className="mr-2"/> Submit Invoice for PO {po.id}</>
+                                            )}
+                                        </Button>
+                                    </DialogTrigger>
+                                    <InvoiceSubmissionForm po={po} onInvoiceSubmitted={fetchRequisitionData} />
+                                </Dialog>
+                             )
+                        })}
                     </CardFooter>
                  )}
                  {!showActions && (
