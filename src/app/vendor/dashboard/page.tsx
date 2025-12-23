@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail, RequisitionItem, QuoteItem } from '@/lib/types';
+import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail, RequisitionItem, QuoteItem, Invoice } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert, List, AlertCircle } from 'lucide-react';
+import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert, List, AlertCircle, Landmark } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -77,6 +77,7 @@ export default function VendorDashboardPage() {
     const router = useRouter();
     const { toast } = useToast();
     const [allRequisitions, setAllRequisitions] = useState<PurchaseRequisition[]>([]);
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [vendor, setVendor] = useState<Vendor | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -92,7 +93,12 @@ export default function VendorDashboardPage() {
         setLoading(true);
         setError(null);
         try {
-            const vendorRes = await fetch(`/api/vendors`);
+            const [vendorRes, reqRes, invRes] = await Promise.all([
+                fetch(`/api/vendors`),
+                fetch('/api/requisitions?forVendor=true', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/invoices', { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+
             if(!vendorRes.ok) throw new Error('Could not fetch vendor details.');
             const allVendors: Vendor[] = await vendorRes.json();
             const currentVendor = allVendors.find(v => v.id === user.vendorId);
@@ -100,20 +106,18 @@ export default function VendorDashboardPage() {
 
             if (currentVendor?.kycStatus !== 'Verified') {
                 setAllRequisitions([]);
+                setInvoices([]);
                 setLoading(false);
                 return;
             }
 
-            const response = await fetch('/api/requisitions?forVendor=true', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) {
-                if (response.status === 403) {
-                     throw new Error('You do not have permission to view these resources.');
-                }
-                throw new Error('Failed to fetch requisitions.');
-            }
-            const requisitionsData: PurchaseRequisition[] = await response.json();
+            if (!reqRes.ok) throw new Error('Failed to fetch requisitions.');
+            if (!invRes.ok) throw new Error('Failed to fetch invoices.');
+            
+            const requisitionsData: PurchaseRequisition[] = await reqRes.json();
+            const allInvoices: Invoice[] = await invRes.json();
+            const vendorInvoices = allInvoices.filter(inv => inv.vendorId === user.vendorId);
+            setInvoices(vendorInvoices);
             
             let needsRefetch = false;
             for (const req of requisitionsData) {
@@ -177,8 +181,7 @@ export default function VendorDashboardPage() {
         const isPerItemAward = (req.rfqSettings as any)?.awardStrategy === 'item';
         
         const posForVendor = req.purchaseOrders?.filter(po => po.vendor.id === user.vendorId) || [];
-        const isAnyPaid = posForVendor.some(po => po.invoices?.some(inv => inv.status === 'Paid'));
-
+        const isAnyPaid = posForVendor.some(po => invoices.some(inv => inv.purchaseOrderId === po.id && inv.status === 'Paid'));
         if (isAnyPaid) return { status: 'Paid' };
 
         const isAnyDisputed = posForVendor.some(po => po.receipts?.some(r => r.status === 'Disputed'));
@@ -195,7 +198,11 @@ export default function VendorDashboardPage() {
 
             if (vendorItemDetails.some(d => d.status === 'Declined')) {
                 const declinedDetail = vendorItemDetails.find(d => d.status === 'Declined');
-                return { status: 'Declined', reason: (declinedDetail as any)?.rejectionReason };
+                const reason = (declinedDetail as any)?.rejectionReason;
+                if(reason && reason.startsWith('[Receiving]')) {
+                    return { status: 'Delivery Issue', reason: reason.replace('[Receiving] ', '') };
+                }
+                return { status: 'Declined', reason: reason };
             }
 
             if (vendorItemDetails.some(d => d.status === 'Accepted')) return { status: 'Accepted' };
@@ -208,7 +215,7 @@ export default function VendorDashboardPage() {
         }
         
         if (vendorQuote) {
-            if (vendorQuote.status === 'Invoice_Submitted') return { status: 'Invoice Submitted' };
+            if (invoices.some(inv => inv.purchaseOrderId === req.purchaseOrderId)) return { status: 'Invoice Submitted' };
             if (vendorQuote.status === 'Accepted') return { status: 'Accepted' };
             if (vendorQuote.status === 'Declined') return { status: 'Declined', reason: vendorQuote.rejectionReason };
             if (vendorQuote.status === 'Awarded') return { status: 'Awarded' };
@@ -228,7 +235,7 @@ export default function VendorDashboardPage() {
         if (req.status === 'Closed' || req.status === 'Fulfilled') return { status: 'Closed' };
         
         return { status: 'Processing' };
-    }, [user]);
+    }, [user, invoices]);
 
 
     const { activeRequisitions, openForQuoting } = useMemo(() => {
@@ -372,6 +379,32 @@ export default function VendorDashboardPage() {
                                     </div>
                                 )}
                             </div>
+                            
+                            {invoices.length > 0 && (
+                                <div className="space-y-4 pt-8 border-t">
+                                    <Alert className="border-purple-500/50 text-purple-700 dark:text-purple-300">
+                                        <Landmark className="h-5 w-5 !text-purple-600" />
+                                        <AlertTitle className="text-xl font-bold">Your Submitted Invoices</AlertTitle>
+                                        <AlertDescription className="text-purple-600/90 dark:text-purple-300/90">
+                                            Track the status of invoices you have submitted for payment.
+                                        </AlertDescription>
+                                    </Alert>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {invoices.map(inv => (
+                                            <Card key={inv.id} className="relative">
+                                                <CardHeader>
+                                                    <CardTitle className="text-base">PO: {inv.purchaseOrderId}</CardTitle>
+                                                    <CardDescription>Submitted: {format(new Date(inv.invoiceDate), 'PP')}</CardDescription>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <p className="text-2xl font-bold">{inv.totalAmount.toLocaleString()} ETB</p>
+                                                    <Badge variant={inv.status === 'Paid' ? 'default' : inv.status === 'Disputed' ? 'destructive' : 'secondary'} className="mt-2">{inv.status.replace(/_/g, ' ')}</Badge>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {activeRequisitions.length > 0 && (
                                 <div className="space-y-4 pt-8 border-t">

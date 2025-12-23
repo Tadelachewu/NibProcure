@@ -877,23 +877,26 @@ export default function VendorRequisitionPage() {
         const relevantPOs = useMemo(() => {
             if (!requisition.purchaseOrders) return [];
             return requisition.purchaseOrders.filter(po => {
-                const poItems = allPOs.find(p => p.id === po.id)?.items;
-                if (!poItems) return false;
+                const poDetails = (requisition.purchaseOrders as PurchaseOrder[]).find(p => p.id === po.id);
+                if (!poDetails) return false;
+
+                if (poDetails.vendor.id !== user?.vendorId) return false;
 
                 if (isFullyAwarded) {
-                    return true; 
+                    return true;
                 }
-                return poItems.some(i => poItemRequisitionIds.has(i.requisitionItemId));
+                
+                return poDetails.items.some(i => poItemRequisitionIds.has(i.requisitionItemId));
             });
-        }, [requisition.purchaseOrders]);
+        }, [requisition.purchaseOrders, user?.vendorId]);
 
-        const allPOs = useMemo(() => requisition.purchaseOrders?.map(p => p.id) || [], [requisition.purchaseOrders]);
+        const allPOs = useMemo(() => requisition.purchaseOrders as PurchaseOrder[] || [], [requisition.purchaseOrders]);
         
         const paidInvoices = useMemo(() => {
-            return (requisition.purchaseOrders || [])
+            return relevantPOs
                 .flatMap(po => (allPOs.find(p => p.id === po.id) as PurchaseOrder)?.invoices || [])
                 .filter(inv => inv?.status === 'Paid');
-        }, [requisition.purchaseOrders, allPOs]);
+        }, [relevantPOs, allPOs]);
 
         return (
             <Card>
@@ -1096,11 +1099,8 @@ export default function VendorRequisitionPage() {
                                             <Card key={itemAward.quoteItemId} className="p-4 bg-destructive/10 border-destructive/30">
                                                 <div className="flex justify-between items-center">
                                                     <p className="font-semibold line-through">{itemAward.reqItemName}</p>
-                                                    <Badge variant="destructive">{(itemAward as any).rejectionReason?.startsWith('[Receiving]') ? 'Delivery Issue' : 'Declined'}</Badge>
+                                                    <Badge variant="destructive">Declined</Badge>
                                                 </div>
-                                                {(itemAward as any).rejectionReason && (
-                                                    <p className="text-xs text-destructive-foreground mt-2 p-2 bg-destructive/20 rounded-md">Reason: {(itemAward as any).rejectionReason.replace('[Receiving] ', '').replace('[Vendor] ', '')}</p>
-                                                )}
                                             </Card>
                                         )
                                     }
