@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { ScrollArea } from './ui/scroll-area';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 
 // --- TYPE DEFINITIONS ---
@@ -369,34 +370,41 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                     </div>
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-4">
-                                {vendor.itemBids.map(itemBid => (
-                                    <details key={itemBid.requisitionItemId} className="p-4 border rounded-lg bg-muted/30">
-                                        <summary className="font-semibold cursor-pointer flex justify-between items-center">
-                                            <span>Proposals for "{itemBid.requisitionItemName}" &rarr; Champion Bid: "{itemBid.championBid.itemName}"</span>
-                                             <DialogTrigger asChild>
-                                                 <Button variant="link" size="sm" onClick={(e) => {e.stopPropagation(); setSelectedCalculation(itemBid.championBid);}}>
-                                                    ({itemBid.championBid.finalItemScore.toFixed(2)} pts)
-                                                 </Button>
-                                            </DialogTrigger>
-                                        </summary>
-                                        <div className="mt-4 space-y-4">
-                                            {itemBid.allProposals.map(proposal => (
-                                                 <Card key={proposal.quoteItemId} className={cn("p-4", proposal.quoteItemId === itemBid.championBid.quoteItemId && "border-primary")}>
-                                                    <div className="flex justify-between items-center mb-4">
-                                                        <h4 className="font-semibold text-base">{proposal.itemName}</h4>
+                            <CardContent>
+                                <Accordion type="single" collapsible className="w-full">
+                                    <AccordionItem value="item-bids">
+                                        <AccordionTrigger>View Item Bids & Scores</AccordionTrigger>
+                                        <AccordionContent className="space-y-4 pt-4">
+                                            {vendor.itemBids.map(itemBid => (
+                                                <details key={itemBid.requisitionItemId} className="p-4 border rounded-lg bg-muted/30">
+                                                    <summary className="font-semibold cursor-pointer flex justify-between items-center">
+                                                        <span>Proposals for "{itemBid.requisitionItemName}" &rarr; Champion Bid: "{itemBid.championBid.itemName}"</span>
                                                          <DialogTrigger asChild>
-                                                             <Badge variant={proposal.quoteItemId === itemBid.championBid.quoteItemId ? "default" : "outline"} className="cursor-pointer" onClick={() => setSelectedCalculation(proposal)}>
-                                                                {proposal.quoteItemId === itemBid.championBid.quoteItemId && <Check className="mr-1 h-3 w-3"/>}
-                                                                Final Score: {proposal.finalItemScore.toFixed(2)}
-                                                             </Badge>
+                                                             <Button variant="link" size="sm" onClick={(e) => {e.stopPropagation(); setSelectedCalculation(itemBid.championBid);}}>
+                                                                ({itemBid.championBid.finalItemScore.toFixed(2)} pts)
+                                                             </Button>
                                                         </DialogTrigger>
+                                                    </summary>
+                                                    <div className="mt-4 space-y-4">
+                                                        {itemBid.allProposals.map(proposal => (
+                                                             <Card key={proposal.quoteItemId} className={cn("p-4", proposal.quoteItemId === itemBid.championBid.quoteItemId && "border-primary")}>
+                                                                <div className="flex justify-between items-center mb-4">
+                                                                    <h4 className="font-semibold text-base">{proposal.itemName}</h4>
+                                                                     <DialogTrigger asChild>
+                                                                         <Badge variant={proposal.quoteItemId === itemBid.championBid.quoteItemId ? "default" : "outline"} className="cursor-pointer" onClick={() => setSelectedCalculation(proposal)}>
+                                                                            {proposal.quoteItemId === itemBid.championBid.quoteItemId && <Check className="mr-1 h-3 w-3"/>}
+                                                                            Final Score: {proposal.finalItemScore.toFixed(2)}
+                                                                         </Badge>
+                                                                    </DialogTrigger>
+                                                                </div>
+                                                             </Card>
+                                                        ))}
                                                     </div>
-                                                 </Card>
+                                                </details>
                                             ))}
-                                        </div>
-                                    </details>
-                                ))}
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
                             </CardContent>
                         </Card>
                     ))}
