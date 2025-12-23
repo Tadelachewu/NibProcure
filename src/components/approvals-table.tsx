@@ -326,12 +326,12 @@ export function ApprovalsTable() {
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="grid gap-2">
-              <Label htmlFor="comment">Comment</Label>
+              <Label htmlFor="justification">Justification / Remarks</Label>
               <Textarea 
-                id="comment" 
+                id="justification" 
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="Type your comment here..."
+                placeholder="Type your justification here..."
               />
             </div>
           </div>

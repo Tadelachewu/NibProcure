@@ -35,6 +35,7 @@ import {
   FileBarChart2,
   AlertTriangle,
   MessageSquare,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -53,15 +54,17 @@ import { Badge } from './ui/badge';
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/tooltip';
+import { AwardStandbyButton } from './award-standby-button';
+import { RestartRfqDialog } from './restart-rfq-dialog';
 
 
 const PAGE_SIZE = 10;
 
 export function AwardReviewsTable() {
-  const [requisitions, setRequisitions] = useState<(PurchaseRequisition & { isActionable?: boolean })[]>([]);
+  const [requisitions, setRequisitions] = useState<(PurchaseRequisition & { isActionable?: boolean, canPromoteStandby?: boolean, canRestartRfq?: boolean })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, token } = useAuth();
+  const { user, token, vendors } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -102,7 +105,7 @@ export function AwardReviewsTable() {
       });
       if (!response.ok) throw new Error('Failed to fetch requisitions for award review');
       
-      const data: (PurchaseRequisition & { isActionable?: boolean })[] = await response.json();
+      const data: (PurchaseRequisition & { isActionable?: boolean, canPromoteStandby?: boolean, canRestartRfq?: boolean })[] = await response.json();
       setRequisitions(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
@@ -222,9 +225,8 @@ export function AwardReviewsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isLoadingAction = activeActionId === req.id;
+                  const isActionable = req.isActionable ?? false;
                   
-                  let isActionable = req.isActionable ?? false;
-
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
                   const isRejectionComment = lastCommentLog?.action.includes('REJECT');
                   
@@ -312,14 +314,34 @@ export function AwardReviewsTable() {
                                       <Eye className="mr-2 h-4 w-4" /> Review Bids
                                   </Link>
                               </Button>
-                              <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={!isActionable || isLoadingAction}>
-                                {isLoadingAction && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4" />} 
-                                Approve
-                            </Button>
-                            <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={!isActionable || isLoadingAction}>
-                                {isLoadingAction && actionType === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className="mr-2 h-4 w-4" />} 
-                                Reject
-                            </Button>
+                              <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span tabIndex={isActionable ? -1 : 0}>
+                                            <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={!isActionable || isLoadingAction}>
+                                                {isLoadingAction && actionType === 'approve' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4" />} 
+                                                Approve
+                                            </Button>
+                                        </span>
+                                    </TooltipTrigger>
+                                    {!isActionable && <TooltipContent><p>Not your turn to approve.</p></TooltipContent>}
+                                </Tooltip>
+                              </TooltipProvider>
+                               <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span tabIndex={isActionable ? -1 : 0}>
+                                            <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={!isActionable || isLoadingAction}>
+                                                {isLoadingAction && actionType === 'reject' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className="mr-2 h-4 w-4" />} 
+                                                Reject
+                                            </Button>
+                                        </span>
+                                    </TooltipTrigger>
+                                    {!isActionable && <TooltipContent><p>Not your turn to reject.</p></TooltipContent>}
+                                </Tooltip>
+                              </TooltipProvider>
+                                {req.canPromoteStandby && <AwardStandbyButton requisition={req} quotations={req.quotations || []} onPromote={fetchRequisitions} isChangingAward={isLoadingAction} />}
+                                {req.canRestartRfq && <RestartRfqDialog requisition={req} vendors={vendors} onRfqRestarted={fetchRequisitions} />}
                         </div>
                         </TableCell>
                     </TableRow>
