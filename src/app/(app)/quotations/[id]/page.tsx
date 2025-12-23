@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, ChevronLeft, ChevronsLeft, ChevronRight, ChevronsRight, AlertTriangle } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, ChevronLeft, ChevronsLeft, ChevronRight, ChevronsRight, AlertTriangle } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -1512,7 +1512,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                                                     <Slider
                                                         defaultValue={[field.value]}
                                                         max={100}
-                                                        step={5}
+                                                        step={1}
                                                         onValueChange={(v) => field.onChange(v[0])}
                                                         disabled={!!existingScore}
                                                     />
@@ -1558,7 +1558,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                                                     <Slider
                                                         defaultValue={[field.value]}
                                                         max={100}
-                                                        step={5}
+                                                        step={1}
                                                         onValueChange={(v) => field.onChange(v[0])}
                                                         disabled={!!existingScore}
                                                     />
@@ -3150,6 +3150,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
+
 
 
 
