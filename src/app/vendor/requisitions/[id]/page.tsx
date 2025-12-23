@@ -713,7 +713,6 @@ const DeclineReasonDialog = ({ onConfirm, itemDeclining }: { onConfirm: (reason:
 
 export default function VendorRequisitionPage() {
     const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
-    const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [isResponding, setIsResponding] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -814,10 +813,6 @@ export default function VendorRequisitionPage() {
              
              if (vendorSubmittedQuote) {
                  setSubmittedQuote(vendorSubmittedQuote);
-                 const poResponse = await fetch('/api/purchase-orders');
-                 const allPOs: PurchaseOrder[] = await poResponse.json();
-                 const vendorPOs = allPOs.filter(p => p.requisitionId === foundReq.id && p.vendor.id === user.vendorId);
-                 setPurchaseOrders(vendorPOs);
              } else {
                 setSubmittedQuote(null);
              }
@@ -879,14 +874,26 @@ export default function VendorRequisitionPage() {
     
         const poItemRequisitionIds = new Set(itemsToShow.map(item => item.requisitionItemId));
         
-        const relevantPOs = isFullyAwarded 
-            ? purchaseOrders.filter(po => po.requisitionId === requisition.id)
-            : purchaseOrders.filter(po => {
-                return po.items.some(i => poItemRequisitionIds.has(i.requisitionItemId));
-            });
+        const relevantPOs = useMemo(() => {
+            if (!requisition.purchaseOrders) return [];
+            return requisition.purchaseOrders.filter(po => {
+                const poItems = allPOs.find(p => p.id === po.id)?.items;
+                if (!poItems) return false;
 
-        const hasSubmittedInvoice = relevantPOs.some(po => po.invoices && po.invoices.length > 0);
-        const paidInvoices = relevantPOs.flatMap(po => po.invoices || []).filter(inv => inv.status === 'Paid');
+                if (isFullyAwarded) {
+                    return true; 
+                }
+                return poItems.some(i => poItemRequisitionIds.has(i.requisitionItemId));
+            });
+        }, [requisition.purchaseOrders]);
+
+        const allPOs = useMemo(() => requisition.purchaseOrders?.map(p => p.id) || [], [requisition.purchaseOrders]);
+        
+        const paidInvoices = useMemo(() => {
+            return (requisition.purchaseOrders || [])
+                .flatMap(po => (allPOs.find(p => p.id === po.id) as PurchaseOrder)?.invoices || [])
+                .filter(inv => inv?.status === 'Paid');
+        }, [requisition.purchaseOrders, allPOs]);
 
         return (
             <Card>
@@ -1010,9 +1017,10 @@ export default function VendorRequisitionPage() {
                                 </Alert>
                             )}
                             {relevantPOs.map(po => {
-                                const hasSubmittedInv = po.invoices && po.invoices.length > 0;
-                                const isPaid = po.invoices?.some(inv => inv.status === 'Paid');
-                                if(isPaid) return null;
+                                const fullPoDetails = (requisition.purchaseOrders as PurchaseOrder[]).find(p => p.id === po.id);
+                                const hasSubmittedInv = fullPoDetails?.invoices && fullPoDetails.invoices.length > 0;
+                                const isPaid = fullPoDetails?.invoices?.some(inv => inv.status === 'Paid');
+                                if(isPaid || !fullPoDetails) return null;
                                  return (
                                     <Dialog key={po.id}>
                                         <DialogTrigger asChild>
@@ -1024,7 +1032,7 @@ export default function VendorRequisitionPage() {
                                                 )}
                                             </Button>
                                         </DialogTrigger>
-                                        <InvoiceSubmissionForm po={po} onInvoiceSubmitted={fetchRequisitionData} />
+                                        <InvoiceSubmissionForm po={fullPoDetails} onInvoiceSubmitted={fetchRequisitionData} />
                                     </Dialog>
                                  )
                             })}
@@ -1147,12 +1155,12 @@ export default function VendorRequisitionPage() {
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                         <Button disabled={isResponding || isResponseDeadlineExpired}>
-                                            <ThumbsUp className="mr-2 h-4 w-4" /> Accept Full Award
+                                            <ThumbsUp className="mr-2 h-4 w-4" /> Accept Award
                                         </Button>
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
                                         <AlertDialogHeader>
-                                            <AlertDialogTitle>Confirm Full Award Acceptance</AlertDialogTitle>
+                                            <AlertDialogTitle>Confirm Award Acceptance</AlertDialogTitle>
                                             <AlertDialogDescription>
                                                 This will accept the award for all items listed in this offer. This action cannot be undone.
                                             </AlertDialogDescription>
