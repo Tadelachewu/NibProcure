@@ -32,8 +32,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, AlertTriangle, ChevronsLeft, ChevronRight, ChevronsRight, ChevronLeft, Calculator } from 'lucide-react';
-import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
+import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -69,6 +69,7 @@ import { ExtendDeadlineDialog } from '@/components/extend-deadline-dialog';
 import { OverdueReportDialog } from '@/components/overdue-report-dialog';
 import { RestartRfqDialog } from '@/components/restart-rfq-dialog';
 import { QuoteDetailsDialog } from '@/components/quote-details-dialog';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 
 
 const PAGE_SIZE = 6;
@@ -1448,7 +1449,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
     const { fields: technicalScoreFields } = useFieldArray({ control, name: `itemScores.${itemIndex}.technicalScores` });
 
     return (
-        <Card className="bg-muted/30">
+        <Card className="bg-background">
             <CardHeader>
                 <CardTitle>{quoteItem.name}</CardTitle>
                 <CardDescription>
@@ -1729,28 +1730,39 @@ const ScoringDialog = ({
                                 </CardContent>
                             </Card>
                         )}
-                        {itemScoreFields.map((field, itemIndex) => {
-                             const itemScoreData = form.getValues().itemScores[itemIndex];
-                             if (!itemScoreData) return null;
-                         
-                             const quoteItem = quote.items.find(item => item.id === itemScoreData.quoteItemId);
-                             if (!quoteItem) return null;
+                        <Accordion type="multiple" className="w-full space-y-4">
+                            {itemScoreFields.map((field, itemIndex) => {
+                                const itemScoreData = form.getValues().itemScores[itemIndex];
+                                if (!itemScoreData) return null;
+                            
+                                const quoteItem = quote.items.find(item => item.id === itemScoreData.quoteItemId);
+                                if (!quoteItem) return null;
 
-                            const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
+                                const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
 
-                            return <ScoringItemCard
-                                key={field.id}
-                                itemIndex={itemIndex}
-                                control={form.control}
-                                quoteItem={quoteItem}
-                                originalItem={originalItem}
-                                requisition={requisition}
-                                isFinancialScorer={isFinancialScorer}
-                                isTechnicalScorer={isTechnicalScorer}
-                                hidePrices={hidePrices}
-                                existingScore={existingScore}
-                            />
-                        })}
+                                return (
+                                    <AccordionItem value={`item-${itemIndex}`} key={field.id}>
+                                        <AccordionTrigger className="text-base font-semibold bg-muted/30 px-4 rounded-md">
+                                            Item to Score: {quoteItem.name}
+                                        </AccordionTrigger>
+                                        <AccordionContent className="pt-4">
+                                            <ScoringItemCard
+                                                itemIndex={itemIndex}
+                                                control={form.control}
+                                                quoteItem={quoteItem}
+                                                originalItem={originalItem}
+                                                requisition={requisition}
+                                                isFinancialScorer={isFinancialScorer}
+                                                isTechnicalScorer={isTechnicalScorer}
+                                                hidePrices={hidePrices}
+                                                existingScore={existingScore}
+                                            />
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                )
+                            })}
+                        </Accordion>
+                        
 
                         <FormField
                             control={form.control}
@@ -2500,53 +2512,10 @@ export default function QuotationDetailsPage() {
         ]);
         const currentReq = await reqResponse.json();
         const venData = await venResponse.json();
-        let quoData: Quotation[] = await quoResponse.json();
+        const quoData: Quotation[] = await quoResponse.json();
 
         if (currentReq) {
             setVendors(venData || []);
-
-            // --- Start of new frontend calculation logic ---
-            if (currentReq.evaluationCriteria && quoData.length > 0) {
-              quoData = quoData.map(quote => {
-                  let finalVendorScore = quote.finalAverageScore || 0; // Default to backend score
-                  
-                  // Only recalculate for 'all' strategy if needed for display, otherwise trust backend
-                  if ((currentReq.rfqSettings as any)?.awardStrategy === 'all' && quote.scores && quote.scores.length > 0) {
-                      const itemBids: {requisitionItemId: string; championBidScore: number;}[] = [];
-
-                      for (const reqItem of currentReq.items) {
-                          const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
-                          if (proposalsForItem.length === 0) continue;
-
-                          const calculatedProposals = proposalsForItem.map(proposal => {
-                              let totalItemScore = 0;
-                              let scoreCount = 0;
-                              quote.scores?.forEach(scoreSet => {
-                                  const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                                  if (itemScore) {
-                                      totalItemScore += itemScore.finalScore;
-                                      scoreCount++;
-                                  }
-                              });
-                              return scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                          });
-
-                          const championBidScore = Math.max(...calculatedProposals);
-                          itemBids.push({ requisitionItemId: reqItem.id, championBidScore });
-                      }
-                      
-                      const calculatedScore = itemBids.length > 0
-                          ? itemBids.reduce((acc, bid) => acc + bid.championBidScore, 0) / itemBids.length
-                          : 0;
-
-                      finalVendorScore = calculatedScore;
-                  }
-                  
-                  return { ...quote, finalAverageScore: finalVendorScore };
-              });
-            }
-            // --- End of new frontend calculation logic ---
-
             setRequisition({...currentReq, quotations: quoData});
             setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
         } else {
@@ -3181,6 +3150,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
+
 
 
 
