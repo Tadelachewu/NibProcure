@@ -230,11 +230,14 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
         const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
         if (isPerItemStrategy) {
-            const vendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
-            if (vendorItemStatuses.some(s => s.status === 'Accepted')) return 'Accepted';
-            if (vendorItemStatuses.some(d => d.status === 'Declined')) return 'Declined';
-            if (vendorItemStatuses.some(s => s.status === 'Awarded' || s.status === 'Pending_Award')) return 'Partially Awarded';
-            if (vendorItemStatuses.some(s => s.status === 'Standby')) return 'Standby';
+            const vendorItemDetails = requisition.items.flatMap(item => 
+                (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === quote.vendorId)
+            );
+
+            if (vendorItemDetails.some(d => d.status === 'Accepted')) return 'Accepted';
+            if (vendorItemDetails.some(d => d.status === 'Declined')) return 'Declined';
+            if (vendorItemDetails.some(d => d.status === 'Awarded' || d.status === 'Pending_Award')) return 'Partially Awarded';
+            if (vendorItemDetails.some(d => d.status === 'Standby')) return 'Standby';
 
             if (quote.status === 'Submitted') {
                 return isAwarded ? 'Not Awarded' : 'Submitted';
@@ -281,10 +284,12 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
             {quotes.map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
                 const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
-                const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
                 const mainStatus = getOverallStatusForVendor(quote);
+                
+                const vendorItemAwards = itemStatuses
+                    .filter(s => s.vendorId === quote.vendorId && (s.status === 'Awarded' || s.status === 'Pending_Award' || s.status === 'Accepted'));
 
-                const shouldShowItems = isPerItemStrategy && isAwarded && thisVendorItemStatuses.length > 0;
+                const shouldShowItems = isPerItemStrategy && isAwarded && vendorItemAwards.length > 0;
                 
                 const declinedItemAwards = isPerItemStrategy
                     ? requisition.items
@@ -368,8 +373,8 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
 
                                      {shouldShowItems && (
                                         <div className="text-sm space-y-2 pt-2 border-t">
-                                            <h4 className="font-semibold">Your Item Statuses</h4>
-                                            {thisVendorItemStatuses.map(item => (
+                                            <h4 className="font-semibold">Your Item Awards</h4>
+                                            {vendorItemAwards.map(item => (
                                                 <div key={item.id} className="flex justify-between items-center text-muted-foreground">
                                                     <div className="flex items-center gap-2">
                                                         {getRankIcon(item.rank)}
@@ -2466,68 +2471,15 @@ export default function QuotationDetailsPage() {
   const itemStatuses = useMemo(() => {
     if (!requisition || !requisition.items) return [];
 
-    const finalStatuses: any[] = [];
-    
-    // Group all champion bids by the original requisition item
-    const bidsByItem = requisition.items.reduce((acc, reqItem) => {
-        const itemBids: any[] = [];
-        quotations.forEach(quote => {
-            const proposalsForItem = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
-            if (proposalsForItem.length > 0) {
-                // Find the best proposal from this vendor for this item
-                const bestProposal = proposalsForItem.map(proposal => {
-                    let totalScore = 0;
-                    let scorerCount = 0;
-                    quote.scores?.forEach(scoreSet => {
-                        const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                        if(itemScore) {
-                            totalScore += itemScore.finalScore;
-                            scorerCount++;
-                        }
-                    });
-                    const score = scorerCount > 0 ? totalScore / scorerCount : 0;
-                    return { proposal, score };
-                }).sort((a,b) => b.score - a.score)[0]; // Get the best one
+    return requisition.items.flatMap(reqItem =>
+        (reqItem.perItemAwardDetails || []).map(detail => ({
+            ...detail,
+            id: `${detail.vendorId}-${reqItem.id}`,
+            reqItemName: reqItem.name,
+        }))
+    );
+}, [requisition]);
 
-                if (bestProposal) {
-                    itemBids.push({
-                        reqItemId: reqItem.id,
-                        reqItemName: reqItem.name,
-                        vendorId: quote.vendorId,
-                        vendorName: quote.vendorName,
-                        proposalId: bestProposal.proposal.id,
-                        proposedItemName: bestProposal.proposal.name,
-                        score: bestProposal.score,
-                    });
-                }
-            }
-        });
-        acc[reqItem.id] = itemBids;
-        return acc;
-    }, {} as Record<string, any[]>);
-
-    // Rank and assign statuses within each item group
-    Object.values(bidsByItem).forEach((bids: any[]) => {
-        bids.sort((a, b) => b.score - a.score); // Rank by score
-        
-        bids.forEach((bid, index) => {
-            const rank = index + 1;
-            const dbStatus = requisition.items
-                .find(i => i.id === bid.reqItemId)
-                ?.perItemAwardDetails?.find(d => d.quoteItemId === bid.proposalId)?.status;
-
-            finalStatuses.push({ 
-                ...bid, 
-                id: `${bid.vendorId}-${bid.reqItemId}-${bid.proposalId}`, 
-                rank, 
-                status: dbStatus || (rank === 1 ? 'Pending_Award' : rank <= 3 ? 'Standby' : 'Rejected')
-            });
-        });
-    });
-    
-    return finalStatuses;
-
-}, [requisition, quotations]);
 
 
   const paginatedQuotes = useMemo(() => {
@@ -2556,33 +2508,40 @@ export default function QuotationDetailsPage() {
             // --- Start of new frontend calculation logic ---
             if (currentReq.evaluationCriteria && quoData.length > 0) {
               quoData = quoData.map(quote => {
-                  const itemBids: {requisitionItemId: string; championBidScore: number;}[] = [];
+                  let finalVendorScore = quote.finalAverageScore || 0; // Default to backend score
+                  
+                  // Only recalculate for 'all' strategy if needed for display, otherwise trust backend
+                  if ((currentReq.rfqSettings as any)?.awardStrategy === 'all' && quote.scores && quote.scores.length > 0) {
+                      const itemBids: {requisitionItemId: string; championBidScore: number;}[] = [];
 
-                  for (const reqItem of currentReq.items) {
-                      const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
-                      if (proposalsForItem.length === 0) continue;
+                      for (const reqItem of currentReq.items) {
+                          const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
+                          if (proposalsForItem.length === 0) continue;
 
-                      const calculatedProposals = proposalsForItem.map(proposal => {
-                          let totalItemScore = 0;
-                          let scoreCount = 0;
-                          quote.scores?.forEach(scoreSet => {
-                              const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                              if (itemScore) {
-                                  totalItemScore += itemScore.finalScore;
-                                  scoreCount++;
-                              }
+                          const calculatedProposals = proposalsForItem.map(proposal => {
+                              let totalItemScore = 0;
+                              let scoreCount = 0;
+                              quote.scores?.forEach(scoreSet => {
+                                  const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
+                                  if (itemScore) {
+                                      totalItemScore += itemScore.finalScore;
+                                      scoreCount++;
+                                  }
+                              });
+                              return scoreCount > 0 ? totalItemScore / scoreCount : 0;
                           });
-                          return scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                      });
 
-                      const championBidScore = Math.max(...calculatedProposals);
-                      itemBids.push({ requisitionItemId: reqItem.id, championBidScore });
+                          const championBidScore = Math.max(...calculatedProposals);
+                          itemBids.push({ requisitionItemId: reqItem.id, championBidScore });
+                      }
+                      
+                      const calculatedScore = itemBids.length > 0
+                          ? itemBids.reduce((acc, bid) => acc + bid.championBidScore, 0) / itemBids.length
+                          : 0;
+
+                      finalVendorScore = calculatedScore;
                   }
                   
-                  const finalVendorScore = itemBids.length > 0
-                      ? itemBids.reduce((acc, bid) => acc + bid.championBidScore, 0) / itemBids.length
-                      : 0;
-
                   return { ...quote, finalAverageScore: finalVendorScore };
               });
             }
@@ -3222,6 +3181,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
+
 
 
 
