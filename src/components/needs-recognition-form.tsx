@@ -384,279 +384,277 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
             </div>
 
             <Separator />
-
-            <div>
-              <h3 className="text-lg font-medium mb-4">Items</h3>
-              <div className="space-y-6">
-                {fields.map((field, index) => (
-                  <div
-                    key={field.id}
-                    className="flex gap-4 items-start p-4 border rounded-lg relative"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.name`}
-                        render={({ field }) => (
-                          <FormItem className="md:col-span-3">
-                            <FormLabel>Item Name</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="e.g. MacBook Pro 16-inch"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`items.${index}.quantity`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Quantity</FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                       <FormField
-                        control={form.control}
-                        name={`items.${index}.description`}
-                        render={({ field }) => (
-                          <FormItem className="md:col-span-5">
-                            <FormLabel>Description (Optional)</FormLabel>
-                            <FormControl>
-                              <Textarea
-                                placeholder="Add any specific details, model numbers, or specifications here..."
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => remove(index)}
-                      className="mt-6"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-               <div className="flex justify-between items-center mt-4">
-                 <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                    append({ id: `ITEM-${Date.now()}`, name: '', quantity: 1, unitPrice: 0, description: '' })
-                    }
-                >
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Add Item
-                </Button>
-              </div>
-            </div>
-
-            <Separator />
-            <Accordion type="single" collapsible className="w-full space-y-4">
-                <AccordionItem value="evaluation-criteria">
-                    <AccordionTrigger className="text-lg font-medium">Evaluation Criteria</AccordionTrigger>
-                    <AccordionContent className="pt-4 space-y-6">
-                        <FormDescription>Define how vendor quotes will be scored by the committee.</FormDescription>
-                        
-                        <FormField
+            <Accordion type="single" collapsible defaultValue="items" className="w-full space-y-4">
+              <AccordionItem value="items">
+                  <AccordionTrigger className="text-lg font-medium">Items Requested</AccordionTrigger>
+                  <AccordionContent className="pt-4 space-y-6">
+                    {fields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className="flex gap-4 items-start p-4 border rounded-lg relative"
+                      >
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
+                          <FormField
                             control={form.control}
-                            name="evaluationCriteria.financialWeight"
+                            name={`items.${index}.name`}
                             render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Overall Weighting</FormLabel>
-                                    <div className="flex items-center gap-4">
-                                        <span className="text-sm font-medium">Financial: {field.value}%</span>
-                                        <Slider
-                                            defaultValue={[field.value]}
-                                            max={100}
-                                            step={5}
-                                            onValueChange={(value) => {
-                                                field.onChange(value[0]);
-                                                form.setValue('evaluationCriteria.technicalWeight', 100 - value[0]);
-                                            }}
-                                            className="w-64"
-                                        />
-                                        <span className="text-sm font-medium">Technical: {100 - field.value}%</span>
-                                    </div>
-                                    <FormMessage />
-                                </FormItem>
+                              <FormItem className="md:col-span-3">
+                                <FormLabel>Item Name</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder="e.g. MacBook Pro 16-inch"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
                             )}
-                        />
-
-                        <div className="grid md:grid-cols-2 gap-8">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-base flex justify-between">
-                                        <span>Financial Criteria</span>
-                                        <Badge variant={financialTotal === 100 ? "default" : "destructive"}>{financialTotal}%</Badge>
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    {financialFields.map((field, index) => (
-                                        <div key={field.id} className="flex gap-2 items-end">
-                                            <FormField control={form.control} name={`evaluationCriteria.financialCriteria.${index}.name`} render={({field}) => (
-                                                <FormItem className="flex-1"><FormLabel className={cn(index>0 && "sr-only")}>Criterion</FormLabel><FormControl><Input {...field} placeholder="e.g., Price Competitiveness"/></FormControl><FormMessage/></FormItem>
-                                            )}/>
-                                            <FormField control={form.control} name={`evaluationCriteria.financialCriteria.${index}.weight`} render={({field}) => (
-                                                <FormItem className="w-28"><FormLabel className={cn(index>0 && "sr-only")}>Weight</FormLabel><FormControl><div className="relative"><Input type="number" {...field} className="pr-7"/><Percent className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground"/></div></FormControl><FormMessage/></FormItem>
-                                            )}/>
-                                            <Button type="button" variant="ghost" size="icon" onClick={() => removeFinancial(index)}><Trash2 className="h-4 w-4"/></Button>
-                                        </div>
-                                    ))}
-                                    <Button type="button" variant="outline" size="sm" onClick={() => appendFinancial({ id: `FIN-${Date.now()}`, name: '', weight: 0})}><PlusCircle className="mr-2"/>Add Financial Criterion</Button>
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader>
-                                <CardTitle className="text-base flex justify-between">
-                                        <span>Technical Criteria</span>
-                                        <Badge variant={technicalTotal === 100 ? "default" : "destructive"}>{technicalTotal}%</Badge>
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    {technicalFields.map((field, index) => (
-                                        <div key={field.id} className="flex gap-2 items-end">
-                                            <FormField control={form.control} name={`evaluationCriteria.technicalCriteria.${index}.name`} render={({field}) => (
-                                                <FormItem className="flex-1"><FormLabel className={cn(index>0 && "sr-only")}>Criterion</FormLabel><FormControl><Input {...field} placeholder="e.g., Product Quality"/></FormControl><FormMessage/></FormItem>
-                                            )}/>
-                                            <FormField control={form.control} name={`evaluationCriteria.technicalCriteria.${index}.weight`} render={({field}) => (
-                                                <FormItem className="w-28"><FormLabel className={cn(index>0 && "sr-only")}>Weight</FormLabel><FormControl><div className="relative"><Input type="number" {...field} className="pr-7"/><Percent className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground"/></div></FormControl><FormMessage/></FormItem>
-                                            )}/>
-                                            <Button type="button" variant="ghost" size="icon" onClick={() => removeTechnical(index)}><Trash2 className="h-4 w-4"/></Button>
-                                        </div>
-                                    ))}
-                                    <Button type="button" variant="outline" size="sm" onClick={() => appendTechnical({ id: `TEC-${Date.now()}`, name: '', weight: 0})}><PlusCircle className="mr-2"/>Add Technical Criterion</Button>
-                                </CardContent>
-                            </Card>
+                          />
+                          <FormField
+                            control={form.control}
+                            name={`items.${index}.quantity`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Quantity</FormLabel>
+                                <FormControl>
+                                  <Input type="number" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name={`items.${index}.description`}
+                            render={({ field }) => (
+                              <FormItem className="md:col-span-5">
+                                <FormLabel>Description (Optional)</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Add any specific details, model numbers, or specifications here..."
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
                         </div>
-                        {form.formState.errors.evaluationCriteria?.financialCriteria && (
-                            <Alert variant="destructive" className="mt-2">
-                                <Info className="h-4 w-4" />
-                                <AlertTitle>Error in Financial Criteria</AlertTitle>
-                                <AlertDescription>{form.formState.errors.evaluationCriteria.financialCriteria.root?.message}</AlertDescription>
-                            </Alert>
-                        )}
-                        {form.formState.errors.evaluationCriteria?.technicalCriteria && (
-                            <Alert variant="destructive" className="mt-2">
-                                <Info className="h-4 w-4" />
-                                <AlertTitle>Error in Technical Criteria</AlertTitle>
-                                <AlertDescription>{form.formState.errors.evaluationCriteria.technicalCriteria.root?.message}</AlertDescription>
-                            </Alert>
-                        )}
-                    </AccordionContent>
-                </AccordionItem>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          onClick={() => remove(index)}
+                          className="mt-6"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <div className="flex justify-between items-center mt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          append({ id: `ITEM-${Date.now()}`, name: '', quantity: 1, unitPrice: 0, description: '' })
+                        }
+                      >
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Add Item
+                      </Button>
+                    </div>
+                  </AccordionContent>
+              </AccordionItem>
 
-                <AccordionItem value="custom-questions">
-                    <AccordionTrigger className="text-lg font-medium">Custom Questions for Vendors</AccordionTrigger>
-                    <AccordionContent className="pt-4 space-y-6">
-                        <FormDescription>Add questions to gather specific information from vendors with their quotes.</FormDescription>
-                        <div className="space-y-6 mt-4">
-                            {questionFields.map((field, index) => {
-                            const questionType = form.watch(`customQuestions.${index}.questionType`);
-                            return (
-                                <div key={field.id} className="flex gap-4 items-start p-4 border rounded-lg">
-                                <div className="flex-1 space-y-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                                    <FormField
-                                        control={form.control}
-                                        name={`customQuestions.${index}.questionText`}
-                                        render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Question {index + 1}</FormLabel>
-                                            <FormControl>
-                                            <Input placeholder="e.g., What is the warranty period?" {...field} />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                        )}
-                                    />
-                                    <FormField
-                                        control={form.control}
-                                        name={`customQuestions.${index}.questionType`}
-                                        render={({ field }) => (
-                                            <FormItem>
-                                            <FormLabel>Question Type</FormLabel>
-                                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                <FormControl>
-                                                <SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                <SelectItem value="text">Open-ended Text</SelectItem>
-                                                <SelectItem value="boolean">True/False</SelectItem>
-                                                <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
-                                                <SelectItem value="file">File Upload</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                            <FormMessage />
-                                            </FormItem>
-                                        )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name={`customQuestions.${index}.isRequired`}
-                                            render={({ field }) => (
-                                            <FormItem className="flex flex-col pt-2">
-                                                <FormLabel>Required</FormLabel>
-                                                <FormControl>
-                                                    <Switch
-                                                        checked={field.value}
-                                                        onCheckedChange={field.onChange}
-                                                        />
-                                                </FormControl>
-                                            </FormItem>
-                                            )}
-                                        />
-                                    </div>
-                                    {questionType === 'multiple_choice' && (
-                                    <div className="pl-4 space-y-2">
-                                        <FormLabel>Multiple Choice Options</FormLabel>
-                                        <QuestionOptions index={index} />
-                                    </div>
-                                    )}
-                                </div>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="mt-6"
-                                    onClick={() => removeQuestion(index)}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                                </div>
-                            );
-                            })}
-                        </div>
-                        <div className="flex justify-between items-center mt-4">
-                            <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => appendQuestion({ questionText: '', questionType: 'text', isRequired: true, options: [] })}
-                            >
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Add Question
-                            </Button>
-                        </div>
-                    </AccordionContent>
-                </AccordionItem>
+              <AccordionItem value="evaluation-criteria">
+                  <AccordionTrigger className="text-lg font-medium">Evaluation Criteria</AccordionTrigger>
+                  <AccordionContent className="pt-4 space-y-6">
+                      <FormDescription>Define how vendor quotes will be scored by the committee.</FormDescription>
+                      
+                      <FormField
+                          control={form.control}
+                          name="evaluationCriteria.financialWeight"
+                          render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Overall Weighting</FormLabel>
+                                  <div className="flex items-center gap-4">
+                                      <span className="text-sm font-medium">Financial: {field.value}%</span>
+                                      <Slider
+                                          defaultValue={[field.value]}
+                                          max={100}
+                                          step={1}
+                                          onValueChange={(value) => {
+                                              field.onChange(value[0]);
+                                              form.setValue('evaluationCriteria.technicalWeight', 100 - value[0]);
+                                          }}
+                                          className="w-64"
+                                      />
+                                      <span className="text-sm font-medium">Technical: {100 - field.value}%</span>
+                                  </div>
+                                  <FormMessage />
+                              </FormItem>
+                          )}
+                      />
+
+                      <div className="grid md:grid-cols-2 gap-8">
+                          <Card>
+                              <CardHeader>
+                                  <CardTitle className="text-base flex justify-between">
+                                      <span>Financial Criteria</span>
+                                      <Badge variant={financialTotal === 100 ? "default" : "destructive"}>{financialTotal}%</Badge>
+                                  </CardTitle>
+                              </CardHeader>
+                              <CardContent className="space-y-4">
+                                  {financialFields.map((field, index) => (
+                                      <div key={field.id} className="flex gap-2 items-end">
+                                          <FormField control={form.control} name={`evaluationCriteria.financialCriteria.${index}.name`} render={({field}) => (
+                                              <FormItem className="flex-1"><FormLabel className={cn(index>0 && "sr-only")}>Criterion</FormLabel><FormControl><Input {...field} placeholder="e.g., Price Competitiveness"/></FormControl><FormMessage/></FormItem>
+                                          )}/>
+                                          <FormField control={form.control} name={`evaluationCriteria.financialCriteria.${index}.weight`} render={({field}) => (
+                                              <FormItem className="w-28"><FormLabel className={cn(index>0 && "sr-only")}>Weight</FormLabel><FormControl><div className="relative"><Input type="number" {...field} className="pr-7"/><Percent className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground"/></div></FormControl><FormMessage/></FormItem>
+                                          )}/>
+                                          <Button type="button" variant="ghost" size="icon" onClick={() => removeFinancial(index)}><Trash2 className="h-4 w-4"/></Button>
+                                      </div>
+                                  ))}
+                                  <Button type="button" variant="outline" size="sm" onClick={() => appendFinancial({ id: `FIN-${Date.now()}`, name: '', weight: 0})}><PlusCircle className="mr-2"/>Add Financial Criterion</Button>
+                              </CardContent>
+                          </Card>
+
+                          <Card>
+                              <CardHeader>
+                              <CardTitle className="text-base flex justify-between">
+                                      <span>Technical Criteria</span>
+                                      <Badge variant={technicalTotal === 100 ? "default" : "destructive"}>{technicalTotal}%</Badge>
+                                  </CardTitle>
+                              </CardHeader>
+                              <CardContent className="space-y-4">
+                                  {technicalFields.map((field, index) => (
+                                      <div key={field.id} className="flex gap-2 items-end">
+                                          <FormField control={form.control} name={`evaluationCriteria.technicalCriteria.${index}.name`} render={({field}) => (
+                                              <FormItem className="flex-1"><FormLabel className={cn(index>0 && "sr-only")}>Criterion</FormLabel><FormControl><Input {...field} placeholder="e.g., Product Quality"/></FormControl><FormMessage/></FormItem>
+                                          )}/>
+                                          <FormField control={form.control} name={`evaluationCriteria.technicalCriteria.${index}.weight`} render={({field}) => (
+                                              <FormItem className="w-28"><FormLabel className={cn(index>0 && "sr-only")}>Weight</FormLabel><FormControl><div className="relative"><Input type="number" {...field} className="pr-7"/><Percent className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground"/></div></FormControl><FormMessage/></FormItem>
+                                          )}/>
+                                          <Button type="button" variant="ghost" size="icon" onClick={() => removeTechnical(index)}><Trash2 className="h-4 w-4"/></Button>
+                                      </div>
+                                  ))}
+                                  <Button type="button" variant="outline" size="sm" onClick={() => appendTechnical({ id: `TEC-${Date.now()}`, name: '', weight: 0})}><PlusCircle className="mr-2"/>Add Technical Criterion</Button>
+                              </CardContent>
+                          </Card>
+                      </div>
+                      {form.formState.errors.evaluationCriteria?.financialCriteria && (
+                          <Alert variant="destructive" className="mt-2">
+                              <Info className="h-4 w-4" />
+                              <AlertTitle>Error in Financial Criteria</AlertTitle>
+                              <AlertDescription>{form.formState.errors.evaluationCriteria.financialCriteria.root?.message}</AlertDescription>
+                          </Alert>
+                      )}
+                      {form.formState.errors.evaluationCriteria?.technicalCriteria && (
+                          <Alert variant="destructive" className="mt-2">
+                              <Info className="h-4 w-4" />
+                              <AlertTitle>Error in Technical Criteria</AlertTitle>
+                              <AlertDescription>{form.formState.errors.evaluationCriteria.technicalCriteria.root?.message}</AlertDescription>
+                          </Alert>
+                      )}
+                  </AccordionContent>
+              </AccordionItem>
+
+              <AccordionItem value="custom-questions">
+                  <AccordionTrigger className="text-lg font-medium">Custom Questions for Vendors</AccordionTrigger>
+                  <AccordionContent className="pt-4 space-y-6">
+                      <FormDescription>Add questions to gather specific information from vendors with their quotes.</FormDescription>
+                      <div className="space-y-6 mt-4">
+                          {questionFields.map((field, index) => {
+                          const questionType = form.watch(`customQuestions.${index}.questionType`);
+                          return (
+                              <div key={field.id} className="flex gap-4 items-start p-4 border rounded-lg">
+                              <div className="flex-1 space-y-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                                  <FormField
+                                      control={form.control}
+                                      name={`customQuestions.${index}.questionText`}
+                                      render={({ field }) => (
+                                      <FormItem>
+                                          <FormLabel>Question {index + 1}</FormLabel>
+                                          <FormControl>
+                                          <Input placeholder="e.g., What is the warranty period?" {...field} />
+                                          </FormControl>
+                                          <FormMessage />
+                                      </FormItem>
+                                      )}
+                                  />
+                                  <FormField
+                                      control={form.control}
+                                      name={`customQuestions.${index}.questionType`}
+                                      render={({ field }) => (
+                                          <FormItem>
+                                          <FormLabel>Question Type</FormLabel>
+                                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                              <FormControl>
+                                              <SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger>
+                                              </FormControl>
+                                              <SelectContent>
+                                              <SelectItem value="text">Open-ended Text</SelectItem>
+                                              <SelectItem value="boolean">True/False</SelectItem>
+                                              <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
+                                              <SelectItem value="file">File Upload</SelectItem>
+                                              </SelectContent>
+                                          </Select>
+                                          <FormMessage />
+                                          </FormItem>
+                                      )}
+                                      />
+                                      <FormField
+                                          control={form.control}
+                                          name={`customQuestions.${index}.isRequired`}
+                                          render={({ field }) => (
+                                          <FormItem className="flex flex-col pt-2">
+                                              <FormLabel>Required</FormLabel>
+                                              <FormControl>
+                                                  <Switch
+                                                      checked={field.value}
+                                                      onCheckedChange={field.onChange}
+                                                      />
+                                              </FormControl>
+                                          </FormItem>
+                                          )}
+                                      />
+                                  </div>
+                                  {questionType === 'multiple_choice' && (
+                                  <div className="pl-4 space-y-2">
+                                      <FormLabel>Multiple Choice Options</FormLabel>
+                                      <QuestionOptions index={index} />
+                                  </div>
+                                  )}
+                              </div>
+                              <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="mt-6"
+                                  onClick={() => removeQuestion(index)}
+                              >
+                                  <Trash2 className="h-4 w-4" />
+                              </Button>
+                              </div>
+                          );
+                          })}
+                      </div>
+                      <div className="flex justify-between items-center mt-4">
+                          <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => appendQuestion({ questionText: '', questionType: 'text', isRequired: true, options: [] })}
+                          >
+                          <PlusCircle className="mr-2 h-4 w-4" />
+                          Add Question
+                          </Button>
+                      </div>
+                  </AccordionContent>
+              </AccordionItem>
             </Accordion>
             
              <FormField
@@ -767,5 +765,3 @@ function QuestionOptions({ index }: { index: number }) {
     </div>
   );
 }
-
-    

@@ -296,6 +296,26 @@ export async function PATCH(
     let updatedRequisition;
     
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && body.title) {
+        // --- BACKEND VALIDATION FOR EVALUATION CRITERIA ---
+        if (body.evaluationCriteria) {
+            const { financialWeight, technicalWeight, financialCriteria, technicalCriteria } = body.evaluationCriteria;
+
+            if (financialWeight + technicalWeight !== 100) {
+                return NextResponse.json({ error: 'The sum of Financial and Technical weights must be 100%.' }, { status: 400 });
+            }
+
+            const financialSum = financialCriteria.reduce((acc: number, c: any) => acc + (c.weight || 0), 0);
+            if (financialSum !== 100) {
+                 return NextResponse.json({ error: `The weights of all Financial Criteria must sum to 100% (currently ${financialSum}%).` }, { status: 400 });
+            }
+
+            const technicalSum = technicalCriteria.reduce((acc: number, c: any) => acc + (c.weight || 0), 0);
+            if (technicalSum !== 100) {
+                 return NextResponse.json({ error: `The weights of all Technical Criteria must sum to 100% (currently ${technicalSum}%).` }, { status: 400 });
+            }
+        }
+        // --- END VALIDATION ---
+
         const totalPrice = body.items.reduce((acc: number, item: any) => {
             const price = item.unitPrice || 0;
             const quantity = item.quantity || 0;
@@ -637,6 +657,27 @@ export async function POST(request: Request) {
         }
       }
     }
+    
+    // --- BACKEND VALIDATION FOR EVALUATION CRITERIA ---
+    if (body.evaluationCriteria) {
+        const { financialWeight, technicalWeight, financialCriteria, technicalCriteria } = body.evaluationCriteria;
+
+        if (financialWeight + technicalWeight !== 100) {
+            return NextResponse.json({ error: 'The sum of Financial and Technical weights must be 100%.' }, { status: 400 });
+        }
+
+        const financialSum = financialCriteria.reduce((acc: number, c: any) => acc + (Number(c.weight) || 0), 0);
+        if (financialSum !== 100) {
+              return NextResponse.json({ error: `The weights of all Financial Criteria must sum to 100% (currently ${financialSum}%).` }, { status: 400 });
+        }
+
+        const technicalSum = technicalCriteria.reduce((acc: number, c: any) => acc + (Number(c.weight) || 0), 0);
+        if (technicalSum !== 100) {
+              return NextResponse.json({ error: `The weights of all Technical Criteria must sum to 100% (currently ${technicalSum}%).` }, { status: 400 });
+        }
+    }
+    // --- END VALIDATION ---
+
     const totalPrice = body.items.reduce((acc: number, item: any) => {
       const price = item.unitPrice || 0;
       const quantity = item.quantity || 0;
