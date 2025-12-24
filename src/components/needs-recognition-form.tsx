@@ -327,18 +327,9 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
                     render={({ field }) => (
                     <FormItem>
                         <FormLabel>Department</FormLabel>
-                         <Select onValueChange={field.onChange} value={field.value} disabled={isEditMode}>
-                            <FormControl>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select your department" />
-                            </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                            {departments.map(dept => (
-                                <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
-                            ))}
-                            </SelectContent>
-                        </Select>
+                        <FormControl>
+                            <Input {...field} disabled />
+                        </FormControl>
                         <FormMessage />
                     </FormItem>
                     )}
