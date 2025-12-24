@@ -326,7 +326,7 @@ export default function VendorDashboardPage() {
                                             <CardContent className="flex-grow">
                                                 <div className="text-sm text-muted-foreground space-y-2">
                                                     <div>
-                                                        <span className="font-semibold text-foreground">Posted:</span> {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
+                                                        <span className="font-semibold text-foreground">Posted:</span> {formatDistanceToNow(new Date(req.updatedAt), { addSuffix: true })}
                                                     </div>
                                                     {req.deadline && (
                                                         <div className="flex items-center gap-1.5 font-semibold text-destructive">
