@@ -326,9 +326,6 @@ export default function VendorDashboardPage() {
                                             <CardContent className="flex-grow">
                                                 <div className="text-sm text-muted-foreground space-y-2">
                                                     <div>
-                                                        <span className="font-semibold text-foreground">Requisition ID:</span> {req.id}
-                                                    </div>
-                                                    <div>
                                                         <span className="font-semibold text-foreground">Posted:</span> {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
                                                     </div>
                                                     {req.deadline && (
@@ -397,7 +394,6 @@ export default function VendorDashboardPage() {
                                                     </CardHeader>
                                                     <CardContent className="flex-grow space-y-4">
                                                         <div className="text-sm text-muted-foreground space-y-2">
-                                                            <div><span className="font-semibold text-foreground">Requisition ID:</span> {req.id}</div>
                                                             {(status === 'Awarded' || status === 'Partially Awarded') && req.awardResponseDeadline && (
                                                                 <div className={cn("flex items-center gap-1", isExpired ? "text-destructive" : "text-amber-600")}>
                                                                     <Timer className="h-4 w-4" />
