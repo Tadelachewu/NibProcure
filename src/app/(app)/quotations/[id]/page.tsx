@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -1297,7 +1298,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                     {isSent ? (
                         <Badge variant="default" className="gap-2">
                             <CheckCircle className="h-4 w-4" />
-                            RFQ Distributed on {format(new Date(requisition.updatedAt), 'PP')}
+                            RFQ Distributed on {format(new Date(requisition.rfqSentAt!), 'PP')}
                         </Badge>
                     ) : (
                         !deadline && (
@@ -1862,7 +1863,7 @@ const CommitteeActions = ({
             <Card>
                 <CardHeader>
                     <CardTitle>Committee Actions</CardTitle>
-                    <CardDescription>Finalize your evaluation for this requisition.</CardHeader>
+                    <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Button variant="outline" disabled>
@@ -2146,28 +2147,34 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                     </TableBody>
                                                 </Table>
                                             ) : (
-                                                requisition.items.map(item => {
-                                                    const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
-                                                    return (
-                                                            <div key={item.id} className="p-4 border-b last:border-b-0">
-                                                                <h4 className="font-semibold">{item.name}</h4>
-                                                                <Table>
-                                                                    <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                                                                    <TableBody>
-                                                                        {awards.map(award => (
-                                                                            <TableRow key={award.quoteItemId}>
-                                                                                <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
-                                                                                <TableCell>{award.vendorName}</TableCell>
-                                                                                <TableCell>{award.proposedItemName}</TableCell>
-                                                                                <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
-                                                                                <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                                                            </TableRow>
-                                                                        ))}
-                                                                    </TableBody>
-                                                                </Table>
-                                                            </div>
-                                                    )
-                                                })
+                                                 <Accordion type="multiple" className="w-full">
+                                                    {requisition.items.map(item => {
+                                                        const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
+                                                        return (
+                                                            <AccordionItem key={item.id} value={item.id}>
+                                                                <AccordionTrigger className="px-4 py-3 bg-muted/50 rounded-md">
+                                                                     <h4 className="font-semibold">{item.name}</h4>
+                                                                </AccordionTrigger>
+                                                                <AccordionContent className="p-2">
+                                                                    <Table>
+                                                                        <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                                                        <TableBody>
+                                                                            {awards.map(award => (
+                                                                                <TableRow key={award.quoteItemId}>
+                                                                                    <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
+                                                                                    <TableCell>{award.vendorName}</TableCell>
+                                                                                    <TableCell>{award.proposedItemName}</TableCell>
+                                                                                    <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
+                                                                                    <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                                                </TableRow>
+                                                                            ))}
+                                                                        </TableBody>
+                                                                    </Table>
+                                                                </AccordionContent>
+                                                            </AccordionItem>
+                                                        )
+                                                    })}
+                                                </Accordion>
                                             )}
                                             </CardContent>
                                         </Card>
@@ -3276,4 +3283,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         </Card>
     );
 };
+    
+
     
