@@ -2578,40 +2578,40 @@ export default function QuotationDetailsPage() {
         if (currentReq) {
             setVendors(venData || []);
 
-            // --- Start of new frontend calculation logic ---
+            // --- Corrected Calculation Logic ---
             if (currentReq.evaluationCriteria && quoData.length > 0) {
               quoData = quoData.map(quote => {
-                  const itemBids: {requisitionItemId: string; championBidScore: number;}[] = [];
+                  const championBidScores: number[] = [];
 
                   for (const reqItem of currentReq.items) {
                       const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
                       if (proposalsForItem.length === 0) continue;
 
                       const calculatedProposals = proposalsForItem.map(proposal => {
-                          let totalItemScore = 0;
+                          let totalScore = 0;
                           let scoreCount = 0;
                           quote.scores?.forEach(scoreSet => {
                               const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
                               if (itemScore) {
-                                  totalItemScore += itemScore.finalScore;
+                                  totalScore += itemScore.finalScore;
                                   scoreCount++;
                               }
                           });
-                          return scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                          return scoreCount > 0 ? totalScore / scoreCount : 0;
                       });
 
                       const championBidScore = Math.max(...calculatedProposals);
-                      itemBids.push({ requisitionItemId: reqItem.id, championBidScore });
+                      championBidScores.push(championBidScore);
                   }
                   
-                  const finalVendorScore = itemBids.length > 0
-                      ? itemBids.reduce((acc, bid) => acc + bid.championBidScore, 0) / itemBids.length
+                  const finalVendorScore = championBidScores.length > 0
+                      ? championBidScores.reduce((acc, score) => acc + score, 0) / championBidScores.length
                       : 0;
 
                   return { ...quote, finalAverageScore: finalVendorScore };
               });
             }
-            // --- End of new frontend calculation logic ---
+            // --- End of Corrected Logic ---
 
             setRequisition({...currentReq, quotations: quoData});
             setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -2849,7 +2849,7 @@ export default function QuotationDetailsPage() {
           </Button>
            <div className="flex items-center gap-2">
                 {isAwarded && (
-                  <Button asChild variant="secondary" onClick={() => router.push(`/requisitions/${id}/award-details`)}>
+                  <Button asChild variant="secondary">
                       <Link href={`/requisitions/${id}/award-details`}><Calculator className="mr-2 h-4 w-4" /> View Calculation</Link>
                   </Button>
                 )}
@@ -2938,7 +2938,7 @@ export default function QuotationDetailsPage() {
             isAuthorized={isAuthorized}
         />
         
-        { hasAssignedCommittee && canManageCommittees && (
+        { hasAssignedCommittee && (
              <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="committee-management">
                     <AccordionTrigger>
