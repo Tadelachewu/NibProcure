@@ -325,9 +325,11 @@ export default function VendorDashboardPage() {
                                             </CardHeader>
                                             <CardContent className="flex-grow">
                                                 <div className="text-sm text-muted-foreground space-y-2">
-                                                    <div>
-                                                        <span className="font-semibold text-foreground">Posted:</span> {formatDistanceToNow(new Date(req.updatedAt), { addSuffix: true })}
-                                                    </div>
+                                                    {req.rfqSentAt && (
+                                                        <div>
+                                                            <span className="font-semibold text-foreground">Posted:</span> {formatDistanceToNow(new Date(req.rfqSentAt), { addSuffix: true })}
+                                                        </div>
+                                                    )}
                                                     {req.deadline && (
                                                         <div className="flex items-center gap-1.5 font-semibold text-destructive">
                                                             <Timer className="h-4 w-4" />

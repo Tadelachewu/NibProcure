@@ -80,6 +80,7 @@ export async function POST(
             status: 'Accepting_Quotes',
             allowedVendorIds: finalVendorIds,
             deadline: deadline ? new Date(deadline) : undefined,
+            rfqSentAt: new Date(), // Set the timestamp here
             cpoAmount: cpoAmount,
             rfqSettings: rfqSettings || {},
         }
@@ -111,7 +112,6 @@ export async function POST(
                 <p>A new Request for Quotation (RFQ) has been issued that you are invited to bid on.</p>
                 <ul>
                     <li><strong>Requisition Title:</strong> ${requisition.title}</li>
-                    <li><strong>Requisition ID:</strong> ${requisition.id}</li>
                     <li><strong>Submission Deadline:</strong> ${deadline ? new Date(deadline).toLocaleString() : 'N/A'}</li>
                 </ul>
                 <p>Please log in to the vendor portal to view the full details and submit your quotation.</p>
