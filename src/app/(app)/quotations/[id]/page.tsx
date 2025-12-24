@@ -1298,7 +1298,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                     {isSent ? (
                         <Badge variant="default" className="gap-2">
                             <CheckCircle className="h-4 w-4" />
-                            RFQ Distributed on {format(new Date(requisition.rfqSentAt!), 'PP')}
+                            RFQ Distributed on {requisition.rfqSentAt ? format(new Date(requisition.rfqSentAt), 'PP') : 'N/A'}
                         </Badge>
                     ) : (
                         !deadline && (
@@ -2147,7 +2147,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                     </TableBody>
                                                 </Table>
                                             ) : (
-                                                 <Accordion type="multiple" className="w-full">
+                                                <Accordion type="multiple" className="w-full">
                                                     {requisition.items.map(item => {
                                                         const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
                                                         return (
@@ -2349,7 +2349,7 @@ const NotifyVendorDialog = ({
                             type="time"
                             className="w-32"
                             value={deadlineTime}
-                            onChange={(e) => setNewDeadlineTime(e.target.value)}
+                            onChange={(e) => setDeadlineTime(e.target.value)}
                         />
                     </div>
                 </div>
