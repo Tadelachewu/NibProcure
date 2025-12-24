@@ -48,6 +48,7 @@ export const BestItemAwardDialog = ({
     }, [awardResponseDeadlineDate, awardResponseDeadlineTime]);
     
     const totalAwardValue = useMemo(() => {
+        if (!bestItemResults) return 0;
         return bestItemResults.reduce((acc, item) => {
             if (item.winner) {
                 return acc + (item.winner.unitPrice * item.quantity);
