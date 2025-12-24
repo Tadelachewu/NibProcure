@@ -134,7 +134,7 @@ export const BestItemAwardDialog = ({
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {bestItemResults.map(item => (
+                                        {bestItemResults && bestItemResults.map(item => (
                                             <TableRow key={item.requisitionItemId}>
                                                 <TableCell className="font-medium">{item.name}</TableCell>
                                                 <TableCell>{item.winner?.vendorName || 'N/A'}</TableCell>
