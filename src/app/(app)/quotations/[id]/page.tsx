@@ -525,7 +525,7 @@ const committeeFormSchema = z.object({
 
 type CommitteeFormValues = z.infer<typeof committeeFormSchema>;
 
-const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, onOpenChange, isAuthorized }: { requisition: PurchaseRequisition; onCommitteeUpdated: () => void; open: boolean; onOpenChange: (open: boolean) => void; isAuthorized: boolean; }) => {
+const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, onOpenChange, isAuthorized, isEditDisabled }: { requisition: PurchaseRequisition; onCommitteeUpdated: () => void; open: boolean; onOpenChange: (open: boolean) => void; isAuthorized: boolean; isEditDisabled: boolean }) => {
     const { user, allUsers } = useAuth();
     const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
@@ -721,7 +721,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
     }
 
     const triggerButton = (
-        <Button variant="outline" className="w-full sm:w-auto" disabled={!isAuthorized}>
+        <Button variant="outline" className="w-full sm:w-auto" disabled={!isAuthorized || isEditDisabled}>
             {allAssignedMemberIds.length > 0 ? (
                 <><Edit2 className="mr-2 h-4 w-4" /> Edit Committee</>
             ) : (
@@ -2510,7 +2510,7 @@ export default function QuotationDetailsPage() {
                             scorerCount++;
                         }
                     });
-                    const score = scorerCount > 0 ? totalScore / scorerCount : 0;
+                    const score = scorerCount > 0 ? totalItemScore / scorerCount : 0;
                     return { proposal, score };
                 }).sort((a,b) => b.score - a.score)[0]; // Get the best one
 
@@ -2837,6 +2837,8 @@ export default function QuotationDetailsPage() {
       const details = (item.perItemAwardDetails as any[]) || [];
       return details.some(d => d.status === 'Declined' || d.status === 'Failed_to_Award');
   });
+  
+  const hasAssignedCommittee = (requisition.financialCommitteeMemberIds && requisition.financialCommitteeMemberIds.length > 0) || (requisition.technicalCommitteeMemberIds && requisition.technicalCommitteeMemberIds.length > 0);
 
   return (
     <div className="space-y-6">
@@ -2935,8 +2937,8 @@ export default function QuotationDetailsPage() {
             onSuccess={fetchRequisitionAndQuotes}
             isAuthorized={isAuthorized}
         />
-
-        {(currentStep !== 'rfq' || readyForCommitteeAssignment) && canManageCommittees && currentStep !== 'award' && currentStep !== 'finalize' && currentStep !== 'completed' && (
+        
+        { hasAssignedCommittee && canManageCommittees && (
              <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="committee-management">
                     <AccordionTrigger>
@@ -2949,12 +2951,12 @@ export default function QuotationDetailsPage() {
                             open={isCommitteeDialogOpen}
                             onOpenChange={setCommitteeDialogOpen}
                             isAuthorized={isAuthorized}
+                            isEditDisabled={isScoringDeadlinePassed || isAwarded}
                         />
                     </AccordionContent>
                 </AccordionItem>
             </Accordion>
         )}
-
 
         {(currentStep !== 'rfq' || readyForCommitteeAssignment) && (
             <Accordion type="single" collapsible className="w-full" defaultValue="quotation-overview">
@@ -3051,7 +3053,7 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-        {isAuthorized && (requisition.financialCommitteeMemberIds?.length || 0) > 0 && (
+        {isAuthorized && hasAssignedCommittee && requisition.status !== 'PreApproved' && (
              <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="scoring-progress">
                     <AccordionTrigger>
