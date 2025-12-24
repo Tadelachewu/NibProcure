@@ -1506,7 +1506,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                                                     <Slider
                                                         defaultValue={[field.value]}
                                                         max={100}
-                                                        step={5}
+                                                        step={1}
                                                         onValueChange={(v) => field.onChange(v[0])}
                                                         disabled={!!existingScore}
                                                     />
@@ -1552,7 +1552,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                                                     <Slider
                                                         defaultValue={[field.value]}
                                                         max={100}
-                                                        step={5}
+                                                        step={1}
                                                         onValueChange={(v) => field.onChange(v[0])}
                                                         disabled={!!existingScore}
                                                     />
@@ -3222,6 +3222,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
+
 
 
 
