@@ -11,29 +11,29 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '.
 import { Label } from './ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
-import { CalendarIcon, HelpCircle, Upload, FileText, UserCog, Calculator } from 'lucide-react';
+import { CalendarIcon, Calculator } from 'lucide-react';
 import { Calendar } from './ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, setHours, setMinutes } from 'date-fns';
-import { PurchaseRequisition, Quotation, QuoteItem } from '@/lib/types';
+import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { ScrollArea } from './ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from './ui/textarea';
 import Link from 'next/link';
-import { getRankIcon } from '@/lib/utils';
 
 export const BestItemAwardDialog = ({
     requisition,
-    quotations,
     onFinalize,
     isOpen,
-    onClose
+    onClose,
+    bestItemResults
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteDocumentUrl?: string, minuteJustification?: string) => void;
     isOpen: boolean;
     onClose: () => void;
+    bestItemResults: any[];
 }) => {
     const { toast } = useToast();
     const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
@@ -47,81 +47,14 @@ export const BestItemAwardDialog = ({
         return setMinutes(setHours(awardResponseDeadlineDate, hours), minutes);
     }, [awardResponseDeadlineDate, awardResponseDeadlineTime]);
     
-    const eligibleQuotes = useMemo(() => {
-        const declinedVendorIds = new Set(
-            quotations.filter(q => q.status === 'Declined').map(q => q.vendorId)
-        );
-        return quotations.filter(q => !declinedVendorIds.has(q.vendorId));
-    }, [quotations]);
-
-    const itemWinners = useMemo(() => {
-        if (!requisition.items) return [];
-
-        return requisition.items.map(reqItem => {
-            
-            const championBids = eligibleQuotes.map(quote => {
-                const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
-                if (proposalsForItem.length === 0) return null;
-
-                let bestProposalForItem: QuoteItem | null = null;
-                let bestItemScore = -1;
-
-                proposalsForItem.forEach(proposal => {
-                    let totalItemScore = 0;
-                    let scoreCount = 0;
-                    quote.scores?.forEach(scoreSet => {
-                        const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                        if (itemScore) {
-                            totalItemScore += itemScore.finalScore;
-                            scoreCount++;
-                        }
-                    });
-                    const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                    
-                    if (averageItemScore > bestItemScore) {
-                        bestItemScore = averageItemScore;
-                        bestProposalForItem = proposal;
-                    }
-                });
-
-                if (!bestProposalForItem) return null;
-
-                return {
-                    vendorId: quote.vendorId,
-                    vendorName: quote.vendorName,
-                    quoteItemId: bestProposalForItem.id,
-                    quotationId: quote.id,
-                    proposedItemName: bestProposalForItem.name,
-                    unitPrice: bestProposalForItem.unitPrice,
-                    bidDocumentUrl: quote.bidDocumentUrl,
-                    experienceDocumentUrl: quote.experienceDocumentUrl,
-                    score: bestItemScore
-                };
-            }).filter((bid): bid is NonNullable<typeof bid> => bid !== null);
-            
-            championBids.sort((a, b) => b.score - a.score);
-            
-            const winner = championBids.length > 0 ? championBids[0] : null;
-
-            return {
-                requisitionItemId: reqItem.id,
-                name: reqItem.name,
-                quantity: reqItem.quantity,
-                winner: winner,
-                rankedBids: championBids,
-            };
-        });
-    }, [requisition, eligibleQuotes]);
-
-
     const totalAwardValue = useMemo(() => {
-        return itemWinners.reduce((acc, item) => {
+        return bestItemResults.reduce((acc, item) => {
             if (item.winner) {
                 return acc + (item.winner.unitPrice * item.quantity);
             }
             return acc;
         }, 0);
-    }, [itemWinners]);
+    }, [bestItemResults]);
 
 
     const handleConfirmAward = async () => {
@@ -151,9 +84,9 @@ export const BestItemAwardDialog = ({
         
         let awards: { [reqItemId: string]: { rankedBids: any[] } } = {};
         
-        itemWinners.forEach(item => {
+        bestItemResults.forEach(item => {
             if (item.winner) {
-                awards[item.requisitionItemId] = { rankedBids: item.rankedBids };
+                awards[item.requisitionItemId] = { rankedBids: item.bids };
             }
         });
 
@@ -200,7 +133,7 @@ export const BestItemAwardDialog = ({
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {itemWinners.map(item => (
+                                        {bestItemResults.map(item => (
                                             <TableRow key={item.requisitionItemId}>
                                                 <TableCell className="font-medium">{item.name}</TableCell>
                                                 <TableCell>{item.winner?.vendorName || 'N/A'}</TableCell>

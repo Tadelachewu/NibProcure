@@ -2387,9 +2387,6 @@ export default function QuotationDetailsPage() {
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
   const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
   const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
-  const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
-  const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
-  const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
   const [deadlineCheckPerformed, setDeadlineCheckPerformed] = useState(false);
 
 
@@ -2578,43 +2575,25 @@ export default function QuotationDetailsPage() {
         if (currentReq) {
             setVendors(venData || []);
 
-            // --- Start of new frontend calculation logic ---
             if (currentReq.evaluationCriteria && quoData.length > 0) {
-              quoData = quoData.map(quote => {
-                  const itemBids: {requisitionItemId: string; championBidScore: number;}[] = [];
-
-                  for (const reqItem of currentReq.items) {
-                      const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
-                      if (proposalsForItem.length === 0) continue;
-
-                      const calculatedProposals = proposalsForItem.map(proposal => {
-                          let totalItemScore = 0;
-                          let scoreCount = 0;
-                          quote.scores?.forEach(scoreSet => {
-                              const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                              if (itemScore) {
-                                  totalItemScore += itemScore.finalScore;
-                                  scoreCount++;
-                              }
-                          });
-                          return scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                      });
-
-                      const championBidScore = Math.max(...calculatedProposals);
-                      itemBids.push({ requisitionItemId: reqItem.id, championBidScore });
+              const calculatedQuotes: Quotation[] = quoData.map(quote => {
+                  if (!quote.scores || quote.scores.length === 0) {
+                      return { ...quote, finalAverageScore: 0 };
                   }
                   
-                  const finalVendorScore = itemBids.length > 0
-                      ? itemBids.reduce((acc, bid) => acc + bid.championBidScore, 0) / itemBids.length
-                      : 0;
+                  const totalScorers = quote.scores.length;
+                  const aggregateScore = quote.scores.reduce((sum, scoreSet) => sum + scoreSet.finalScore, 0);
+                  const finalAverageScore = aggregateScore / totalScorers;
 
-                  return { ...quote, finalAverageScore: finalVendorScore };
+                  return { ...quote, finalAverageScore };
               });
+              
+              setQuotations(calculatedQuotes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+              setRequisition({...currentReq, quotations: calculatedQuotes});
+            } else {
+                setRequisition({...currentReq, quotations: quoData});
+                setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
             }
-            // --- End of new frontend calculation logic ---
-
-            setRequisition({...currentReq, quotations: quoData});
-            setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
         } else {
             toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
         }
@@ -2714,6 +2693,8 @@ export default function QuotationDetailsPage() {
         setBestItemAwardCenterOpen(false);
     }
 }
+    const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
+    const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
 
     const handleAwardChange = async () => {
         if (!user || !id || !requisition) return;
@@ -2938,8 +2919,8 @@ export default function QuotationDetailsPage() {
             isAuthorized={isAuthorized}
         />
         
-        { hasAssignedCommittee && canManageCommittees && (
-             <Accordion type="single" collapsible className="w-full">
+        { hasAssignedCommittee && (
+             <Accordion type="single" collapsible className="w-full" defaultValue="committee-management">
                 <AccordionItem value="committee-management">
                     <AccordionTrigger>
                         <CardTitle className="flex items-center gap-2 text-lg"><Users /> Evaluation Committee (Scorers)</CardTitle>
@@ -3053,7 +3034,7 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-        {isAuthorized && hasAssignedCommittee && requisition.status !== 'PreApproved' && (
+        {isAuthorized && hasAssignedCommittee && isScoringComplete && (
              <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="scoring-progress">
                     <AccordionTrigger>
