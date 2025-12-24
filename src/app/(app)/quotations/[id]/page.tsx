@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, AlertTriangle, ChevronsLeft, ChevronRight, ChevronsRight, ChevronLeft, Calculator } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -69,6 +69,7 @@ import { ExtendDeadlineDialog } from '@/components/extend-deadline-dialog';
 import { OverdueReportDialog } from '@/components/overdue-report-dialog';
 import { RestartRfqDialog } from '@/components/restart-rfq-dialog';
 import { QuoteDetailsDialog } from '@/components/quote-details-dialog';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 
 const PAGE_SIZE = 6;
@@ -1724,28 +1725,42 @@ const ScoringDialog = ({
                                 </CardContent>
                             </Card>
                         )}
-                        {itemScoreFields.map((field, itemIndex) => {
-                             const itemScoreData = form.getValues().itemScores[itemIndex];
-                             if (!itemScoreData) return null;
-                         
-                             const quoteItem = quote.items.find(item => item.id === itemScoreData.quoteItemId);
-                             if (!quoteItem) return null;
+                        <Accordion type="single" collapsible className="space-y-4">
+                            {itemScoreFields.map((field, itemIndex) => {
+                                const itemScoreData = form.getValues().itemScores[itemIndex];
+                                if (!itemScoreData) return null;
+                            
+                                const quoteItem = quote.items.find(item => item.id === itemScoreData.quoteItemId);
+                                if (!quoteItem) return null;
 
-                            const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
+                                const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
 
-                            return <ScoringItemCard
-                                key={field.id}
-                                itemIndex={itemIndex}
-                                control={form.control}
-                                quoteItem={quoteItem}
-                                originalItem={originalItem}
-                                requisition={requisition}
-                                isFinancialScorer={isFinancialScorer}
-                                isTechnicalScorer={isTechnicalScorer}
-                                hidePrices={hidePrices}
-                                existingScore={existingScore}
-                            />
-                        })}
+                                return (
+                                    <AccordionItem key={field.id} value={`item-${itemIndex}`} className="border rounded-lg bg-muted/20">
+                                        <AccordionTrigger className="px-4 py-3">
+                                            <div className="flex items-center gap-2 text-left">
+                                                <h4 className="font-semibold">{quoteItem.name}</h4>
+                                                <p className="text-xs text-muted-foreground">(for: {originalItem?.name})</p>
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent className="p-4 border-t">
+                                            <ScoringItemCard
+                                                itemIndex={itemIndex}
+                                                control={form.control}
+                                                quoteItem={quoteItem}
+                                                originalItem={originalItem}
+                                                requisition={requisition}
+                                                isFinancialScorer={isFinancialScorer}
+                                                isTechnicalScorer={isTechnicalScorer}
+                                                hidePrices={hidePrices}
+                                                existingScore={existingScore}
+                                            />
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                );
+                            })}
+                        </Accordion>
+
 
                         <FormField
                             control={form.control}
@@ -2095,7 +2110,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                 <DialogHeader>
                     <DialogTitle>Cumulative Scoring Report</DialogTitle>
                     <DialogDescription>
-                        A detailed breakdown of committee scores for requisition {requisition.id}, explaining the award decision based on the '{awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}' strategy.
+                        This is a detailed, auditable breakdown of all committee scores for requisition {requisition.id}. It explains the award decision based on the '{awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}' strategy.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="flex-1 overflow-hidden">
@@ -2169,89 +2184,92 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                      <CardTitle>Evaluation Committee Scoring Report</CardTitle>
                                      <CardDescription>Detailed scores from each committee member for each vendor.</CardDescription>
                                  </CardHeader>
-                                 <CardContent className="space-y-6">
-                                     {quotations.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)).map(quote => (
-                                        <Card key={quote.id} className="break-inside-avoid print:border-gray-300 print:shadow-none print:rounded-lg">
-                                            <CardHeader className="print:bg-gray-100 print:rounded-t-lg">
-                                                <div className="flex justify-between items-start">
-                                                    <div>
-                                                        <CardTitle className="text-xl">{quote.vendorName}</CardTitle>
-                                                        <CardDescription className="print:text-gray-700 pt-1">
-                                                            Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> |
-                                                            Rank: <span className="font-bold">{quote.rank || 'N/A'}</span> |
-                                                            Total Price: <span className="font-bold">{quote.totalPrice.toLocaleString()} ETB</span>
-                                                        </CardDescription>
-                                                    </div>
-                                                    <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
-                                                </div>
-                                            </CardHeader>
-                                            <CardContent className="p-4 space-y-4">
-                                                {quote.scores && quote.scores.length > 0 ? (
-                                                    quote.scores.map(scoreSet => (
-                                                        <div key={scoreSet.scorerId} className="p-3 border rounded-md break-inside-avoid print:border-gray-200">
-                                                            <div className="flex items-center justify-between mb-3 pb-2 border-b print:border-gray-200">
-                                                                <div className="flex items-center gap-3">
-                                                                    <Avatar className="h-8 w-8">
-                                                                        <AvatarImage src={`https://picsum.photos/seed/${scoreSet.scorerId}/32/32`} />
-                                                                        <AvatarFallback>{scoreSet.scorer?.name?.charAt(0) || 'U'}</AvatarFallback>
-                                                                    </Avatar>
-                                                                    <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
-                                                                <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPpp')}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="space-y-4">
-                                                                {scoreSet.itemScores.map(itemScore => {
-                                                                    const scoredQuoteItem = quote.items.find(qi => qi.id === itemScore.quoteItemId);
-                                                                    const hasFinancialScores = (requisition.evaluationCriteria?.financialCriteria?.length ?? 0) > 0;
-                                                                    const hasTechnicalScores = (requisition.evaluationCriteria?.technicalCriteria?.length ?? 0) > 0;
-                                                                    
-                                                                    return (
-                                                                        <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
-                                                                            <h4 className="font-semibold text-sm mb-2">Item: {scoredQuoteItem?.name || 'Unknown Item'}</h4>
-                                                                            <div className={cn("grid gap-4 print:grid-cols-2", hasFinancialScores && hasTechnicalScores ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
-                                                                                {hasFinancialScores && itemScore.scores.some(s => s.type === 'FINANCIAL') && (
-                                                                                    <div>
-                                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Financial Scores ({requisition.evaluationCriteria?.financialWeight}%)</h5>
-                                                                                        {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
-                                                                                            <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
-                                                                                                <div className="flex justify-between items-center font-medium">
-                                                                                                     <p>{getCriterionName(s.financialCriterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
-                                                                                                    <p className="font-bold">{s.score}/100</p>
-                                                                                                </div>
-                                                                                                {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                                            </div>
-                                                                                        ))}
-                                                                                    </div>
-                                                                                )}
-                                                                                {hasTechnicalScores && itemScore.scores.some(s => s.type === 'TECHNICAL') && (
-                                                                                    <div>
-                                                                                        <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical Scores ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
-                                                                                        {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
-                                                                                            <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
-                                                                                                <div className="flex justify-between items-center font-medium">
-                                                                                                    <p>{getCriterionName(s.technicalCriterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
-                                                                                                    <p className="font-bold">{s.score}/100</p>
-                                                                                                </div>
-                                                                                                {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                                            </div>
-                                                                                        ))}
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    )
-                                                                })}
-                                                            </div>
-                                                            {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
+                                 <CardContent>
+                                     <Accordion type="multiple" className="w-full space-y-4">
+                                         {quotations.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)).map(quote => (
+                                            <AccordionItem key={quote.id} value={quote.id} className="border rounded-lg">
+                                                <AccordionTrigger className="p-4 hover:no-underline">
+                                                    <div className="flex justify-between items-start w-full">
+                                                        <div>
+                                                            <h4 className="font-semibold text-lg">{quote.vendorName}</h4>
+                                                            <p className="text-sm text-muted-foreground pt-1">
+                                                                Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> |
+                                                                Rank: <span className="font-bold">{quote.rank || 'N/A'}</span>
+                                                            </p>
                                                         </div>
-                                                    ))
-                                                ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
-                                            </CardContent>
-                                        </Card>
-                                     ))}
+                                                        <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
+                                                    </div>
+                                                </AccordionTrigger>
+                                                <AccordionContent className="p-4 border-t">
+                                                    <div className="space-y-4">
+                                                    {quote.scores && quote.scores.length > 0 ? (
+                                                        quote.scores.map(scoreSet => (
+                                                            <div key={scoreSet.scorerId} className="p-3 border rounded-md break-inside-avoid print:border-gray-200">
+                                                                <div className="flex items-center justify-between mb-3 pb-2 border-b print:border-gray-200">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <Avatar className="h-8 w-8">
+                                                                            <AvatarImage src={`https://picsum.photos/seed/${scoreSet.scorerId}/32/32`} />
+                                                                            <AvatarFallback>{scoreSet.scorer?.name?.charAt(0) || 'U'}</AvatarFallback>
+                                                                        </Avatar>
+                                                                        <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                    <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
+                                                                    <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPpp')}</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="space-y-4">
+                                                                    {scoreSet.itemScores.map(itemScore => {
+                                                                        const scoredQuoteItem = quote.items.find(qi => qi.id === itemScore.quoteItemId);
+                                                                        const hasFinancialScores = (requisition.evaluationCriteria?.financialCriteria?.length ?? 0) > 0;
+                                                                        const hasTechnicalScores = (requisition.evaluationCriteria?.technicalCriteria?.length ?? 0) > 0;
+                                                                        
+                                                                        return (
+                                                                            <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
+                                                                                <h4 className="font-semibold text-sm mb-2">Item: {scoredQuoteItem?.name || 'Unknown Item'}</h4>
+                                                                                <div className={cn("grid gap-4 print:grid-cols-2", hasFinancialScores && hasTechnicalScores ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
+                                                                                    {hasFinancialScores && itemScore.scores.some(s => s.type === 'FINANCIAL') && (
+                                                                                        <div>
+                                                                                            <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Financial Scores ({requisition.evaluationCriteria?.financialWeight}%)</h5>
+                                                                                            {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
+                                                                                                <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                                    <div className="flex justify-between items-center font-medium">
+                                                                                                        <p>{getCriterionName(s.financialCriterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                                                        <p className="font-bold">{s.score}/100</p>
+                                                                                                    </div>
+                                                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {hasTechnicalScores && itemScore.scores.some(s => s.type === 'TECHNICAL') && (
+                                                                                        <div>
+                                                                                            <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical Scores ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
+                                                                                            {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
+                                                                                                <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                                    <div className="flex justify-between items-center font-medium">
+                                                                                                        <p>{getCriterionName(s.technicalCriterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
+                                                                                                        <p className="font-bold">{s.score}/100</p>
+                                                                                                    </div>
+                                                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                                {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
+                                                            </div>
+                                                        ))
+                                                    ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
+                                                    </div>
+                                                </AccordionContent>
+                                            </AccordionItem>
+                                         ))}
+                                     </Accordion>
                                  </CardContent>
                              </Card>
                         </div>
@@ -3222,6 +3240,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
+
 
 
 
