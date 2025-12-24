@@ -126,7 +126,7 @@ export const AwardCenterDialog = ({
                             <CardTitle className="flex items-center justify-between">
                                 <span>Ranking Summary</span>
                                 <Button variant="secondary" size="sm" asChild>
-                                    <Link href={`/requisitions/${requisition.id}/award-details`} target="_blank">
+                                    <Link href={`/requisitions/${requisition.id}/award-details`}>
                                         <Calculator className="mr-2 h-4 w-4" />
                                         Show Full Calculation
                                     </Link>
