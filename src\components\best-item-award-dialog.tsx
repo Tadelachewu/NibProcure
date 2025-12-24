@@ -1,0 +1,238 @@
+
+"use client";
+
+import React, { useState, useMemo } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from './ui/dialog';
+import { Button } from './ui/button';
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from './ui/alert-dialog';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from './ui/table';
+import { Label } from './ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Input } from './ui/input';
+import { CalendarIcon, Calculator } from 'lucide-react';
+import { Calendar } from './ui/calendar';
+import { cn } from '@/lib/utils';
+import { format, setHours, setMinutes } from 'date-fns';
+import { PurchaseRequisition, Quotation } from '@/lib/types';
+import { ScrollArea } from './ui/scroll-area';
+import { useToast } from '@/hooks/use-toast';
+import { Textarea } from './ui/textarea';
+import Link from 'next/link';
+import { getRankIcon } from '@/lib/utils';
+
+export const BestItemAwardDialog = ({
+    requisition,
+    onFinalize,
+    isOpen,
+    onClose,
+    bestItemResults
+}: {
+    requisition: PurchaseRequisition;
+    quotations: Quotation[];
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteDocumentUrl?: string, minuteJustification?: string) => void;
+    isOpen: boolean;
+    onClose: () => void;
+    bestItemResults: any[];
+}) => {
+    const { toast } = useToast();
+    const [awardResponseDeadlineDate, setAwardResponseDeadlineDate] = useState<Date|undefined>();
+    const [awardResponseDeadlineTime, setAwardResponseDeadlineTime] = useState('17:00');
+    const [minuteFile, setMinuteFile] = useState<File | null>(null);
+    const [minuteJustification, setMinuteJustification] = useState('');
+
+    const awardResponseDeadline = useMemo(() => {
+        if (!awardResponseDeadlineDate) return undefined;
+        const [hours, minutes] = awardResponseDeadlineTime.split(':').map(Number);
+        return setMinutes(setHours(awardResponseDeadlineDate, hours), minutes);
+    }, [awardResponseDeadlineDate, awardResponseDeadlineTime]);
+    
+    const totalAwardValue = useMemo(() => {
+        if (!bestItemResults) return 0; // Guard clause
+        return bestItemResults.reduce((acc, item) => {
+            if (item.winner) {
+                // Ensure quantity is available on the item object itself, not winner
+                const reqItem = requisition.items.find(i => i.id === item.requisitionItemId);
+                if (reqItem) {
+                    return acc + (item.winner.calculation.unitPrice * reqItem.quantity);
+                }
+            }
+            return acc;
+        }, 0);
+    }, [bestItemResults, requisition.items]);
+
+
+    const handleConfirmAward = async () => {
+        let minuteDocumentUrl: string | undefined = undefined;
+
+        if (!minuteFile) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Please upload an official minute document.' });
+            return;
+        }
+        if (!minuteJustification.trim()) {
+            toast({ variant: 'destructive', title: 'Error', description: 'A justification/summary is required for the minute.' });
+            return;
+        }
+
+        try {
+            const formData = new FormData();
+            formData.append('file', minuteFile);
+            formData.append('directory', 'minutes');
+            const response = await fetch('/api/upload', { method: 'POST', body: formData });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'File upload failed');
+            minuteDocumentUrl = result.path;
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Upload Failed', description: error instanceof Error ? error.message : 'Could not upload minute file.' });
+            return;
+        }
+        
+        let awards: { [reqItemId: string]: { rankedBids: any[] } } = {};
+        
+        bestItemResults.forEach(item => {
+            if (item.winner) {
+                // Map to the format expected by the API
+                const rankedBids = item.bids.map((bid: any) => ({
+                    vendorId: bid.vendorId,
+                    vendorName: bid.vendorName,
+                    quotationId: bid.quotationId,
+                    quoteItemId: bid.quoteItemId,
+                    proposedItemName: bid.itemName,
+                    unitPrice: bid.calculation.unitPrice,
+                    score: bid.calculation.finalItemScore,
+                }));
+                awards[item.requisitionItemId] = { rankedBids };
+            }
+        });
+
+        onFinalize('item', awards, awardResponseDeadline, minuteDocumentUrl, minuteJustification);
+        onClose();
+    }
+
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Award by Best Offer (Per Item)</DialogTitle>
+                    <DialogDescription>
+                        This strategy awards each item to the vendor with the highest score for that specific item. This may result in multiple Purchase Orders.
+                    </DialogDescription>
+                </DialogHeader>
+                
+                <ScrollArea className="flex-1 -mx-6 px-6">
+                    <div className="space-y-6 py-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center justify-between">
+                                    <span>Winning Bids per Item</span>
+                                    <Button variant="secondary" size="sm" asChild>
+                                        <Link href={`/requisitions/${requisition.id}/award-details`}>
+                                            <Calculator className="mr-2 h-4 w-4" />
+                                            Show Full Calculation
+                                        </Link>
+                                    </Button>
+                                </CardTitle>
+                                <CardDescription>
+                                    Each item is awarded to the vendor with the highest score. Standby vendors are also ranked.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Item</TableHead>
+                                            <TableHead>Recommended Winner</TableHead>
+                                            <TableHead className="text-right">Winning Score</TableHead>
+                                            <TableHead className="text-right">Winning Price</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {bestItemResults.map(item => {
+                                            const reqItem = requisition.items.find(i => i.id === item.requisitionItemId);
+                                            return (
+                                            <TableRow key={item.requisitionItemId}>
+                                                <TableCell className="font-medium">{item.itemName}</TableCell>
+                                                <TableCell>{item.winner?.vendorName || 'N/A'}</TableCell>
+                                                <TableCell className="text-right font-mono">{item.winner ? item.winner.calculation.finalItemScore.toFixed(2) : 'N/A'}</TableCell>
+                                                <TableCell className="text-right font-mono">{item.winner && reqItem ? `${(item.winner.calculation.unitPrice * reqItem.quantity).toLocaleString()} ETB` : 'N/A'}</TableCell>
+                                            </TableRow>
+                                        )})}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
+
+                        <div className="space-y-2">
+                            <Label>Vendor Response Deadline (Optional)</Label>
+                            <div className="flex gap-2">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                            "flex-1 justify-start text-left font-normal",
+                                            !awardResponseDeadlineDate && "text-muted-foreground"
+                                            )}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {awardResponseDeadlineDate ? format(awardResponseDeadlineDate, "PPP") : <span>Set a date for vendors to respond</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar
+                                            mode="single"
+                                            selected={awardResponseDeadlineDate}
+                                            onSelect={setAwardResponseDeadlineDate}
+                                            disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                                            initialFocus
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                                <Input 
+                                    type="time" 
+                                    className="w-32"
+                                    value={awardResponseDeadlineTime}
+                                    onChange={(e) => setAwardResponseDeadlineTime(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <Label>Minute Recording</Label>
+                            <div className="p-4 border rounded-lg space-y-2">
+                                <Label htmlFor="minute-justification-item">Justification / Summary</Label>
+                                <Textarea id="minute-justification-item" placeholder="Provide a brief summary of the decision in the minute." value={minuteJustification} onChange={e => setMinuteJustification(e.target.value)} />
+                                <Label htmlFor="minute-file-item">Official Minute Document (PDF)</Label>
+                                <Input id="minute-file-item" type="file" accept=".pdf" onChange={e => setMinuteFile(e.target.files?.[0] || null)} />
+                            </div>
+                        </div>
+
+                        <div className="text-right text-xl font-bold">
+                            Total Award Value: {totalAwardValue.toLocaleString()} ETB
+                        </div>
+                    </div>
+                </ScrollArea>
+
+                <DialogFooter className="pt-4 border-t">
+                    <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild><Button>Finalize & Send Awards</Button></AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                            <AlertDialogTitle>Confirm Per-Item Award Decision</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                You are about to finalize the award based on the Best Offer Per Item strategy. This will initiate the final approval workflow.
+                            </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleConfirmAward}>Confirm</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
