@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -32,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, ChevronDown, ChevronsRight, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, ChevronDown, ChevronsRight, ChevronRight, ChevronLeft, AlertTriangle, FileBadge } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -81,7 +80,7 @@ const quoteFormSchema = z.object({
     name: z.string().min(1, "Item name cannot be empty."),
     quantity: z.number(),
     unitPrice: z.coerce.number().min(0.01, "Price is required."),
-    leadTimeDays: z.coerce.number().min(0, "Delivery time is required."),
+    leadTimeDays: z.coerce.number().min(0, "Delivery Time is required."),
   })),
 });
 
@@ -1863,7 +1862,7 @@ const CommitteeActions = ({
             <Card>
                 <CardHeader>
                     <CardTitle>Committee Actions</CardTitle>
-                    <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
+                    <CardDescription>Finalize your evaluation for this requisition.</CardHeader>
                 </CardHeader>
                 <CardContent>
                     <Button variant="outline" disabled>
@@ -2124,62 +2123,57 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                 <p className="text-sm text-gray-500">Report Generated: {format(new Date(), 'PPpp')}</p>
                             </div>
                             
-                            {awardStrategy === 'all' ? (
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Overall Vendor Ranking</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <Table>
-                                            <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead className="text-right">Final Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                                            <TableBody>
-                                                {quotations.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)).map(q => (
-                                                    <TableRow key={q.id}>
-                                                        <TableCell className="font-bold flex items-center gap-1">{getRankIcon(q.rank)} {q.rank}</TableCell>
-                                                        <TableCell>{q.vendorName}</TableCell>
-                                                        <TableCell className="text-right font-mono">{q.finalAverageScore?.toFixed(2)}</TableCell>
-                                                        <TableCell><Badge variant="outline">{q.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
-                                    </CardContent>
-                                </Card>
-                            ) : (
-                                <Accordion type="single" collapsible className="w-full" defaultValue="item-awards">
-                                    <AccordionItem value="item-awards" className="border-none">
-                                        <AccordionTrigger className="text-lg font-semibold">Award Breakdown by Item</AccordionTrigger>
-                                        <AccordionContent>
-                                            <Card>
-                                                <CardContent className="p-0">
-                                                    {requisition.items.map(item => {
-                                                        const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
-                                                        return (
-                                                                <div key={item.id} className="p-4 border-b last:border-b-0">
-                                                                    <h4 className="font-semibold">{item.name}</h4>
-                                                                    <Table>
-                                                                        <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                                                                        <TableBody>
-                                                                            {awards.map(award => (
-                                                                                <TableRow key={award.quoteItemId}>
-                                                                                    <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
-                                                                                    <TableCell>{award.vendorName}</TableCell>
-                                                                                    <TableCell>{award.proposedItemName}</TableCell>
-                                                                                    <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
-                                                                                    <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                                                                </TableRow>
-                                                                            ))}
-                                                                        </TableBody>
-                                                                    </Table>
-                                                                </div>
-                                                        )
-                                                    })}
-                                                </CardContent>
-                                            </Card>
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                </Accordion>
-                            )}
+                           <Accordion type="single" collapsible className="w-full" defaultValue="item-awards">
+                                <AccordionItem value="item-awards" className="border-none">
+                                    <AccordionTrigger className="text-lg font-semibold">
+                                        {awardStrategy === 'all' ? 'Overall Vendor Ranking' : 'Award Breakdown by Item'}
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                        <Card>
+                                            <CardContent className="p-0">
+                                            {awardStrategy === 'all' ? (
+                                                <Table>
+                                                    <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead className="text-right">Final Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                                    <TableBody>
+                                                        {quotations.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)).map(q => (
+                                                            <TableRow key={q.id}>
+                                                                <TableCell className="font-bold flex items-center gap-1">{getRankIcon(q.rank)} {q.rank}</TableCell>
+                                                                <TableCell>{q.vendorName}</TableCell>
+                                                                <TableCell className="text-right font-mono">{q.finalAverageScore?.toFixed(2)}</TableCell>
+                                                                <TableCell><Badge variant="outline">{q.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            ) : (
+                                                requisition.items.map(item => {
+                                                    const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
+                                                    return (
+                                                            <div key={item.id} className="p-4 border-b last:border-b-0">
+                                                                <h4 className="font-semibold">{item.name}</h4>
+                                                                <Table>
+                                                                    <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                                                    <TableBody>
+                                                                        {awards.map(award => (
+                                                                            <TableRow key={award.quoteItemId}>
+                                                                                <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
+                                                                                <TableCell>{award.vendorName}</TableCell>
+                                                                                <TableCell>{award.proposedItemName}</TableCell>
+                                                                                <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
+                                                                                <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                                            </TableRow>
+                                                                        ))}
+                                                                    </TableBody>
+                                                                </Table>
+                                                            </div>
+                                                    )
+                                                })
+                                            )}
+                                            </CardContent>
+                                        </Card>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
 
                              <Separator className="my-6"/>
 
@@ -2348,7 +2342,7 @@ const NotifyVendorDialog = ({
                             type="time"
                             className="w-32"
                             value={deadlineTime}
-                            onChange={(e) => setDeadlineTime(e.target.value)}
+                            onChange={(e) => setNewDeadlineTime(e.target.value)}
                         />
                     </div>
                 </div>
