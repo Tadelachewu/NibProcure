@@ -38,7 +38,7 @@ const quoteFormSchema = z.object({
     name: z.string().min(1, "Item name cannot be empty."),
     quantity: z.number(),
     unitPrice: z.coerce.number().min(0.01, "Price is required."),
-    leadTimeDays: z.coerce.number().min(0, "Lead time is required."),
+    leadTimeDays: z.coerce.number().min(0, "Delivery time is required."),
     brandDetails: z.string().min(1, "Brand/Model details are required."),
     imageUrl: z.string().optional(),
   })),
@@ -403,7 +403,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             <CardHeader>
                 <CardTitle>{quote ? 'Edit Your Quotation' : 'Submit Your Quotation'}</CardTitle>
                 <CardDescription>
-                    Please provide your pricing and estimated lead times for the items requested.
+                    Please provide your pricing and estimated delivery times for the items requested.
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -536,7 +536,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                                     <FormItem><FormLabel>Unit Price (ETB)</FormLabel><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                                                                 )}/>
                                                                 <FormField control={form.control} name={`items.${overallIndex}.leadTimeDays`} render={({ field }) => (
-                                                                    <FormItem><FormLabel>Lead Time (Days)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
+                                                                    <FormItem><FormLabel>Delivery Time (Days)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                                                                 )}/>
                                                             </div>
                                                         </Card>

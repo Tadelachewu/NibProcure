@@ -63,7 +63,7 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                                         <div className="flex justify-between">
                                             <div>
                                                 <p className="font-semibold">{item.name}</p>
-                                                <p className="text-xs text-muted-foreground">Qty: {item.quantity} | Lead Time: {item.leadTimeDays} days</p>
+                                                <p className="text-xs text-muted-foreground">Qty: {item.quantity} | Delivery Time: {item.leadTimeDays} days</p>
                                             </div>
                                             <p className="font-semibold">{item.unitPrice.toLocaleString()} ETB / unit</p>
                                         </div>
