@@ -3007,7 +3007,7 @@ export default function QuotationDetailsPage() {
                             {totalQuotePages > 1 && (
                                 <CardFooter className="flex items-center justify-end gap-2 pt-4">
                                     <span className="text-sm text-muted-foreground">Page {currentQuotesPage} of {totalQuotePages}</span>
-                                    <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(1)} disabled={currentQuotesPage === 1}></Button>
+                                    <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(1)} disabled={currentQuotesPage === 1}><ChevronsLeft /></Button>
                                     <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p - 1)} disabled={currentQuotesPage === 1}><ChevronLeft /></Button>
                                     <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p + 1)} disabled={currentQuotesPage === totalQuotePages}><ChevronRight /></Button>
                                     <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(totalQuotePages)} disabled={currentQuotesPage === totalQuotePages}><ChevronsRight /></Button>
@@ -3047,12 +3047,11 @@ export default function QuotationDetailsPage() {
              <CommitteeActions
                 user={user}
                 requisition={requisition}
-                quotations={quotations}
                 onFinalScoresSubmitted={fetchRequisitionAndQuotes}
              />
         )}
         
-        {isAuthorized && (isScoringComplete || requisition.status.startsWith('Scoring_')) && (
+        {isAuthorized && (requisition.financialCommitteeMemberIds?.length || 0) > 0 && (
              <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="scoring-progress">
                     <AccordionTrigger>
