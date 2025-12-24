@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, AlertTriangle, ChevronRight, ChevronLeft, ChevronsRight } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, ChevronDown, ChevronsRight, ChevronRight, ChevronLeft } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -2146,138 +2146,139 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                     </CardContent>
                                 </Card>
                             ) : (
-                                <Accordion type="single" collapsible className="w-full space-y-4">
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle>Award Breakdown by Item</CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            {requisition.items.map(item => {
-                                                const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
-                                                return (
-                                                    <AccordionItem key={item.id} value={item.id} className="mb-4 p-4 border rounded-md">
-                                                        <AccordionTrigger>
-                                                            <h4 className="font-semibold">{item.name}</h4>
-                                                        </AccordionTrigger>
-                                                        <AccordionContent>
-                                                            <Table>
-                                                                <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                                                                <TableBody>
-                                                                    {awards.map(award => (
-                                                                        <TableRow key={award.quoteItemId}>
-                                                                            <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
-                                                                            <TableCell>{award.vendorName}</TableCell>
-                                                                            <TableCell>{award.proposedItemName}</TableCell>
-                                                                            <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
-                                                                            <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                                                        </TableRow>
-                                                                    ))}
-                                                                </TableBody>
-                                                            </Table>
-                                                        </AccordionContent>
-                                                    </AccordionItem>
-                                                )
-                                            })}
-                                        </CardContent>
-                                    </Card>
+                                <Accordion type="single" collapsible className="w-full" defaultValue="item-awards">
+                                    <AccordionItem value="item-awards" className="border-none">
+                                        <AccordionTrigger className="text-lg font-semibold">Award Breakdown by Item</AccordionTrigger>
+                                        <AccordionContent>
+                                            <Card>
+                                                <CardContent className="p-0">
+                                                    {requisition.items.map(item => {
+                                                        const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
+                                                        return (
+                                                                <div key={item.id} className="p-4 border-b last:border-b-0">
+                                                                    <h4 className="font-semibold">{item.name}</h4>
+                                                                    <Table>
+                                                                        <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                                                        <TableBody>
+                                                                            {awards.map(award => (
+                                                                                <TableRow key={award.quoteItemId}>
+                                                                                    <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
+                                                                                    <TableCell>{award.vendorName}</TableCell>
+                                                                                    <TableCell>{award.proposedItemName}</TableCell>
+                                                                                    <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
+                                                                                    <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                                                </TableRow>
+                                                                            ))}
+                                                                        </TableBody>
+                                                                    </Table>
+                                                                </div>
+                                                        )
+                                                    })}
+                                                </CardContent>
+                                            </Card>
+                                        </AccordionContent>
+                                    </AccordionItem>
                                 </Accordion>
                             )}
 
                              <Separator className="my-6"/>
 
-                             <Card>
-                                 <CardHeader>
-                                     <CardTitle>Evaluation Committee Scoring Report</CardTitle>
-                                     <CardDescription>Detailed scores from each committee member for each vendor.</CardDescription>
-                                 </CardHeader>
-                                 <CardContent>
-                                     <Accordion type="multiple" className="w-full space-y-4">
-                                         {quotations.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)).map(quote => (
-                                            <AccordionItem key={quote.id} value={quote.id} className="border rounded-lg">
-                                                <AccordionTrigger className="p-4 hover:no-underline">
-                                                    <div className="flex justify-between items-start w-full">
-                                                        <div>
-                                                            <h4 className="font-semibold text-lg">{quote.vendorName}</h4>
-                                                            <p className="text-sm text-muted-foreground pt-1">
-                                                                Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> |
-                                                                Rank: <span className="font-bold">{quote.rank || 'N/A'}</span>
-                                                            </p>
-                                                        </div>
-                                                        <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
-                                                    </div>
-                                                </AccordionTrigger>
-                                                <AccordionContent className="p-4 border-t">
-                                                    <div className="space-y-4">
-                                                    {quote.scores && quote.scores.length > 0 ? (
-                                                        quote.scores.map(scoreSet => (
-                                                            <div key={scoreSet.scorerId} className="p-3 border rounded-md break-inside-avoid print:border-gray-200">
-                                                                <div className="flex items-center justify-between mb-3 pb-2 border-b print:border-gray-200">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <Avatar className="h-8 w-8">
-                                                                            <AvatarImage src={`https://picsum.photos/seed/${scoreSet.scorerId}/32/32`} />
-                                                                            <AvatarFallback>{scoreSet.scorer?.name?.charAt(0) || 'U'}</AvatarFallback>
-                                                                        </Avatar>
-                                                                        <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                    <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
-                                                                    <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPpp')}</p>
-                                                                    </div>
+                            <Accordion type="single" collapsible className="w-full" defaultValue="scoring-report">
+                                <AccordionItem value="scoring-report" className="border-none">
+                                    <AccordionTrigger className="text-lg font-semibold">Evaluation Committee Scoring Report</AccordionTrigger>
+                                    <AccordionContent>
+                                     <Card>
+                                         <CardContent className="p-4">
+                                             <Accordion type="multiple" className="w-full space-y-4">
+                                                 {quotations.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)).map(quote => (
+                                                    <AccordionItem key={quote.id} value={quote.id} className="border rounded-lg">
+                                                        <AccordionTrigger className="p-4 hover:no-underline">
+                                                            <div className="flex justify-between items-start w-full">
+                                                                <div>
+                                                                    <h4 className="font-semibold text-lg">{quote.vendorName}</h4>
+                                                                    <p className="text-sm text-muted-foreground pt-1">
+                                                                        Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> |
+                                                                        Rank: <span className="font-bold">{quote.rank || 'N/A'}</span>
+                                                                    </p>
                                                                 </div>
-                                                                <div className="space-y-4">
-                                                                    {scoreSet.itemScores.map(itemScore => {
-                                                                        const scoredQuoteItem = quote.items.find(qi => qi.id === itemScore.quoteItemId);
-                                                                        const hasFinancialScores = (requisition.evaluationCriteria?.financialCriteria?.length ?? 0) > 0;
-                                                                        const hasTechnicalScores = (requisition.evaluationCriteria?.technicalCriteria?.length ?? 0) > 0;
-                                                                        
-                                                                        return (
-                                                                            <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
-                                                                                <h4 className="font-semibold text-sm mb-2">Item: {scoredQuoteItem?.name || 'Unknown Item'}</h4>
-                                                                                <div className={cn("grid gap-4 print:grid-cols-2", hasFinancialScores && hasTechnicalScores ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
-                                                                                    {hasFinancialScores && itemScore.scores.some(s => s.type === 'FINANCIAL') && (
-                                                                                        <div>
-                                                                                            <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Financial Scores ({requisition.evaluationCriteria?.financialWeight}%)</h5>
-                                                                                            {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
-                                                                                                <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
-                                                                                                    <div className="flex justify-between items-center font-medium">
-                                                                                                        <p>{getCriterionName(s.financialCriterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
-                                                                                                        <p className="font-bold">{s.score}/100</p>
-                                                                                                    </div>
-                                                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                                                </div>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    )}
-                                                                                    {hasTechnicalScores && itemScore.scores.some(s => s.type === 'TECHNICAL') && (
-                                                                                        <div>
-                                                                                            <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical Scores ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
-                                                                                            {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
-                                                                                                <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
-                                                                                                    <div className="flex justify-between items-center font-medium">
-                                                                                                        <p>{getCriterionName(s.technicalCriterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
-                                                                                                        <p className="font-bold">{s.score}/100</p>
-                                                                                                    </div>
-                                                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                                                </div>
-                                                                                            ))}
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-                                                                        )
-                                                                    })}
-                                                                </div>
-                                                                {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
+                                                                <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
                                                             </div>
-                                                        ))
-                                                    ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
-                                                    </div>
-                                                </AccordionContent>
-                                            </AccordionItem>
-                                         ))}
-                                     </Accordion>
-                                 </CardContent>
-                             </Card>
+                                                        </AccordionTrigger>
+                                                        <AccordionContent className="p-4 border-t">
+                                                            <div className="space-y-4">
+                                                            {quote.scores && quote.scores.length > 0 ? (
+                                                                quote.scores.map(scoreSet => (
+                                                                    <div key={scoreSet.scorerId} className="p-3 border rounded-md break-inside-avoid print:border-gray-200">
+                                                                        <div className="flex items-center justify-between mb-3 pb-2 border-b print:border-gray-200">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <Avatar className="h-8 w-8">
+                                                                                    <AvatarImage src={`https://picsum.photos/seed/${scoreSet.scorerId}/32/32`} />
+                                                                                    <AvatarFallback>{scoreSet.scorer?.name?.charAt(0) || 'U'}</AvatarFallback>
+                                                                                </Avatar>
+                                                                                <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
+                                                                            </div>
+                                                                            <div className="text-right">
+                                                                            <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
+                                                                            <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPpp')}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="space-y-4">
+                                                                            {scoreSet.itemScores.map(itemScore => {
+                                                                                const scoredQuoteItem = quote.items.find(qi => qi.id === itemScore.quoteItemId);
+                                                                                const hasFinancialScores = (requisition.evaluationCriteria?.financialCriteria?.length ?? 0) > 0;
+                                                                                const hasTechnicalScores = (requisition.evaluationCriteria?.technicalCriteria?.length ?? 0) > 0;
+                                                                                
+                                                                                return (
+                                                                                    <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
+                                                                                        <h4 className="font-semibold text-sm mb-2">Item: {scoredQuoteItem?.name || 'Unknown Item'}</h4>
+                                                                                        <div className={cn("grid gap-4 print:grid-cols-2", hasFinancialScores && hasTechnicalScores ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
+                                                                                            {hasFinancialScores && itemScore.scores.some(s => s.type === 'FINANCIAL') && (
+                                                                                                <div>
+                                                                                                    <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Financial Scores ({requisition.evaluationCriteria?.financialWeight}%)</h5>
+                                                                                                    {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
+                                                                                                        <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                                            <div className="flex justify-between items-center font-medium">
+                                                                                                                <p>{getCriterionName(s.financialCriterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                                                                <p className="font-bold">{s.score}/100</p>
+                                                                                                            </div>
+                                                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                                                        </div>
+                                                                                                    ))}
+                                                                                                </div>
+                                                                                            )}
+                                                                                            {hasTechnicalScores && itemScore.scores.some(s => s.type === 'TECHNICAL') && (
+                                                                                                <div>
+                                                                                                    <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical Scores ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
+                                                                                                    {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
+                                                                                                        <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                                            <div className="flex justify-between items-center font-medium">
+                                                                                                                <p>{getCriterionName(s.technicalCriterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
+                                                                                                                <p className="font-bold">{s.score}/100</p>
+                                                                                                            </div>
+                                                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                                                        </div>
+                                                                                                    ))}
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )
+                                                                            })}
+                                                                        </div>
+                                                                        {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
+                                                                    </div>
+                                                                ))
+                                                            ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
+                                                            </div>
+                                                        </AccordionContent>
+                                                    </AccordionItem>
+                                                 ))}
+                                             </Accordion>
+                                         </CardContent>
+                                     </Card>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
                         </div>
                     </ScrollArea>
                 </div>
@@ -2863,23 +2864,29 @@ export default function QuotationDetailsPage() {
             <WorkflowStepper step={currentStep} />
         </Card>
 
-        {requisition.evaluationCriteria && (
-            <Card>
-                 <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <CardTitle className="flex items-center gap-2"><ClipboardList /> Evaluation Criteria</CardTitle>
-                        <CardDescription>The following criteria were set by the requester to guide quote evaluation.</CardDescription>
-                    </div>
-                     <Button variant="outline" onClick={() => setIsDetailsOpen(true)} className="w-full sm:w-auto">
-                        <Eye className="mr-2 h-4 w-4" />
-                        View Requisition Details
-                    </Button>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-md whitespace-pre-wrap">{formatEvaluationCriteria(requisition.evaluationCriteria)}</p>
-                </CardContent>
-            </Card>
-        )}
+        <Accordion type="single" collapsible className="w-full" defaultValue="evaluation-criteria">
+            <AccordionItem value="evaluation-criteria">
+                <AccordionTrigger>
+                    <CardTitle className="flex items-center gap-2 text-lg"><ClipboardList /> Evaluation Criteria</CardTitle>
+                </AccordionTrigger>
+                <AccordionContent>
+                    <Card className="border-0 shadow-none">
+                        <CardHeader>
+                            <CardDescription>The following criteria were set by the requester to guide quote evaluation.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-md whitespace-pre-wrap">{formatEvaluationCriteria(requisition.evaluationCriteria)}</p>
+                        </CardContent>
+                         <CardFooter>
+                            <Button variant="outline" onClick={() => setIsDetailsOpen(true)} className="w-full sm:w-auto">
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Full Requisition Details
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </AccordionContent>
+            </AccordionItem>
+        </Accordion>
 
         {noBidsAndDeadlinePassed && isAuthorized && (
             <Card className="border-amber-500">
@@ -2930,97 +2937,110 @@ export default function QuotationDetailsPage() {
         />
 
         {(currentStep !== 'rfq' || readyForCommitteeAssignment) && canManageCommittees && currentStep !== 'award' && currentStep !== 'finalize' && currentStep !== 'completed' && (
-            <EvaluationCommitteeManagement
-                requisition={requisition}
-                onCommitteeUpdated={fetchRequisitionAndQuotes}
-                open={isCommitteeDialogOpen}
-                onOpenChange={setCommitteeDialogOpen}
-                isAuthorized={isAuthorized}
-            />
+             <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="committee-management">
+                    <AccordionTrigger>
+                        <CardTitle className="flex items-center gap-2 text-lg"><Users /> Evaluation Committee (Scorers)</CardTitle>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                        <EvaluationCommitteeManagement
+                            requisition={requisition}
+                            onCommitteeUpdated={fetchRequisitionAndQuotes}
+                            open={isCommitteeDialogOpen}
+                            onOpenChange={setCommitteeDialogOpen}
+                            isAuthorized={isAuthorized}
+                        />
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
         )}
 
 
         {(currentStep !== 'rfq' || readyForCommitteeAssignment) && (
-            <>
-                <Card>
-                    <CardHeader>
-                        <div>
-                            <CardTitle>Quotation Overview</CardTitle>
-                            <CardDescription>{requisition.title}</CardDescription>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
-                                {requisition.deadline && (
-                                    <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
-                                        <CalendarIcon className="h-4 w-4"/>
-                                        <span>Quote Deadline:</span>
-                                        <span className="font-semibold text-foreground">{format(new Date(requisition.deadline), 'PPpp')}</span>
+            <Accordion type="single" collapsible className="w-full" defaultValue="quotation-overview">
+                 <AccordionItem value="quotation-overview">
+                    <AccordionTrigger>
+                        <CardTitle className="flex items-center gap-2 text-lg"><FileBadge/> Quotation Overview</CardTitle>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                        <Card className="border-0 shadow-none">
+                            <CardHeader>
+                                <CardDescription>{requisition.title}</CardDescription>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
+                                    {requisition.deadline && (
+                                        <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                                            <CalendarIcon className="h-4 w-4"/>
+                                            <span>Quote Deadline:</span>
+                                            <span className="font-semibold text-foreground">{format(new Date(requisition.deadline), 'PPpp')}</span>
+                                        </div>
+                                    )}
+                                    {requisition.scoringDeadline && (
+                                        <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                                            <Timer className="h-4 w-4"/>
+                                            <span>Scoring Deadline:</span>
+                                            <span className="font-semibold text-foreground">{format(new Date(requisition.scoringDeadline), 'PPpp')}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                {loading ? (
+                                    <div className="flex items-center justify-center h-24">
+                                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
                                     </div>
+                                ) : (
+                                    <Tabs value={committeeTab} onValueChange={(value) => setCommitteeTab(value as any)} defaultValue="pending">
+                                        {user && (user.roles as string[]).some(r => r.includes('Committee')) && <TabsList className="mb-4">
+                                            <TabsTrigger value="pending">Pending Your Score ({pendingQuotes.length})</TabsTrigger>
+                                            <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
+                                        </TabsList>}
+                                        <TabsContent value="pending">
+                                            <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember} />
+                                        </TabsContent>
+                                        <TabsContent value="scored">
+                                            <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember}/>
+                                        </TabsContent>
+                                    </Tabs>
                                 )}
-                                {requisition.scoringDeadline && (
-                                    <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
-                                        <Timer className="h-4 w-4"/>
-                                        <span>Scoring Deadline:</span>
-                                        <span className="font-semibold text-foreground">{format(new Date(requisition.scoringDeadline), 'PPpp')}</span>
-                                    </div>
+                            </CardContent>
+
+                            {totalQuotePages > 1 && (
+                                <CardFooter className="flex items-center justify-end gap-2 pt-4">
+                                    <span className="text-sm text-muted-foreground">Page {currentQuotesPage} of {totalQuotePages}</span>
+                                    <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(1)} disabled={currentQuotesPage === 1}></Button>
+                                    <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p - 1)} disabled={currentQuotesPage === 1}><ChevronLeft /></Button>
+                                    <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p + 1)} disabled={currentQuotesPage === totalQuotePages}><ChevronRight /></Button>
+                                    <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(totalQuotePages)} disabled={currentQuotesPage === totalQuotePages}><ChevronsRight /></Button>
+                                </CardFooter>
+                            )}
+
+                            <Dialog open={isScoringFormOpen} onOpenChange={setScoringFormOpen}>
+                                {selectedQuoteForScoring && requisition && user && (
+                                    <ScoringDialog
+                                        quote={selectedQuoteForScoring}
+                                        requisition={requisition}
+                                        user={user}
+                                        onScoreSubmitted={handleScoreSubmitted}
+                                        isScoringDeadlinePassed={isScoringDeadlinePassed}
+                                        hidePrices={hidePricesForScoring}
+                                    />
                                 )}
-                            </div>
-                        </div>
-                    </CardHeader>
-                     <CardContent>
-                        {loading ? (
-                            <div className="flex items-center justify-center h-24">
-                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                            </div>
-                        ) : (
-                             <Tabs value={committeeTab} onValueChange={(value) => setCommitteeTab(value as any)} defaultValue="pending">
-                                {user && (user.roles as string[]).some(r => r.includes('Committee')) && <TabsList className="mb-4">
-                                    <TabsTrigger value="pending">Pending Your Score ({pendingQuotes.length})</TabsTrigger>
-                                    <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
-                                </TabsList>}
-                                <TabsContent value="pending">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember} />
-                                </TabsContent>
-                                <TabsContent value="scored">
-                                    <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember}/>
-                                </TabsContent>
-                             </Tabs>
-                        )}
-                    </CardContent>
-
-                    {totalQuotePages > 1 && (
-                        <CardFooter className="flex items-center justify-end gap-2 pt-4">
-                            <span className="text-sm text-muted-foreground">Page {currentQuotesPage} of {totalQuotePages}</span>
-                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(1)} disabled={currentQuotesPage === 1}></Button>
-                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p - 1)} disabled={currentQuotesPage === 1}><ChevronLeft /></Button>
-                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p + 1)} disabled={currentQuotesPage === totalQuotePages}><ChevronRight /></Button>
-                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(totalQuotePages)} disabled={currentQuotesPage === totalQuotePages}><ChevronsRight /></Button>
-                        </CardFooter>
-                    )}
-
-                    <Dialog open={isScoringFormOpen} onOpenChange={setScoringFormOpen}>
-                        {selectedQuoteForScoring && requisition && user && (
-                            <ScoringDialog
-                                quote={selectedQuoteForScoring}
-                                requisition={requisition}
-                                user={user}
-                                onScoreSubmitted={handleScoreSubmitted}
-                                isScoringDeadlinePassed={isScoringDeadlinePassed}
-                                hidePrices={hidePricesForScoring}
-                            />
-                        )}
-                    </Dialog>
-                    {isAccepted && (
-                        <CardFooter>
-                            <Alert variant="default" className="w-full border-green-600">
-                                <CheckCircle className="h-4 w-4 text-green-600" />
-                                <AlertTitle>Award Accepted</AlertTitle>
-                                <AlertDescription>
-                                    The vendor has accepted the award. The PO has been generated.
-                                </AlertDescription>
-                            </Alert>
-                        </CardFooter>
-                    )}
-                </Card>
-            </>
+                            </Dialog>
+                            {isAccepted && (
+                                <CardFooter>
+                                    <Alert variant="default" className="w-full border-green-600">
+                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                        <AlertTitle>Award Accepted</AlertTitle>
+                                        <AlertDescription>
+                                            The vendor has accepted the award. The PO has been generated.
+                                        </AlertDescription>
+                                    </Alert>
+                                </CardFooter>
+                            )}
+                        </Card>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
         )}
         
         {isAssignedCommitteeMember && (
@@ -3032,76 +3052,93 @@ export default function QuotationDetailsPage() {
         )}
         
         {isAuthorized && (isScoringComplete || requisition.status.startsWith('Scoring_')) && (
-            <ScoringProgressTracker
-                requisition={requisition}
-                quotations={quotations}
-                allUsers={allUsers}
-                onSuccess={fetchRequisitionAndQuotes}
-                onCommitteeUpdate={setCommitteeDialogOpen}
-                isFinalizing={isFinalizing}
-                isAuthorized={isAuthorized}
-            />
+             <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="scoring-progress">
+                    <AccordionTrigger>
+                        <CardTitle className="flex items-center gap-2 text-lg"><GanttChart /> Scoring Progress</CardTitle>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                        <ScoringProgressTracker
+                            requisition={requisition}
+                            quotations={quotations}
+                            allUsers={allUsers}
+                            onSuccess={fetchRequisitionAndQuotes}
+                            onCommitteeUpdate={setCommitteeDialogOpen}
+                            isFinalizing={isFinalizing}
+                            isAuthorized={isAuthorized}
+                        />
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
         )}
         
         {(showAwardingCenter || awardIsDeclined || (isPerItemStrategy && (hasDeclinedWithStandby || hasFailedOrDeclined))) && isAuthorized && (
-            <Card className="mt-6">
-            <CardHeader>
-                <CardTitle>Awarding Center</CardTitle>
-                <CardDescription>
-                {showAwardingCenter && 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
-                {awardIsDeclined && 'An award was declined. You may now promote a standby vendor or restart the RFQ for any failed items.'}
-                {isPerItemStrategy && hasDeclinedWithStandby && 'Per-item awards: declined items with standby detected — you may promote standby vendors.'}
-                {isPerItemStrategy && hasFailedOrDeclined && 'Per-item awards: failed or declined items detected — you may restart RFQs for those items.'}
-                </CardDescription>
-            </CardHeader>
-            <CardFooter className="gap-4">
-                <AwardStandbyButton
-                    requisition={requisition}
-                    quotations={quotations}
-                    onPromote={handleAwardChange}
-                    isChangingAward={isChangingAward}
-                />
+            <Accordion type="single" collapsible className="w-full" defaultValue="awarding-center">
+                <AccordionItem value="awarding-center">
+                    <AccordionTrigger>
+                        <CardTitle className="flex items-center gap-2 text-lg"><TrophyIcon /> Awarding Center</CardTitle>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                        <Card className="mt-6 border-amber-400">
+                            <CardHeader>
+                                <CardDescription>
+                                {showAwardingCenter && 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
+                                {awardIsDeclined && 'An award was declined. You may now promote a standby vendor or restart the RFQ for any failed items.'}
+                                {isPerItemStrategy && hasDeclinedWithStandby && 'Per-item awards: declined items with standby detected — you may promote standby vendors.'}
+                                {isPerItemStrategy && hasFailedOrDeclined && 'Per-item awards: failed or declined items detected — you may restart RFQs for those items.'}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardFooter className="gap-4">
+                                <AwardStandbyButton
+                                    requisition={requisition}
+                                    quotations={quotations}
+                                    onPromote={handleAwardChange}
+                                    isChangingAward={isChangingAward}
+                                />
 
-                {showAwardingCenter && (
-                <>
-                    <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
-                    <DialogTrigger asChild>
-                        <Button disabled={isFinalizing}>Award All to Single Vendor</Button>
-                    </DialogTrigger>
-                    <AwardCenterDialog
-                        requisition={requisition}
-                        quotations={quotations}
-                        onFinalize={handleFinalizeScores}
-                        onClose={() => setSingleAwardCenterOpen(false)}
-                    />
-                    </Dialog>
+                                {showAwardingCenter && (
+                                <>
+                                    <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button disabled={isFinalizing}>Award All to Single Vendor</Button>
+                                    </DialogTrigger>
+                                    <AwardCenterDialog
+                                        requisition={requisition}
+                                        quotations={quotations}
+                                        onFinalize={handleFinalizeScores}
+                                        onClose={() => setSingleAwardCenterOpen(false)}
+                                    />
+                                    </Dialog>
 
-                    {requisition.items.length > 1 && (
-                        <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
-                        <DialogTrigger asChild>
-                            <Button variant="secondary" disabled={isFinalizing}>
-                            Award by Best Offer (Per Item)
-                            </Button>
-                        </DialogTrigger>
-                        <BestItemAwardDialog
-                            requisition={requisition}
-                            quotations={quotations}
-                            onFinalize={handleFinalizeScores}
-                            isOpen={isBestItemAwardCenterOpen}
-                            onClose={() => setBestItemAwardCenterOpen(false)}
-                        />
-                        </Dialog>
-                    )}
-                </>
-                )}
+                                    {requisition.items.length > 1 && (
+                                        <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button variant="secondary" disabled={isFinalizing}>
+                                            Award by Best Offer (Per Item)
+                                            </Button>
+                                        </DialogTrigger>
+                                        <BestItemAwardDialog
+                                            requisition={requisition}
+                                            quotations={quotations}
+                                            onFinalize={handleFinalizeScores}
+                                            isOpen={isBestItemAwardCenterOpen}
+                                            onClose={() => setBestItemAwardCenterOpen(false)}
+                                        />
+                                        </Dialog>
+                                    )}
+                                </>
+                                )}
 
-                <RestartRfqDialog 
-                    requisition={requisition} 
-                    vendors={vendors} 
-                    onRfqRestarted={fetchRequisitionAndQuotes}
-                />
-            </CardFooter>
-            </Card>
+                                <RestartRfqDialog 
+                                    requisition={requisition} 
+                                    vendors={vendors} 
+                                    onRfqRestarted={fetchRequisitionAndQuotes}
+                                />
+                            </CardFooter>
+                        </Card>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
         )}
 
 
