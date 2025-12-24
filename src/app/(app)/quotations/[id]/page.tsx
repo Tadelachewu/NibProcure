@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -80,7 +81,7 @@ const quoteFormSchema = z.object({
     name: z.string().min(1, "Item name cannot be empty."),
     quantity: z.number(),
     unitPrice: z.coerce.number().min(0.01, "Price is required."),
-    leadTimeDays: z.coerce.number().min(0, "Lead time is required."),
+    leadTimeDays: z.coerce.number().min(0, "Delivery time is required."),
   })),
 });
 
@@ -191,7 +192,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
                                         name={`items.${index}.leadTimeDays`}
                                         render={({ field }) => (
                                             <FormItem>
-                                                <FormLabel>Lead Time (Days)</FormLabel>
+                                                <FormLabel>Delivery Time (Days)</FormLabel>
                                                 <FormControl><Input type="number" {...field} /></FormControl>
                                                 <FormMessage />
                                             </FormItem>
@@ -1474,7 +1475,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                         <p>{quoteItem.brandDetails || 'Not Provided'}</p>
                     </div>
                     <div>
-                        <p className="font-semibold text-muted-foreground">Quoted Lead Time</p>
+                        <p className="font-semibold text-muted-foreground">Quoted Delivery Time</p>
                         <p>{quoteItem.leadTimeDays} days</p>
                     </div>
                     {!hidePrices &&
@@ -2145,35 +2146,41 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                     </CardContent>
                                 </Card>
                             ) : (
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Award Breakdown by Item</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {requisition.items.map(item => {
-                                            const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
-                                            return (
-                                                <div key={item.id} className="mb-4 p-4 border rounded-md">
-                                                    <h4 className="font-semibold">{item.name}</h4>
-                                                    <Table>
-                                                        <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                                                        <TableBody>
-                                                            {awards.map(award => (
-                                                                <TableRow key={award.quoteItemId}>
-                                                                    <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
-                                                                    <TableCell>{award.vendorName}</TableCell>
-                                                                    <TableCell>{award.proposedItemName}</TableCell>
-                                                                    <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
-                                                                    <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                                                </TableRow>
-                                                            ))}
-                                                        </TableBody>
-                                                    </Table>
-                                                </div>
-                                            )
-                                        })}
-                                    </CardContent>
-                                </Card>
+                                <Accordion type="single" collapsible className="w-full space-y-4">
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle>Award Breakdown by Item</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            {requisition.items.map(item => {
+                                                const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
+                                                return (
+                                                    <AccordionItem key={item.id} value={item.id} className="mb-4 p-4 border rounded-md">
+                                                        <AccordionTrigger>
+                                                            <h4 className="font-semibold">{item.name}</h4>
+                                                        </AccordionTrigger>
+                                                        <AccordionContent>
+                                                            <Table>
+                                                                <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Score</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                                                <TableBody>
+                                                                    {awards.map(award => (
+                                                                        <TableRow key={award.quoteItemId}>
+                                                                            <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
+                                                                            <TableCell>{award.vendorName}</TableCell>
+                                                                            <TableCell>{award.proposedItemName}</TableCell>
+                                                                            <TableCell className="text-right font-mono">{award.score.toFixed(2)}</TableCell>
+                                                                            <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                                        </TableRow>
+                                                                    ))}
+                                                                </TableBody>
+                                                            </Table>
+                                                        </AccordionContent>
+                                                    </AccordionItem>
+                                                )
+                                            })}
+                                        </CardContent>
+                                    </Card>
+                                </Accordion>
                             )}
 
                              <Separator className="my-6"/>
@@ -2938,7 +2945,7 @@ export default function QuotationDetailsPage() {
                 <Card>
                     <CardHeader>
                         <div>
-                            <CardTitle>Quotations for {requisition.id}</CardTitle>
+                            <CardTitle>Quotation Overview</CardTitle>
                             <CardDescription>{requisition.title}</CardDescription>
                             <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
                                 {requisition.deadline && (
@@ -3239,10 +3246,3 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
-
-
-
-
-
-
-
