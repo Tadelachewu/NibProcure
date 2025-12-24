@@ -54,22 +54,6 @@ const nextConfig = {
       },
     ];
   },
-  async rewrites() {
-    return [
-      {
-        source: '/uploads',
-        destination: '/404',
-      },
-       {
-        source: '/uploads/:path((?!.*\\.\\w+).*)', // Match directory paths, not files
-        destination: '/404',
-      },
-      {
-        source: '/uploads/:path*',
-        destination: '/uploads/:path*',
-      },
-    ];
-  },
 };
 
 module.exports = nextConfig;
