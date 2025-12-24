@@ -2501,12 +2501,12 @@ export default function QuotationDetailsPage() {
             if (proposalsForItem.length > 0) {
                 // Find the best proposal from this vendor for this item
                 const bestProposal = proposalsForItem.map(proposal => {
-                    let totalScore = 0;
+                    let totalItemScore = 0;
                     let scorerCount = 0;
                     quote.scores?.forEach(scoreSet => {
                         const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
                         if(itemScore) {
-                            totalScore += itemScore.finalScore;
+                            totalItemScore += itemScore.finalScore;
                             scorerCount++;
                         }
                     });
@@ -2849,7 +2849,7 @@ export default function QuotationDetailsPage() {
           </Button>
            <div className="flex items-center gap-2">
                 {isAwarded && (
-                  <Button asChild variant="secondary">
+                  <Button asChild variant="secondary" onClick={() => router.push(`/requisitions/${id}/award-details`)}>
                       <Link href={`/requisitions/${id}/award-details`}><Calculator className="mr-2 h-4 w-4" /> View Calculation</Link>
                   </Button>
                 )}
