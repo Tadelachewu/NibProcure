@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { ScrollArea } from './ui/scroll-area';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 
 
 // --- TYPE DEFINITIONS ---
@@ -369,34 +370,41 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                     </div>
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-4">
-                                {vendor.itemBids.map(itemBid => (
-                                    <details key={itemBid.requisitionItemId} className="p-4 border rounded-lg bg-muted/30">
-                                        <summary className="font-semibold cursor-pointer flex justify-between items-center">
-                                            <span>Proposals for "{itemBid.requisitionItemName}" &rarr; Champion Bid: "{itemBid.championBid.itemName}"</span>
-                                             <DialogTrigger asChild>
-                                                 <Button variant="link" size="sm" onClick={(e) => {e.stopPropagation(); setSelectedCalculation(itemBid.championBid);}}>
-                                                    ({itemBid.championBid.finalItemScore.toFixed(2)} pts)
-                                                 </Button>
-                                            </DialogTrigger>
-                                        </summary>
-                                        <div className="mt-4 space-y-4">
-                                            {itemBid.allProposals.map(proposal => (
-                                                 <Card key={proposal.quoteItemId} className={cn("p-4", proposal.quoteItemId === itemBid.championBid.quoteItemId && "border-primary")}>
-                                                    <div className="flex justify-between items-center mb-4">
-                                                        <h4 className="font-semibold text-base">{proposal.itemName}</h4>
-                                                         <DialogTrigger asChild>
-                                                             <Badge variant={proposal.quoteItemId === itemBid.championBid.quoteItemId ? "default" : "outline"} className="cursor-pointer" onClick={() => setSelectedCalculation(proposal)}>
-                                                                {proposal.quoteItemId === itemBid.championBid.quoteItemId && <Check className="mr-1 h-3 w-3"/>}
-                                                                Final Score: {proposal.finalItemScore.toFixed(2)}
-                                                             </Badge>
+                            <CardContent>
+                                <Accordion type="single" collapsible>
+                                    <AccordionItem value="bids">
+                                        <AccordionTrigger>View Champion Bids ({vendor.itemBids.length})</AccordionTrigger>
+                                        <AccordionContent className="pt-4 space-y-4">
+                                            {vendor.itemBids.map(itemBid => (
+                                                <details key={itemBid.requisitionItemId} className="p-4 border rounded-lg bg-muted/30">
+                                                    <summary className="font-semibold cursor-pointer flex justify-between items-center">
+                                                        <span>Proposals for "{itemBid.requisitionItemName}" &rarr; Champion Bid: "{itemBid.championBid.itemName}"</span>
+                                                        <DialogTrigger asChild>
+                                                            <Button variant="link" size="sm" onClick={(e) => {e.stopPropagation(); setSelectedCalculation(itemBid.championBid);}}>
+                                                                ({itemBid.championBid.finalItemScore.toFixed(2)} pts)
+                                                            </Button>
                                                         </DialogTrigger>
+                                                    </summary>
+                                                    <div className="mt-4 space-y-4">
+                                                        {itemBid.allProposals.map(proposal => (
+                                                            <Card key={proposal.quoteItemId} className={cn("p-4", proposal.quoteItemId === itemBid.championBid.quoteItemId && "border-primary")}>
+                                                                <div className="flex justify-between items-center mb-4">
+                                                                    <h4 className="font-semibold text-base">{proposal.itemName}</h4>
+                                                                    <DialogTrigger asChild>
+                                                                        <Badge variant={proposal.quoteItemId === itemBid.championBid.quoteItemId ? "default" : "outline"} className="cursor-pointer" onClick={() => setSelectedCalculation(proposal)}>
+                                                                            {proposal.quoteItemId === itemBid.championBid.quoteItemId && <Check className="mr-1 h-3 w-3"/>}
+                                                                            Final Score: {proposal.finalItemScore.toFixed(2)}
+                                                                        </Badge>
+                                                                    </DialogTrigger>
+                                                                </div>
+                                                            </Card>
+                                                        ))}
                                                     </div>
-                                                 </Card>
+                                                </details>
                                             ))}
-                                        </div>
-                                    </details>
-                                ))}
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
                             </CardContent>
                         </Card>
                     ))}
@@ -409,21 +417,21 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                     <CardTitle>Strategy 2: Best Offer (Per Item)</CardTitle>
                     <CardDescription>Compares all vendor proposals for each individual item and selects the highest-scoring bid for each.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent>
+                    <Accordion type="multiple" className="space-y-4">
                     {bestItemResults.map(item => (
-                        <Card key={item.itemName}>
-                            <CardHeader>
-                                 <CardTitle>Item: {item.itemName}</CardTitle>
-                                 <CardDescription>Comparison of all vendor bids for this item.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
+                        <AccordionItem value={item.itemName} key={item.itemName}>
+                            <AccordionTrigger className="font-semibold bg-muted/50 px-4 rounded-md">
+                                {item.itemName} &rarr; Winner: {item.winner?.vendorName || 'N/A'} ({item.winner?.calculation.finalItemScore.toFixed(2)} pts)
+                            </AccordionTrigger>
+                            <AccordionContent className="pt-4">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Rank</TableHead>
                                             <TableHead>Vendor</TableHead>
-                                            <TableHead>Proposed Item Name</TableHead>
-                                            <TableHead className="text-right">Final Item Score</TableHead>
+                                            <TableHead>Proposed Item</TableHead>
+                                            <TableHead className="text-right">Final Score</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -443,14 +451,10 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                         ))}
                                     </TableBody>
                                 </Table>
-                                {item.winner && 
-                                    <div className="mt-4 p-3 bg-primary/10 rounded-md text-center">
-                                        <p className="font-semibold">Winner for this item: <span className="text-primary">{item.winner.vendorName}</span></p>
-                                    </div>
-                                }
-                            </CardContent>
-                        </Card>
+                            </AccordionContent>
+                        </AccordionItem>
                     ))}
+                    </Accordion>
                 </CardContent>
             </Card>
              {selectedCalculation && requisition.evaluationCriteria && (
