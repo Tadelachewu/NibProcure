@@ -1153,12 +1153,9 @@ export default function VendorRequisitionPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Requisition Details</CardTitle>
-                        <div className="text-sm text-muted-foreground">
-                            ID: {requisition.id}
-                            <div className="text-xs text-destructive mt-1">
-                                Quotation Deadline: {requisition.deadline ? format(new Date(requisition.deadline), 'PPpp') : 'N/A'}
-                            </div>
-                        </div>
+                        <CardDescription className="text-xs text-destructive mt-1">
+                            Quotation Deadline: {requisition.deadline ? format(new Date(requisition.deadline), 'PPpp') : 'N/A'}
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {requisition.cpoAmount && requisition.cpoAmount > 0 && (
@@ -1197,7 +1194,7 @@ export default function VendorRequisitionPage() {
                                 <Separator />
                                 <div>
                                     <h3 className="font-semibold text-sm mb-2">Additional Questions from Requester</h3>
-                                    <div className="space-y-3 text-sm">
+                                    <div className="space-y-3 text-sm border rounded-md p-4">
                                         {requisition.customQuestions.map((q,i) => (
                                             <div key={`${q.id}-${i}`}>
                                                 <p className="font-medium">{q.questionText}</p>
