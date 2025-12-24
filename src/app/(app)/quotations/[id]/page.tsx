@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -3047,12 +3046,11 @@ export default function QuotationDetailsPage() {
              <CommitteeActions
                 user={user}
                 requisition={requisition}
-                quotations={quotations}
                 onFinalScoresSubmitted={fetchRequisitionAndQuotes}
              />
         )}
         
-        {isAuthorized && (isScoringComplete || requisition.status.startsWith('Scoring_')) && (
+        {isAuthorized && (requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete') && (
              <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="scoring-progress">
                     <AccordionTrigger>
@@ -3283,4 +3281,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         </Card>
     );
 };
+    
+
     
