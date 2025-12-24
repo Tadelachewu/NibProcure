@@ -33,7 +33,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon } from 'lucide-react';
-import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
+import { useForm, useFieldArray, FormProvider, useFormContext } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -1936,18 +1936,38 @@ const ScoringProgressTracker = ({
                             <AlertDialogDescription>Select how you want to award the items in this requisition.</AlertDialogDescription>
                         </AlertDialogHeader>
                         <div className="py-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Card className="hover:bg-muted/50 cursor-pointer" onClick={() => setAwardCenterOpen(true)}>
-                                <CardHeader>
-                                    <CardTitle>Award All to Single Vendor</CardTitle>
-                                    <CardDescription>The system will recommend the vendor with the highest overall score.</CardDescription>
-                                </CardHeader>
-                            </Card>
-                             <Card className="hover:bg-muted/50 cursor-pointer" onClick={() => setBestItemAwardOpen(true)}>
-                                <CardHeader>
-                                    <CardTitle>Award by Best Offer (Per Item)</CardTitle>
-                                    <CardDescription>Award each item to the vendor with the best offer for that specific item.</CardDescription>
-                                </CardHeader>
-                            </Card>
+                            <Dialog>
+                                <DialogTrigger asChild>
+                                    <Card className="hover:bg-muted/50 cursor-pointer">
+                                        <CardHeader>
+                                            <CardTitle>Award All to Single Vendor</CardTitle>
+                                            <CardDescription>The system will recommend the vendor with the highest overall score.</CardDescription>
+                                        </CardHeader>
+                                    </Card>
+                                </DialogTrigger>
+                                <AwardCenterDialog
+                                    requisition={requisition}
+                                    quotations={quotations}
+                                    onFinalize={onFinalize}
+                                    onClose={() => {}}
+                                />
+                             </Dialog>
+                             <Dialog>
+                                <DialogTrigger asChild>
+                                     <Card className="hover:bg-muted/50 cursor-pointer">
+                                        <CardHeader>
+                                            <CardTitle>Award by Best Offer (Per Item)</CardTitle>
+                                            <CardDescription>Award each item to the vendor with the best offer for that specific item.</CardDescription>
+                                        </CardHeader>
+                                    </Card>
+                                </DialogTrigger>
+                                <BestItemAwardDialog
+                                    requisition={requisition}
+                                    quotations={quotations}
+                                    onFinalize={onFinalize}
+                                    onClose={() => {}}
+                                />
+                            </Dialog>
                         </div>
                          <AlertDialogFooter>
                              <AlertDialogCancel asChild><Button variant="ghost">Cancel</Button></AlertDialogCancel>
@@ -1955,20 +1975,6 @@ const ScoringProgressTracker = ({
                     </AlertDialogContent>
                  </AlertDialog>
             </CardFooter>
-            <AwardCenterDialog
-                isOpen={isAwardCenterOpen}
-                onClose={() => setAwardCenterOpen(false)}
-                requisition={requisition}
-                quotations={quotations}
-                onFinalize={onFinalize}
-            />
-            <BestItemAwardDialog
-                isOpen={isBestItemAwardOpen}
-                onClose={() => setBestItemAwardOpen(false)}
-                requisition={requisition}
-                quotations={quotations}
-                onFinalize={onFinalize}
-            />
             {selectedMember && (
                 <>
                     <ExtendDeadlineDialog 
@@ -1988,6 +1994,167 @@ const ScoringProgressTracker = ({
         </Card>
     );
 };
+
+const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClose }: { requisition: PurchaseRequisition; quotations: Quotation[], isOpen: boolean, onClose: () => void }) => {
+    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const printRef = useRef<HTMLDivElement>(null);
+    const { toast } = useToast();
+
+    const getCriterionName = (criterionId: string, criteria?: EvaluationCriterion[]) => {
+        return criteria?.find(c => c.id === criterionId)?.name || 'Unknown Criterion';
+    }
+
+    const handleGeneratePdf = async () => {
+        const input = printRef.current;
+        if (!input) return;
+
+        setIsGeneratingPdf(true);
+        toast({ title: "Generating PDF...", description: "This may take a moment." });
+
+        try {
+            const canvas = await html2canvas(input, {
+                scale: 2, // Increase resolution
+                useCORS: true,
+                backgroundColor: null // Important for dark mode
+            });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+            const ratio = imgWidth / imgHeight;
+            let width = pdfWidth - 20; // with margin
+            let height = width / ratio;
+
+             if (height > pdfHeight - 20) {
+                 height = pdfHeight - 20;
+                 width = height * ratio;
+            }
+            
+            const x = (pdfWidth - width) / 2;
+            const y = 10;
+
+            // Add a white background to the PDF before adding the image
+            pdf.setFillColor(255, 255, 255);
+            pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
+            
+            pdf.addImage(imgData, 'PNG', x, y, width, height);
+            
+            pdf.save(`Scoring-Report-${requisition.id}.pdf`);
+            toast({ title: "PDF Generated", description: "Your report has been downloaded." });
+
+        } catch (error) {
+            console.error(error);
+            toast({ variant: 'destructive', title: "PDF Generation Failed", description: "An error occurred while creating the PDF." });
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+    }
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Cumulative Scoring Report: How The Award Was Won</DialogTitle>
+                    <DialogDescription>
+                        A detailed breakdown of committee scores for requisition {requisition.id}, explaining the award decision.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex-grow overflow-hidden">
+                    <ScrollArea className="h-full">
+                        <div ref={printRef} className="p-1 space-y-6 bg-background text-foreground print:bg-white print:text-black">
+                            {/* Header for PDF */}
+                            <div className="hidden print:block text-center mb-8 pt-4">
+                                <Image src="/logo.png" alt="Logo" width={40} height={40} className="mx-auto mb-2" />
+                                <h1 className="text-2xl font-bold text-black">Scoring & Award Justification Report</h1>
+                                <p className="text-gray-600">{requisition.title}</p>
+                                <p className="text-sm text-gray-500">{requisition.id}</p>
+                                <p className="text-sm text-gray-500">Report Generated: {format(new Date(), 'PPpp')}</p>
+                            </div>
+
+                            {quotations.sort((a, b) => (a.rank || 99) - (b.rank || 99)).map(quote => (
+                                <Card key={quote.id} className="break-inside-avoid print:border-gray-300 print:shadow-none print:rounded-lg">
+                                    <CardHeader className="print:bg-gray-100 print:rounded-t-lg">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <CardTitle className="text-xl">{quote.vendorName}</CardTitle>
+                                                <CardDescription className="print:text-gray-700 pt-1">
+                                                    Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> | 
+                                                    Rank: <span className="font-bold">{quote.rank || 'N/A'}</span> |
+                                                    Total Price: <span className="font-bold">{quote.totalPrice.toLocaleString()} ETB</span>
+                                                </CardDescription>
+                                            </div>
+                                            <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-4 space-y-4">
+                                        {quote.scores && quote.scores.length > 0 ? (
+                                            quote.scores.map(scoreSet => (
+                                                <div key={scoreSet.scorerId} className="p-3 border rounded-md break-inside-avoid print:border-gray-200">
+                                                    <div className="flex items-center justify-between mb-3 pb-2 border-b print:border-gray-200">
+                                                        <div className="flex items-center gap-3">
+                                                            <Avatar className="h-8 w-8">
+                                                                <AvatarImage src={`https://picsum.photos/seed/${scoreSet.scorerId}/32/32`} />
+                                                                <AvatarFallback>{scoreSet.scorer?.name?.charAt(0) || 'U'}</AvatarFallback>
+                                                            </Avatar>
+                                                            <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                        <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
+                                                        <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPp')}</p>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
+                                                        <div>
+                                                            <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
+                                                            {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'FINANCIAL').map(s => (
+                                                                <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
+                                                                    <div className="flex justify-between items-center font-medium">
+                                                                        <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                        <p className="font-bold">{s.score}/100</p>
+                                                                    </div>
+                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                </div>
+                                                            )))}
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
+                                                            {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'TECHNICAL').map(s => (
+                                                                <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
+                                                                    <div className="flex justify-between items-center font-medium">
+                                                                        <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
+                                                                        <p className="font-bold">{s.score}/100</p>
+                                                                    </div>
+                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                </div>
+                                                            )))}
+                                                        </div>
+                                                    </div>
+
+                                                    {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
+                                                </div>
+                                            ))
+                                        ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    </ScrollArea>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={onClose}>Close</Button>
+                    <Button onClick={handleGeneratePdf} disabled={isGeneratingPdf}>
+                        {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4"/>}
+                        Print / Export PDF
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 
 const CommitteeActions = ({
     user,
@@ -2156,166 +2323,6 @@ const NotifyVendorDialog = ({
                 <DialogFooter>
                     <Button variant="ghost" onClick={onClose}>Cancel</Button>
                     <Button onClick={() => onConfirm(finalDeadline)}>Confirm & Notify</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-};
-
-const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClose }: { requisition: PurchaseRequisition; quotations: Quotation[], isOpen: boolean, onClose: () => void }) => {
-    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-    const printRef = useRef<HTMLDivElement>(null);
-    const { toast } = useToast();
-
-    const getCriterionName = (criterionId: string, criteria?: EvaluationCriterion[]) => {
-        return criteria?.find(c => c.id === criterionId)?.name || 'Unknown Criterion';
-    }
-
-    const handleGeneratePdf = async () => {
-        const input = printRef.current;
-        if (!input) return;
-
-        setIsGeneratingPdf(true);
-        toast({ title: "Generating PDF...", description: "This may take a moment." });
-
-        try {
-            const canvas = await html2canvas(input, {
-                scale: 2, // Increase resolution
-                useCORS: true,
-                backgroundColor: null // Important for dark mode
-            });
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = canvas.width;
-            const imgHeight = canvas.height;
-            const ratio = imgWidth / imgHeight;
-            let width = pdfWidth - 20; // with margin
-            let height = width / ratio;
-
-             if (height > pdfHeight - 20) {
-                 height = pdfHeight - 20;
-                 width = height * ratio;
-            }
-            
-            const x = (pdfWidth - width) / 2;
-            const y = 10;
-            
-            // Add a white background to the PDF before adding the image
-            pdf.setFillColor(255, 255, 255);
-            pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
-            
-            pdf.addImage(imgData, 'PNG', x, y, width, height);
-            
-            pdf.save(`Scoring-Report-${requisition.id}.pdf`);
-            toast({ title: "PDF Generated", description: "Your report has been downloaded." });
-
-        } catch (error) {
-            console.error(error);
-            toast({ variant: 'destructive', title: "PDF Generation Failed", description: "An error occurred while creating the PDF." });
-        } finally {
-            setIsGeneratingPdf(false);
-        }
-    }
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
-                <DialogHeader>
-                    <DialogTitle>Cumulative Scoring Report: How The Award Was Won</DialogTitle>
-                    <DialogDescription>
-                        A detailed breakdown of committee scores for requisition {requisition.id}, explaining the award decision.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="flex-grow overflow-hidden">
-                    <ScrollArea className="h-full">
-                        <div ref={printRef} className="p-1 space-y-6 bg-background text-foreground print:bg-white print:text-black">
-                            {/* Header for PDF */}
-                            <div className="hidden print:block text-center mb-8 pt-4">
-                                <Image src="/logo.png" alt="Logo" width={40} height={40} className="mx-auto mb-2" />
-                                <h1 className="text-2xl font-bold text-black">Scoring & Award Justification Report</h1>
-                                <p className="text-gray-600">{requisition.title}</p>
-                                <p className="text-sm text-gray-500">{requisition.id}</p>
-                                <p className="text-sm text-gray-500">Report Generated: {format(new Date(), 'PPpp')}</p>
-                            </div>
-
-                            {quotations.sort((a, b) => (a.rank || 99) - (b.rank || 99)).map(quote => (
-                                <Card key={quote.id} className="break-inside-avoid print:border-gray-300 print:shadow-none print:rounded-lg">
-                                    <CardHeader className="print:bg-gray-100 print:rounded-t-lg">
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <CardTitle className="text-xl">{quote.vendorName}</CardTitle>
-                                                <CardDescription className="print:text-gray-700 pt-1">
-                                                    Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> | 
-                                                    Rank: <span className="font-bold">{quote.rank || 'N/A'}</span> |
-                                                    Total Price: <span className="font-bold">{quote.totalPrice.toLocaleString()} ETB</span>
-                                                </CardDescription>
-                                            </div>
-                                            <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="p-4 space-y-4">
-                                        {quote.scores && quote.scores.length > 0 ? (
-                                            quote.scores.map(scoreSet => (
-                                                <div key={scoreSet.scorerId} className="p-3 border rounded-md break-inside-avoid print:border-gray-200">
-                                                    <div className="flex items-center justify-between mb-3 pb-2 border-b print:border-gray-200">
-                                                        <div className="flex items-center gap-3">
-                                                            <Avatar className="h-8 w-8">
-                                                                <AvatarImage src={`https://picsum.photos/seed/${scoreSet.scorerId}/32/32`} />
-                                                                <AvatarFallback>{scoreSet.scorer?.name?.charAt(0) || 'U'}</AvatarFallback>
-                                                            </Avatar>
-                                                            <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
-                                                        </div>
-                                                        <div className="text-right">
-                                                        <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
-                                                        <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPp')}</p>
-                                                        </div>
-                                                    </div>
-                                                    
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
-                                                        <div>
-                                                            <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
-                                                            {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'FINANCIAL').map(s => (
-                                                                <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
-                                                                    <div className="flex justify-between items-center font-medium">
-                                                                        <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
-                                                                        <p className="font-bold">{s.score}/100</p>
-                                                                    </div>
-                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                </div>
-                                                            )))}
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
-                                                            {scoreSet.itemScores?.flatMap(is => is.scores.filter(s => s.type === 'TECHNICAL').map(s => (
-                                                                <div key={s.id} className="text-xs p-2 bg-muted/50 print:bg-gray-50 rounded-md mb-2">
-                                                                    <div className="flex justify-between items-center font-medium">
-                                                                        <p>{getCriterionName(s.criterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
-                                                                        <p className="font-bold">{s.score}/100</p>
-                                                                    </div>
-                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                </div>
-                                                            )))}
-                                                        </div>
-                                                    </div>
-
-                                                    {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
-                                                </div>
-                                            ))
-                                        ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    </ScrollArea>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>Close</Button>
-                    <Button onClick={handleGeneratePdf} disabled={isGeneratingPdf}>
-                        {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4"/>}
-                        Print / Export PDF
-                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -3006,6 +3013,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
 
 

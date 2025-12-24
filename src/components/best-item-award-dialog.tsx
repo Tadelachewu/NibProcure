@@ -26,13 +26,11 @@ export const BestItemAwardDialog = ({
     requisition,
     quotations,
     onFinalize,
-    isOpen,
     onClose
 }: {
     requisition: PurchaseRequisition;
     quotations: Quotation[];
     onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteDocumentUrl?: string, minuteJustification?: string) => void;
-    isOpen: boolean;
     onClose: () => void;
 }) => {
     const { toast } = useToast();
