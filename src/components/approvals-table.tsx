@@ -53,7 +53,7 @@ export function ApprovalsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, rfqSenderSetting, allUsers } = useAuth();
+  const { user, rfqSenderSetting, allUsers, token } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -125,7 +125,7 @@ export function ApprovalsTable() {
   }
   
   const submitAction = async () => {
-    if (!selectedRequisition || !actionType || !user) return;
+    if (!selectedRequisition || !actionType || !user || !token) return;
     
     let rfqSenderId: string | null = null;
     if (actionType === 'approve') {
@@ -140,11 +140,10 @@ export function ApprovalsTable() {
     try {
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ 
             id: selectedRequisition.id, 
-            status: actionType === 'approve' ? 'PreApproved' : 'Rejected', 
-            userId: user.id, 
+            status: actionType === 'approve' ? 'PreApproved' : 'Rejected',
             comment,
             rfqSenderId,
         }),
@@ -357,3 +356,5 @@ export function ApprovalsTable() {
     </>
   );
 }
+
+    

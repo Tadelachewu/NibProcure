@@ -10,9 +10,6 @@ import { sendEmail } from '@/services/email-service';
 import { isPast } from 'date-fns';
 import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-service';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { promises as fs } from 'fs';
-import path from 'path';
-
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -272,16 +269,17 @@ export async function PATCH(
   request: Request,
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+    const user = actor; // Use the securely identified user
+
     const body = await request.json();
-    const { id, status, userId, comment } = body;
-    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${userId}`);
+    const { id, status, comment } = body;
+    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${user.id}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
-
-    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
 
     const requisition = await prisma.purchaseRequisition.findUnique({ 
       where: { id },
@@ -324,7 +322,7 @@ export async function PATCH(
             totalPrice: totalPrice,
             status: status ? status.replace(/ /g, '_') : requisition.status,
             approver: { disconnect: true },
-            approverComment: null, // *** FIX: Clear the rejection comment on resubmission ***
+            approverComment: null,
             items: {
                 deleteMany: {},
                 create: body.items.map((item: any) => ({
@@ -384,7 +382,7 @@ export async function PATCH(
 
     } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Approval') {
         dataToUpdate.status = 'PreApproved';
-        dataToUpdate.approver = { connect: { id: userId } };
+        dataToUpdate.approver = { connect: { id: user.id } };
         dataToUpdate.approverComment = comment;
         dataToUpdate.currentApprover = { disconnect: true };
         auditAction = 'APPROVE_REQUISITION';
@@ -392,7 +390,7 @@ export async function PATCH(
     }
     else if (newStatus === 'Rejected' && requisition.status === 'Pending_Approval') {
         dataToUpdate.status = 'Rejected';
-        dataToUpdate.approver = { connect: { id: userId } };
+        dataToUpdate.approver = { connect: { id: user.id } };
         dataToUpdate.approverComment = comment;
         dataToUpdate.currentApprover = { disconnect: true };
         auditAction = 'REJECT_REQUISITION';
@@ -404,7 +402,7 @@ export async function PATCH(
              return NextResponse.json({ error: 'Invalid action. Only approve or reject is allowed at this stage.' }, { status: 400 });
         }
         
-        let isAuthorizedToAct = (requisition.currentApproverId === userId) || 
+        let isAuthorizedToAct = (requisition.currentApproverId === user.id) || 
                       (user.roles as any[]).some(r => requisition.status === `Pending_${r.name}`) ||
                       (user.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer');
 
@@ -418,7 +416,7 @@ export async function PATCH(
           if (!isAuthorizedToAct && requisition.status === 'Award_Declined' && awardStrategy === 'item' && hasPendingPerItemAwards) {
             const fcIds = (requisition.financialCommitteeMembers || []).map((m: any) => m.id);
             const tcIds = (requisition.technicalCommitteeMembers || []).map((m: any) => m.id);
-            if (fcIds.includes(userId) || tcIds.includes(userId) || (user.roles as any[]).some(r => (r.name as string).includes('Committee'))) {
+            if (fcIds.includes(user.id) || tcIds.includes(user.id) || (user.roles as any[]).some(r => (r.name as string).includes('Committee'))) {
               isAuthorizedToAct = true;
             }
           }
@@ -462,7 +460,7 @@ export async function PATCH(
         }
 
         if (!isAuthorizedToAct) {
-            console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
+            console.error(`[PATCH /api/requisitions] User ${user.id} not authorized for status ${requisition.status}.`);
             return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
         }
         
@@ -527,7 +525,7 @@ export async function PATCH(
               const signatureRecord = await tx.signature.create({
                 data: {
                   minute: { connect: { id: latestMinute.id } },
-                  signer: { connect: { id: userId } },
+                  signer: { connect: { id: user.id } },
                   signerName: user.name,
                   signerRole: (user.roles as any[]).map(r => r.name).join(', '),
                   decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
@@ -535,39 +533,6 @@ export async function PATCH(
                 }
               });
               auditDetails += ` Signature recorded as ${signatureRecord.id}.`;
-              
-              const filePath = path.join(process.cwd(), 'public', latestMinute.documentUrl);
-              try {
-                const pdfBytes = await fs.readFile(filePath);
-                const pdfDoc = await PDFDocument.load(pdfBytes);
-                const newPage = pdfDoc.addPage();
-                
-                const { width, height } = newPage.getSize();
-                let y = height - 50;
-
-                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-                const drawText = (text: string, size: number, options: { y: number, color?: any, font?: any }) => {
-                    newPage.drawText(text, { x: 50, y: options.y, size, font: options.font || font, color: options.color || rgb(0,0,0) });
-                    return options.y - (size * 1.5);
-                }
-
-                y = drawText(`Digital Signature Record`, 18, { y });
-                y -= 20;
-
-                y = drawText(`Decision: ${signatureRecord.decision}`, 14, { y, color: signatureRecord.decision === 'APPROVED' ? rgb(0.1, 0.5, 0.1) : rgb(0.7, 0, 0) });
-                y = drawText(`Signer: ${signatureRecord.signerName} (${signatureRecord.signerRole})`, 12, { y });
-                y = drawText(`Date: ${new Date(signatureRecord.signedAt).toLocaleString()}`, 12, { y });
-                y -= 10;
-                y = drawText(`Justification:`, 12, { y });
-                y = drawText(signatureRecord.comment || 'No comment provided.', 11, { y, font: await pdfDoc.embedFont(StandardFonts.HelveticaOblique) });
-
-                const modifiedPdfBytes = await pdfDoc.save();
-                await fs.writeFile(filePath, modifiedPdfBytes);
-                auditDetails += ` Signature appended to document.`;
-              } catch(e) {
-                  console.error("Failed to append signature to PDF:", e);
-                  auditDetails += ` (Failed to append signature to PDF).`;
-              }
             }
 
             await tx.auditLog.create({
@@ -643,19 +608,17 @@ export async function PATCH(
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const actor = await prisma.user.findUnique({
-      where: { id: body.requesterId },
-      include: { roles: true },
-    });
+    const actor = await getActorFromToken(request);
     if (!actor) {
-      return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const body = await request.json();
     const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
     if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
       const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
       if (setting.type === 'specific_roles') {
-        const userRoles = actor.roles.map(r => r.name);
+        const userRoles = actor.roles;
         const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
         if (!canCreate) {
           return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
@@ -835,3 +798,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
