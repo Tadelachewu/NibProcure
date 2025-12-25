@@ -47,8 +47,9 @@ export function RequisitionsForQuotingTable() {
             if (!response.ok) {
                 throw new Error('Failed to fetch requisitions');
             }
-            const data: PurchaseRequisition[] = await response.json();
-            setRequisitions(data);
+            const data = await response.json();
+            // FIX: The API now returns an object { requisitions, totalCount }
+            setRequisitions(data.requisitions || []);
 
         } catch (e) {
             setError(e instanceof Error ? e.message : 'An unknown error occurred');
