@@ -364,15 +364,22 @@ export async function PATCH(
         
         if (newStatus === 'Pending_Approval') {
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
-            if (department?.headId) { 
-                dataToUpdate.currentApprover = { connect: { id: department.headId } };
-                dataToUpdate.status = 'Pending_Approval';
-            } else {
+            if (department?.headId === user.id) {
                 dataToUpdate.status = 'PreApproved';
                 dataToUpdate.currentApprover = { disconnect: true };
+                auditAction = 'SUBMIT_AND_AUTO_APPROVE';
+                auditDetails = `Requisition ${id} ("${body.title}") submitted by department head and automatically approved.`;
+            } else if (department?.headId) {
+                dataToUpdate.status = 'Pending_Approval';
+                dataToUpdate.currentApprover = { connect: { id: department.headId } };
+                auditAction = 'SUBMIT_FOR_APPROVAL';
+                auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
+            } else {
+                 dataToUpdate.status = 'PreApproved';
+                 dataToUpdate.currentApprover = { disconnect: true };
+                 auditAction = 'SUBMIT_FOR_APPROVAL';
+                 auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval (no department head found, auto-approved).`;
             }
-            auditAction = 'SUBMIT_FOR_APPROVAL';
-            auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
         }
 
     } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Approval') {
@@ -584,11 +591,11 @@ export async function PATCH(
     else if (newStatus === 'Pending_Approval' && (requisition.status === 'Draft' || requisition.status === 'Rejected')) {
         const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
         if (department?.headId) { 
-            dataToUpdate.currentApproverId = department.headId; 
+            dataToUpdate.currentApprover = { connect: { id: department.headId } };
         } else {
             // If no department head, auto-approve to the next stage
             dataToUpdate.status = 'PreApproved';
-            dataToUpdate.currentApproverId = null;
+            dataToUpdate.currentApprover = { disconnect: true };
         }
         dataToUpdate.status = 'Pending_Approval';
         dataToUpdate.approverComment = null; // Clear rejection comment
@@ -707,14 +714,14 @@ export async function POST(request: Request) {
       // If submitting, check if user is their own dept head
       if (body.status === 'Pending_Approval') {
           if (department.headId === actor.id) {
-              data.status = 'PreApproved'; // Auto-approve
-              data.currentApprover = undefined;
+              data.status = 'PreApproved';
+              data.currentApprover = { disconnect: true };
           } else if (department.headId) {
               data.status = 'Pending_Approval';
               data.currentApprover = { connect: { id: department.headId } };
           } else {
               data.status = 'PreApproved'; // No head, auto-approve
-              data.currentApprover = undefined;
+              data.currentApprover = { disconnect: true };
           }
       }
 
