@@ -83,7 +83,7 @@ export function RequisitionsTable() {
         throw new Error('Failed to fetch requisitions');
       }
       const data = await response.json();
-      setRequisitions(data);
+      setRequisitions(data.requisitions || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
     } finally {
@@ -125,7 +125,7 @@ export function RequisitionsTable() {
   const handleDeleteRequisition = async (id: string) => {
     if (!user) return;
     try {
-        const response = await fetch(`/api/requisitions/${id}`, {
+        const response = await fetch(`/api/requisitions/${id}/delete`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: user.id }),
@@ -209,7 +209,7 @@ export function RequisitionsTable() {
   }
 
   if (loading) return <div className="flex h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (error) return <div className="text-destructive">Error: {error}</div>;
+  if (error) return <div className="text-destructive">{error}</div>;
 
   return (
     <>
