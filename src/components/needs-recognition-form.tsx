@@ -298,7 +298,16 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   }
 
   const handleFormSubmit = async () => {
-    await onFinalSubmit(form.getValues(), false);
+    const isFormValid = await form.trigger();
+    if(isFormValid) {
+        onFinalSubmit(form.getValues(), false);
+    } else {
+        toast({
+            variant: "destructive",
+            title: "Validation Error",
+            description: "Please correct the errors before submitting.",
+        });
+    }
   };
 
 
@@ -322,7 +331,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
             </Alert>
          )}
         <Form {...form}>
-          <form onSubmit={(e) => { e.preventDefault(); handleFormSubmit(); }} className="space-y-8">
+          <form onSubmit={(e) => { e.preventDefault(); }} className="space-y-8">
             <div className="grid md:grid-cols-2 gap-8">
                 <FormItem>
                   <FormLabel>Your Name</FormLabel>

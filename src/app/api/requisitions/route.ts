@@ -581,6 +581,21 @@ export async function PATCH(
         return NextResponse.json(updatedRequisition);
     }
 
+    else if (newStatus === 'Pending_Approval' && (requisition.status === 'Draft' || requisition.status === 'Rejected')) {
+        const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
+        if (department?.headId) { 
+            dataToUpdate.currentApproverId = department.headId; 
+        } else {
+            // If no department head, auto-approve to the next stage
+            dataToUpdate.status = 'PreApproved';
+            dataToUpdate.currentApproverId = null;
+        }
+        dataToUpdate.status = 'Pending_Approval';
+        dataToUpdate.approverComment = null; // Clear rejection comment
+        auditAction = 'SUBMIT_FOR_APPROVAL';
+        auditDetails = `Requisition ${id} was submitted for approval.`;
+    }
+    
     else {
         return NextResponse.json({ error: 'Invalid operation for current status.' }, { status: 400 });
     }
