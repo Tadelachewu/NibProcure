@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -704,10 +705,18 @@ export async function POST(request: Request) {
         } : undefined,
       };
 
-      if (body.status === 'Pending_Approval' && department.headId) {
-        data.currentApproverId = department.headId;
-      } else if (body.status === 'Pending_Approval' && !department.headId) {
-        data.status = 'PreApproved'; // Auto-approve if no head
+      // If submitting, check if user is their own dept head
+      if (body.status === 'Pending_Approval') {
+          if (department.headId === actor.id) {
+              data.status = 'PreApproved'; // Auto-approve
+              data.currentApproverId = null;
+          } else if (department.headId) {
+              data.status = 'Pending_Approval';
+              data.currentApproverId = department.headId;
+          } else {
+              data.status = 'PreApproved'; // No head, auto-approve
+              data.currentApproverId = null;
+          }
       }
 
       const newRequisition = await tx.purchaseRequisition.create({ data });
@@ -718,10 +727,18 @@ export async function POST(request: Request) {
         include: { items: true, customQuestions: true, evaluationCriteria: true }
       });
       
-      const auditAction = body.status === 'Pending_Approval' ? 'SUBMIT_FOR_APPROVAL' : 'CREATE_REQUISITION';
-      const auditDetails = body.status === 'Pending_Approval' 
-        ? `Requisition "${finalRequisition.title}" submitted for approval.`
-        : `Created new requisition: "${finalRequisition.title}".`;
+      let auditAction = 'CREATE_REQUISITION';
+      let auditDetails = `Created new requisition: "${finalRequisition.title}".`;
+
+      if (body.status === 'Pending_Approval') {
+          if (data.status === 'PreApproved') {
+            auditAction = 'SUBMIT_AND_AUTO_APPROVE';
+            auditDetails = `Requisition "${finalRequisition.title}" submitted by department head and automatically approved.`;
+          } else {
+            auditAction = 'SUBMIT_FOR_APPROVAL';
+            auditDetails = `Requisition "${finalRequisition.title}" submitted for approval.`;
+          }
+      }
 
       await tx.auditLog.create({
         data: {
