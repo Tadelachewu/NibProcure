@@ -411,22 +411,23 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
                             {fields.map((field, index) => (
                             <Accordion key={field.id} type="single" collapsible className="border rounded-lg" defaultValue={`item-${index}`}>
                                 <AccordionItem value={`item-${index}`}>
-                                <AccordionTrigger className="px-4 py-2 bg-muted/50 rounded-t-lg flex justify-between w-full">
-                                    <div className="flex items-center gap-2">
-                                        <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
-                                        <span className="font-semibold">{form.watch(`items.${index}.name`) || `Item ${index + 1}`}</span>
-                                        <Badge variant="outline">Qty: {form.watch(`items.${index}.quantity`) || 0}</Badge>
-                                    </div>
+                                <div className="flex items-center px-4 py-2 bg-muted/50 rounded-t-lg">
+                                    <AccordionTrigger className="flex-1 py-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold">{form.watch(`items.${index}.name`) || `Item ${index + 1}`}</span>
+                                            <Badge variant="outline">Qty: {form.watch(`items.${index}.quantity`) || 0}</Badge>
+                                        </div>
+                                    </AccordionTrigger>
                                     <Button
                                         type="button"
                                         variant="ghost"
                                         size="icon"
-                                        onClick={(e) => { e.stopPropagation(); remove(index); }}
-                                        className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                        onClick={() => remove(index)}
+                                        className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0"
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
-                                </AccordionTrigger>
+                                </div>
                                 <AccordionContent className="p-4">
                                      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                         <FormField
@@ -824,3 +825,4 @@ function QuestionOptions({ index }: { index: number }) {
     </div>
   );
 }
+
