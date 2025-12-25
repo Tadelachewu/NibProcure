@@ -388,6 +388,14 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
         }
     };
     
+    const onInvalid = () => {
+        toast({
+            variant: 'destructive',
+            title: 'Validation Error',
+            description: 'Please correct the errors in the form before submitting your quote.',
+        });
+    }
+    
     const totalQuotePrice = form.watch('items').reduce((acc, item) => acc + (item.quantity * (item.unitPrice || 0)), 0);
     const cpoDocumentValue = form.watch('cpoDocumentUrl');
     const isCpoRequired = !!(requisition.cpoAmount && requisition.cpoAmount > 0);
@@ -408,7 +416,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             </CardHeader>
             <CardContent>
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
                         {isCpoRequired && (
                              <FormField
                                 control={form.control}
@@ -1226,3 +1234,5 @@ export default function VendorRequisitionPage() {
         </div>
     )
 }
+
+    

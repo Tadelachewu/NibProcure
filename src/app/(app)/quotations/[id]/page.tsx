@@ -144,6 +144,14 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
             setSubmitting(false);
         }
     };
+    
+    const onInvalid = () => {
+        toast({
+            variant: 'destructive',
+            title: 'Validation Error',
+            description: 'Please correct the errors in the form before adding the quotation.',
+        });
+    }
 
     // Filter for only verified vendors
     const verifiedVendors = vendors.filter(v => v.kycStatus === 'Verified');
@@ -157,7 +165,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
                 </DialogDescription>
             </DialogHeader>
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
                      <FormField
                         control={form.control}
                         name="notes"
@@ -1665,6 +1673,14 @@ const ScoringDialog = ({
             setSubmitting(false);
         }
     };
+    
+    const onInvalid = () => {
+        toast({
+            variant: 'destructive',
+            title: 'Validation Error',
+            description: 'Please correct the errors before submitting your scores.',
+        });
+    }
 
     if (!requisition.evaluationCriteria) return null;
 
@@ -1693,7 +1709,7 @@ const ScoringDialog = ({
                 <DialogDescription>Evaluate each item in the quote against the requester's criteria.</DialogDescription>
             </DialogHeader>
             <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0 flex flex-col">
+            <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="flex-1 min-h-0 flex flex-col">
                 <ScrollArea className="flex-1 pr-4 -mr-4">
                      <div className="space-y-6">
                         <div className="flex gap-2">
@@ -1783,7 +1799,11 @@ const ScoringDialog = ({
                         <DialogClose asChild><Button>Close</Button></DialogClose>
                     ) : (
                         <AlertDialog>
-                            <AlertDialogTrigger asChild><Button type="button">Submit Score</Button></AlertDialogTrigger>
+                            <AlertDialogTrigger asChild>
+                                <Button type="button">
+                                    Submit Score
+                                </Button>
+                            </AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>Confirm Your Score</AlertDialogTitle>
@@ -1791,7 +1811,7 @@ const ScoringDialog = ({
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
                                     <AlertDialogCancel>Go Back & Edit</AlertDialogCancel>
-                                    <AlertDialogAction onClick={form.handleSubmit(onSubmit)} disabled={isSubmitting}>
+                                    <AlertDialogAction onClick={form.handleSubmit(onSubmit, onInvalid)} disabled={isSubmitting}>
                                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                         Confirm & Submit
                                     </AlertDialogAction>
@@ -3284,4 +3304,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         </Card>
     );
 };
+    
+
+
     
