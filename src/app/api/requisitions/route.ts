@@ -9,10 +9,6 @@ import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { isPast } from 'date-fns';
 import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-service';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { promises as fs } from 'fs';
-import path from 'path';
-
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -273,8 +269,8 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    const { id, status, userId, comment } = body;
-    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${userId}`);
+    const { id, status, comment } = body;
+    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
 
@@ -613,13 +609,14 @@ export async function POST(request: Request) {
     const body = await request.json();
     const actor = await getActorFromToken(request);
     if (!actor) {
-      return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Unauthorized: No valid user token found.' }, { status: 401 });
     }
+    
     const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
     if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
       const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
       if (setting.type === 'specific_roles') {
-        const userRoles = actor.roles.map(r => r.name);
+        const userRoles = actor.roles;
         const canCreate = userRoles.some(role => setting.allowedRoles?.includes(role));
         if (!canCreate) {
           return NextResponse.json({ error: 'Unauthorized: You do not have permission to create requisitions.' }, { status: 403 });
