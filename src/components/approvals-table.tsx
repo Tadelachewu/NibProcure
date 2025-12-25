@@ -91,8 +91,8 @@ export function ApprovalsTable() {
       if (!response.ok) {
         throw new Error('Failed to fetch requisitions for approval');
       }
-      const data: PurchaseRequisition[] = await response.json();
-      setRequisitions(data);
+      const data = await response.json();
+      setRequisitions(data.requisitions || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
     } finally {
