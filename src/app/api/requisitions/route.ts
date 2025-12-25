@@ -278,7 +278,7 @@ export async function PATCH(
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
 
-    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
+    const user = await getActorFromToken(request);
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -366,17 +366,17 @@ export async function PATCH(
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
             if (department?.headId === user.id) {
                 dataToUpdate.status = 'PreApproved';
-                dataToUpdate.currentApprover = { disconnect: true };
+                dataToUpdate.currentApproverId = null;
                 auditAction = 'SUBMIT_AND_AUTO_APPROVE';
                 auditDetails = `Requisition ${id} ("${body.title}") submitted by department head and automatically approved.`;
             } else if (department?.headId) {
                 dataToUpdate.status = 'Pending_Approval';
-                dataToUpdate.currentApprover = { connect: { id: department.headId } };
+                dataToUpdate.currentApproverId = department.headId;
                 auditAction = 'SUBMIT_FOR_APPROVAL';
                 auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
             } else {
                  dataToUpdate.status = 'PreApproved';
-                 dataToUpdate.currentApprover = { disconnect: true };
+                 dataToUpdate.currentApproverId = null;
                  auditAction = 'SUBMIT_FOR_APPROVAL';
                  auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval (no department head found, auto-approved).`;
             }
@@ -384,17 +384,17 @@ export async function PATCH(
 
     } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Approval') {
         dataToUpdate.status = 'PreApproved';
-        dataToUpdate.approver = { connect: { id: userId } };
+        dataToUpdate.approverId = user.id;
         dataToUpdate.approverComment = comment;
-        dataToUpdate.currentApprover = { disconnect: true };
+        dataToUpdate.currentApproverId = null;
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Departmental approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;
     }
     else if (newStatus === 'Rejected' && requisition.status === 'Pending_Approval') {
         dataToUpdate.status = 'Rejected';
-        dataToUpdate.approver = { connect: { id: userId } };
+        dataToUpdate.approverId = user.id;
         dataToUpdate.approverComment = comment;
-        dataToUpdate.currentApprover = { disconnect: true };
+        dataToUpdate.currentApproverId = null;
         auditAction = 'REJECT_REQUISITION';
         auditDetails = `Requisition ${id} was rejected with comment: "${comment}".`;
     }
@@ -404,7 +404,7 @@ export async function PATCH(
              return NextResponse.json({ error: 'Invalid action. Only approve or reject is allowed at this stage.' }, { status: 400 });
         }
         
-        let isAuthorizedToAct = (requisition.currentApproverId === userId) || 
+        let isAuthorizedToAct = (requisition.currentApproverId === user.id) || 
                       (user.roles as any[]).some(r => requisition.status === `Pending_${r.name}`) ||
                       (user.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer');
 
@@ -418,7 +418,7 @@ export async function PATCH(
           if (!isAuthorizedToAct && requisition.status === 'Award_Declined' && awardStrategy === 'item' && hasPendingPerItemAwards) {
             const fcIds = (requisition.financialCommitteeMembers || []).map((m: any) => m.id);
             const tcIds = (requisition.technicalCommitteeMembers || []).map((m: any) => m.id);
-            if (fcIds.includes(userId) || tcIds.includes(userId) || (user.roles as any[]).some(r => (r.name as string).includes('Committee'))) {
+            if (fcIds.includes(user.id) || tcIds.includes(user.id) || (user.roles as any[]).some(r => (r.name as string).includes('Committee'))) {
               isAuthorizedToAct = true;
             }
           }
@@ -462,7 +462,7 @@ export async function PATCH(
         }
 
         if (!isAuthorizedToAct) {
-            console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
+            console.error(`[PATCH /api/requisitions] User ${user.id} not authorized for status ${requisition.status}.`);
             return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
         }
         
@@ -517,7 +517,7 @@ export async function PATCH(
                 where: { id },
                 data: {
                     status: dataToUpdate.status,
-                    currentApprover: dataToUpdate.currentApproverId ? { connect: { id: dataToUpdate.currentApproverId } } : { disconnect: true },
+                    currentApproverId: dataToUpdate.currentApproverId,
                     approverComment: dataToUpdate.approverComment,
                 },
             });
@@ -526,8 +526,8 @@ export async function PATCH(
             if (latestMinute && latestMinute.documentUrl) {
               const signatureRecord = await tx.signature.create({
                 data: {
-                  minute: { connect: { id: latestMinute.id } },
-                  signer: { connect: { id: userId } },
+                  minuteId: latestMinute.id,
+                  signerId: user.id,
                   signerName: user.name,
                   signerRole: (user.roles as any[]).map(r => r.name).join(', '),
                   decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
@@ -535,39 +535,6 @@ export async function PATCH(
                 }
               });
               auditDetails += ` Signature recorded as ${signatureRecord.id}.`;
-              
-              const filePath = path.join(process.cwd(), 'public', latestMinute.documentUrl);
-              try {
-                const pdfBytes = await fs.readFile(filePath);
-                const pdfDoc = await PDFDocument.load(pdfBytes);
-                const newPage = pdfDoc.addPage();
-                
-                const { width, height } = newPage.getSize();
-                let y = height - 50;
-
-                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-                const drawText = (text: string, size: number, options: { y: number, color?: any, font?: any }) => {
-                    newPage.drawText(text, { x: 50, y: options.y, size, font: options.font || font, color: options.color || rgb(0,0,0) });
-                    return options.y - (size * 1.5);
-                }
-
-                y = drawText(`Digital Signature Record`, 18, { y });
-                y -= 20;
-
-                y = drawText(`Decision: ${signatureRecord.decision}`, 14, { y, color: signatureRecord.decision === 'APPROVED' ? rgb(0.1, 0.5, 0.1) : rgb(0.7, 0, 0) });
-                y = drawText(`Signer: ${signatureRecord.signerName} (${signatureRecord.signerRole})`, 12, { y });
-                y = drawText(`Date: ${new Date(signatureRecord.signedAt).toLocaleString()}`, 12, { y });
-                y -= 10;
-                y = drawText(`Justification:`, 12, { y });
-                y = drawText(signatureRecord.comment || 'No comment provided.', 11, { y, font: await pdfDoc.embedFont(StandardFonts.HelveticaOblique) });
-
-                const modifiedPdfBytes = await pdfDoc.save();
-                await fs.writeFile(filePath, modifiedPdfBytes);
-                auditDetails += ` Signature appended to document.`;
-              } catch(e) {
-                  console.error("Failed to append signature to PDF:", e);
-                  auditDetails += ` (Failed to append signature to PDF).`;
-              }
             }
 
             await tx.auditLog.create({
@@ -591,11 +558,11 @@ export async function PATCH(
     else if (newStatus === 'Pending_Approval' && (requisition.status === 'Draft' || requisition.status === 'Rejected')) {
         const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
         if (department?.headId) { 
-            dataToUpdate.currentApprover = { connect: { id: department.headId } };
+            dataToUpdate.currentApproverId = department.headId;
         } else {
             // If no department head, auto-approve to the next stage
             dataToUpdate.status = 'PreApproved';
-            dataToUpdate.currentApprover = { disconnect: true };
+            dataToUpdate.currentApproverId = null;
         }
         dataToUpdate.status = 'Pending_Approval';
         dataToUpdate.approverComment = null; // Clear rejection comment
@@ -644,10 +611,7 @@ export async function PATCH(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const actor = await prisma.user.findUnique({
-      where: { id: body.requesterId },
-      include: { roles: true },
-    });
+    const actor = await getActorFromToken(request);
     if (!actor) {
       return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
     }
@@ -715,13 +679,11 @@ export async function POST(request: Request) {
       if (body.status === 'Pending_Approval') {
           if (department.headId === actor.id) {
               data.status = 'PreApproved';
-              data.currentApprover = { disconnect: true };
           } else if (department.headId) {
               data.status = 'Pending_Approval';
               data.currentApprover = { connect: { id: department.headId } };
           } else {
               data.status = 'PreApproved'; // No head, auto-approve
-              data.currentApprover = { disconnect: true };
           }
       }
 
