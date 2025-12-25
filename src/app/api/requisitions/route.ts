@@ -4,12 +4,11 @@
 import { NextResponse } from 'next/server';
 import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
-import { decodeJwt, getActorFromToken } from '@/lib/auth';
+import { getActorFromToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
-import { isPast } from 'date-fns';
+import { differenceInMinutes, format, isPast } from 'date-fns';
 import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-service';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -26,15 +25,7 @@ export async function GET(request: Request) {
   const skip = (page - 1) * limit;
   // --- END: Server-side pagination and search ---
 
-  const authHeader = request.headers.get('Authorization');
-  const token = authHeader?.split(' ')[1];
-  let userPayload: (User & { roles: { name: UserRole }[] }) | null = null;
-  if(token) {
-    const decodedUser = await getActorFromToken(request);
-    if(decodedUser) {
-        userPayload = decodedUser as any;
-    }
-  }
+  const actor = await getActorFromToken(request);
 
   try {
     let whereClause: any = {};
@@ -48,24 +39,24 @@ export async function GET(request: Request) {
     }
     // --- END: Search logic ---
 
-    if (forAwardReview === 'true' && userPayload) {
-        const userRoles = userPayload.roles as any[];
-        const userId = userPayload.id;
+    if (forAwardReview === 'true' && actor) {
+        const userRoles = actor.roles as UserRole[];
+        const userId = actor.id;
         
         const orConditions: any[] = [
           // The user is the direct current approver for a pending item.
           { currentApproverId: userId, status: { startsWith: 'Pending_', not: 'Pending_Approval' } },
           // The status matches a committee role the user has.
-          { status: { in: userRoles.map(r => `Pending_${r.name}`) } },
+          { status: { in: userRoles.map(r => `Pending_${r}`) } },
         ];
         
         const reviewableStatuses: RequisitionStatus[] = ['Award_Declined', 'Partially_Closed'];
 
-        if(userRoles.some(r => r.name !== 'Requester' && r.name !== 'Vendor')) {
+        if(!userRoles.includes('Requester') && !userRoles.includes('Vendor')) {
             orConditions.push({ status: { in: reviewableStatuses } });
         }
 
-        if (userRoles.some(r => r.name === 'Admin' || r.name === 'Procurement_Officer')) {
+        if (userRoles.includes('Admin') || userRoles.includes('Procurement_Officer')) {
             const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
             const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
             orConditions.push({ status: { in: allPossiblePendingStatuses } });
@@ -75,7 +66,7 @@ export async function GET(request: Request) {
         whereClause.OR = whereClause.OR ? [...whereClause.OR, ...orConditions] : orConditions;
 
     } else if (forVendor === 'true') {
-        if (!userPayload || !userPayload.vendorId) {
+        if (!actor || !actor.vendorId) {
              return NextResponse.json({ error: 'Unauthorized: No valid vendor found for this user.' }, { status: 403 });
         }
         
@@ -89,14 +80,14 @@ export async function GET(request: Request) {
                         {
                             OR: [
                             { allowedVendorIds: { isEmpty: true } },
-                            { allowedVendorIds: { has: userPayload.vendorId } },
+                            { allowedVendorIds: { has: actor.vendorId } },
                             ],
                         },
                         {
                             NOT: {
                             quotations: {
                                 some: {
-                                vendorId: userPayload.vendorId,
+                                vendorId: actor.vendorId,
                                 },
                             },
                             },
@@ -106,7 +97,7 @@ export async function GET(request: Request) {
                 {
                     quotations: {
                         some: {
-                            vendorId: userPayload.vendorId,
+                            vendorId: actor.vendorId,
                         }
                     }
                 },
@@ -114,7 +105,7 @@ export async function GET(request: Request) {
                     items: {
                       some: {
                         perItemAwardDetails: {
-                          array_contains: [{vendorId: userPayload.vendorId}],
+                          array_contains: [{vendorId: actor.vendorId}],
                         },
                       },
                     },
@@ -135,13 +126,13 @@ export async function GET(request: Request) {
         
         const rfqLifecycleStatuses = [...baseRfqLifecycleStatuses, ...allPendingStatuses];
 
-        const userRoles = userPayload?.roles.map(r => (r as any).name) || [];
+        const userRoles = actor?.roles || [];
 
         if (userRoles.includes('Committee_Member')) {
             whereClause.status = { in: rfqLifecycleStatuses };
             whereClause.OR = [
-                    { financialCommitteeMembers: { some: { id: userPayload?.id } } },
-                    { technicalCommitteeMembers: { some: { id: userPayload?.id } } },
+                    { financialCommitteeMembers: { some: { id: actor?.id } } },
+                    { technicalCommitteeMembers: { some: { id: actor?.id } } },
                 ];
         } else {
             whereClause.status = { in: rfqLifecycleStatuses };
@@ -158,8 +149,8 @@ export async function GET(request: Request) {
         ];
       }
       
-      if (userPayload && userPayload.roles.some(r => (r as any).name === 'Requester') && !statusParam && !approverId) {
-        whereClause.requesterId = userPayload.id;
+      if (actor && actor.roles.includes('Requester') && !statusParam && !approverId) {
+        whereClause.requesterId = actor.id;
       }
     }
 
@@ -737,13 +728,12 @@ export async function DELETE(
   request: Request,
 ) {
   try {
-    const body = await request.json();
-    const { id, userId } = body;
-
-    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const body = await request.json();
+    const { id } = body;
 
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
 
@@ -751,7 +741,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const canDelete = (requisition.requesterId === userId) || ((user.roles as any[]).some(r => r.name === 'Procurement_Officer' || r.name === 'Admin'));
+    const canDelete = (requisition.requesterId === actor.id) || (actor.roles.some(r => r === 'Procurement_Officer' || r === 'Admin'));
 
     if (!canDelete) {
       return NextResponse.json({ error: 'You are not authorized to delete this requisition.' }, { status: 403 });
@@ -776,7 +766,7 @@ export async function DELETE(
     await prisma.auditLog.create({
         data: {
             transactionId: requisition.transactionId,
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             timestamp: new Date(),
             action: 'DELETE_REQUISITION',
             entity: 'Requisition',
@@ -798,5 +788,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    

@@ -85,7 +85,7 @@ export function ApprovalsTable() {
     if (!user) return;
     try {
       setLoading(true);
-      const apiUrl = `/api/requisitions?status=Pending_Approval,PreApproved,Rejected&approverId=${user.id}`;
+      const apiUrl = `/api/requisitions?status=Pending_Approval&approverId=${user.id}`;
       
       const response = await fetch(apiUrl);
       if (!response.ok) {
@@ -140,7 +140,10 @@ export function ApprovalsTable() {
     try {
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify({ 
             id: selectedRequisition.id, 
             status: actionType === 'approve' ? 'PreApproved' : 'Rejected',
@@ -356,5 +359,3 @@ export function ApprovalsTable() {
     </>
   );
 }
-
-    
