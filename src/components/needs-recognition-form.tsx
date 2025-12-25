@@ -102,7 +102,7 @@ const baseFormSchema = z.object({
 
 // A more lenient schema for saving drafts
 const draftFormSchema = baseFormSchema.deepPartial().extend({
-    title: z.string().optional(), // Make title optional for drafts
+    title: z.string().min(1, "Title is required to save a draft."),
 });
 
 const formSchema = baseFormSchema.refine(data => {
@@ -257,7 +257,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
         };
 
         const status = isDraft ? 'Draft' : 'Pending_Approval';
-        const body = { ...formattedValues, id: existingRequisition?.id, status: status };
+        const body = { ...formattedValues, id: existingRequisition?.id, status: status, requesterId: user?.id };
         
         const response = await fetch('/api/requisitions', {
             method: isEditMode ? 'PATCH' : 'POST',
