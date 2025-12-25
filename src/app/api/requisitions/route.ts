@@ -10,7 +10,6 @@ import { sendEmail } from '@/services/email-service';
 import { isPast } from 'date-fns';
 import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-service';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { promises as fs } from 'fs';
 import path from 'path';
 
 
@@ -272,16 +271,17 @@ export async function PATCH(
   request: Request,
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const userId = actor.id;
+
     const body = await request.json();
-    const { id, status, userId, comment } = body;
+    const { id, status, comment } = body;
     console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${userId}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
-
-    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
 
     const requisition = await prisma.purchaseRequisition.findUnique({ 
       where: { id },
@@ -364,9 +364,9 @@ export async function PATCH(
         
         if (newStatus === 'Pending_Approval') {
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
-            if (department?.headId === user.id) {
+            if (department?.headId === userId) {
                 dataToUpdate.status = 'PreApproved';
-                dataToUpdate.currentApprover = { disconnect: true };
+                dataToUpdate.currentApprover = undefined;
                 auditAction = 'SUBMIT_AND_AUTO_APPROVE';
                 auditDetails = `Requisition ${id} ("${body.title}") submitted by department head and automatically approved.`;
             } else if (department?.headId) {
@@ -376,7 +376,7 @@ export async function PATCH(
                 auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
             } else {
                  dataToUpdate.status = 'PreApproved';
-                 dataToUpdate.currentApprover = { disconnect: true };
+                 dataToUpdate.currentApprover = undefined;
                  auditAction = 'SUBMIT_FOR_APPROVAL';
                  auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval (no department head found, auto-approved).`;
             }
@@ -388,7 +388,7 @@ export async function PATCH(
         dataToUpdate.approverComment = comment;
         dataToUpdate.currentApprover = { disconnect: true };
         auditAction = 'APPROVE_REQUISITION';
-        auditDetails = `Departmental approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;
+        auditDetails = `Departmental approval for requisition ${id} granted by ${actor.name}. Ready for RFQ.`;
     }
     else if (newStatus === 'Rejected' && requisition.status === 'Pending_Approval') {
         dataToUpdate.status = 'Rejected';
@@ -405,8 +405,8 @@ export async function PATCH(
         }
         
         let isAuthorizedToAct = (requisition.currentApproverId === userId) || 
-                      (user.roles as any[]).some(r => requisition.status === `Pending_${r.name}`) ||
-                      (user.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer');
+                      (actor.roles as any[]).some(r => requisition.status === `Pending_${r.name}`) ||
+                      (actor.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer');
 
         try {
           const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
@@ -418,7 +418,7 @@ export async function PATCH(
           if (!isAuthorizedToAct && requisition.status === 'Award_Declined' && awardStrategy === 'item' && hasPendingPerItemAwards) {
             const fcIds = (requisition.financialCommitteeMembers || []).map((m: any) => m.id);
             const tcIds = (requisition.technicalCommitteeMembers || []).map((m: any) => m.id);
-            if (fcIds.includes(userId) || tcIds.includes(userId) || (user.roles as any[]).some(r => (r.name as string).includes('Committee'))) {
+            if (fcIds.includes(userId) || tcIds.includes(userId) || (actor.roles as any[]).some(r => (r.name as string).includes('Committee'))) {
               isAuthorizedToAct = true;
             }
           }
@@ -452,7 +452,7 @@ export async function PATCH(
 
           if (relevantTier) {
             const tierRoleNames = (relevantTier.steps || []).map((s: any) => s.role.name);
-            const userRoleNames = (user.roles as any[]).map(r => r.name);
+            const userRoleNames = (actor.roles as any[]).map(r => r.name);
             if (!isAuthorizedToAct && userRoleNames.some((rn: string) => tierRoleNames.includes(rn))) {
               isAuthorizedToAct = true;
             }
@@ -473,14 +473,14 @@ export async function PATCH(
             await tx.review.create({
               data: {
                 requisitionId: requisition.id,
-                reviewerId: user.id,
+                reviewerId: userId,
                 decision: newStatus as 'Approved' | 'Rejected',
                 comment: comment,
               }
             });
 
             if (newStatus === 'Rejected') {
-                const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
+                const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, actor, comment);
                 dataToUpdate.status = previousStatus;
                 dataToUpdate.currentApproverId = previousApproverId;
                 dataToUpdate.approverComment = comment; 
@@ -505,7 +505,7 @@ export async function PATCH(
                 console.warn('Failed to compute adjusted total for per-item approval routing:', e);
               }
 
-              const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, effectiveRequisition, user);
+              const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, effectiveRequisition, actor);
                 dataToUpdate.status = nextStatus;
                 dataToUpdate.currentApproverId = nextApproverId;
                 dataToUpdate.approverComment = comment;
@@ -528,52 +528,19 @@ export async function PATCH(
                 data: {
                   minute: { connect: { id: latestMinute.id } },
                   signer: { connect: { id: userId } },
-                  signerName: user.name,
-                  signerRole: (user.roles as any[]).map(r => r.name).join(', '),
+                  signerName: actor.name,
+                  signerRole: (actor.roles as any[]).map(r => r.name).join(', '),
                   decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
                   comment: comment,
                 }
               });
               auditDetails += ` Signature recorded as ${signatureRecord.id}.`;
-              
-              const filePath = path.join(process.cwd(), 'public', latestMinute.documentUrl);
-              try {
-                const pdfBytes = await fs.readFile(filePath);
-                const pdfDoc = await PDFDocument.load(pdfBytes);
-                const newPage = pdfDoc.addPage();
-                
-                const { width, height } = newPage.getSize();
-                let y = height - 50;
-
-                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-                const drawText = (text: string, size: number, options: { y: number, color?: any, font?: any }) => {
-                    newPage.drawText(text, { x: 50, y: options.y, size, font: options.font || font, color: options.color || rgb(0,0,0) });
-                    return options.y - (size * 1.5);
-                }
-
-                y = drawText(`Digital Signature Record`, 18, { y });
-                y -= 20;
-
-                y = drawText(`Decision: ${signatureRecord.decision}`, 14, { y, color: signatureRecord.decision === 'APPROVED' ? rgb(0.1, 0.5, 0.1) : rgb(0.7, 0, 0) });
-                y = drawText(`Signer: ${signatureRecord.signerName} (${signatureRecord.signerRole})`, 12, { y });
-                y = drawText(`Date: ${new Date(signatureRecord.signedAt).toLocaleString()}`, 12, { y });
-                y -= 10;
-                y = drawText(`Justification:`, 12, { y });
-                y = drawText(signatureRecord.comment || 'No comment provided.', 11, { y, font: await pdfDoc.embedFont(StandardFonts.HelveticaOblique) });
-
-                const modifiedPdfBytes = await pdfDoc.save();
-                await fs.writeFile(filePath, modifiedPdfBytes);
-                auditDetails += ` Signature appended to document.`;
-              } catch(e) {
-                  console.error("Failed to append signature to PDF:", e);
-                  auditDetails += ` (Failed to append signature to PDF).`;
-              }
             }
 
             await tx.auditLog.create({
                 data: {
                     transactionId: req.transactionId,
-                    user: { connect: { id: user.id } },
+                    user: { connect: { id: userId } },
                     timestamp: new Date(),
                     action: auditAction,
                     entity: 'Requisition',
@@ -595,7 +562,7 @@ export async function PATCH(
         } else {
             // If no department head, auto-approve to the next stage
             dataToUpdate.status = 'PreApproved';
-            dataToUpdate.currentApprover = { disconnect: true };
+            dataToUpdate.currentApprover = undefined;
         }
         dataToUpdate.status = 'Pending_Approval';
         dataToUpdate.approverComment = null; // Clear rejection comment
@@ -615,7 +582,7 @@ export async function PATCH(
     await prisma.auditLog.create({
         data: {
             transactionId: updatedRequisition.transactionId,
-            user: { connect: { id: user.id } },
+            user: { connect: { id: userId } },
             timestamp: new Date(),
             action: auditAction,
             entity: 'Requisition',
@@ -643,14 +610,13 @@ export async function PATCH(
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const actor = await prisma.user.findUnique({
-      where: { id: body.requesterId },
-      include: { roles: true },
-    });
+    const actor = await getActorFromToken(request);
     if (!actor) {
-      return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Unauthorized: No valid user token found.' }, { status: 401 });
     }
+
+    const body = await request.json();
+    
     const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
     if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
       const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
@@ -715,13 +681,13 @@ export async function POST(request: Request) {
       if (body.status === 'Pending_Approval') {
           if (department.headId === actor.id) {
               data.status = 'PreApproved';
-              data.currentApprover = { disconnect: true };
+              data.currentApproverId = undefined; // Omit the field
           } else if (department.headId) {
               data.status = 'Pending_Approval';
-              data.currentApprover = { connect: { id: department.headId } };
+              data.currentApproverId = department.headId;
           } else {
               data.status = 'PreApproved'; // No head, auto-approve
-              data.currentApprover = { disconnect: true };
+              data.currentApproverId = undefined; // Omit the field
           }
       }
 
