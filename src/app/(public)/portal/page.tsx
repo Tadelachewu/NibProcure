@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -5,15 +6,18 @@ import { useRouter } from 'next/navigation';
 import { PurchaseRequisition } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowRight, Building, Calendar, FileText, Search } from 'lucide-react';
+import { Loader2, ArrowRight, Building, Calendar, FileText, Search, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { Input } from '@/components/ui/input';
+
+const PAGE_SIZE = 6;
 
 export default function PublicPortalPage() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -47,10 +51,16 @@ export default function PublicPortalPage() {
     const lowercasedTerm = searchTerm.toLowerCase();
     return requisitions.filter(req => 
       req.title.toLowerCase().includes(lowercasedTerm) ||
-      req.department.toLowerCase().includes(lowercasedTerm) ||
-      req.id.toLowerCase().includes(lowercasedTerm)
+      req.department.toLowerCase().includes(lowercasedTerm)
     );
   }, [requisitions, searchTerm]);
+
+  const totalPages = Math.ceil(filteredRequisitions.length / PAGE_SIZE);
+
+  const paginatedRequisitions = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return filteredRequisitions.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredRequisitions, currentPage]);
 
   return (
     <div className="space-y-8">
@@ -74,7 +84,10 @@ export default function PublicPortalPage() {
                     placeholder="Search by title or department..." 
                     className="pl-10"
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCurrentPage(1); // Reset to first page on search
+                    }}
                 />
             </div>
           </div>
@@ -84,31 +97,46 @@ export default function PublicPortalPage() {
             <div className="flex h-64 items-center justify-center">
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
             </div>
-          ) : filteredRequisitions.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredRequisitions.map(req => (
-                <Card key={req.id} className="flex flex-col hover:shadow-lg transition-shadow duration-300">
-                  <CardHeader>
-                    <CardTitle className="text-lg">{req.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex-grow space-y-4 text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                        <Building className="h-4 w-4" />
-                        <span>{req.department} Department</span>
+          ) : paginatedRequisitions.length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {paginatedRequisitions.map(req => (
+                  <Card key={req.id} className="flex flex-col hover:shadow-lg transition-shadow duration-300">
+                    <CardHeader>
+                      <CardTitle className="text-lg">{req.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex-grow space-y-4 text-sm">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                          <Building className="h-4 w-4" />
+                          <span>{req.department} Department</span>
+                      </div>
+                       <div className="flex items-center gap-2 text-muted-foreground">
+                          <Calendar className="h-4 w-4" />
+                          <span>Posted on: {format(new Date(req.createdAt), 'PPP')}</span>
+                      </div>
+                    </CardContent>
+                    <CardFooter>
+                      <Button className="w-full" onClick={() => router.push(`/portal/${req.id}`)}>
+                        View Details <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6">
+                    <div className="text-sm text-muted-foreground">
+                        Page {currentPage} of {totalPages}
                     </div>
-                     <div className="flex items-center gap-2 text-muted-foreground">
-                        <Calendar className="h-4 w-4" />
-                        <span>Posted on: {format(new Date(req.createdAt), 'PPP')}</span>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
+                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft /></Button>
+                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight /></Button>
+                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronsRight /></Button>
                     </div>
-                  </CardContent>
-                  <CardFooter>
-                    <Button className="w-full" onClick={() => router.push(`/portal/${req.id}`)}>
-                      View Details <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
+                </div>
+              )}
+            </>
           ) : (
             <div className="h-64 flex flex-col items-center justify-center text-center border-2 border-dashed rounded-lg">
                 <FileText className="h-12 w-12 text-muted-foreground" />
