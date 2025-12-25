@@ -113,7 +113,8 @@ export default function VendorDashboardPage() {
                 }
                 throw new Error('Failed to fetch requisitions.');
             }
-            const requisitionsData: PurchaseRequisition[] = await response.json();
+            const data = await response.json();
+            const requisitionsData: PurchaseRequisition[] = data.requisitions || [];
             
             let needsRefetch = false;
             for (const req of requisitionsData) {
