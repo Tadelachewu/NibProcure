@@ -22,6 +22,13 @@ export async function GET(request: Request) {
   const forQuoting = searchParams.get('forQuoting');
   const forAwardReview = searchParams.get('forReview');
 
+  // --- START: Server-side pagination and search ---
+  const page = parseInt(searchParams.get('page') || '1', 10);
+  const limit = parseInt(searchParams.get('limit') || '10', 10);
+  const searchQuery = searchParams.get('search');
+  const skip = (page - 1) * limit;
+  // --- END: Server-side pagination and search ---
+
   const authHeader = request.headers.get('Authorization');
   const token = authHeader?.split(' ')[1];
   let userPayload: (User & { roles: { name: UserRole }[] }) | null = null;
@@ -35,81 +42,89 @@ export async function GET(request: Request) {
   try {
     let whereClause: any = {};
     
+    // --- START: Search logic ---
+    if (searchQuery) {
+        whereClause.OR = [
+            { title: { contains: searchQuery, mode: 'insensitive' } },
+            { department: { name: { contains: searchQuery, mode: 'insensitive' } } },
+        ];
+    }
+    // --- END: Search logic ---
+
     if (forAwardReview === 'true' && userPayload) {
         const userRoles = userPayload.roles as any[];
         const userId = userPayload.id;
         
         const orConditions: any[] = [
           // The user is the direct current approver for a pending item.
-          { currentApproverId: userId, status: { startsWith: 'Pending_' } },
+          { currentApproverId: userId, status: { startsWith: 'Pending_', not: 'Pending_Approval' } },
           // The status matches a committee role the user has.
           { status: { in: userRoles.map(r => `Pending_${r.name}`) } },
         ];
         
         const reviewableStatuses: RequisitionStatus[] = ['Award_Declined', 'Partially_Closed'];
 
-        // If user is approver, they can also see declined/partially closed items
         if(userRoles.some(r => r.name !== 'Requester' && r.name !== 'Vendor')) {
             orConditions.push({ status: { in: reviewableStatuses } });
         }
 
-
-        // If a user is an Admin or Procurement Officer, they should see all pending reviews
         if (userRoles.some(r => r.name === 'Admin' || r.name === 'Procurement_Officer')) {
             const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
             const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
             orConditions.push({ status: { in: allPossiblePendingStatuses } });
-            // Also show items ready for notification and those declined/partially closed
             orConditions.push({ status: 'PostApproved' });
         }
         
-        whereClause.OR = orConditions;
+        whereClause.OR = whereClause.OR ? [...whereClause.OR, ...orConditions] : orConditions;
 
     } else if (forVendor === 'true') {
         if (!userPayload || !userPayload.vendorId) {
              return NextResponse.json({ error: 'Unauthorized: No valid vendor found for this user.' }, { status: 403 });
         }
         
-        whereClause.OR = [
-            {
-                AND: [
-                    { status: 'Accepting_Quotes' }, 
-                    { deadline: { not: null } },
-                    { deadline: { gt: new Date() } },
-                    {
-                        OR: [
-                        { allowedVendorIds: { isEmpty: true } },
-                        { allowedVendorIds: { has: userPayload.vendorId } },
-                        ],
-                    },
-                    {
-                        NOT: {
-                        quotations: {
-                            some: {
-                            vendorId: userPayload.vendorId,
+        const vendorWhere: any = {
+            OR: [
+                {
+                    AND: [
+                        { status: 'Accepting_Quotes' }, 
+                        { deadline: { not: null } },
+                        { deadline: { gt: new Date() } },
+                        {
+                            OR: [
+                            { allowedVendorIds: { isEmpty: true } },
+                            { allowedVendorIds: { has: userPayload.vendorId } },
+                            ],
+                        },
+                        {
+                            NOT: {
+                            quotations: {
+                                some: {
+                                vendorId: userPayload.vendorId,
+                                },
+                            },
                             },
                         },
-                        },
-                    },
-                ]
-            },
-            {
-                quotations: {
-                    some: {
-                        vendorId: userPayload.vendorId,
-                    }
-                }
-            },
-            {
-                items: {
-                  some: {
-                    perItemAwardDetails: {
-                      array_contains: [{vendorId: userPayload.vendorId}],
-                    },
-                  },
+                    ]
                 },
-            }
-        ];
+                {
+                    quotations: {
+                        some: {
+                            vendorId: userPayload.vendorId,
+                        }
+                    }
+                },
+                {
+                    items: {
+                      some: {
+                        perItemAwardDetails: {
+                          array_contains: [{vendorId: userPayload.vendorId}],
+                        },
+                      },
+                    },
+                }
+            ]
+        };
+        whereClause = { ...whereClause, ...vendorWhere };
 
     } else if (forQuoting) {
         const allRoles = await prisma.role.findMany({ select: { name: true } });
@@ -126,17 +141,13 @@ export async function GET(request: Request) {
         const userRoles = userPayload?.roles.map(r => (r as any).name) || [];
 
         if (userRoles.includes('Committee_Member')) {
-            whereClause = {
-                status: { in: rfqLifecycleStatuses },
-                OR: [
+            whereClause.status = { in: rfqLifecycleStatuses };
+            whereClause.OR = [
                     { financialCommitteeMembers: { some: { id: userPayload?.id } } },
                     { technicalCommitteeMembers: { some: { id: userPayload?.id } } },
-                ],
-            };
+                ];
         } else {
-            whereClause = {
-                status: { in: rfqLifecycleStatuses }
-            };
+            whereClause.status = { in: rfqLifecycleStatuses };
         }
     } else {
       if (statusParam) {
@@ -155,57 +166,61 @@ export async function GET(request: Request) {
       }
     }
 
-
-    const requisitions = await prisma.purchaseRequisition.findMany({
-      where: whereClause,
-      include: {
-        requester: true,
-        department: true,
-        approver: true,
-        quotations: {
-          select: {
-            id: true,
-            vendorId: true,
-            status: true,
-            vendorName: true,
-            totalPrice: true,
-            finalAverageScore: true,
+    const [requisitions, totalCount] = await prisma.$transaction([
+        prisma.purchaseRequisition.findMany({
+          where: whereClause,
+          skip,
+          take: limit,
+          include: {
+            requester: true,
+            department: true,
+            approver: true,
+            quotations: {
+              select: {
+                id: true,
+                vendorId: true,
+                status: true,
+                vendorName: true,
+                totalPrice: true,
+                finalAverageScore: true,
+                items: {
+                  select: {
+                    id: true,
+                    requisitionItemId: true,
+                    name: true,
+                    quantity: true,
+                    unitPrice: true,
+                  }
+                }
+              }
+            },
+            financialCommitteeMembers: { select: { id: true } },
+            technicalCommitteeMembers: { select: { id: true } },
+            committeeAssignments: true,
             items: {
               select: {
                 id: true,
-                requisitionItemId: true,
                 name: true,
+                description: true,
                 quantity: true,
                 unitPrice: true,
+                perItemAwardDetails: true,
+              }
+            },
+            minutes: {
+              include: {
+                author: true,
+                attendees: true,
+                signatures: true,
               }
             }
-          }
-        },
-        financialCommitteeMembers: { select: { id: true } },
-        technicalCommitteeMembers: { select: { id: true } },
-        committeeAssignments: true,
-        items: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            quantity: true,
-            unitPrice: true,
-            perItemAwardDetails: true,
-          }
-        },
-        minutes: {
-          include: {
-            author: true,
-            attendees: true,
-            signatures: true,
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        }),
+        prisma.purchaseRequisition.count({ where: whereClause })
+    ]);
     
     const transactionIds = requisitions.map(r => r.transactionId).filter(Boolean) as string[];
     const auditLogs = await prisma.auditLog.findMany({
@@ -231,7 +246,7 @@ export async function GET(request: Request) {
           ...log,
           user: log.user?.name || 'System',
           role: userRoles.replace(/_/g, ' '),
-          approverComment: log.details, // Use details for comment
+          approverComment: log.details,
         });
       }
     });
@@ -243,7 +258,7 @@ export async function GET(request: Request) {
         auditTrail: logsByTransaction.get(req.transactionId!) || [],
     }));
     
-    return NextResponse.json(formattedRequisitions);
+    return NextResponse.json({ requisitions: formattedRequisitions, totalCount });
   } catch (error) {
     console.error('Failed to fetch requisitions:', error);
     if (error instanceof Error) {
@@ -279,7 +294,6 @@ export async function PATCH(
           orderBy: { createdAt: 'desc' },
           take: 1
         },
-        // include committee membership so we can allow committee actions on per-item award flows
         financialCommitteeMembers: { select: { id: true } },
         technicalCommitteeMembers: { select: { id: true } },
       }
@@ -387,10 +401,6 @@ export async function PATCH(
                       (user.roles as any[]).some(r => requisition.status === `Pending_${r.name}`) ||
                       (user.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer');
 
-        // Relax authorization for per-item award strategy: if the requisition is in Award_Declined
-        // but there are still per-item awards pending, allow committee members (financial/technical)
-        // to act so they can approve/reject remaining items. This avoids blocking approvals while
-        // preserving the main status flow.
         try {
           const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
           const hasPendingPerItemAwards = requisition.items.some((item: any) => {
@@ -409,11 +419,7 @@ export async function PATCH(
           console.warn('Failed to evaluate per-item committee authorization fallback:', e);
         }
 
-        // Additionally: allow any user whose role appears in the approval matrix tier for this
-        // requisition value to act. This ensures members of any approval step can take action
-        // even if the status naming doesn't exactly match (robustness for matrix-driven flows).
         try {
-          // compute effective total (for per-item flows, consider only pending per-item awards)
           let effectiveTotal = requisition.totalPrice || 0;
           const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
           if (requisition.status === 'Award_Declined' && awardStrategy === 'item') {
@@ -474,9 +480,6 @@ export async function PATCH(
                 auditDetails = serviceAuditDetails;
                 auditAction = 'REJECT_AWARD_STEP';
             } else { // Approved
-              // If we're in a per-item award flow and the overall requisition is 'Award_Declined',
-              // compute an adjusted totalPrice using only remaining pending per-item awards so the
-              // approval matrix routes correctly for the remaining items.
               let effectiveRequisition = requisition;
               try {
                 const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;

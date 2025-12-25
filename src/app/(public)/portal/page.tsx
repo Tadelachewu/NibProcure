@@ -1,8 +1,8 @@
 
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { PurchaseRequisition } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,27 +10,40 @@ import { Loader2, ArrowRight, Building, Calendar, FileText, Search, ChevronsLeft
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { Input } from '@/components/ui/input';
+import { useDebounce } from '@/hooks/use-debounce';
 
 const PAGE_SIZE = 6;
 
 export default function PublicPortalPage() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const router = useRouter();
   const { toast } = useToast();
+  
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const fetchOpenTenders = useCallback(async () => {
+  const fetchOpenTenders = useCallback(async (page: number, search: string) => {
     setLoading(true);
     try {
-      // Only fetch requisitions that are in the "PreApproved" state
-      const response = await fetch('/api/requisitions?status=PreApproved');
+      const params = new URLSearchParams({
+        status: 'PreApproved',
+        page: page.toString(),
+        limit: PAGE_SIZE.toString(),
+      });
+      if (search) {
+        params.append('search', search);
+      }
+
+      const response = await fetch(`/api/requisitions?${params.toString()}`);
       if (!response.ok) {
         throw new Error('Failed to fetch open tenders.');
       }
-      const data: PurchaseRequisition[] = await response.json();
-      setRequisitions(data);
+      const data = await response.json();
+      setRequisitions(data.requisitions || []);
+      setTotalCount(data.totalCount || 0);
     } catch (error) {
       console.error(error);
       toast({
@@ -42,25 +55,17 @@ export default function PublicPortalPage() {
       setLoading(false);
     }
   }, [toast]);
-
+  
   useEffect(() => {
-    fetchOpenTenders();
-  }, [fetchOpenTenders]);
+    fetchOpenTenders(currentPage, debouncedSearchTerm);
+  }, [currentPage, debouncedSearchTerm, fetchOpenTenders]);
+  
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm]);
 
-  const filteredRequisitions = useMemo(() => {
-    const lowercasedTerm = searchTerm.toLowerCase();
-    return requisitions.filter(req => 
-      req.title.toLowerCase().includes(lowercasedTerm) ||
-      req.department.toLowerCase().includes(lowercasedTerm)
-    );
-  }, [requisitions, searchTerm]);
 
-  const totalPages = Math.ceil(filteredRequisitions.length / PAGE_SIZE);
-
-  const paginatedRequisitions = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return filteredRequisitions.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [filteredRequisitions, currentPage]);
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
     <div className="space-y-8">
@@ -84,10 +89,7 @@ export default function PublicPortalPage() {
                     placeholder="Search by title or department..." 
                     className="pl-10"
                     value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      setCurrentPage(1); // Reset to first page on search
-                    }}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                 />
             </div>
           </div>
@@ -97,10 +99,10 @@ export default function PublicPortalPage() {
             <div className="flex h-64 items-center justify-center">
               <Loader2 className="h-12 w-12 animate-spin text-primary" />
             </div>
-          ) : paginatedRequisitions.length > 0 ? (
+          ) : requisitions.length > 0 ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {paginatedRequisitions.map(req => (
+                {requisitions.map(req => (
                   <Card key={req.id} className="flex flex-col hover:shadow-lg transition-shadow duration-300">
                     <CardHeader>
                       <CardTitle className="text-lg">{req.title}</CardTitle>
@@ -141,7 +143,7 @@ export default function PublicPortalPage() {
             <div className="h-64 flex flex-col items-center justify-center text-center border-2 border-dashed rounded-lg">
                 <FileText className="h-12 w-12 text-muted-foreground" />
                 <p className="mt-4 font-semibold">No Open Tenders</p>
-                <p className="text-sm text-muted-foreground">There are currently no requisitions open for public bidding. Please check back later.</p>
+                <p className="text-sm text-muted-foreground">There are currently no requisitions open for public bidding that match your search.</p>
             </div>
           )}
         </CardContent>
