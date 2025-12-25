@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     if (searchQuery) {
         whereClause.OR = [
             { title: { contains: searchQuery, mode: 'insensitive' } },
-            { department: { name: { contains: searchQuery, mode: 'insensitive' } } },
+            { items: { some: { name: { contains: searchQuery, mode: 'insensitive' } } } },
         ];
     }
     // --- END: Search logic ---
@@ -428,7 +428,7 @@ export async function PATCH(
               const details = (item.perItemAwardDetails as any[]) || [];
               const pending = details.find(d => d.status === 'Pending_Award');
               if (pending) {
-                newTotal += (pending.unitPrice ?? item.unitPrice) * (item.quantity ?? 1);
+                newTotal += (pending.unitPrice || pending.unitPrice === 0 ? pending.unitPrice : item.unitPrice) * (item.quantity || 1);
               }
             }
             effectiveTotal = newTotal;
