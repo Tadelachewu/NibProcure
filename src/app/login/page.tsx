@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -18,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -63,46 +63,59 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-            <Image src="/logo.png" alt="Nib InternationalBank Logo" width={48} height={48} className="mx-auto mb-4" />
-          <CardTitle className="text-2xl">Sign In</CardTitle>
-          <CardDescription>
-            Enter your credentials to access your account.
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleLogin}>
-          <CardContent className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)} 
-              />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button className="w-full" type="submit" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Sign in
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+      <div className="w-full max-w-sm space-y-6">
+        <div className="text-center">
+             <Link href="/portal" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                &larr; View Public Tenders
+            </Link>
+        </div>
+        <Card>
+            <CardHeader className="text-center">
+                <Image src="/logo.png" alt="Nib InternationalBank Logo" width={48} height={48} className="mx-auto mb-4" />
+            <CardTitle className="text-2xl">Sign In</CardTitle>
+            <CardDescription>
+                Enter your credentials to access your account.
+            </CardDescription>
+            </CardHeader>
+            <form onSubmit={handleLogin}>
+            <CardContent className="grid gap-4">
+                <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                    id="email"
+                    type="email"
+                    placeholder="m@example.com"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                />
+                </div>
+                <div className="grid gap-2">
+                <Label htmlFor="password">Password</Label>
+                <Input 
+                    id="password" 
+                    type="password" 
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)} 
+                />
+                </div>
+            </CardContent>
+            <CardFooter className="flex-col gap-4">
+                <Button className="w-full" type="submit" disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Sign in
+                </Button>
+                 <div className="text-center text-sm">
+                    New vendor?{' '}
+                    <Link href="/register" className="underline">
+                        Register here
+                    </Link>
+                    </div>
+            </CardFooter>
+            </form>
+        </Card>
+      </div>
     </div>
   );
 }
