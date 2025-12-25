@@ -114,7 +114,7 @@ function RequesterDashboard() {
         setLoading(true);
         fetch(`/api/requisitions?requesterId=${user.id}`, { headers: { 'Authorization': `Bearer ${token}` } })
             .then(res => res.json())
-            .then(data => setRequisitions(data))
+            .then(data => setRequisitions(data.requisitions || []))
             .catch(console.error)
             .finally(() => setLoading(false));
     }, [user, token]);
@@ -203,9 +203,9 @@ function ProcurementOfficerDashboard() {
         Promise.all([
             fetch('/api/requisitions').then(res => res.json()),
             fetch('/api/invoices').then(res => res.json()),
-        ]).then(([requisitions, invoices]) => {
+        ]).then(([requisitionsData, invoices]) => {
             setData({ 
-                requisitions: Array.isArray(requisitions) ? requisitions : [],
+                requisitions: Array.isArray(requisitionsData.requisitions) ? requisitionsData.requisitions : [],
                 invoices: Array.isArray(invoices) ? invoices : []
             });
         }).catch(error => {
@@ -348,9 +348,10 @@ function CommitteeDashboard() {
         // Fetch all requisitions in the quoting lifecycle
         fetch(`/api/requisitions?forQuoting=true`, { headers: { 'Authorization': `Bearer ${token}` } })
             .then(res => res.json())
-            .then((data: PurchaseRequisition[]) => {
+            .then((data) => {
+                const reqs = data.requisitions || [];
                 // Filter client-side to find only requisitions assigned to this committee member
-                const assignedReqs = data.filter((req: PurchaseRequisition) => {
+                const assignedReqs = reqs.filter((req: PurchaseRequisition) => {
                     const finIds = req.financialCommitteeMemberIds ?? (req as any).financialCommitteeMembers?.map((m: any) => m.id) ?? [];
                     const techIds = req.technicalCommitteeMemberIds ?? (req as any).technicalCommitteeMembers?.map((m: any) => m.id) ?? [];
                     return finIds.includes(user.id) || techIds.includes(user.id);
