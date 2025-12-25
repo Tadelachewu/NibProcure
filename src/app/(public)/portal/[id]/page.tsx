@@ -1,16 +1,18 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PurchaseRequisition } from '@/lib/types';
 import { Loader2, ArrowLeft, Calendar, FileText, Building, User, Info, MessageSquare } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
+import Link from 'next/link';
 
 export default function PublicRequisitionDetailsPage() {
   const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
