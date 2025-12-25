@@ -273,14 +273,14 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    const { id, status, userId, comment } = body;
-    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${userId}`);
+    const { id, status, comment } = body;
+    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
 
-    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
+    const user = await getActorFromToken(request);
     if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        return NextResponse.json({ error: 'Unauthorized: Invalid token or user not found' }, { status: 401 });
     }
 
     const requisition = await prisma.purchaseRequisition.findUnique({ 
@@ -384,7 +384,7 @@ export async function PATCH(
 
     } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Approval') {
         dataToUpdate.status = 'PreApproved';
-        dataToUpdate.approver = { connect: { id: userId } };
+        dataToUpdate.approver = { connect: { id: user.id } };
         dataToUpdate.approverComment = comment;
         dataToUpdate.currentApprover = { disconnect: true };
         auditAction = 'APPROVE_REQUISITION';
@@ -392,7 +392,7 @@ export async function PATCH(
     }
     else if (newStatus === 'Rejected' && requisition.status === 'Pending_Approval') {
         dataToUpdate.status = 'Rejected';
-        dataToUpdate.approver = { connect: { id: userId } };
+        dataToUpdate.approver = { connect: { id: user.id } };
         dataToUpdate.approverComment = comment;
         dataToUpdate.currentApprover = { disconnect: true };
         auditAction = 'REJECT_REQUISITION';
@@ -404,7 +404,7 @@ export async function PATCH(
              return NextResponse.json({ error: 'Invalid action. Only approve or reject is allowed at this stage.' }, { status: 400 });
         }
         
-        let isAuthorizedToAct = (requisition.currentApproverId === userId) || 
+        let isAuthorizedToAct = (requisition.currentApproverId === user.id) || 
                       (user.roles as any[]).some(r => requisition.status === `Pending_${r.name}`) ||
                       (user.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer');
 
@@ -418,7 +418,7 @@ export async function PATCH(
           if (!isAuthorizedToAct && requisition.status === 'Award_Declined' && awardStrategy === 'item' && hasPendingPerItemAwards) {
             const fcIds = (requisition.financialCommitteeMembers || []).map((m: any) => m.id);
             const tcIds = (requisition.technicalCommitteeMembers || []).map((m: any) => m.id);
-            if (fcIds.includes(userId) || tcIds.includes(userId) || (user.roles as any[]).some(r => (r.name as string).includes('Committee'))) {
+            if (fcIds.includes(user.id) || tcIds.includes(user.id) || (user.roles as any[]).some(r => (r.name as string).includes('Committee'))) {
               isAuthorizedToAct = true;
             }
           }
@@ -462,7 +462,7 @@ export async function PATCH(
         }
 
         if (!isAuthorizedToAct) {
-            console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
+            console.error(`[PATCH /api/requisitions] User ${user.id} not authorized for status ${requisition.status}.`);
             return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
         }
         
@@ -527,7 +527,7 @@ export async function PATCH(
               const signatureRecord = await tx.signature.create({
                 data: {
                   minute: { connect: { id: latestMinute.id } },
-                  signer: { connect: { id: userId } },
+                  signer: { connect: { id: user.id } },
                   signerName: user.name,
                   signerRole: (user.roles as any[]).map(r => r.name).join(', '),
                   decision: newStatus === 'Rejected' ? 'REJECTED' : 'APPROVED',
@@ -835,3 +835,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
