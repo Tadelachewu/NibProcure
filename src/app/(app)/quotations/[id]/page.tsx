@@ -2477,9 +2477,17 @@ export default function QuotationDetailsPage() {
     const allowedPaths = rolePermissions['Combined'] || [];
     return allowedPaths.includes('/award-reviews');
   }, [user, role, requisition, rolePermissions]);
+
+  const readyForCommitteeAssignment = useMemo(() => {
+    if (!requisition) return false;
+    const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+    const hasEnoughQuotes = quotations.length >= committeeQuorum;
+    return deadlinePassed && hasEnoughQuotes && requisition.status === 'Accepting_Quotes';
+  }, [requisition, quotations.length, committeeQuorum]);
   
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
     if (!requisition || !requisition.status) return 'rfq';
+    if (readyForCommitteeAssignment) return 'committee';
 
     const completeStatuses = ['Fulfilled', 'Closed'];
     if (completeStatuses.includes(requisition.status)) return 'completed';
@@ -2496,7 +2504,7 @@ export default function QuotationDetailsPage() {
     if (requisition.status === 'Accepting_Quotes' && isDeadlinePassed) return 'committee';
     
     return 'rfq';
-  }, [requisition, isAccepted, isDeadlinePassed]);
+  }, [requisition, isAccepted, isDeadlinePassed, readyForCommitteeAssignment]);
   
   const { pendingQuotes, scoredQuotes } = useMemo(() => {
     if (!user || !(user.roles as string[]).some(r => r.includes('Committee')) ) return { pendingQuotes: quotations, scoredQuotes: [] };
@@ -2841,7 +2849,6 @@ export default function QuotationDetailsPage() {
   const isReadyForNotification = requisition?.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && !isAwarded && quotations.length > 0 && quotations.length < committeeQuorum;
-  const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
   
   const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
   
@@ -2958,7 +2965,7 @@ export default function QuotationDetailsPage() {
             isAuthorized={isAuthorized}
         />
         
-        { hasAssignedCommittee && canManageCommittees && (
+        {(currentStep === 'committee' || readyForCommitteeAssignment) && canManageCommittees && (
              <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="committee-management">
                     <AccordionTrigger>
@@ -2978,7 +2985,7 @@ export default function QuotationDetailsPage() {
             </Accordion>
         )}
 
-        {(currentStep !== 'rfq' || readyForCommitteeAssignment) && (
+        {(currentStep !== 'rfq') && (
             <Accordion type="single" collapsible className="w-full" defaultValue="quotation-overview">
                  <AccordionItem value="quotation-overview">
                     <AccordionTrigger>
