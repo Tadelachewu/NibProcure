@@ -90,7 +90,6 @@ export default function PublicRequisitionDetailsPage() {
             <CardHeader>
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                     <div>
-                        <Badge variant="secondary">{requisition.id}</Badge>
                         <CardTitle className="mt-2 text-3xl">{requisition.title}</CardTitle>
                         <CardDescription className="mt-2 text-base">
                             An invitation to bid from the {requisition.department} department.

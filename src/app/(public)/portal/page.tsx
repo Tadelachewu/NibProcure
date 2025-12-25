@@ -71,7 +71,7 @@ export default function PublicPortalPage() {
             <div className="relative w-full md:max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
-                    placeholder="Search by title, department, or ID..." 
+                    placeholder="Search by title or department..." 
                     className="pl-10"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -90,7 +90,6 @@ export default function PublicPortalPage() {
                 <Card key={req.id} className="flex flex-col hover:shadow-lg transition-shadow duration-300">
                   <CardHeader>
                     <CardTitle className="text-lg">{req.title}</CardTitle>
-                    <CardDescription>{req.id}</CardDescription>
                   </CardHeader>
                   <CardContent className="flex-grow space-y-4 text-sm">
                     <div className="flex items-center gap-2 text-muted-foreground">
