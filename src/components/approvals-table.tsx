@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -142,7 +141,10 @@ export function ApprovalsTable() {
     try {
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify({ 
             id: selectedRequisition.id, 
             status: actionType === 'approve' ? 'PreApproved' : 'Rejected', 
@@ -358,5 +360,3 @@ export function ApprovalsTable() {
     </>
   );
 }
-
-    
