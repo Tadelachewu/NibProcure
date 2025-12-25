@@ -53,7 +53,7 @@ export function ApprovalsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, rfqSenderSetting, allUsers, token } = useAuth();
+  const { user, token, rfqSenderSetting, allUsers } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -87,7 +87,9 @@ export function ApprovalsTable() {
       setLoading(true);
       const apiUrl = `/api/requisitions?status=Pending_Approval&approverId=${user.id}`;
       
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch requisitions for approval');
       }
@@ -98,7 +100,7 @@ export function ApprovalsTable() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, token]);
 
   useEffect(() => {
     if (user) {

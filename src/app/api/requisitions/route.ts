@@ -264,14 +264,12 @@ export async function PATCH(
     if (!actor) {
         return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
-    const user = actor; // Use the securely identified user
+    const user = actor;
 
     const body = await request.json();
     const { id, status, comment } = body;
-    console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${user.id}`);
+    const updateData = body;
     
-    const newStatus = status ? status.replace(/ /g, '_') : null;
-
     const requisition = await prisma.purchaseRequisition.findUnique({ 
       where: { id },
       include: { 
@@ -291,32 +289,32 @@ export async function PATCH(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
     
-    console.log(`[PATCH /api/requisitions] Current req status: ${requisition.status}. Requested new status: ${newStatus}`);
-
     let dataToUpdate: any = {};
     let auditAction = 'UPDATE_REQUISITION';
     let auditDetails = `Updated requisition ${id}.`;
     let updatedRequisition;
     
-    if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && body.title) {
-        const totalPrice = body.items.reduce((acc: number, item: any) => {
+    const newStatus = status ? status.replace(/ /g, '_') : requisition.status;
+    
+    // This handles editing a draft or rejected requisition and resubmitting
+    if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && updateData.title) {
+        const totalPrice = updateData.items.reduce((acc: number, item: any) => {
             const price = item.unitPrice || 0;
             const quantity = item.quantity || 0;
             return acc + (price * quantity);
         }, 0);
 
         dataToUpdate = {
-            title: body.title,
-            justification: body.justification,
-            urgency: body.urgency,
-            department: { connect: { name: body.department } },
+            title: updateData.title,
+            justification: updateData.justification,
+            urgency: updateData.urgency,
+            department: { connect: { name: updateData.department } },
             totalPrice: totalPrice,
-            status: status ? status.replace(/ /g, '_') : requisition.status,
             approver: { disconnect: true },
             approverComment: null,
             items: {
                 deleteMany: {},
-                create: body.items.map((item: any) => ({
+                create: updateData.items.map((item: any) => ({
                     name: item.name,
                     quantity: Number(item.quantity) || 0,
                     unitPrice: Number(item.unitPrice) || 0,
@@ -325,7 +323,7 @@ export async function PATCH(
             },
             customQuestions: {
                 deleteMany: {},
-                create: body.customQuestions?.map((q: any) => ({
+                create: updateData.customQuestions?.map((q: any) => ({
                     questionText: q.questionText,
                     questionType: q.questionType.replace(/-/g, '_'),
                     isRequired: q.isRequired,
@@ -333,7 +331,7 @@ export async function PATCH(
                 })),
             },
         };
-        if (body.evaluationCriteria) {
+        if (updateData.evaluationCriteria) {
              const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
              if (oldCriteria) {
                  await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
@@ -343,10 +341,10 @@ export async function PATCH(
 
              dataToUpdate.evaluationCriteria = {
                 create: {
-                    financialWeight: body.evaluationCriteria.financialWeight,
-                    technicalWeight: body.evaluationCriteria.technicalWeight,
-                    financialCriteria: { create: body.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) })) },
-                    technicalCriteria: { create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) })) }
+                    financialWeight: updateData.evaluationCriteria.financialWeight,
+                    technicalWeight: updateData.evaluationCriteria.technicalWeight,
+                    financialCriteria: { create: updateData.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) })) },
+                    technicalCriteria: { create: updateData.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) })) }
                 }
             };
         }
@@ -357,18 +355,20 @@ export async function PATCH(
                 dataToUpdate.status = 'PreApproved';
                 dataToUpdate.currentApprover = { disconnect: true };
                 auditAction = 'SUBMIT_AND_AUTO_APPROVE';
-                auditDetails = `Requisition ${id} ("${body.title}") submitted by department head and automatically approved.`;
+                auditDetails = `Requisition ${id} ("${updateData.title}") submitted by department head and automatically approved.`;
             } else if (department?.headId) {
                 dataToUpdate.status = 'Pending_Approval';
                 dataToUpdate.currentApprover = { connect: { id: department.headId } };
                 auditAction = 'SUBMIT_FOR_APPROVAL';
-                auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
+                auditDetails = `Requisition ${id} ("${updateData.title}") was edited and submitted for approval.`;
             } else {
                  dataToUpdate.status = 'PreApproved';
                  dataToUpdate.currentApprover = { disconnect: true };
                  auditAction = 'SUBMIT_FOR_APPROVAL';
-                 auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval (no department head found, auto-approved).`;
+                 auditDetails = `Requisition ${id} ("${updateData.title}") was edited and submitted for approval (no department head found, auto-approved).`;
             }
+        } else {
+             dataToUpdate.status = newStatus;
         }
 
     } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Approval') {
@@ -455,7 +455,6 @@ export async function PATCH(
             return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
         }
         
-        console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
         updatedRequisition = await prisma.$transaction(async (tx) => {
             const committeeName = requisition.status.replace('Pending_', '').replace(/_/g, ' ');
 
@@ -540,7 +539,6 @@ export async function PATCH(
 
             return req;
         });
-        console.log(`[PATCH /api/requisitions] Award action transaction complete for Req ID: ${id}`);
         return NextResponse.json(updatedRequisition);
     }
 
