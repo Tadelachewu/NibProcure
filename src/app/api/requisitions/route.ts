@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -709,13 +708,13 @@ export async function POST(request: Request) {
       if (body.status === 'Pending_Approval') {
           if (department.headId === actor.id) {
               data.status = 'PreApproved'; // Auto-approve
-              data.currentApproverId = null;
+              data.currentApprover = undefined;
           } else if (department.headId) {
               data.status = 'Pending_Approval';
-              data.currentApproverId = department.headId;
+              data.currentApprover = { connect: { id: department.headId } };
           } else {
               data.status = 'PreApproved'; // No head, auto-approve
-              data.currentApproverId = null;
+              data.currentApprover = undefined;
           }
       }
 
