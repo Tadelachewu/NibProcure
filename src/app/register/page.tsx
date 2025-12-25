@@ -111,7 +111,7 @@ export default function RegisterPage() {
 
         if (response.ok) {
             localStorage.removeItem(storageKey); // Clear saved data on success
-            authLogin(result.token, result.user, result.roles);
+            authLogin(result.token, result.user);
             toast({
                 title: 'Registration Successful',
                 description: `Welcome, ${result.user.name}! Your vendor application is pending verification.`,
@@ -132,108 +132,115 @@ export default function RegisterPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-xl">Vendor Registration</CardTitle>
-          <CardDescription>
-            Enter your company information to create a vendor account.
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleRegister}>
-          <CardContent className="grid gap-4">
-            
-            <div className="grid gap-2">
-              <Label htmlFor="name">Company Name</Label>
-              <Input 
-                id="name" 
-                placeholder="Your Company LLC"
-                required 
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password">Password</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                required 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-
-            <>
-                <Separator />
-                  <p className="text-sm text-muted-foreground">Please provide your business details for verification.</p>
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center">
+            <Link href="/portal" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                &larr; View Public Tenders
+            </Link>
+        </div>
+        <Card>
+            <CardHeader>
+            <CardTitle className="text-xl">Vendor Registration</CardTitle>
+            <CardDescription>
+                Enter your company information to create a vendor account.
+            </CardDescription>
+            </CardHeader>
+            <form onSubmit={handleRegister}>
+            <CardContent className="grid gap-4">
+                
                 <div className="grid gap-2">
-                    <Label htmlFor="contactPerson">Contact Person</Label>
-                    <Input 
-                        id="contactPerson" 
-                        placeholder="Jane Doe" 
-                        required 
-                        value={contactPerson}
-                        onChange={(e) => setContactPerson(e.target.value)}
-                    />
+                <Label htmlFor="name">Company Name</Label>
+                <Input 
+                    id="name" 
+                    placeholder="Your Company LLC"
+                    required 
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                />
                 </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input 
-                        id="phone" 
-                        placeholder="(555) 123-4567" 
-                        required 
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                    />
+                <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                    id="email"
+                    type="email"
+                    placeholder="m@example.com"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                />
                 </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="address">Business Address</Label>
-                    <Input 
-                        id="address" 
-                        placeholder="123 Main St, Anytown, USA" 
-                        required 
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                    />
+                <div className="grid gap-2">
+                <Label htmlFor="password">Password</Label>
+                <Input 
+                    id="password" 
+                    type="password" 
+                    required 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                />
                 </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="license">Business License</Label>
-                    <Input id="license" type="file" required onChange={(e) => setLicenseFile(e.target.files?.[0] || null)} />
-                      <p className="text-xs text-muted-foreground">Upload a PDF of your business license.</p>
-                </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="tax-id">Tax ID Document</Label>
-                    <Input id="tax-id" type="file" required onChange={(e) => setTaxIdFile(e.target.files?.[0] || null)} />
-                      <p className="text-xs text-muted-foreground">Upload a PDF of your tax registration.</p>
-                </div>
-            </>
 
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create an account
-            </Button>
-            <div className="mt-4 text-center text-sm">
-              Already have an account?{' '}
-              <Link href="/login" className="underline">
-                Sign in
-              </Link>
-            </div>
-          </CardFooter>
-        </form>
-      </Card>
+                <>
+                    <Separator />
+                    <p className="text-sm text-muted-foreground">Please provide your business details for verification.</p>
+                    <div className="grid gap-2">
+                        <Label htmlFor="contactPerson">Contact Person</Label>
+                        <Input 
+                            id="contactPerson" 
+                            placeholder="Jane Doe" 
+                            required 
+                            value={contactPerson}
+                            onChange={(e) => setContactPerson(e.target.value)}
+                        />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="phone">Phone Number</Label>
+                        <Input 
+                            id="phone" 
+                            placeholder="(555) 123-4567" 
+                            required 
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                        />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="address">Business Address</Label>
+                        <Input 
+                            id="address" 
+                            placeholder="123 Main St, Anytown, USA" 
+                            required 
+                            value={address}
+                            onChange={(e) => setAddress(e.target.value)}
+                        />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="license">Business License</Label>
+                        <Input id="license" type="file" required onChange={(e) => setLicenseFile(e.target.files?.[0] || null)} />
+                        <p className="text-xs text-muted-foreground">Upload a PDF of your business license.</p>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="tax-id">Tax ID Document</Label>
+                        <Input id="tax-id" type="file" required onChange={(e) => setTaxIdFile(e.target.files?.[0] || null)} />
+                        <p className="text-xs text-muted-foreground">Upload a PDF of your tax registration.</p>
+                    </div>
+                </>
+
+            </CardContent>
+            <CardFooter className="flex flex-col gap-4">
+                <Button type="submit" className="w-full" disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Create an account
+                </Button>
+                <div className="mt-4 text-center text-sm">
+                Already have an account?{' '}
+                <Link href="/login" className="underline">
+                    Sign in
+                </Link>
+                </div>
+            </CardFooter>
+            </form>
+        </Card>
+      </div>
     </div>
   );
 }
