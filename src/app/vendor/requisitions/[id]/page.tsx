@@ -1113,12 +1113,12 @@ export default function VendorRequisitionPage() {
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
                                         <Button disabled={isResponding || isResponseDeadlineExpired}>
-                                            <ThumbsUp className="mr-2 h-4 w-4" /> Accept Full Award
+                                            <ThumbsUp className="mr-2 h-4 w-4" /> Accept Award
                                         </Button>
                                     </AlertDialogTrigger>
                                     <AlertDialogContent>
                                         <AlertDialogHeader>
-                                            <AlertDialogTitle>Confirm Full Award Acceptance</AlertDialogTitle>
+                                            <AlertDialogTitle>Confirm Award Acceptance</AlertDialogTitle>
                                             <AlertDialogDescription>
                                                 This will accept the award for all items listed in this offer. This action cannot be undone.
                                             </AlertDialogDescription>
