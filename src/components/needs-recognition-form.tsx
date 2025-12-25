@@ -314,6 +314,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   const financialWeight = form.watch('evaluationCriteria.financialWeight');
   const financialTotal = (form.watch('evaluationCriteria.financialCriteria') || []).reduce((acc, c) => acc + (Number(c.weight) || 0), 0);
   const technicalTotal = (form.watch('evaluationCriteria.technicalCriteria') || []).reduce((acc, c) => acc + (Number(c.weight) || 0), 0);
+  const isRejected = isEditMode && existingRequisition.status === 'Rejected';
 
   return (
     <Card>
@@ -324,7 +325,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
         </CardDescription>
       </CardHeader>
       <CardContent>
-         {isEditMode && existingRequisition.approverComment && (
+         {isRejected && existingRequisition.approverComment && (
             <Alert variant="destructive" className="mb-6">
                 <AlertTitle>Rejection Reason from Approver</AlertTitle>
                 <AlertDescription>"{existingRequisition.approverComment}"</AlertDescription>
@@ -757,33 +758,42 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
             </div>
             
             <div className="flex justify-end items-center gap-4">
-                <Button type="button" onClick={handleSaveDraft} variant="secondary" disabled={loading}>
-                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Save as Draft
-                </Button>
-                
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button type="button" disabled={loading}>
-                            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                            Submit for Approval
+                {isRejected ? (
+                    <Button type="button" onClick={handleFormSubmit} disabled={loading}>
+                        {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Update & Resubmit for Approval
+                    </Button>
+                ) : (
+                    <>
+                        <Button type="button" onClick={handleSaveDraft} variant="secondary" disabled={loading}>
+                            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                            Save as Draft
                         </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Are you ready to submit?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This will submit the requisition to your department head for approval. You will not be able to edit it after submission unless it is rejected.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleFormSubmit}>
-                                Yes, Submit for Approval
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
+                        
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button type="button" disabled={loading}>
+                                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                                    Submit for Approval
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you ready to submit?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This will submit the requisition to your department head for approval. You will not be able to edit it after submission unless it is rejected.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleFormSubmit}>
+                                        Yes, Submit for Approval
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </>
+                )}
             </div>
           </form>
         </Form>
@@ -825,4 +835,3 @@ function QuestionOptions({ index }: { index: number }) {
     </div>
   );
 }
-
