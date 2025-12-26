@@ -1,4 +1,6 @@
 
+'use server';
+
 import type { User, UserRole } from './types';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { prisma } from './prisma';
@@ -73,19 +75,17 @@ export async function getActorFromToken(request: Request): Promise<(User & { eff
     const baseRoles = user.roles.map(r => r.name as UserRole);
     let effectiveRoles = [...baseRoles];
 
-    // **FIX START**: Dynamically add Procurement_Officer role if user is a designated sender.
     const rfqSetting = rfqSenderSetting?.value as { type: string, userIds?: string[] } | undefined;
     if (rfqSetting?.type === 'specific' && rfqSetting.userIds?.includes(user.id)) {
         if (!effectiveRoles.includes('Procurement_Officer')) {
             effectiveRoles.push('Procurement_Officer');
         }
     }
-    // **FIX END**
 
     return {
       ...user,
       department: user.department?.name,
       roles: baseRoles, // Keep original roles
       effectiveRoles: [...new Set(effectiveRoles)], // Return a unique set of effective roles
-    }
+    } as any;
 }

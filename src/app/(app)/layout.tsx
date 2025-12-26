@@ -45,7 +45,7 @@ export default function AppLayout({
   
   const accessibleNavItems = useMemo(() => {
     if (!role) return [];
-    // Use the special 'Combined' key which holds the union of all permissions
+    
     const allowedPaths = rolePermissions['Combined'] || [];
     let items = navItems.filter(item => allowedPaths.includes(item.path));
 
@@ -106,11 +106,9 @@ export default function AppLayout({
         return; // Wait for all auth data to be loaded
     }
     
-    // The 'Combined' key now holds the merged permissions for the current user
     const allowedPaths = rolePermissions['Combined'] || [];
     
-    // If somehow permissions are empty and user is not admin, logout
-    if (user && allowedPaths.length === 0 && !user.roles?.includes('Admin')) { 
+    if (user && allowedPaths.length === 0 && !(user.roles as string[]).includes('Admin')) { 
         console.warn(`No permissions found for user roles. Logging out.`);
         logout();
         return;
@@ -118,12 +116,10 @@ export default function AppLayout({
     
     const currentPath = pathname.split('?')[0];
 
-    // Always allow access to dashboard for any logged-in user
     if (currentPath === '/dashboard') {
         return;
     }
     
-    // Special check for new-requisition page
     if (currentPath === '/new-requisition' && requisitionCreatorSetting.type === 'specific_roles') {
         const canCreate = user?.roles.some(r => requisitionCreatorSetting.allowedRoles?.includes(r as any));
         if (!canCreate) {
@@ -132,11 +128,8 @@ export default function AppLayout({
         }
     }
 
-
-    // Check if the current path is allowed, including sub-paths
     const isAllowed = allowedPaths.some(p => {
         if (p === '/') return currentPath === '/'; // Exact match for root
-        // Allow access to sub-paths, e.g., /requisitions/edit/123 if /requisitions is allowed
         return currentPath === p || currentPath.startsWith(`${p}/`);
     });
     
@@ -144,13 +137,11 @@ export default function AppLayout({
         return;
     }
     
-    // If not allowed, determine where to redirect
     const defaultPath = allowedPaths.includes('/dashboard') ? '/dashboard' : allowedPaths[0];
 
-    // Redirect to default path if it's different, otherwise, as a last resort, logout
     if (defaultPath && defaultPath !== currentPath) {
         router.push(defaultPath);
-    } else if (!defaultPath && !user.roles?.includes('Admin')) {
+    } else if (!defaultPath && !(user.roles as string[]).includes('Admin')) {
         logout();
     }
   }, [pathname, loading, role, user, router, rolePermissions, logout, requisitionCreatorSetting]);

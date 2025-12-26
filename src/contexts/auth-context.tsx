@@ -218,12 +218,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         permissionsForRole.forEach(path => permissionsSet.add(path));
     });
     
-    // **FIX START**: Dynamically grant Procurement Officer permissions if the user is a designated RFQ sender.
     if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userIds?.includes(user.id)) {
         const procurementPermissions = rolePermissions['Procurement_Officer'] || [];
         procurementPermissions.forEach(path => permissionsSet.add(path));
     }
-    // **FIX END**
 
     return { ...rolePermissions, Combined: Array.from(permissionsSet) };
   }, [user, rolePermissions, loading, rfqSenderSetting]);
@@ -336,8 +334,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await updateSetting('committeeConfig', newConfig);
   }
 
-  const authContextValue = useMemo(() => ({
-      user,
+  const authContextValue = useMemo(() => {
+    const effectiveUser = user ? {
+        ...user,
+        effectiveRoles: combinedPermissions['Combined'] || []
+    } : null;
+
+    return {
+      user: effectiveUser,
       token,
       role,
       allUsers,
@@ -363,7 +367,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetchAllUsers,
       fetchAllSettings,
       fetchAllDepartments
-  }), [user, token, role, loading, allUsers, departments, combinedPermissions, rfqSenderSetting, requisitionCreatorSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
+  }}, [user, token, role, loading, allUsers, departments, combinedPermissions, rfqSenderSetting, requisitionCreatorSetting, approvalThresholds, committeeConfig, settings, rfqQuorum, committeeQuorum, fetchAllUsers, fetchAllSettings, fetchAllDepartments]);
 
 
   return (

@@ -19,9 +19,7 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
     
-    // **FIX START**: Use the effectiveRoles from the actor for authorization
     const isAuthorized = actor.effectiveRoles.includes('Procurement_Officer') || actor.effectiveRoles.includes('Admin');
-    // **FIX END**
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
     }

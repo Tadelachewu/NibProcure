@@ -65,9 +65,7 @@ export async function POST(
             return NextResponse.json({ error: "The official minute document is required to proceed." }, { status: 400 });
         }
         
-        // **FIX START**: Use the effectiveRoles from the actor for authorization
         const isAuthorized = actor.effectiveRoles.includes('Procurement_Officer') || actor.effectiveRoles.includes('Admin');
-        // **FIX END**
 
         if (!isAuthorized) {
             console.error(`[FINALIZE-SCORES] User ${actor.id} is not authorized.`);

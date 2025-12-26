@@ -18,9 +18,7 @@ export async function POST(
 
   const requisitionId = params.id;
   try {
-    // **FIX START**: Use the effectiveRoles from the actor for authorization
     const isAuthorized = actor.effectiveRoles.includes('Procurement_Officer') || actor.effectiveRoles.includes('Admin');
-    // **FIX END**
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

@@ -24,9 +24,7 @@ export async function POST(
         const { awardResponseDeadline } = body;
         console.log(`[NOTIFY-VENDOR] Action by User ID: ${actor.id}, Award Response Deadline: ${awardResponseDeadline}`);
         
-        // **FIX START**: Use the effectiveRoles from the actor for authorization
         const isAuthorized = actor.effectiveRoles.includes('Procurement_Officer') || actor.effectiveRoles.includes('Admin');
-        // **FIX END**
 
         if (!isAuthorized) {
             console.error(`[NOTIFY-VENDOR] User ${actor.id} is not authorized to notify vendors.`);
