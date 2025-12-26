@@ -1,11 +1,13 @@
 
 'use server';
-import 'dotenv/config';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { getActorFromToken } from '@/lib/auth';
+import 'dotenv/config';
+
 
 export async function POST(
   request: Request,
@@ -13,7 +15,7 @@ export async function POST(
 ) {
   try {
     const actor = await getActorFromToken(request);
-    
+
     const { id } = params;
     const body = await request.json();
     const { vendorIds, deadline, cpoAmount, rfqSettings } = body;
@@ -23,8 +25,21 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
     
+    // Correct Authorization Logic
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
     const userRoles = actor.roles as UserRole[];
-    const isAuthorized = userRoles.includes('Admin') || userRoles.includes('Procurement_Officer');
+
+    if (userRoles.includes('Admin')) {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
+        if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
+            isAuthorized = true;
+        } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
+            isAuthorized = true;
+        }
+    }
 
 
     if (!isAuthorized) {

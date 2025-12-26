@@ -1,5 +1,6 @@
 
 'use server';
+
 import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -21,9 +22,21 @@ export async function POST(
         const { awardResponseDeadline } = body;
         console.log(`[NOTIFY-VENDOR] Action by User ID: ${actor.id}, Award Response Deadline: ${awardResponseDeadline}`);
         
+        // Correct Authorization Logic
+        const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+        let isAuthorized = false;
         const userRoles = actor.roles as UserRole[];
-        const isAuthorized = userRoles.includes('Admin') || userRoles.includes('Procurement_Officer');
 
+        if (userRoles.includes('Admin')) {
+            isAuthorized = true;
+        } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+            const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
+            if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
+                isAuthorized = true;
+            } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
+                isAuthorized = true;
+            }
+        }
 
         if (!isAuthorized) {
             console.error(`[NOTIFY-VENDOR] User ${actor.id} is not authorized to notify vendors.`);

@@ -1,11 +1,13 @@
 
 'use server';
 
+import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { User, UserRole, PerItemAwardDetail } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format } from 'date-fns';
+import { getActorFromToken } from '@/lib/auth';
 
 const prisma = new PrismaClient();
 
@@ -13,20 +15,30 @@ export async function POST(
   request: Request
 ) {
   try {
-    const body = await request.json();
-    const { originalRequisitionId, itemIds, vendorIds, newDeadline, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({ where: { id: actorUserId }, include: { roles: true } });
-    if (!actor) {
-      return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
-    }
+    const actor = await getActorFromToken(request);
     
     // --- Authorization Check ---
-    const userRoles = (actor.roles as any[]).map(r => r.name);
-    const isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+    const userRoles = actor.roles as UserRole[];
+
+    if (userRoles.includes('Admin')) {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
+        if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
+            isAuthorized = true;
+        } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
+            isAuthorized = true;
+        }
+    }
+
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { originalRequisitionId, itemIds, vendorIds, newDeadline } = body;
 
     if (!originalRequisitionId || !itemIds || itemIds.length === 0 || !vendorIds || vendorIds.length === 0 || !newDeadline) {
       return NextResponse.json({ error: 'Missing required parameters: originalRequisitionId, itemIds, vendorIds, and newDeadline.' }, { status: 400 });
@@ -173,6 +185,9 @@ export async function POST(
 
   } catch (error) {
     console.error('Failed to restart item RFQ:', error);
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+        return NextResponse.json({ error: error.message }, { status: 401 });
+    }
     if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
