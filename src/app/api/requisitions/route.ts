@@ -366,7 +366,7 @@ export async function PATCH(
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
             if (department?.headId === user.id) {
                 dataToUpdate.status = 'PreApproved';
-                dataToUpdate.currentApprover = { disconnect: true };
+                dataToUpdate.currentApproverId = undefined; // Use undefined instead of disconnect
                 auditAction = 'SUBMIT_AND_AUTO_APPROVE';
                 auditDetails = `Requisition ${id} ("${body.title}") submitted by department head and automatically approved.`;
             } else if (department?.headId) {
@@ -376,7 +376,7 @@ export async function PATCH(
                 auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
             } else {
                  dataToUpdate.status = 'PreApproved';
-                 dataToUpdate.currentApprover = { disconnect: true };
+                 dataToUpdate.currentApproverId = undefined; // Use undefined instead of disconnect
                  auditAction = 'SUBMIT_FOR_APPROVAL';
                  auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval (no department head found, auto-approved).`;
             }
@@ -386,7 +386,7 @@ export async function PATCH(
         dataToUpdate.status = 'PreApproved';
         dataToUpdate.approver = { connect: { id: userId } };
         dataToUpdate.approverComment = comment;
-        dataToUpdate.currentApprover = { disconnect: true };
+        dataToUpdate.currentApproverId = null;
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Departmental approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;
     }
@@ -394,7 +394,7 @@ export async function PATCH(
         dataToUpdate.status = 'Rejected';
         dataToUpdate.approver = { connect: { id: userId } };
         dataToUpdate.approverComment = comment;
-        dataToUpdate.currentApprover = { disconnect: true };
+        dataToUpdate.currentApproverId = null;
         auditAction = 'REJECT_REQUISITION';
         auditDetails = `Requisition ${id} was rejected with comment: "${comment}".`;
     }
@@ -412,7 +412,7 @@ export async function PATCH(
           const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
           const hasPendingPerItemAwards = requisition.items.some((item: any) => {
             const details = (item.perItemAwardDetails as any[]) || [];
-            return details.some(d => d.status === 'Pending_Award');
+            return details.some(d => d.status === 'Pending_AWARD' || d.status === 'Pending_Award');
           });
 
           if (!isAuthorizedToAct && requisition.status === 'Award_Declined' && awardStrategy === 'item' && hasPendingPerItemAwards) {
@@ -517,7 +517,8 @@ export async function PATCH(
                 where: { id },
                 data: {
                     status: dataToUpdate.status,
-                    currentApprover: dataToUpdate.currentApproverId ? { connect: { id: dataToUpdate.currentApproverId } } : { disconnect: true },
+                    currentApprover: dataToUpdate.currentApproverId ? { connect: { id: dataToUpdate.currentApproverId } } : undefined,
+                    currentApproverId: dataToUpdate.currentApproverId === null ? null : dataToUpdate.currentApproverId,
                     approverComment: dataToUpdate.approverComment,
                 },
             });
@@ -595,7 +596,7 @@ export async function PATCH(
         } else {
             // If no department head, auto-approve to the next stage
             dataToUpdate.status = 'PreApproved';
-            dataToUpdate.currentApprover = { disconnect: true };
+            dataToUpdate.currentApproverId = null;
         }
         dataToUpdate.status = 'Pending_Approval';
         dataToUpdate.approverComment = null; // Clear rejection comment
@@ -644,13 +645,16 @@ export async function PATCH(
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    
     const actor = await prisma.user.findUnique({
       where: { id: body.requesterId },
       include: { roles: true },
     });
+
     if (!actor) {
       return NextResponse.json({ error: 'Requester user not found' }, { status: 404 });
     }
+    
     const creatorSetting = await prisma.setting.findUnique({ where: { key: 'requisitionCreatorSetting' } });
     if (creatorSetting && typeof creatorSetting.value === 'object' && creatorSetting.value && 'type' in creatorSetting.value) {
       const setting = creatorSetting.value as { type: string, allowedRoles?: string[] };
@@ -662,6 +666,7 @@ export async function POST(request: Request) {
         }
       }
     }
+    
     const totalPrice = body.items.reduce((acc: number, item: any) => {
       const price = item.unitPrice || 0;
       const quantity = item.quantity || 0;
@@ -715,13 +720,11 @@ export async function POST(request: Request) {
       if (body.status === 'Pending_Approval') {
           if (department.headId === actor.id) {
               data.status = 'PreApproved';
-              data.currentApprover = { disconnect: true };
           } else if (department.headId) {
               data.status = 'Pending_Approval';
               data.currentApprover = { connect: { id: department.headId } };
           } else {
               data.status = 'PreApproved'; // No head, auto-approve
-              data.currentApprover = { disconnect: true };
           }
       }
 

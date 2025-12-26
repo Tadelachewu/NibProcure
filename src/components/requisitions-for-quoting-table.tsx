@@ -29,6 +29,7 @@ const PAGE_SIZE = 10;
 
 export function RequisitionsForQuotingTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -36,38 +37,34 @@ export function RequisitionsForQuotingTable() {
   const { user, role, token, committeeQuorum } = useAuth();
 
 
-  useEffect(() => {
-    const fetchRequisitions = async () => {
-        if (!user || !token) return;
-        try {
-            setLoading(true);
-            const response = await fetch(`/api/requisitions?forQuoting=true`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) {
-                throw new Error('Failed to fetch requisitions');
-            }
-            const data = await response.json();
-            // FIX: The API now returns an object { requisitions, totalCount }
-            setRequisitions(data.requisitions || []);
+  const fetchRequisitions = useCallback(async (page: number) => {
+    if (!user || !token) return;
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/requisitions?forQuoting=true&page=${page}&limit=${PAGE_SIZE}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) {
+          throw new Error('Failed to fetch requisitions');
+      }
+      const data = await response.json();
+      setRequisitions(data.requisitions || []);
+      setTotalCount(data.totalCount || 0);
 
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'An unknown error occurred');
-        } finally {
-            setLoading(false);
-        }
-    };
-    if (user) {
-        fetchRequisitions();
+    } catch (e) {
+        setError(e instanceof Error ? e.message : 'An unknown error occurred');
+    } finally {
+        setLoading(false);
     }
   }, [user, token]);
-  
-  const totalPages = Math.ceil(requisitions.length / PAGE_SIZE);
-  const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return requisitions.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [requisitions, currentPage]);
 
+  useEffect(() => {
+    if (user) {
+        fetchRequisitions(currentPage);
+    }
+  }, [user, currentPage, fetchRequisitions]);
+  
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   const handleRowClick = (reqId: string) => {
     router.push(`/quotations/${reqId}`);
@@ -186,8 +183,8 @@ export function RequisitionsForQuotingTable() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedData.length > 0 ? (
-                paginatedData.map((req, index) => (
+              {requisitions.length > 0 ? (
+                requisitions.map((req, index) => (
                   <TableRow key={req.id} className="cursor-pointer" onClick={() => handleRowClick(req.id)}>
                     <TableCell className="text-muted-foreground">{(currentPage - 1) * PAGE_SIZE + index + 1}</TableCell>
                     <TableCell className="font-medium text-primary">{req.id}</TableCell>
@@ -226,7 +223,7 @@ export function RequisitionsForQuotingTable() {
         </div>
          <div className="flex items-center justify-between mt-4">
           <div className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages || 1} ({requisitions.length} total requisitions)
+            Page {currentPage} of {totalPages || 1} ({totalCount} total requisitions)
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
