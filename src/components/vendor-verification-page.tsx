@@ -30,11 +30,15 @@ export function VendorVerificationPage() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const router = useRouter();
+  const { token } = useAuth();
 
   const fetchVendors = useCallback(async () => {
+    if (!token) return;
     setLoading(true);
     try {
-      const response = await fetch('/api/vendors');
+      const response = await fetch('/api/vendors', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       const data = await response.json();
       setVendors(data.filter((v: Vendor) => v.kycStatus === 'Pending'));
     } catch (error) {
@@ -43,7 +47,7 @@ export function VendorVerificationPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, token]);
 
   useEffect(() => {
     fetchVendors();

@@ -69,7 +69,7 @@ const PAGE_SIZE = 10;
 function AddInvoiceForm({ onInvoiceAdded }: { onInvoiceAdded: () => void }) {
     const [isSubmitting, setSubmitting] = useState(false);
     const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const { toast } = useToast();
 
     const form = useForm<z.infer<typeof invoiceSchema>>({
@@ -112,7 +112,7 @@ function AddInvoiceForm({ onInvoiceAdded }: { onInvoiceAdded: () => void }) {
     const totalAmount = form.watch('items').reduce((acc, item) => acc + item.totalPrice, 0);
 
     const onSubmit = async (values: z.infer<typeof invoiceSchema>) => {
-        if (!user) return;
+        if (!user || !token) return;
         
         const selectedPO = purchaseOrders.find(p => p.id === values.purchaseOrderId);
         if (!selectedPO) return;
@@ -121,7 +121,7 @@ function AddInvoiceForm({ onInvoiceAdded }: { onInvoiceAdded: () => void }) {
         try {
             const response = await fetch('/api/invoices', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ 
                     ...values,
                     vendorId: selectedPO.vendor.id,
@@ -252,7 +252,7 @@ const MatchDetailRow = ({ label, value, isMismatch = false }: { label: string, v
 }
 
 function MatchDetailsDialog({ result, onResolve, onCancel }: { result: MatchingResult, onResolve: () => void, onCancel: () => void }) {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const { toast } = useToast();
     const [isResolving, setResolving] = useState(false);
     const [poDetails, setPoDetails] = useState<PurchaseOrder | null>(null);
@@ -268,13 +268,13 @@ function MatchDetailsDialog({ result, onResolve, onCancel }: { result: MatchingR
 
 
     const handleResolve = async () => {
-        if (!user) return;
+        if (!user || !token) return;
         setResolving(true);
         try {
             const response = await fetch('/api/matching', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
-                body: JSON.stringify({ poId: result.poId, userId: user.id })
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ poId: result.poId })
             });
             if (!response.ok) throw new Error("Failed to resolve mismatch.");
             toast({ title: "Mismatch Resolved", description: `PO ${result.poId} has been manually marked as matched.` });
@@ -493,28 +493,24 @@ export function InvoicesPage() {
   const [actionType, setActionType] = useState<'approve' | 'dispute' | null>(null);
 
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
 
   const fetchAllData = useCallback(async () => {
+    if (!token) return;
     setLoading(true);
     try {
-      const invResponse = await fetch('/api/invoices');
+      const invResponse = await fetch('/api/invoices', { headers: { 'Authorization': `Bearer ${token}` } });
       if (!invResponse.ok) throw new Error('Failed to fetch invoices');
       const invData: Invoice[] = await invResponse.json();
       
-      const poResponse = await fetch('/api/purchase-orders');
+      const poResponse = await fetch('/api/purchase-orders', { headers: { 'Authorization': `Bearer ${token}` } });
       if (!poResponse.ok) throw new Error('Failed to fetch POs');
       const poData: PurchaseOrder[] = await poResponse.json();
 
       setInvoices(invData);
       setAllPOs(poData);
       
-      // Filter out invoices where the GRN is disputed before showing them
-      const activeInvoices = invData.filter(inv => {
-          const po = poData.find(p => p.id === inv.purchaseOrderId);
-          const isGrnDisputed = po?.receipts?.some(r => r.status === 'Disputed');
-          return !isGrnDisputed;
-      });
+      const activeInvoices = invData;
       setInvoices(activeInvoices);
 
       const initialMatchResults: Record<string, null> = {};
@@ -524,7 +520,7 @@ export function InvoicesPage() {
       setMatchResults(initialMatchResults);
 
       const matchPromises = activeInvoices.map(inv =>
-        fetch(`/api/matching?invoiceId=${inv.id}`)
+        fetch(`/api/matching?invoiceId=${inv.id}`, { headers: { 'Authorization': `Bearer ${token}` } })
           .then(res => res.ok ? res.json() : null)
           .then(data => ({ id: inv.id, data }))
       );
@@ -547,7 +543,7 @@ export function InvoicesPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, token]);
 
   useEffect(() => {
     fetchAllData();
@@ -565,14 +561,14 @@ export function InvoicesPage() {
   }
   
   const handleAction = async (invoiceId: string, status: 'Approved for Payment' | 'Disputed', reason?: string) => {
-      if (!user) return;
+      if (!user || !token) return;
       setActiveAction(invoiceId);
       setActionType(status === 'Disputed' ? 'dispute' : 'approve');
       try {
           const response = await fetch(`/api/invoices/${invoiceId}/status`, {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
-              body: JSON.stringify({ status, userId: user.id, reason }),
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ status, reason }),
           });
           if (!response.ok) throw new Error(`Failed to mark invoice as ${status}.`);
           toast({ title: "Success", description: `Invoice has been marked as ${status}.`});
@@ -590,13 +586,13 @@ export function InvoicesPage() {
   }
 
   const handlePayment = async (invoiceId: string, paymentEvidenceUrl: string) => {
-    if (!user) return;
+    if (!user || !token) return;
      setActiveAction(invoiceId);
      try {
         const response = await fetch(`/api/payments`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('authToken')}` },
-            body: JSON.stringify({ invoiceId, userId: user.id, paymentEvidenceUrl })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ invoiceId, paymentEvidenceUrl })
         });
         if (!response.ok) {
             const errorData = await response.json();

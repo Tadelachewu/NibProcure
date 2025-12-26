@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -41,6 +40,7 @@ import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Badge } from './ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { useAuth } from '@/contexts/auth-context';
 
 const vendorSchema = z.object({
   name: z.string().min(2, "Vendor name is required."),
@@ -86,6 +86,7 @@ export function VendorsPage() {
   const [isSubmitting, setSubmitting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
+  const { token } = useAuth();
 
   const form = useForm<z.infer<typeof vendorSchema>>({
     resolver: zodResolver(vendorSchema),
@@ -99,9 +100,12 @@ export function VendorsPage() {
   });
 
   const fetchVendors = useCallback(async () => {
+    if (!token) return;
     try {
       setLoading(true);
-      const response = await fetch('/api/vendors');
+      const response = await fetch('/api/vendors', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (!response.ok) throw new Error('Failed to fetch vendors');
       const data = await response.json();
       setVendors(data);
@@ -114,7 +118,7 @@ export function VendorsPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, token]);
 
   useEffect(() => {
     fetchVendors();
@@ -131,7 +135,7 @@ export function VendorsPage() {
     try {
       const response = await fetch('/api/vendors', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(values),
       });
 

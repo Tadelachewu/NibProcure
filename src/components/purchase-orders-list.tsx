@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -25,6 +24,7 @@ import { Button } from './ui/button';
 import Link from 'next/link';
 import { ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Eye, FileX2, Loader2 } from 'lucide-react';
 import { RequisitionDetailsDialog } from './requisition-details-dialog';
+import { useAuth } from '@/contexts/auth-context';
 
 const PAGE_SIZE = 10;
 
@@ -35,24 +35,26 @@ export function PurchaseOrdersList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
+  const { token } = useAuth();
 
   const fetchData = useCallback(async () => {
+    if (!token) return;
     setLoading(true);
     try {
       const [poResponse, reqResponse] = await Promise.all([
-        fetch('/api/purchase-orders'),
-        fetch('/api/requisitions')
+        fetch('/api/purchase-orders', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch('/api/requisitions', { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
       const poData: PurchaseOrder[] = await poResponse.json();
-      const reqData: PurchaseRequisition[] = await reqResponse.json();
+      const reqData = await reqResponse.json();
       setPurchaseOrders(poData);
-      setRequisitions(reqData);
+      setRequisitions(reqData.requisitions);
     } catch (error) {
       console.error("Failed to fetch data", error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     fetchData();
@@ -155,9 +157,9 @@ export function PurchaseOrdersList() {
     </Card>
     {selectedRequisition && (
         <RequisitionDetailsDialog
+            requisition={selectedRequisition}
             isOpen={isDetailsOpen}
             onClose={() => setIsDetailsOpen(false)}
-            requisition={selectedRequisition}
         />
     )}
     </>
