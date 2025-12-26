@@ -1,6 +1,4 @@
 
-'use server';
-
 import type { User, UserRole } from './types';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { prisma } from './prisma';
