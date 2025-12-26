@@ -1,5 +1,6 @@
+
 'use server';
-import 'dotenv/config';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { promoteStandbyVendor } from '@/services/award-service';
@@ -10,13 +11,10 @@ export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const actor = await getActorFromToken(request);
-    if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
-    }
-
+  
   const requisitionId = params.id;
   try {
+    const actor = await getActorFromToken(request);
     const isAuthorized = actor.effectiveRoles.includes('Procurement_Officer') || actor.effectiveRoles.includes('Admin');
 
     if (!isAuthorized) {
@@ -34,6 +32,9 @@ export async function POST(
 
   } catch (error) {
     console.error(`Failed to promote standby for requisition ${requisitionId}:`, error);
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+        return NextResponse.json({ error: error.message }, { status: 401 });
+    }
     if (error instanceof Error) {
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }

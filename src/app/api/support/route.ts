@@ -1,3 +1,4 @@
+
 'use server';
 import 'dotenv/config';
 import { NextResponse } from 'next/server';
@@ -8,9 +9,6 @@ import { getActorFromToken } from '@/lib/auth';
 export async function GET(request: Request) {
     try {
         const actor = await getActorFromToken(request);
-        if (!actor) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
 
         const isAdmin = (actor.roles as string[]).includes('Admin');
         
@@ -30,6 +28,9 @@ export async function GET(request: Request) {
         return NextResponse.json(tickets);
     } catch (error) {
         console.error("Failed to fetch tickets:", error);
+        if (error instanceof Error && error.message.includes('Unauthorized')) {
+            return NextResponse.json({ error: error.message }, { status: 401 });
+        }
         return NextResponse.json({ error: "Failed to fetch tickets" }, { status: 500 });
     }
 }
@@ -39,9 +40,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
     try {
         const actor = await getActorFromToken(request);
-        if (!actor) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
 
         const body = await request.json();
         const { subject, message } = body;
@@ -63,6 +61,9 @@ export async function POST(request: Request) {
 
     } catch (error) {
         console.error("Failed to create ticket:", error);
+         if (error instanceof Error && error.message.includes('Unauthorized')) {
+            return NextResponse.json({ error: error.message }, { status: 401 });
+        }
         return NextResponse.json({ error: 'Failed to create support ticket' }, { status: 500 });
     }
 }

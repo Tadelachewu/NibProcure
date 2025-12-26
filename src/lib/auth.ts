@@ -1,10 +1,10 @@
-
 import type { User, UserRole } from './types';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { prisma } from './prisma';
+import { headers } from 'next/headers';
 
 /**
- * Decodes a JWT token without verifying its signature. 
+ * Decodes a JWT token without verifying its signature.
  * This is safe to use on the client-side as it only reads the token's payload.
  * The signature should always be verified on the server/middleware.
  */
@@ -39,7 +39,7 @@ export async function verifyJwt(token: string) {
     if (!jwtSecret) {
         throw new Error('JWT_SECRET is not defined in environment variables.');
     }
-    
+
     try {
         const decoded = jwt.verify(token, jwtSecret);
         return decoded as JwtPayload;
@@ -50,13 +50,17 @@ export async function verifyJwt(token: string) {
 }
 
 
-export async function getActorFromToken(request: Request): Promise<(User & { effectiveRoles: UserRole[] }) | null> {
+export async function getActorFromToken(request: Request): Promise<(User & { effectiveRoles: UserRole[] })> {
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.split(' ')[1];
-    if (!token) return null;
+    if (!token) {
+      throw new Error('Unauthorized: No token provided');
+    };
     
     const decoded = await verifyJwt(token);
-    if (!decoded || !decoded.id) return null;
+    if (!decoded || !decoded.id) {
+       throw new Error('Unauthorized: Invalid token');
+    }
 
     const [user, rfqSenderSetting] = await Promise.all([
         prisma.user.findUnique({
@@ -68,7 +72,9 @@ export async function getActorFromToken(request: Request): Promise<(User & { eff
         })
     ]);
     
-    if (!user) return null;
+    if (!user) {
+       throw new Error('Unauthorized: User not found');
+    }
 
     const baseRoles = user.roles.map(r => r.name as UserRole);
     let effectiveRoles = [...baseRoles];

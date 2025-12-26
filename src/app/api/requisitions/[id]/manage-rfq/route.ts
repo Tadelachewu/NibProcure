@@ -1,5 +1,6 @@
+
 'use server';
-import 'dotenv/config';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@/lib/types';
@@ -14,9 +15,6 @@ export async function POST(
 ) {
   try {
     const actor = await getActorFromToken(request);
-    if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
-    }
 
     const requisitionId = params.id;
     const body = await request.json();
@@ -87,6 +85,9 @@ export async function POST(
     return NextResponse.json({ message: 'RFQ successfully modified.', requisition: updatedRequisition });
   } catch (error) {
     console.error('Failed to manage RFQ:', error);
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+        return NextResponse.json({ error: error.message }, { status: 401 });
+    }
     if (error instanceof Error) {
       return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }
