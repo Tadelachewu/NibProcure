@@ -10,7 +10,7 @@ import { RequisitionCreatorSetting } from '@/components/settings/requisition-cre
 
 export interface RfqSenderSetting {
   type: 'all' | 'specific';
-  userId?: string | null;
+  userIds?: string[];
 }
 
 export interface ApprovalStep {

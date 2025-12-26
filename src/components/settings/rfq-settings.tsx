@@ -6,18 +6,23 @@ import { useAuth } from '@/contexts/auth-context';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Label } from '../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Button } from '../ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, Users, Check, ChevronsUpDown } from 'lucide-react';
 import { UserRole } from '@/lib/types';
 import { RfqSenderSetting } from '@/contexts/auth-context';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '../ui/command';
+import { Badge } from '../ui/badge';
+import { cn } from '@/lib/utils';
+import { ScrollArea } from '../ui/scroll-area';
 
 export function RfqSettings() {
     const { allUsers, rfqSenderSetting, updateRfqSenderSetting } = useAuth();
     const { toast } = useToast();
     const [setting, setSetting] = useState<RfqSenderSetting>(rfqSenderSetting);
     const [isSaving, setIsSaving] = useState(false);
+    const [open, setOpen] = useState(false);
 
     useEffect(() => {
         setSetting(rfqSenderSetting);
@@ -48,6 +53,15 @@ export function RfqSettings() {
         Array.isArray(user.roles) && user.roles.some(role => procurementRoles.includes((role as any).name))
     );
 
+    const handleUserSelection = (userId: string) => {
+        setSetting(prev => {
+            const currentIds = prev.userIds || [];
+            const newIds = currentIds.includes(userId)
+                ? currentIds.filter(id => id !== userId)
+                : [...currentIds, userId];
+            return { ...prev, userIds: newIds };
+        })
+    }
 
     return (
         <Card>
@@ -60,7 +74,7 @@ export function RfqSettings() {
             <CardContent className="space-y-6">
                 <RadioGroup 
                     value={setting.type} 
-                    onValueChange={(value: 'all' | 'specific') => setSetting({ type: value, userId: value === 'all' ? null : setting.userId })}
+                    onValueChange={(value: 'all' | 'specific') => setSetting({ type: value, userIds: value === 'all' ? [] : setting.userIds })}
                     className="space-y-2"
                 >
                     <div className="flex items-center space-x-2">
@@ -73,31 +87,50 @@ export function RfqSettings() {
 
                     <div className="flex items-center space-x-2">
                         <RadioGroupItem value="specific" id="rfq-specific" />
-                        <Label htmlFor="rfq-specific">Specific Person</Label>
+                        <Label htmlFor="rfq-specific">Specific People</Label>
                     </div>
                      <p className="pl-6 text-sm text-muted-foreground">
-                        Only one designated user can send RFQs.
+                        Only designated users can send RFQs.
                     </p>
                 </RadioGroup>
 
                 {setting.type === 'specific' && (
                     <div className="pl-6 pt-2">
-                        <Label htmlFor="specific-user-select">Select a user</Label>
-                        <Select
-                            value={setting.userId || ''}
-                            onValueChange={(userId) => setSetting({ ...setting, userId })}
-                        >
-                            <SelectTrigger id="specific-user-select" className="w-full md:w-1/2 mt-2">
-                                <SelectValue placeholder="Select a procurement user" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {procurementUsers.map(user => (
-                                    <SelectItem key={user.id} value={user.id}>
-                                        {user.name} ({(Array.isArray(user.roles) && user.roles.length > 0) ? (user.roles[0] as any).name.replace(/_/g, ' ') : 'N/A'})
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <Label>Select designated users</Label>
+                        <Popover open={open} onOpenChange={setOpen}>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full md:w-1/2 justify-between mt-2">
+                                    <div className="flex gap-1 flex-wrap">
+                                        {(setting.userIds && setting.userIds.length > 0)
+                                            ? setting.userIds.map(id => {
+                                                const user = procurementUsers.find(u => u.id === id);
+                                                return <Badge key={id} variant="secondary">{user?.name || 'Unknown'}</Badge>;
+                                            })
+                                            : "Select users..."}
+                                    </div>
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                <Command>
+                                    <CommandInput placeholder="Search users..." />
+                                    <CommandEmpty>No users found.</CommandEmpty>
+                                    <ScrollArea className="h-48">
+                                        <CommandGroup>
+                                            {procurementUsers.map(user => (
+                                                <CommandItem
+                                                    key={user.id}
+                                                    onSelect={() => handleUserSelection(user.id)}
+                                                >
+                                                    <Check className={cn("mr-2 h-4 w-4", setting.userIds?.includes(user.id) ? "opacity-100" : "opacity-0")} />
+                                                    {user.name}
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </ScrollArea>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
                     </div>
                 )}
             </CardContent>

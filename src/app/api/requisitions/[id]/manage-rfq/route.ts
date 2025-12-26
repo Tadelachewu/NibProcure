@@ -34,14 +34,14 @@ export async function POST(
     // Correct Authorization Logic
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    const userRoleName = user.roles.map(r => r.name)[0] as UserRole;
+    const userRoles = (user.roles as any[]).map(r => r.name);
 
     if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-      const setting = rfqSenderSetting.value as { type: string, userId?: string };
+      const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
       if (setting.type === 'specific') {
-          isAuthorized = setting.userId === userId;
+          isAuthorized = setting.userIds?.includes(userId) ?? false;
       } else { // 'all' case
-          isAuthorized = user.roles.some(r => r.name === 'Procurement_Officer' || r.name === 'Admin');
+          isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
       }
     }
 

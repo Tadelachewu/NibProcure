@@ -39,9 +39,9 @@ export async function POST(
     const userRoles = (user.roles as any[]).map(r => r.name);
     
     if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userId?: string };
+        const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
         if (setting.type === 'specific') {
-            isAuthorized = setting.userId === userId;
+            isAuthorized = setting.userIds?.includes(userId) ?? false;
         } else { // 'all' case
             isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
         }
