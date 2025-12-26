@@ -1,6 +1,7 @@
 
 'use server';
 
+import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PerItemAwardDetail, User, UserRole } from '@/lib/types';
@@ -46,7 +47,6 @@ export async function POST(
         console.log(`[RESPOND-AWARD] Found Requisition ID: ${requisition.id} with status ${requisition.status}`);
 
         // **SAFEGUARD START**
-        // Prevent creating a PO for a requisition that is already closed.
         if (requisition.status === 'Closed' || requisition.status === 'Fulfilled') {
             console.error(`[RESPOND-AWARD] Aborting: Requisition ${requisition.id} is already in a final state (${requisition.status}).`);
             throw new Error(`Cannot accept award because the parent requisition '${requisition.id}' is already closed.`);
@@ -59,39 +59,37 @@ export async function POST(
         if (action === 'accept') {
             let awardedQuoteItems: any[] = [];
             
-            if (isPerItemAward) {
-                console.log('[RESPOND-AWARD] Handling per-item award acceptance.');
-                // Find all items awarded to this vendor for this requisition
-                const itemsAwardedToThisVendor = requisition.items.flatMap(item => 
-                    (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId && d.status === 'Awarded')
+            if (isPerItemAward && quoteItemId) {
+                console.log('[RESPOND-AWARD] Handling specific per-item award acceptance for quoteItemId:', quoteItemId);
+
+                const reqItemToUpdate = requisition.items.find(item => 
+                    (item.perItemAwardDetails as PerItemAwardDetail[] || []).some(d => d.quoteItemId === quoteItemId && d.status === 'Awarded')
                 );
 
-                if (itemsAwardedToThisVendor.length === 0) {
-                     throw new Error("No items in 'Awarded' status found for you to accept.");
+                if (!reqItemToUpdate) {
+                    throw new Error("No item in 'Awarded' status found for you to accept with that specific ID.");
+                }
+                
+                awardedQuoteItems = quote.items.filter(item => item.id === quoteItemId);
+                if (awardedQuoteItems.length === 0) {
+                     throw new Error("Could not find the corresponding item in your quotation.");
                 }
 
-                console.log(`[RESPOND-AWARD] Found ${itemsAwardedToThisVendor.length} item(s) to accept.`);
-                const awardedQuoteItemIds = new Set(itemsAwardedToThisVendor.map(d => d.quoteItemId));
-                
-                awardedQuoteItems = quote.items.filter(item => awardedQuoteItemIds.has(item.id));
-                
-                // Update the status on the requisition items themselves
-                for (const item of requisition.items) {
-                    const originalDetails = item.perItemAwardDetails as PerItemAwardDetail[] | null;
-                    if (originalDetails) {
-                        const newDetails = originalDetails.map(d => 
-                            awardedQuoteItemIds.has(d.quoteItemId) ? { ...d, status: 'Accepted' as const } : d
-                        );
-                        await tx.requisitionItem.update({
-                            where: { id: item.id },
-                            data: { perItemAwardDetails: newDetails }
-                        });
-                    }
+                // Update the status ONLY for the specific item being accepted
+                const originalDetails = reqItemToUpdate.perItemAwardDetails as PerItemAwardDetail[] | null;
+                if (originalDetails) {
+                    const newDetails = originalDetails.map(d => 
+                        d.quoteItemId === quoteItemId ? { ...d, status: 'Accepted' as const } : d
+                    );
+                    await tx.requisitionItem.update({
+                        where: { id: reqItemToUpdate.id },
+                        data: { perItemAwardDetails: newDetails }
+                    });
+                     console.log(`[RESPOND-AWARD] Updated perItemAwardDetails on requisition item ${reqItemToUpdate.id}.`);
                 }
-                console.log(`[RESPOND-AWARD] Updated perItemAwardDetails on requisition items.`);
 
-            } else { // Single vendor award
-                console.log('[RESPOND-AWARD] Handling single-vendor award acceptance.');
+            } else { // Single vendor award or grouped per-item acceptance (fallback)
+                console.log('[RESPOND-AWARD] Handling single-vendor or grouped award acceptance.');
                  await tx.quotation.update({
                     where: { id: quoteId },
                     data: { status: 'Accepted' }
@@ -101,6 +99,7 @@ export async function POST(
                 if (awardedIds.size > 0) {
                   awardedQuoteItems = quote.items.filter(item => awardedIds.has(item.id));
                 } else {
+                  // Fallback for older awards or if awardedQuoteItemIds is not populated
                   awardedQuoteItems = quote.items;
                 }
             }
@@ -161,7 +160,7 @@ export async function POST(
                     .map(item => item.id);
             
             console.log(`[RESPOND-AWARD] Handling award rejection. Declined item IDs: ${declinedItemIds.join(', ')}`);
-            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds, quoteItemId);
+            return await handleAwardRejection(tx, quote, requisition, user, declinedItemIds, 'Vendor', rejectionReason);
         }
         
         throw new Error('Invalid action.');

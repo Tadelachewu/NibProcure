@@ -2,11 +2,12 @@
 
 'use server';
 
+import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
         const departments = await prisma.department.findMany({
             include: {

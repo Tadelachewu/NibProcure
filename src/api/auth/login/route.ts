@@ -1,11 +1,42 @@
 
 'use server';
 
+import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { User, UserRole } from '@/lib/types';
+
+// Define a hierarchy or precedence for roles. Higher number = higher precedence.
+const rolePrecedence: Record<string, number> = {
+  Admin: 10,
+  Procurement_Officer: 9,
+  Committee: 8,
+  Finance: 7,
+  Approver: 6,
+  Receiving: 5,
+  Requester: 4,
+  Committee_A_Member: 3,
+  Committee_B_Member: 3,
+  Committee_Member: 3,
+  Manager_Procurement_Division: 7,
+  Director_Supply_Chain_and_Property_Management: 7,
+  VP_Resources_and_Facilities: 7,
+  President: 7,
+  Vendor: 1,
+};
+
+const getPrimaryRole = (roles: {name: string}[]): UserRole | null => {
+    if (!roles || roles.length === 0) return null;
+    
+    const roleNames = roles.map(r => r.name);
+    
+    // Sort by precedence (descending)
+    roleNames.sort((a, b) => (rolePrecedence[b] || 0) - (rolePrecedence[a] || 0));
+    
+    return (roleNames[0] as UserRole) || null;
+}
 
 export async function POST(request: Request) {
     try {
@@ -16,7 +47,7 @@ export async function POST(request: Request) {
             include: {
                 vendor: true,
                 department: true,
-                roles: true, // Include the roles relation
+                roles: true,
             }
         });
 
@@ -25,12 +56,19 @@ export async function POST(request: Request) {
         }
 
         if (user && user.password && await bcrypt.compare(password, user.password)) {
-            const { password: _, roles: roleInfo, ...userWithoutPassword } = user;
+            const { password: _, ...userWithoutPassword } = user;
             
-            const finalUser: User = {
+            const primaryRole = getPrimaryRole(user.roles);
+            if (!primaryRole) {
+                return NextResponse.json({ error: 'User has no assigned role.' }, { status: 403 });
+            }
+            
+            const roleNames = user.roles.map(r => r.name as UserRole);
+
+            const finalUser: Omit<User, 'roles'> & { roles: UserRole[] } = {
                 ...userWithoutPassword,
-                roles: roleInfo.map(r => r.name as UserRole), // Use the role name from the relation
                 department: user.department?.name,
+                roles: roleNames, // Return a simple array of role names
             };
 
             const jwtSecret = process.env.JWT_SECRET;
@@ -43,18 +81,17 @@ export async function POST(request: Request) {
                     id: finalUser.id, 
                     name: finalUser.name,
                     email: finalUser.email,
-                    roles: finalUser.roles,
+                    roles: roleNames, // Token contains the array of role names
                     vendorId: finalUser.vendorId,
                     department: finalUser.department,
                 }, 
                 jwtSecret, 
-                { expiresIn: '1d' } // Token expires in 1 day
+                { expiresIn: '1d' }
             );
             
             return NextResponse.json({ 
                 user: finalUser, 
                 token, 
-                roles: finalUser.roles // Ensure this top-level role is present
             });
         }
         

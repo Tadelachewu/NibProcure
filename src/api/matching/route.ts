@@ -1,4 +1,5 @@
 
+import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { performThreeWayMatch } from '@/services/matching-service';
 import { prisma } from '@/lib/prisma';
