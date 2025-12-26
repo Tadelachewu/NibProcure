@@ -861,7 +861,6 @@ export default function VendorRequisitionPage() {
             return itemsToShow.some(item => poItemRequisitionIds.has(item.requisitionItemId));
         });
 
-        const hasSubmittedInvoice = relevantPOs.some(po => po.invoices && po.invoices.length > 0);
         const paidInvoices = relevantPOs.flatMap(po => po.invoices || []).filter(inv => inv.status === 'Paid');
 
         return (
@@ -969,34 +968,33 @@ export default function VendorRequisitionPage() {
                      <div className="text-right font-bold text-2xl">
                         Total Award Value: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
                      </div>
+                </CardContent>
+                <CardFooter className="flex-col gap-4 items-stretch">
                      {isAccepted && relevantPOs.length > 0 && (
-                        <CardFooter className="p-0 pt-4 flex-col gap-2">
-                            {paidInvoices.length > 0 && (
-                                 <Alert variant="default" className="w-full border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800">
+                        <>
+                            {paidInvoices.map(inv => (
+                                <Alert key={inv.id} variant="default" className="border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800">
                                     <CheckCircle className="h-4 w-4 !text-emerald-600"/>
                                     <AlertTitle>Payment Confirmed</AlertTitle>
                                     <AlertDescription className="space-y-2">
-                                        {paidInvoices.map(inv => (
-                                            <div key={inv.id} className="flex items-center justify-between">
-                                                <div>
-                                                    <p>Invoice for PO {inv.purchaseOrderId} has been paid.</p>
-                                                    <p className="text-xs">Ref: <span className="font-mono">{inv.paymentReference}</span></p>
-                                                </div>
-                                                {inv.paymentEvidenceUrl && (
-                                                    <a href={inv.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
-                                                        <Button variant="link" size="sm">View Evidence</Button>
-                                                    </a>
-                                                )}
-                                            </div>
-                                        ))}
+                                        <div>
+                                            <p>Invoice for PO {inv.purchaseOrderId} has been paid.</p>
+                                            <p className="text-xs">Ref: <span className="font-mono">{inv.paymentReference}</span></p>
+                                        </div>
+                                        {inv.paymentEvidenceUrl && (
+                                            <a href={inv.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
+                                                <Button variant="link" size="sm" className="h-auto p-0">View Evidence</Button>
+                                            </a>
+                                        )}
                                     </AlertDescription>
                                 </Alert>
-                            )}
+                            ))}
                             {relevantPOs.map(po => {
+                                const poHasPaidInvoice = paidInvoices.some(inv => inv.purchaseOrderId === po.id);
+                                if(poHasPaidInvoice) return null;
+
                                 const hasSubmittedInv = po.invoices && po.invoices.length > 0;
-                                const isPaid = po.invoices?.some(inv => inv.status === 'Paid');
-                                if(isPaid) return null;
-                                 return (
+                                return (
                                     <Dialog key={po.id}>
                                         <DialogTrigger asChild>
                                             <Button className="w-full" disabled={hasSubmittedInv}>
@@ -1009,22 +1007,20 @@ export default function VendorRequisitionPage() {
                                         </DialogTrigger>
                                         <InvoiceSubmissionForm po={po} onInvoiceSubmitted={fetchRequisitionData} />
                                     </Dialog>
-                                 )
+                                )
                             })}
-                        </CardFooter>
+                        </>
                      )}
-                     {!showActions && (
-                         <CardFooter className="p-0 pt-4">
-                            <Alert variant="default" className="border-blue-500/50">
-                                <Info className="h-4 w-4 text-blue-500" />
-                                <AlertTitle>{ isStandby ? "You are on Standby" : "Quote Under Review" }</AlertTitle>
-                                <AlertDescription>
-                                    { isStandby ? "Your quote is a backup option. You will be notified if the primary vendor declines." : (canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.')}
-                                </AlertDescription>
-                            </Alert>
-                         </CardFooter>
+                     {!showActions && !isPaid && (
+                         <Alert variant="default" className="border-blue-500/50">
+                            <Info className="h-4 w-4 text-blue-500" />
+                            <AlertTitle>{ isStandby ? "You are on Standby" : "Quote Under Review" }</AlertTitle>
+                            <AlertDescription>
+                                { isStandby ? "Your quote is a backup option. You will be notified if the primary vendor declines." : (canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.')}
+                            </AlertDescription>
+                        </Alert>
                      )}
-                </CardContent>
+                </CardFooter>
             </Card>
         )
     };
@@ -1156,7 +1152,7 @@ export default function VendorRequisitionPage() {
                  </Card>
             )}
 
-            {isAccepted && (
+            {isAccepted && !isPaid && (
                 <Alert variant="default" className="border-green-600 bg-green-50 text-green-900 dark:bg-green-950 dark:text-green-200 dark:border-green-800">
                     <CheckCircle className="h-5 w-5 !text-green-600" />
                     <AlertTitle className="font-bold text-lg">Award Accepted!</AlertTitle>
