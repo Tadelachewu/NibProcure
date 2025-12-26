@@ -1,6 +1,5 @@
-
 'use server';
-
+import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User, UserRole, PerItemAwardDetail, QuoteItem, Quotation, EvaluationCriteria } from '@/lib/types';
@@ -49,14 +48,11 @@ export async function POST(
   request: Request,
   { params }: { params: { id:string } }
 ) {
-    const actor = await getActorFromToken(request);
-    if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
-    }
-
-    const requisitionId = params.id;
-    console.log(`[FINALIZE-SCORES] Received request for requisition: ${requisitionId}`);
     try {
+        const actor = await getActorFromToken(request);
+
+        const requisitionId = params.id;
+        console.log(`[FINALIZE-SCORES] Received request for requisition: ${requisitionId}`);
         const body = await request.json();
         const { awards, awardStrategy, awardResponseDeadline, minuteDocumentUrl, minuteJustification } = body;
         console.log(`[FINALIZE-SCORES] Action by User ID: ${actor.id}, Strategy: ${awardStrategy}`);
@@ -65,21 +61,8 @@ export async function POST(
             return NextResponse.json({ error: "The official minute document is required to proceed." }, { status: 400 });
         }
         
-        const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-        let isAuthorized = false;
         const userRoles = actor.roles as UserRole[];
-
-        if (userRoles.includes('Admin')) {
-            isAuthorized = true;
-        } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-            const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-            if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
-                isAuthorized = true;
-            } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
-                isAuthorized = true;
-            }
-        }
-
+        const isAuthorized = userRoles.includes('Admin') || userRoles.includes('Procurement_Officer');
 
         if (!isAuthorized) {
             console.error(`[FINALIZE-SCORES] User ${actor.id} is not authorized.`);
@@ -261,6 +244,9 @@ export async function POST(
 
     } catch (error) {
         console.error("[FINALIZE-SCORES] Failed to finalize scores and award:", error);
+         if (error instanceof Error && error.message.includes('Unauthorized')) {
+            return NextResponse.json({ error: error.message }, { status: 401 });
+        }
         if (error instanceof Error) {
             return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
         }

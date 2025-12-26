@@ -1,10 +1,13 @@
 
+import 'dotenv/config';
+import { util } from 'util';
 import type { User, UserRole } from './types';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { prisma } from './prisma';
+import { RfqSenderSetting } from '@/contexts/auth-context';
 
 /**
- * Decodes a JWT token without verifying its signature. 
+ * Decodes a JWT token without verifying its signature.
  * This is safe to use on the client-side as it only reads the token's payload.
  * The signature should always be verified on the server/middleware.
  */
@@ -34,12 +37,12 @@ export function decodeJwt<T>(token: string): (T & { exp: number }) | null {
  * Verifies a JWT token on the server side using the secret key.
  * Throws an error if the token is invalid or expired.
  */
-export async function verifyJwt(token: string) {
+export async function verifyJwt(token: string): Promise<JwtPayload | null> {
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
         throw new Error('JWT_SECRET is not defined in environment variables.');
     }
-    
+
     try {
         const decoded = jwt.verify(token, jwtSecret);
         return decoded as JwtPayload;
@@ -50,41 +53,42 @@ export async function verifyJwt(token: string) {
 }
 
 
-export async function getActorFromToken(request: Request): Promise<User | null> {
+export async function getActorFromToken(request: Request): Promise<User> {
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.split(' ')[1];
-    if (!token) return null;
-    
+    if (!token) {
+      throw new Error('Unauthorized: No token provided');
+    };
+
     const decoded = await verifyJwt(token);
-    if (!decoded || !decoded.id) return null;
+    if (!decoded || !decoded.id) {
+        throw new Error('Unauthorized: Invalid token');
+    }
 
     const user = await prisma.user.findUnique({
         where: { id: decoded.id as string },
         include: { roles: true, department: true }
     });
     
-    if (!user) return null;
+    if (!user) {
+        throw new Error('Unauthorized: User not found');
+    }
+
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    const effectiveRoles = new Set(user.roles.map(r => r.name as UserRole));
+
+    if (rfqSenderSetting) {
+        const setting = rfqSenderSetting.value as RfqSenderSetting;
+        if (setting.type === 'specific' && setting.userIds?.includes(user.id)) {
+            effectiveRoles.add('Procurement_Officer');
+        } else if (setting.type === 'all' && user.roles.some(r => r.name === 'Procurement_Officer')) {
+            // This case is already handled by the initial roles, but it's good for clarity
+        }
+    }
 
     return {
       ...user,
       department: user.department?.name,
-      roles: user.roles.map(r => r.name as UserRole),
-    }
-}
-
-export async function getUserByToken(token: string): Promise<{ user: User, role: UserRole } | null> {
-    try {
-        const decoded = decodeJwt<User>(token);
-        if (!decoded) {
-            return null;
-        }
-        
-        // **FIX**: Ensure the role from the token is always formatted with underscores
-        const formattedRole = (decoded.role as string).replace(/ /g, '_') as UserRole;
-        
-        return { user: decoded, role: formattedRole };
-    } catch(e) {
-        console.error("Failed to decode token:", e);
-        return null;
+      roles: Array.from(effectiveRoles),
     }
 }

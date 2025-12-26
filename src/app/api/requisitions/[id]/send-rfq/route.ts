@@ -1,6 +1,5 @@
-
 'use server';
-
+import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@/lib/types';
@@ -13,10 +12,7 @@ export async function POST(
 ) {
   try {
     const actor = await getActorFromToken(request);
-    if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
-    }
-
+    
     const { id } = params;
     const body = await request.json();
     const { vendorIds, deadline, cpoAmount, rfqSettings } = body;
@@ -26,21 +22,8 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
     
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    let isAuthorized = false;
     const userRoles = actor.roles as UserRole[];
-
-    if (userRoles.includes('Admin')) {
-        isAuthorized = true;
-    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-        if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
-            isAuthorized = true;
-        } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
-            isAuthorized = true;
-        }
-    }
-
+    const isAuthorized = userRoles.includes('Admin') || userRoles.includes('Procurement_Officer');
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized: You do not have permission to send RFQs based on the current system settings.' }, { status: 403 });
@@ -130,6 +113,9 @@ export async function POST(
     return NextResponse.json(updatedRequisition);
   } catch (error) {
     console.error('Failed to send RFQ:', error);
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+        return NextResponse.json({ error: error.message }, { status: 401 });
+    }
     if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }

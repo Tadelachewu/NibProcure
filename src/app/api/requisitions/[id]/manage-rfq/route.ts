@@ -1,6 +1,5 @@
-
 'use server';
-
+import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@/lib/types';
@@ -15,9 +14,6 @@ export async function POST(
 ) {
   try {
     const actor = await getActorFromToken(request);
-    if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
-    }
 
     const requisitionId = params.id;
     const body = await request.json();
@@ -27,21 +23,8 @@ export async function POST(
       newDeadline?: string;
     };
 
-    // Correct Authorization Logic
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    let isAuthorized = false;
     const userRoles = actor.roles as UserRole[];
-
-    if (userRoles.includes('Admin')) {
-        isAuthorized = true;
-    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-      const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-      if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
-          isAuthorized = true;
-      } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
-          isAuthorized = true;
-      }
-    }
+    const isAuthorized = userRoles.includes('Admin') || userRoles.includes('Procurement_Officer');
 
     if (!isAuthorized) {
       return NextResponse.json({ error: 'Unauthorized to manage this RFQ based on system settings.' }, { status: 403 });
@@ -102,8 +85,11 @@ export async function POST(
     return NextResponse.json({ message: 'RFQ successfully modified.', requisition: updatedRequisition });
   } catch (error) {
     console.error('Failed to manage RFQ:', error);
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+        return NextResponse.json({ error: error.message }, { status: 401 });
+    }
     if (error instanceof Error) {
-      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
