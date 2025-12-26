@@ -209,17 +209,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   const combinedPermissions = useMemo(() => {
     if (!user || !user.roles || loading) return {};
-
+  
     const userRoleNames = user.roles as UserRole[];
     const permissionsSet = new Set<string>();
-
+  
+    // Add base permissions from user's assigned roles
     userRoleNames.forEach(roleName => {
-        const permissionsForRole = rolePermissions[roleName as UserRole] || [];
-        permissionsForRole.forEach(path => permissionsSet.add(path));
+      const permissionsForRole = rolePermissions[roleName as UserRole] || [];
+      permissionsForRole.forEach(path => permissionsSet.add(path));
     });
-    
+  
+    // **NEW LOGIC**: Dynamically add Procurement Officer permissions if user is a designated RFQ sender
+    if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userIds?.includes(user.id)) {
+      const procPermissions = rolePermissions['Procurement_Officer'] || [];
+      procPermissions.forEach(path => permissionsSet.add(path));
+    }
+  
     return { ...rolePermissions, Combined: Array.from(permissionsSet) };
-  }, [user, rolePermissions, loading]);
+  }, [user, rolePermissions, loading, rfqSenderSetting]);
 
   useEffect(() => {
     if (user && user.roles) {
