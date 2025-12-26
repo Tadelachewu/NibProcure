@@ -1,11 +1,11 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User, UserRole, PerItemAwardDetail, QuoteItem, Quotation, EvaluationCriteria } from '@/lib/types';
 import { getNextApprovalStep } from '@/services/award-service';
+import { getActorFromToken } from '@/lib/auth';
 
 function calculateItemScoreForVendor(
     quote: Quotation & { items: QuoteItem[], scores: any[] },
@@ -49,53 +49,53 @@ export async function POST(
   request: Request,
   { params }: { params: { id:string } }
 ) {
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+
     const requisitionId = params.id;
     console.log(`[FINALIZE-SCORES] Received request for requisition: ${requisitionId}`);
     try {
         const body = await request.json();
-        const { userId, awards, awardStrategy, awardResponseDeadline, minuteDocumentUrl, minuteJustification } = body;
-        console.log(`[FINALIZE-SCORES] Action by User ID: ${userId}, Strategy: ${awardStrategy}`);
+        const { awards, awardStrategy, awardResponseDeadline, minuteDocumentUrl, minuteJustification } = body;
+        console.log(`[FINALIZE-SCORES] Action by User ID: ${actor.id}, Strategy: ${awardStrategy}`);
 
         if (!minuteDocumentUrl) {
             return NextResponse.json({ error: "The official minute document is required to proceed." }, { status: 400 });
         }
-
-        const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
-
+        
         const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
         let isAuthorized = false;
-        const userRoles = (user.roles as any[]).map(r => r.name) as UserRole[];
+        const userRoles = actor.roles as UserRole[];
 
         if (userRoles.includes('Admin')) {
             isAuthorized = true;
         } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-            const setting = rfqSenderSetting.value as { type: string, userId?: string };
-            if (setting.type === 'specific') {
-                isAuthorized = setting.userId === userId;
-            } else { // 'all' case
-                isAuthorized = userRoles.includes('Procurement_Officer');
+            const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
+            if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
+                isAuthorized = true;
+            } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
+                isAuthorized = true;
             }
         }
 
 
         if (!isAuthorized) {
-            console.error(`[FINALIZE-SCORES] User ${userId} is not authorized.`);
+            console.error(`[FINALIZE-SCORES] User ${actor.id} is not authorized.`);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
-
+        
         console.log('[FINALIZE-SCORES] Starting transaction...');
         const result = await prisma.$transaction(async (tx) => {
-
-            const requisition = await tx.purchaseRequisition.findUnique({
-                where: { id: requisitionId },
-                include: {
-                    items: true,
+            
+            const requisition = await tx.purchaseRequisition.findUnique({ 
+                where: { id: requisitionId }, 
+                include: { 
+                    items: true, 
                     evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } },
                     quotations: { include: { scores: { include: { itemScores: true } }, items: true } }
-                }
+                } 
             });
             if (!requisition || !requisition.evaluationCriteria) {
                 throw new Error("Requisition or its evaluation criteria not found.");
@@ -144,15 +144,15 @@ export async function POST(
                 console.log('[FINALIZE-SCORES] Calculating for "Award All to Single Vendor" strategy.');
                 const winningVendorId = Object.keys(awards)[0];
                 const winningQuote = allQuotes.find(q => q.vendorId === winningVendorId);
-
+                
                 if (!winningQuote) throw new Error("Winning vendor's quote not found.");
 
                 const otherQuotes = allQuotes.filter(q => q.vendorId !== winningVendorId);
-
+                
                 await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
-
+                
                 const sortedOthers = otherQuotes.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
-
+                
                 for (let i = 0; i < sortedOthers.length; i++) {
                     const quote = sortedOthers[i];
                     const rank = i < 2 ? (i + 2) as 2 | 3 : null;
@@ -177,7 +177,7 @@ export async function POST(
 
             } else if (awardStrategy === 'item') {
                 console.log('[FINALIZE-SCORES] Calculating for "Best Offer (Per Item)" strategy.');
-
+                
                 const allItemsWithAwards = requisition.items.map(item => {
                     const bids = awards[item.id]?.rankedBids;
                     if (!bids || bids.length === 0) {
@@ -206,7 +206,7 @@ export async function POST(
             }
 
             console.log('[FINALIZE-SCORES] Getting next approval step...');
-            const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: dynamicAwardValue }, user);
+            const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: dynamicAwardValue }, actor);
             console.log(`[FINALIZE-SCORES] Next Step: Status=${nextStatus}, ApproverID=${nextApproverId}`);
 
             const updatedRequisition = await tx.purchaseRequisition.update({
@@ -226,7 +226,7 @@ export async function POST(
             await tx.minute.create({
                 data: {
                     requisition: { connect: { id: requisitionId } },
-                    author: { connect: { id: userId } },
+                    author: { connect: { id: actor.id } },
                     decision: 'APPROVED',
                     decisionBody: 'Award Finalization',
                     justification: minuteJustification || 'Official minute document for award finalization.',
@@ -239,7 +239,7 @@ export async function POST(
 
             await tx.auditLog.create({
                 data: {
-                    user: { connect: { id: userId } },
+                    user: { connect: { id: actor.id } },
                     timestamp: new Date(),
                     action: 'FINALIZE_AWARD',
                     entity: 'Requisition',
@@ -249,13 +249,13 @@ export async function POST(
                 }
             });
             console.log('[FINALIZE-SCORES] Audit log created.');
-
+            
             return updatedRequisition;
         }, {
             maxWait: 15000,
             timeout: 30000,
         });
-
+        
         console.log('[FINALIZE-SCORES] Transaction complete. Sending response.');
         return NextResponse.json({ message: 'Award process finalized and routed for review.', requisition: result });
 

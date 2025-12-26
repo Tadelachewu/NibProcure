@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User, UserRole } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
 
 export async function POST(
@@ -11,10 +12,14 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+
     const { id } = params;
     const body = await request.json();
     const { 
-        userId, 
         financialCommitteeMemberIds, 
         technicalCommitteeMemberIds,
         committeeName, 
@@ -27,28 +32,25 @@ export async function POST(
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
-
-    const user = await prisma.user.findUnique({where: {id: userId}, include: { roles: true }});
-    if (!user) {
-        return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
-    }
     
     // Correct Authorization Logic
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
-    const userRoles = (user.roles as any[]).map(r => r.name);
-    
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+    const userRoles = actor.roles as UserRole[];
+
+    if (userRoles.includes('Admin') || userRoles.includes('Committee')) {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-        if (setting.type === 'specific') {
-            isAuthorized = setting.userIds?.includes(userId) ?? false;
-        } else { // 'all' case
-            isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+        if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
+            isAuthorized = true;
+        } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
+            isAuthorized = true;
         }
     }
-
+    
     if (!isAuthorized) {
-        return NextResponse.json({ error: 'Unauthorized to assign committees based on system settings.' }, { status: 403 });
+        return NextResponse.json({ error: 'Unauthorized to assign committees.' }, { status: 403 });
     }
     
     // Start a transaction to ensure atomicity
@@ -93,7 +95,7 @@ export async function POST(
         if (membersToAdd.length > 0) {
             await tx.committeeAssignment.createMany({
                 data: membersToAdd.map(memberId => ({
-                    userId: memberId,
+                    userId: memberId as string,
                     requisitionId: id,
                     scoresSubmitted: false,
                 })),
@@ -106,7 +108,7 @@ export async function POST(
             data: {
                 transactionId: requisition.transactionId,
                 timestamp: new Date(),
-                user: { connect: { id: user.id } },
+                user: { connect: { id: actor.id } },
                 action: 'ASSIGN_EVALUATION_COMMITTEE',
                 entity: 'Requisition',
                 entityId: id,

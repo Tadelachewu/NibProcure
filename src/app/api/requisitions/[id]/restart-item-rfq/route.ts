@@ -21,7 +21,20 @@ export async function POST(
     
     // --- Authorization Check ---
     const userRoles = actor.roles as UserRole[];
-    const isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+    let isAuthorized = false;
+
+    if (userRoles.includes('Admin')) {
+        isAuthorized = true;
+    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
+        if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
+            isAuthorized = true;
+        } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
+            isAuthorized = true;
+        }
+    }
+    
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
     }
