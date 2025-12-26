@@ -1,9 +1,10 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { useAuth } from '@/contexts/auth-context';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function GET() {
   try {
@@ -21,13 +22,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { name, description, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({ where: { id: actorUserId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !actor.effectiveRoles.includes('Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { name, description } = body;
+
 
     if (!name) {
       return NextResponse.json({ error: 'Role name is required' }, { status: 400 });
@@ -79,13 +81,14 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
    try {
-    const body = await request.json();
-    const { id, name, description, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !actor.effectiveRoles.includes('Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { id, name, description } = body;
+
 
     if (!id || !name) {
       return NextResponse.json({ error: 'Role ID and name are required' }, { status: 400 });
@@ -114,14 +117,14 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
    try {
-    const body = await request.json();
-    const { id, actorUserId } = body;
-
-    const actor = await prisma.user.findUnique({where: { id: actorUserId }, include: { roles: true }});
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !actor.effectiveRoles.includes('Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
+    const body = await request.json();
+    const { id } = body;
+
     if (!id) {
       return NextResponse.json({ error: 'Role ID is required' }, { status: 400 });
     }

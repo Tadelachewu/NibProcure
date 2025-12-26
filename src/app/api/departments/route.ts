@@ -1,11 +1,12 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
         const departments = await prisma.department.findMany({
             include: {
@@ -25,14 +26,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { name, description, headId, userId } = body;
-    
-    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !actor.effectiveRoles.includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    const body = await request.json();
+    const { name, description, headId } = body;
+    
     if (!name) {
       return NextResponse.json({ error: 'Department name is required' }, { status: 400 });
     }
@@ -73,13 +74,13 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
    try {
-    const body = await request.json();
-    const { id, name, description, headId, userId } = body;
-    
-    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !actor.effectiveRoles.includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { id, name, description, headId } = body;
 
     if (!id || !name) {
       return NextResponse.json({ error: 'Department ID and name are required' }, { status: 400 });
@@ -148,13 +149,13 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
    try {
-    const body = await request.json();
-    const { id, userId } = body;
-
-    const actor = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!actor || !actor.roles.some(r => r.name === 'Admin')) {
+    const actor = await getActorFromToken(request);
+    if (!actor || !actor.effectiveRoles.includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
+
+    const body = await request.json();
+    const { id } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Department ID is required' }, { status: 400 });
@@ -177,7 +178,7 @@ export async function DELETE(request: Request) {
   } catch (error) {
      console.error("Error deleting department:", error);
      if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
