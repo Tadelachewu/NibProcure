@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -853,7 +852,7 @@ export default function VendorRequisitionPage() {
     const isPaid = purchaseOrders.some(po => po.invoices?.some(inv => inv.status === 'Paid'));
 
 
-    const QuoteDisplayCard = ({ quote, itemsToShow, showActions }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean }) => {
+    const QuoteDisplayCard = ({ quote, itemsToShow, showActions, purchaseOrders }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean, purchaseOrders: PurchaseOrder[] }) => {
         const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
 
         const relevantPOs = purchaseOrders.filter(po => {
@@ -862,25 +861,18 @@ export default function VendorRequisitionPage() {
         });
 
         const paidInvoices = relevantPOs.flatMap(po => po.invoices || []).filter(inv => inv.status === 'Paid');
+        const isPaid = paidInvoices.length > 0;
 
         return (
             <Card>
-                <CardHeader className="flex flex-row items-start justify-between">
-                    <div>
+                <CardHeader>
+                    <div className="flex justify-between items-start">
                         <CardTitle>Your Submitted Quote</CardTitle>
-                        <CardDescription>
-                            Status: 
-                            {isPaid 
-                                ? <Badge variant="default" className="bg-emerald-600">You have been paid</Badge>
-                                : <Badge variant={quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded' ? 'default' : 'secondary'}>{quote.status.replace(/_/g, ' ')}</Badge>
-                            }
-                        </CardDescription>
+                        {isPaid 
+                            ? <Badge variant="default" className="bg-emerald-600">You have been paid</Badge>
+                            : <Badge variant={quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded' ? 'default' : 'secondary'}>{quote.status.replace(/_/g, ' ')}</Badge>
+                        }
                     </div>
-                    {canEditQuote && (
-                        <Button variant="outline" size="sm" onClick={() => setIsEditingQuote(true)}>
-                            <FileEdit className="mr-2 h-4 w-4" /> Edit Quote
-                        </Button>
-                    )}
                 </CardHeader>
                 <CardContent className="space-y-4">
                     
@@ -970,7 +962,7 @@ export default function VendorRequisitionPage() {
                      </div>
                 </CardContent>
                 <CardFooter className="flex-col gap-4 items-stretch">
-                     {isAccepted && relevantPOs.length > 0 && (
+                     {isAccepted && purchaseOrders.length > 0 && (
                         <>
                             {paidInvoices.map(inv => (
                                 <Alert key={inv.id} variant="default" className="border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800">
@@ -1227,7 +1219,7 @@ export default function VendorRequisitionPage() {
                 </Card>
 
                 {submittedQuote && !isEditingQuote ? (
-                     <QuoteDisplayCard quote={submittedQuote} itemsToShow={itemsToDisplayInQuoteCard} showActions={hasPendingResponseItems} />
+                     <QuoteDisplayCard quote={submittedQuote} itemsToShow={itemsToDisplayInQuoteCard} showActions={hasPendingResponseItems} purchaseOrders={purchaseOrders}/>
                 ) : (
                     <QuoteSubmissionForm 
                         requisition={requisition} 
@@ -1239,3 +1231,5 @@ export default function VendorRequisitionPage() {
         </div>
     )
 }
+
+    
