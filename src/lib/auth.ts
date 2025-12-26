@@ -1,6 +1,6 @@
 
 import 'dotenv/config';
-import { util } from 'util';
+import util from 'util';
 import type { User, UserRole } from './types';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { prisma } from './prisma';
