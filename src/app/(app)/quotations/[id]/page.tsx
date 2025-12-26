@@ -2415,15 +2415,17 @@ export default function QuotationDetailsPage() {
 
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
-    if (role === 'Admin' || role === 'Committee') return true;
+    const userRoles = user.roles as UserRole[];
+    if (userRoles.includes('Admin') || userRoles.includes('Committee')) return true;
+    
     if (rfqSenderSetting.type === 'specific') {
-      return user.id === rfqSenderSetting.userId;
+      return rfqSenderSetting.userIds?.includes(user.id) ?? false;
     }
     if (rfqSenderSetting.type === 'all') {
-      return role === 'Procurement_Officer';
+      return userRoles.includes('Procurement_Officer');
     }
     return false;
-  }, [user, role, rfqSenderSetting]);
+}, [user, role, rfqSenderSetting]);
   
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
 
