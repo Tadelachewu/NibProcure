@@ -40,13 +40,15 @@ export function decodeJwt<T>(token: string): (T & { exp: number }) | null {
 export async function verifyJwt(token: string): Promise<JwtPayload | null> {
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
-        throw new Error('JWT_SECRET is not defined in environment variables.');
+        console.error('JWT_SECRET is not defined in environment variables.');
+        return null;
     }
 
+    const verify = util.promisify(jwt.verify);
     try {
-        const decoded = jwt.verify(token, jwtSecret);
+        const decoded = await verify(token, jwtSecret);
         return decoded as JwtPayload;
-    } catch(e) {
+    } catch (e) {
         console.error("Failed to verify token:", e);
         return null;
     }
@@ -90,5 +92,5 @@ export async function getActorFromToken(request: Request): Promise<User> {
       ...user,
       department: user.department?.name,
       roles: Array.from(effectiveRoles),
-    }
+    } as User;
 }
