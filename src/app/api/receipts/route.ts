@@ -1,6 +1,5 @@
-
 'use server';
-
+import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -99,7 +98,7 @@ export async function POST(request: Request) {
 
                 const firstReason = defectiveItems[0].notes || 'Goods received were damaged or incorrect.';
 
-                await handleAwardRejection(tx, quoteForVendor, po.requisition, po.vendor.user, declinedReqItemIds, 'Receiving', firstReason);
+                await handleAwardRejection(tx, quoteForVendor, po.requisition, po.vendor.user, declinedReqItemIds as string[], 'Receiving', firstReason);
             }
         }
 

@@ -1,6 +1,5 @@
-
 'use server';
-
+import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -9,13 +8,13 @@ import { getActorFromToken } from '@/lib/auth';
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
     try {
         const actor = await getActorFromToken(request);
-        if (!actor || !(actor.roles as string[]).includes('Admin')) {
+        if (!actor || !actor.effectiveRoles.includes('Admin')) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
         const ticketId = params.id;
         const body = await request.json();
-        const { response, status, adminId } = body;
+        const { response, status } = body;
 
         if (!response || !status) {
             return NextResponse.json({ error: 'Response and status are required.' }, { status: 400 });
@@ -31,7 +30,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
             data: {
                 response,
                 status,
-                adminId: adminId,
+                adminId: actor.id,
                 updatedAt: new Date(),
             }
         });

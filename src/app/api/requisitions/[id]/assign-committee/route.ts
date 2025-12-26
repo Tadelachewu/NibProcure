@@ -1,6 +1,5 @@
-
 'use server';
-
+import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User, UserRole } from '@/lib/types';
@@ -33,6 +32,7 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
     
+    // Correct Authorization Logic
     const isAuthorized = actor.effectiveRoles.includes('Procurement_Officer') 
         || actor.effectiveRoles.includes('Admin') 
         || actor.effectiveRoles.includes('Committee');
@@ -83,7 +83,7 @@ export async function POST(
         if (membersToAdd.length > 0) {
             await tx.committeeAssignment.createMany({
                 data: membersToAdd.map(memberId => ({
-                    userId: memberId,
+                    userId: memberId as string,
                     requisitionId: id,
                     scoresSubmitted: false,
                 })),
