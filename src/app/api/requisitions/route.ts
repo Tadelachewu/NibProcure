@@ -366,7 +366,7 @@ export async function PATCH(
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
             if (department?.headId === user.id) {
                 dataToUpdate.status = 'PreApproved';
-                dataToUpdate.currentApproverId = undefined; // Use undefined instead of disconnect
+                dataToUpdate.currentApprover = { disconnect: true };
                 auditAction = 'SUBMIT_AND_AUTO_APPROVE';
                 auditDetails = `Requisition ${id} ("${body.title}") submitted by department head and automatically approved.`;
             } else if (department?.headId) {
@@ -376,7 +376,7 @@ export async function PATCH(
                 auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
             } else {
                  dataToUpdate.status = 'PreApproved';
-                 dataToUpdate.currentApproverId = undefined; // Use undefined instead of disconnect
+                 dataToUpdate.currentApprover = { disconnect: true };
                  auditAction = 'SUBMIT_FOR_APPROVAL';
                  auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval (no department head found, auto-approved).`;
             }
@@ -386,7 +386,7 @@ export async function PATCH(
         dataToUpdate.status = 'PreApproved';
         dataToUpdate.approver = { connect: { id: userId } };
         dataToUpdate.approverComment = comment;
-        dataToUpdate.currentApproverId = null;
+        dataToUpdate.currentApprover = { disconnect: true };
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Departmental approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;
     }
@@ -394,7 +394,7 @@ export async function PATCH(
         dataToUpdate.status = 'Rejected';
         dataToUpdate.approver = { connect: { id: userId } };
         dataToUpdate.approverComment = comment;
-        dataToUpdate.currentApproverId = null;
+        dataToUpdate.currentApprover = { disconnect: true };
         auditAction = 'REJECT_REQUISITION';
         auditDetails = `Requisition ${id} was rejected with comment: "${comment}".`;
     }
@@ -482,7 +482,11 @@ export async function PATCH(
             if (newStatus === 'Rejected') {
                 const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
                 dataToUpdate.status = previousStatus;
-                dataToUpdate.currentApproverId = previousApproverId;
+                if (previousApproverId) {
+                    dataToUpdate.currentApprover = { connect: { id: previousApproverId } };
+                } else {
+                    dataToUpdate.currentApprover = { disconnect: true };
+                }
                 dataToUpdate.approverComment = comment; 
                 auditDetails = serviceAuditDetails;
                 auditAction = 'REJECT_AWARD_STEP';
@@ -507,7 +511,11 @@ export async function PATCH(
 
               const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, effectiveRequisition, user);
                 dataToUpdate.status = nextStatus;
-                dataToUpdate.currentApproverId = nextApproverId;
+                 if (nextApproverId) {
+                    dataToUpdate.currentApprover = { connect: { id: nextApproverId } };
+                } else {
+                    dataToUpdate.currentApprover = { disconnect: true };
+                }
                 dataToUpdate.approverComment = comment;
                 auditDetails = serviceAuditDetails;
                 auditAction = 'APPROVE_AWARD_STEP';
@@ -517,8 +525,7 @@ export async function PATCH(
                 where: { id },
                 data: {
                     status: dataToUpdate.status,
-                    currentApprover: dataToUpdate.currentApproverId ? { connect: { id: dataToUpdate.currentApproverId } } : undefined,
-                    currentApproverId: dataToUpdate.currentApproverId === null ? null : dataToUpdate.currentApproverId,
+                    currentApprover: dataToUpdate.currentApprover,
                     approverComment: dataToUpdate.approverComment,
                 },
             });
@@ -596,7 +603,7 @@ export async function PATCH(
         } else {
             // If no department head, auto-approve to the next stage
             dataToUpdate.status = 'PreApproved';
-            dataToUpdate.currentApproverId = null;
+            dataToUpdate.currentApprover = { disconnect: true };
         }
         dataToUpdate.status = 'Pending_Approval';
         dataToUpdate.approverComment = null; // Clear rejection comment
