@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, ChevronDown, ChevronsRight, ChevronRight, ChevronLeft, FileBadge, AlertTriangle } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, ChevronDown, ChevronsRight, ChevronLeft, FileBadge, AlertTriangle } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -70,6 +70,7 @@ import { OverdueReportDialog } from '@/components/overdue-report-dialog';
 import { RestartRfqDialog } from '@/components/restart-rfq-dialog';
 import { QuoteDetailsDialog } from '@/components/quote-details-dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { CommitteeActions } from '@/components/committee-actions';
 
 
 const PAGE_SIZE = 6;
@@ -1144,7 +1145,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                         <AlertCircle className="h-4 w-4 text-amber-600" />
                         <AlertTitle>Read-Only Mode</AlertTitle>
                         <AlertDescription>
-                            You do not have permission to send RFQs based on current system settings.
+                            You do not have permission to send RFQs based on system settings.
                         </AlertDescription>
                     </Alert>
                 )}
@@ -1451,6 +1452,8 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
     const { fields: financialScoreFields } = useFieldArray({ control, name: `itemScores.${itemIndex}.financialScores` });
     const { fields: technicalScoreFields } = useFieldArray({ control, name: `itemScores.${itemIndex}.technicalScores` });
 
+    const form = useFormContext<ScoreFormValues>();
+
     return (
         <Card className="bg-muted/30">
             <CardHeader>
@@ -1611,13 +1614,15 @@ const ScoringDialog = ({
 }) => {
     const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
+    const { token } = useAuth();
 
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
         defaultValues: {}, // Initialize empty
     });
 
-    const { fields: itemScoreFields } = useFieldArray({ control: form.control, name: "itemScores" });
+    const { control: formControl } = form;
+    const { fields: itemScoreFields } = useFieldArray({ control: formControl, name: "itemScores" });
 
     const existingScore = useMemo(() => quote.scores?.find(s => s.scorerId === user.id), [quote, user.id]);
     const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id) ?? false;
@@ -1648,11 +1653,12 @@ const ScoringDialog = ({
 
 
     const onSubmit = async (values: ScoreFormValues) => {
+        if (!token) return;
         setSubmitting(true);
         try {
             const response = await fetch(`/api/quotations/${quote.id}/score`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ scores: values, userId: user.id }),
             });
              if (!response.ok) {
@@ -2210,6 +2216,8 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     );
 };
     
+
+
 const NotifyVendorDialog = ({
     isOpen,
     onClose,
@@ -2312,7 +2320,7 @@ export default function QuotationDetailsPage() {
   const isAuthorized = useMemo(() => {
     if (!user || !role) return false;
     const userRoles = user.roles as UserRole[];
-    if (userRoles.includes('Admin') || userRoles.includes('Committee')) return true;
+    if (userRoles.includes('Admin')) return true;
     
     if (rfqSenderSetting.type === 'specific') {
       return rfqSenderSetting.userIds?.includes(user.id) ?? false;
@@ -2836,7 +2844,7 @@ export default function QuotationDetailsPage() {
             <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
         )}
         
-        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && isAuthorized && (
+        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && (
             <div className="grid md:grid-cols-2 gap-6 items-start">
                 <RFQDistribution
                     requisition={requisition}
@@ -2999,7 +3007,7 @@ export default function QuotationDetailsPage() {
             </Accordion>
         )}
         
-        {(showAwardingCenter || awardIsDeclined || (isPerItemStrategy && (hasDeclinedWithStandby || hasFailedOrDeclined))) && isAuthorized && (
+        {(showAwardingCenter || awardIsDeclined || (isPerItemStrategy && (hasDeclinedWithStandby || hasFailedOrDeclined))) && (
             <Accordion type="single" collapsible className="w-full" defaultValue="awarding-center">
                 <AccordionItem value="awarding-center">
                     <AccordionTrigger>
@@ -3027,7 +3035,7 @@ export default function QuotationDetailsPage() {
                                 <>
                                     <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
                                     <DialogTrigger asChild>
-                                        <Button disabled={isFinalizing}>Award All to Single Vendor</Button>
+                                        <Button disabled={isFinalizing || !isAuthorized}>Award All to Single Vendor</Button>
                                     </DialogTrigger>
                                     <AwardCenterDialog
                                         requisition={requisition}
@@ -3040,7 +3048,7 @@ export default function QuotationDetailsPage() {
                                     {requisition.items.length > 1 && (
                                         <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
                                         <DialogTrigger asChild>
-                                            <Button variant="secondary" disabled={isFinalizing}>
+                                            <Button variant="secondary" disabled={isFinalizing || !isAuthorized}>
                                             Award by Best Offer (Per Item)
                                             </Button>
                                         </DialogTrigger>
@@ -3078,7 +3086,7 @@ export default function QuotationDetailsPage() {
                 <CardFooter>
                      <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
                         <DialogTrigger asChild>
-                             <Button disabled={isNotifying || requisition.status === 'Awarded'}>
+                             <Button disabled={isNotifying || requisition.status === 'Awarded' || !isAuthorized}>
                                 {isNotifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                 {requisition.status === 'Awarded' ? 'Notification Sent' : 'Send Award Notification'}
                             </Button>
@@ -3210,6 +3218,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     );
 };
     
-
 
     
