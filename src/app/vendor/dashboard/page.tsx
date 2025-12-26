@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail, RequisitionItem, QuoteItem } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import {
@@ -21,7 +21,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 const OPEN_PAGE_SIZE = 9;
 const ACTIVE_PAGE_SIZE = 6;
@@ -40,7 +40,7 @@ const VendorStatusBadge = ({ status, reason }: { status: RequisitionCardStatus, 
     'Submitted': { text: 'Submitted', variant: 'secondary', className: '' },
     'Processing': { text: 'Processing', variant: 'secondary', className: '' },
     'Closed': { text: 'Closed', variant: 'outline', className: '' },
-    'Not Awarded': { text: 'Not Awarded', variant: 'destructive', className: 'bg-gray-500 hover:bg-gray-600' },
+    'Not Awarded': { text: 'Not Awarded', variant: 'outline', className: 'bg-gray-500 hover:bg-gray-600 text-white' },
     'Failed_to_Award': { text: 'Not Awarded', variant: 'destructive', className: 'bg-gray-500 hover:bg-gray-600' },
     'Action Required': { text: 'Action Required', variant: 'default', className: '' },
     'Standby': { text: 'On Standby', variant: 'outline', className: 'border-amber-500 text-amber-600' },
@@ -387,7 +387,7 @@ export default function VendorDashboardPage() {
                                             const isActionable = status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted' || status === 'Invoice Submitted';
                                             
                                             return (
-                                                <Card key={req.id} className={cn("relative flex flex-col", (status === 'Awarded' || status === 'Partially Awarded') && "border-primary ring-2 ring-primary/50 bg-primary/5", isExpired && "opacity-60")}>
+                                                <Card key={req.id} className={cn("relative flex flex-col", (status === 'Awarded' || status === 'Partially Awarded') && "border-green-600 ring-2 ring-green-600/50 bg-green-500/5", isExpired && "opacity-60")}>
                                                     <VendorStatusBadge status={status} reason={reason} />
                                                     <CardHeader>
                                                         <CardTitle>{req.title}</CardTitle>

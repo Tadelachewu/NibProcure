@@ -455,7 +455,7 @@ const MatchingStatusBadge = ({ result, onRefresh }: { result: MatchingResult | n
     const BadgeComponent = (
         <Badge 
             variant={result.status === 'Matched' ? 'default' : 'destructive'}
-            className={cn(isClickable && "cursor-pointer")}
+            className={cn(isClickable && "cursor-pointer", result.status === 'Matched' && "bg-green-600 hover:bg-green-700")}
         >
             {result.status === 'Matched' && <CheckCircle2 className="mr-2 h-3 w-3" />}
             {result.status === 'Mismatched' && <AlertTriangle className="mr-2 h-3 w-3" />}
