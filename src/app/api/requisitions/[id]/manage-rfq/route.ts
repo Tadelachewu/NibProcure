@@ -3,7 +3,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { User, UserRole } from '@/lib/types';
+import { UserRole } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
 
 type RFQAction = 'update' | 'cancel' | 'restart';
@@ -13,43 +14,26 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+
     const requisitionId = params.id;
     const body = await request.json();
-    const { userId, action, reason, newDeadline } = body as {
-      userId: string;
+    const { action, reason, newDeadline } = body as {
       action: RFQAction;
       reason: string;
       newDeadline?: string;
     };
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { roles: true }
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    // Correct Authorization Logic
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    let isAuthorized = false;
-    const userRoles = (user.roles as any[]).map(r => r.name);
-
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-      const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-      if (setting.type === 'specific') {
-          isAuthorized = setting.userIds?.includes(userId) ?? false;
-      } else { // 'all' case
-          isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
-      }
-    }
-
+    // **FIX START**: Use the effectiveRoles from the actor for authorization
+    const isAuthorized = actor.effectiveRoles.includes('Procurement_Officer') || actor.effectiveRoles.includes('Admin');
+    // **FIX END**
 
     if (!isAuthorized) {
       return NextResponse.json({ error: 'Unauthorized to manage this RFQ based on system settings.' }, { status: 403 });
     }
-
 
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId }});
     if (!requisition) {
@@ -95,7 +79,7 @@ export async function POST(
         data: {
             transactionId: requisition.transactionId,
             timestamp: new Date(),
-            user: { connect: { id: user.id } },
+            user: { connect: { id: actor.id } },
             action: auditAction,
             entity: 'Requisition',
             entityId: requisitionId,

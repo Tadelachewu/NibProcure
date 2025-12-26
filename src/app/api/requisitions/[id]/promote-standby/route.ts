@@ -5,40 +5,29 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { promoteStandbyVendor } from '@/services/award-service';
 import { UserRole } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+
   const requisitionId = params.id;
   try {
-    const body = await request.json();
-    const { userId } = body;
-
-    const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    let isAuthorized = false;
-    const userRoles = (user.roles as any[]).map(r => r.name);
-
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userId?: string };
-        if (setting.type === 'specific') {
-            isAuthorized = setting.userId === userId;
-        } else { // 'all' case
-            isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
-        }
-    }
+    // **FIX START**: Use the effectiveRoles from the actor for authorization
+    const isAuthorized = actor.effectiveRoles.includes('Procurement_Officer') || actor.effectiveRoles.includes('Admin');
+    // **FIX END**
 
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      return await promoteStandbyVendor(tx, requisitionId, user);
+      return await promoteStandbyVendor(tx, requisitionId, actor);
     }, {
       maxWait: 15000,
       timeout: 30000,

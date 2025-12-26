@@ -19,9 +19,9 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
     
-    // --- Authorization Check ---
-    const userRoles = actor.roles as UserRole[];
-    const isAuthorized = userRoles.includes('Procurement_Officer') || userRoles.includes('Admin');
+    // **FIX START**: Use the effectiveRoles from the actor for authorization
+    const isAuthorized = actor.effectiveRoles.includes('Procurement_Officer') || actor.effectiveRoles.includes('Admin');
+    // **FIX END**
     if (!isAuthorized) {
         return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
     }
@@ -66,7 +66,7 @@ export async function POST(
                 totalPrice: totalValue,
                 deadline: new Date(newDeadline),
                 allowedVendorIds: vendorIds,
-                parentRequisition: { 
+                parent: { 
                     connect: {
                         id: originalRequisition.id 
                     }
@@ -119,50 +119,6 @@ export async function POST(
                 });
             }
         }
-
-        // --- Start of Corrected Logic: Check if original requisition can be closed ---
-        const updatedOriginalReq = await tx.purchaseRequisition.findUnique({
-            where: { id: originalRequisitionId },
-            include: { 
-                items: true,
-                purchaseOrders: { include: { items: true, invoices: true }}
-            }
-        });
-
-        if (updatedOriginalReq) {
-            // Get all items that were NOT part of this restart operation.
-            const remainingItems = updatedOriginalReq.items.filter(item => !itemIds.includes(item.id));
-            
-            // If there are no remaining items, the parent is effectively empty and can be closed.
-            if (remainingItems.length === 0) {
-                 await tx.purchaseRequisition.update({
-                    where: { id: originalRequisitionId },
-                    data: { status: 'Closed' }
-                });
-            } else {
-                 // Check if ALL remaining items are fully paid.
-                const allRemainingItemsArePaid = remainingItems.every(item => {
-                    const po = updatedOriginalReq.purchaseOrders.find(p => p.items.some(pi => pi.requisitionItemId === item.id));
-                    
-                    // If an item has a PO, all its invoices must be 'Paid'.
-                    if (po) {
-                        const relatedInvoices = po.invoices || [];
-                        // It must have at least one invoice and all must be paid.
-                        return relatedInvoices.length > 0 && relatedInvoices.every(inv => inv.status === 'Paid');
-                    }
-                    // If an item has no PO, it's not considered "paid" and the requisition shouldn't close.
-                    return false;
-                });
-                
-                if (allRemainingItemsArePaid) {
-                    await tx.purchaseRequisition.update({
-                        where: { id: originalRequisitionId },
-                        data: { status: 'Closed' }
-                    });
-                }
-            }
-        }
-        // --- End of Corrected Logic ---
 
         await tx.auditLog.create({
             data: {
@@ -219,9 +175,6 @@ export async function POST(
   } catch (error) {
     console.error('Failed to restart item RFQ:', error);
     if (error instanceof Error) {
-        if ((error as any).code === 'P2002') {
-          return NextResponse.json({ error: 'Failed to create new requisition due to a unique constraint violation. This may be a temporary issue. Please try again.' }, { status: 409 });
-        }
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });

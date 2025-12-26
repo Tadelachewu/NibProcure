@@ -50,7 +50,7 @@ export async function verifyJwt(token: string) {
 }
 
 
-export async function getActorFromToken(request: Request): Promise<User | null> {
+export async function getActorFromToken(request: Request): Promise<(User & { effectiveRoles: UserRole[] }) | null> {
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.split(' ')[1];
     if (!token) return null;
@@ -58,33 +58,34 @@ export async function getActorFromToken(request: Request): Promise<User | null> 
     const decoded = await verifyJwt(token);
     if (!decoded || !decoded.id) return null;
 
-    const user = await prisma.user.findUnique({
-        where: { id: decoded.id as string },
-        include: { roles: true, department: true }
-    });
+    const [user, rfqSenderSetting] = await Promise.all([
+        prisma.user.findUnique({
+            where: { id: decoded.id as string },
+            include: { roles: true, department: true }
+        }),
+        prisma.setting.findUnique({
+            where: { key: 'rfqSenderSetting' }
+        })
+    ]);
     
     if (!user) return null;
+
+    const baseRoles = user.roles.map(r => r.name as UserRole);
+    let effectiveRoles = [...baseRoles];
+
+    // **FIX START**: Dynamically add Procurement_Officer role if user is a designated sender.
+    const rfqSetting = rfqSenderSetting?.value as { type: string, userIds?: string[] } | undefined;
+    if (rfqSetting?.type === 'specific' && rfqSetting.userIds?.includes(user.id)) {
+        if (!effectiveRoles.includes('Procurement_Officer')) {
+            effectiveRoles.push('Procurement_Officer');
+        }
+    }
+    // **FIX END**
 
     return {
       ...user,
       department: user.department?.name,
-      roles: user.roles.map(r => r.name as UserRole),
-    }
-}
-
-export async function getUserByToken(token: string): Promise<{ user: User, role: UserRole } | null> {
-    try {
-        const decoded = decodeJwt<User>(token);
-        if (!decoded) {
-            return null;
-        }
-        
-        // **FIX**: Ensure the role from the token is always formatted with underscores
-        const formattedRole = (decoded.role as string).replace(/ /g, '_') as UserRole;
-        
-        return { user: decoded, role: formattedRole };
-    } catch(e) {
-        console.error("Failed to decode token:", e);
-        return null;
+      roles: baseRoles, // Keep original roles
+      effectiveRoles: [...new Set(effectiveRoles)], // Return a unique set of effective roles
     }
 }

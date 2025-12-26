@@ -218,11 +218,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         permissionsForRole.forEach(path => permissionsSet.add(path));
     });
     
-    // Dynamically add procurement officer permissions if user is a designated RFQ sender
+    // **FIX START**: Dynamically grant Procurement Officer permissions if the user is a designated RFQ sender.
     if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userIds?.includes(user.id)) {
         const procurementPermissions = rolePermissions['Procurement_Officer'] || [];
         procurementPermissions.forEach(path => permissionsSet.add(path));
     }
+    // **FIX END**
 
     return { ...rolePermissions, Combined: Array.from(permissionsSet) };
   }, [user, rolePermissions, loading, rfqSenderSetting]);

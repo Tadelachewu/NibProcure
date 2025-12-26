@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -26,7 +27,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Admin')) {
+    if (!actor || !actor.effectiveRoles.includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
    try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Admin')) {
+    if (!actor || !actor.effectiveRoles.includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -149,7 +150,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
    try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Admin')) {
+    if (!actor || !actor.effectiveRoles.includes('Admin')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -177,7 +178,7 @@ export async function DELETE(request: Request) {
   } catch (error) {
      console.error("Error deleting department:", error);
      if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
