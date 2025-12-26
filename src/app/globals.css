@@ -4,24 +4,24 @@
 
 @layer base {
   :root {
-    --background: 45 75% 94%;
+    --background: 0 0% 100%;
     --foreground: 24 9.8% 10%;
-    --card: 40 89% 96%;
+    --card: 0 0% 100%;
     --card-foreground: 24 9.8% 10%;
-    --popover: 40 89% 96%;
+    --popover: 0 0% 100%;
     --popover-foreground: 24 9.8% 10%;
-    --primary: 35 91% 55%; /* Yellowish Honey */
+    --primary: 35 91% 55%;
     --primary-foreground: 24 9.8% 10%;
-    --secondary: 40 89% 92%;
+    --secondary: 0 0% 96.1%;
     --secondary-foreground: 24 9.8% 10%;
-    --muted: 40 89% 92%;
-    --muted-foreground: 24 5% 65%; /* Lighter gray for placeholders */
-    --accent: 25 64% 38%; /* Dark Brownish Honey */
-    --accent-foreground: 40 89% 96%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 24 5.4% 63.9%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 24 9.8% 10%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 40 89% 90%;
-    --input: 40 89% 80%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
     --ring: 35 91% 55%;
     --chart-1: 35 91% 55%;
     --chart-2: 25 64% 38%;
@@ -29,13 +29,13 @@
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
     --radius: 0.5rem;
-    --sidebar-background: 40 89% 96%; /* Honey-toned background */
+    --sidebar-background: 0 0% 95%; /* Light Gray */
     --sidebar-foreground: 24 9.8% 10%;
     --sidebar-primary: 35 91% 55%;
     --sidebar-primary-foreground: 24 9.8% 10%;
-    --sidebar-accent: 25 64% 38%;
-    --sidebar-accent-foreground: 40 89% 96%;
-    --sidebar-border: 40 89% 90%;
+    --sidebar-accent: 0 0% 90%; /* Slightly darker gray for accent */
+    --sidebar-accent-foreground: 24 9.8% 10%;
+    --sidebar-border: 0 0% 85%;
     --sidebar-ring: 35 91% 55%;
   }
 
@@ -46,18 +46,18 @@
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 35 91% 55%; /* Yellowish Honey */
+    --primary: 35 91% 55%;
     --primary-foreground: 24 9.8% 10%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 25 64% 42%; /* Dark Brownish Honey */
+    --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 27.5%;
+    --input: 217.2 32.6% 17.5%;
     --ring: 35 91% 55%;
     --chart-1: 35 91% 55%;
     --chart-2: 25 64% 42%;
