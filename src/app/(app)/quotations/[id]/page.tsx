@@ -534,7 +534,7 @@ const committeeFormSchema = z.object({
 type CommitteeFormValues = z.infer<typeof committeeFormSchema>;
 
 const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, onOpenChange, isAuthorized, isEditDisabled }: { requisition: PurchaseRequisition; onCommitteeUpdated: () => void; open: boolean; onOpenChange: (open: boolean) => void; isAuthorized: boolean; isEditDisabled: boolean }) => {
-    const { user, allUsers } = useAuth();
+    const { user, allUsers, token } = useAuth();
     const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
     const [deadlineDate, setDeadlineDate] = useState<Date|undefined>(
@@ -576,7 +576,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
     }, [requisition, form]);
 
     const handleSaveCommittee = async (values: CommitteeFormValues) => {
-        if (!user || !finalDeadline) {
+        if (!user || !finalDeadline || !token) {
              toast({
                 variant: 'destructive',
                 title: 'Invalid Deadline',
@@ -598,7 +598,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/assign-committee`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
                     userId: user.id,
                     ...values,
@@ -884,7 +884,7 @@ const RFQActionDialog = ({
     onClose: () => void,
     onSuccess: () => void,
 }) => {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [reason, setReason] = useState('');
@@ -898,7 +898,7 @@ const RFQActionDialog = ({
     }, [newDeadlineDate, newDeadlineTime]);
 
     const handleSubmit = async () => {
-        if (!user) return;
+        if (!user || !token) return;
         if (action !== 'update' && !reason.trim()) {
             toast({ variant: 'destructive', title: 'Error', description: 'A reason must be provided.'});
             return;
@@ -912,7 +912,7 @@ const RFQActionDialog = ({
         try {
              const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
                     userId: user.id,
                     action,
@@ -1020,7 +1020,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
 
     const [allowQuoteEdits, setAllowQuoteEdits] = useState(requisition.rfqSettings?.allowQuoteEdits ?? true);
     const [experienceDocumentRequired, setExperienceDocumentRequired] = useState(requisition.rfqSettings?.experienceDocumentRequired ?? false);
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const { toast } = useToast();
 
     const isSent = requisition.status === 'Accepting_Quotes' || requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
@@ -1047,7 +1047,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
 
 
     const handleSendRFQ = async () => {
-        if (!user || !deadline) return;
+        if (!user || !deadline || !token) return;
 
         if (isBefore(deadline, new Date())) {
             toast({
@@ -1076,7 +1076,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/send-rfq`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
                     userId: user.id,
                     vendorIds: distributionType === 'all' ? [] : selectedVendors,
@@ -1506,7 +1506,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                                     <Badge variant="secondary">Weight: {requisition.evaluationCriteria?.financialCriteria[criterionIndex].weight}%</Badge>
                                 </div>
                                 <FormField
-                                    control={control}
+                                    control={form.control}
                                     name={`itemScores.${itemIndex}.financialScores.${criterionIndex}.score`}
                                     render={({ field }) => (
                                         <FormItem>
@@ -1527,7 +1527,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                                     )}
                                 />
                                 <FormField
-                                    control={control}
+                                    control={form.control}
                                     name={`itemScores.${itemIndex}.financialScores.${criterionIndex}.comment`}
                                     render={({ field }) => (
                                         <FormItem>
@@ -1552,7 +1552,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                                     <Badge variant="secondary">Weight: {requisition.evaluationCriteria?.technicalCriteria[criterionIndex].weight}%</Badge>
                                 </div>
                                  <FormField
-                                    control={control}
+                                    control={form.control}
                                     name={`itemScores.${itemIndex}.technicalScores.${criterionIndex}.score`}
                                     render={({ field }) => (
                                         <FormItem>
@@ -1573,7 +1573,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                                     )}
                                 />
                                 <FormField
-                                    control={control}
+                                    control={form.control}
                                     name={`itemScores.${itemIndex}.technicalScores.${criterionIndex}.comment`}
                                     render={({ field }) => (
                                         <FormItem>
@@ -1823,110 +1823,6 @@ const ScoringDialog = ({
             </form>
             </Form>
         </DialogContent>
-    );
-};
-
-const CommitteeActions = ({
-    user,
-    requisition,
-    onFinalScoresSubmitted,
-}: {
-    user: User,
-    requisition: PurchaseRequisition,
-    onFinalScoresSubmitted: () => void,
-}) => {
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const { toast } = useToast();
-    
-    // Check if the user is part of any committee for this requisition
-    const userRoles = user.roles as UserRole[];
-    const isCommitteeUser = userRoles.some(r => r.includes('Committee'));
-    
-    if (!isCommitteeUser) {
-        return null;
-    }
-    
-    const userScoredQuotesCount = requisition.quotations?.filter(q => q.scores?.some(s => s.scorerId === user.id)).length || 0;
-    const allQuotesScored = (requisition.quotations?.length || 0) > 0 && userScoredQuotesCount === requisition.quotations?.length;
-    
-    const assignment = user.committeeAssignments?.find(a => a.requisitionId === requisition.id);
-    const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
-
-    const handleSubmitScores = async () => {
-        setIsSubmitting(true);
-        try {
-            const response = await fetch(`/api/requisitions/${requisition.id}/submit-scores`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to submit scores');
-            }
-            toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
-            onFinalScoresSubmitted();
-        } catch (error) {
-             toast({
-                variant: 'destructive',
-                title: 'Error',
-                description: error instanceof Error ? error.message : 'An unknown error occurred.',
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    if (scoresAlreadyFinalized) {
-        return (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Committee Actions</CardTitle>
-                    <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Button variant="outline" disabled>
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Scores Submitted
-                    </Button>
-                </CardContent>
-            </Card>
-        )
-    }
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Committee Actions</CardTitle>
-                <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {requisition.quotations?.length || 0} quotes.</p>
-            </CardContent>
-            <CardFooter>
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button disabled={!allQuotesScored || isSubmitting}>
-                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Submit Final Scores
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure you want to submit?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This will finalize your scores for this requisition. You will not be able to make further changes.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-            </CardFooter>
-        </Card>
     );
 };
 
@@ -2717,13 +2613,13 @@ export default function QuotationDetailsPage() {
     minuteDocumentUrl?: string,
     minuteJustification?: string
 ) => {
-    if (!user || !requisition || !quotations) return;
+    if (!user || !requisition || !quotations || !token) return;
     
     setIsFinalizing(true);
     try {
          const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, minuteDocumentUrl, minuteJustification }),
         });
         if (!response.ok) {
@@ -2746,12 +2642,12 @@ export default function QuotationDetailsPage() {
 }
 
     const handleAwardChange = async () => {
-        if (!user || !id || !requisition) return;
+        if (!user || !id || !requisition || !token) return;
         setIsChangingAward(true);
         try {
             const response = await fetch(`/api/requisitions/${id}/promote-standby`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ userId: user.id }),
             });
             if (!response.ok) {
@@ -2772,12 +2668,12 @@ export default function QuotationDetailsPage() {
     }
 
   const handleNotifyVendor = async (deadline?: Date) => {
-    if (!user || !requisition) return;
+    if (!user || !requisition || !token) return;
     setIsNotifying(true);
     try {
       const response = await fetch(`/api/requisitions/${requisition.id}/notify-vendor`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ userId: user.id, awardResponseDeadline: deadline })
       });
 
@@ -3238,7 +3134,7 @@ export default function QuotationDetailsPage() {
 }
 
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
@@ -3251,7 +3147,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     }, [newDeadlineDate, newDeadlineTime]);
 
     const handleReopen = async () => {
-        if (!user) return;
+        if (!user || !token) return;
         if (!finalNewDeadline || isBefore(finalNewDeadline, new Date())) {
             toast({ variant: 'destructive', title: 'Error', description: 'A new deadline in the future must be set.' });
             return;
@@ -3261,7 +3157,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ userId: user.id, newDeadline: finalNewDeadline }),
             });
             if (!response.ok) {
