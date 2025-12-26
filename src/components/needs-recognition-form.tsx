@@ -297,20 +297,6 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
     onFinalSubmit(form.getValues(), true);
   }
 
-  const handleFormSubmit = async () => {
-    const isFormValid = await form.trigger();
-    if(isFormValid) {
-        onFinalSubmit(form.getValues(), false);
-    } else {
-        toast({
-            variant: "destructive",
-            title: "Validation Error",
-            description: "Please correct the errors before submitting.",
-        });
-    }
-  };
-
-
   const financialWeight = form.watch('evaluationCriteria.financialWeight');
   const financialTotal = (form.watch('evaluationCriteria.financialCriteria') || []).reduce((acc, c) => acc + (Number(c.weight) || 0), 0);
   const technicalTotal = (form.watch('evaluationCriteria.technicalCriteria') || []).reduce((acc, c) => acc + (Number(c.weight) || 0), 0);
@@ -761,29 +747,6 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save as Draft
                 </Button>
-                
-                <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                        <Button type="button" disabled={loading}>
-                            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                            Submit for Approval
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Are you ready to submit?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                This will submit the requisition to your department head for approval. You will not be able to edit it after submission unless it is rejected.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleFormSubmit}>
-                                Yes, Submit for Approval
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
             </div>
           </form>
         </Form>
@@ -826,3 +789,4 @@ function QuestionOptions({ index }: { index: number }) {
   );
 }
 
+    
