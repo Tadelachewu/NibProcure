@@ -29,9 +29,9 @@ export async function POST(
     if (userRoles.includes('Admin')) {
         isAuthorized = true;
     } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userId?: string };
+        const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
         if (setting.type === 'specific') {
-            isAuthorized = setting.userId === userId;
+            isAuthorized = setting.userIds?.includes(userId) ?? false;
         } else { // 'all' case
             isAuthorized = userRoles.includes('Procurement_Officer');
         }
