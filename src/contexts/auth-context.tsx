@@ -108,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>(defaultRolePermissions);
-  const [rfqSenderSetting, setRfqSenderSetting] = useState<RfqSenderSetting>({ type: 'all' });
+  const [rfqSenderSetting, setRfqSenderSetting] = useState<RfqSenderSetting>({ type: 'all', userIds: [] });
   const [requisitionCreatorSetting, setRequisitionCreatorSetting] = useState<RequisitionCreatorSetting>({ type: 'all_users' });
   const [approvalThresholds, setApprovalThresholds] = useState<ApprovalThreshold[]>([]);
   const [committeeConfig, setCommitteeConfig] = useState<CommitteeConfig>({});
@@ -218,8 +218,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         permissionsForRole.forEach(path => permissionsSet.add(path));
     });
     
+    // Dynamically add procurement officer permissions if user is a designated RFQ sender
+    if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userIds?.includes(user.id)) {
+        const procurementPermissions = rolePermissions['Procurement_Officer'] || [];
+        procurementPermissions.forEach(path => permissionsSet.add(path));
+    }
+
     return { ...rolePermissions, Combined: Array.from(permissionsSet) };
-  }, [user, rolePermissions, loading]);
+  }, [user, rolePermissions, loading, rfqSenderSetting]);
 
   useEffect(() => {
     if (user && user.roles) {
