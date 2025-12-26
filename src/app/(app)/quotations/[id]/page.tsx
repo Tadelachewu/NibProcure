@@ -1894,20 +1894,435 @@ const NotifyVendorDialog = ({
     );
 };
 
-// ... Rest of the page component (main export) remains unchanged from previous version
-// NOTE: I am omitting the large component for brevity, as the changes are only in the sub-components above.
-// The user prompt only asks for color consistency fixes.
-// The following is the main export component, but with the necessary changes applied to sub-components.
 export default function QuotationDetailsPage() {
-    // ... all existing state and logic ...
+    const router = useRouter();
+    const params = useParams();
+    const { toast } = useToast();
+    const { user, allUsers, role, rfqSenderSetting, committeeQuorum } = useAuth();
+    const id = params.id as string;
+    
+    const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
+    const [vendors, setVendors] = useState<Vendor[]>([]);
+    const [quotations, setQuotations] = useState<Quotation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isCommitteeDialogOpen, setCommitteeDialogOpen] = useState(false);
+    const [isScoringFormOpen, setScoringFormOpen] = useState(false);
+    const [isFinalizing, setIsFinalizing] = useState(false);
+    const [isNotifying, setIsNotifying] = useState(false);
+    const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
+    const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
+    const [selectedQuoteForDetails, setSelectedQuoteForDetails] = useState<Quotation | null>(null);
+    const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
+    const [isChangingAward, setIsChangingAward] = useState(false);
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+    const [isReportOpen, setReportOpen] = useState(false);
+  
+    const fetchRequisitionAndQuotes = useCallback(async () => {
+        if (!id || !user) return;
+        setLoading(true);
+        try {
+            const [reqResponse, venResponse, quoResponse] = await Promise.all([
+                fetch(`/api/requisitions/${id}`),
+                fetch('/api/vendors'),
+                fetch(`/api/quotations?requisitionId=${id}`),
+            ]);
+            const currentReq = await reqResponse.json();
+            const venData = await venResponse.json();
+            const quoData = await quoResponse.json();
+
+            setRequisition(currentReq);
+            setQuotations(quoData);
+            setVendors(venData || []);
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
+        } finally {
+            setLoading(false);
+        }
+    }, [id, user, toast]);
+  
+    useEffect(() => {
+        fetchRequisitionAndQuotes();
+    }, [fetchRequisitionAndQuotes]);
+
+    const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby', 'Pending_Award'].includes(q.status)), [quotations]);
+    const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
+    
+    const isDeadlinePassed = useMemo(() => {
+        if (!requisition) return false;
+        return requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+    }, [requisition]);
+  
+    const isScoringDeadlinePassed = useMemo(() => {
+        if (!requisition || !requisition.scoringDeadline) return false;
+        return isPast(new Date(requisition.scoringDeadline));
+    }, [requisition]);
+
+    const isCommitteeAssigned = useMemo(() => {
+        if (!requisition) return false;
+        return (requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0;
+    }, [requisition]);
+  
+    const isAssignedCommitteeMember = useMemo(() => {
+        if (!user || !requisition) return false;
+        const allCommitteeIds = new Set([
+            ...(requisition.financialCommitteeMemberIds || []),
+            ...(requisition.technicalCommitteeMemberIds || [])
+        ]);
+        return allCommitteeIds.has(user.id);
+    }, [user, requisition]);
+
+    const isScoringComplete = useMemo(() => {
+        if (!isCommitteeAssigned) return false;
+        
+        const allAssignedMemberIds = new Set([
+            ...(requisition?.financialCommitteeMemberIds || []),
+            ...(requisition?.technicalCommitteeMemberIds || [])
+        ]);
+        if(allAssignedMemberIds.size === 0) return false;
+
+        const allAssignments = requisition?.committeeAssignments || [];
+
+        for (const memberId of allAssignedMemberIds) {
+            const assignment = allAssignments.find(a => a.userId === memberId);
+            if (!assignment || !assignment.scoresSubmitted) {
+                return false;
+            }
+        }
+        return true;
+    }, [isCommitteeAssigned, requisition]);
+  
+    const isAuthorized = useMemo(() => {
+        if (!user || !role) return false;
+        if (role === 'Admin') return true;
+        
+        if (rfqSenderSetting.type === 'all') {
+          return role === 'Procurement_Officer';
+        }
+        
+        if (rfqSenderSetting.type === 'specific') {
+            return rfqSenderSetting.userIds?.includes(user.id);
+        }
+        return false;
+    }, [user, role, rfqSenderSetting]);
+
+    const itemStatuses = useMemo(() => {
+        if (!requisition?.items) return [];
+        return requisition.items.flatMap(item => (item.perItemAwardDetails || []));
+    }, [requisition]);
+  
+    const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteDocumentUrl?: string, minuteJustification?: string) => {
+        if (!user || !requisition || !quotations) return;
+        
+        setIsFinalizing(true);
+        try {
+             const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, minuteDocumentUrl, minuteJustification }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to finalize scores.');
+            }
+            toast({ title: 'Success', description: 'Scores have been finalized and awards are being routed for final review.' });
+            fetchRequisitionAndQuotes();
+        } catch(error) {
+             toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsFinalizing(false);
+        }
+    }
+
+    const handlePromoteStandby = async () => {
+        if (!user || !id || !requisition) return;
+        
+        setIsChangingAward(true);
+        try {
+            const response = await fetch(`/api/requisitions/${id}/promote-standby`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id }),
+            });
+    
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Failed to handle award change.' }));
+                throw new Error(errorData.error);
+            }
+    
+            const result = await response.json();
+            toast({
+                title: `Action Successful`,
+                description: result.message || `The award status has been updated.`
+            });
+            fetchRequisitionAndQuotes();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsChangingAward(false);
+        }
+    }
+  
+    const handleNotifyVendor = async (deadline?: Date) => {
+      if (!user || !requisition) return;
+      setIsNotifying(true);
+      try {
+        const response = await fetch(`/api/requisitions/${requisition.id}/notify-vendor`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, awardResponseDeadline: deadline })
+        });
+  
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to notify vendor.");
+        }
+  
+        toast({
+          title: "Vendor Notified",
+          description: "The winning vendor has been notified and the award is pending their response."
+        });
+        fetchRequisitionAndQuotes();
+      } catch (error) {
+          toast({
+              variant: 'destructive',
+              title: 'Error',
+              description: error instanceof Error ? error.message : 'An unknown error occurred.',
+          });
+      } finally {
+          setIsNotifying(false);
+          setIsNotifyDialogOpen(false);
+      }
+    }
+  
+    const handleScoreButtonClick = (quote: Quotation, hidePrices: boolean) => {
+      setSelectedQuoteForScoring(quote);
+      setHidePricesForScoring(hidePrices);
+      setScoringFormOpen(true);
+    }
+    
+    const handleScoreSubmitted = () => {
+        setScoringFormOpen(false);
+        setSelectedQuoteForScoring(null);
+        fetchRequisitionAndQuotes();
+    }
+  
+    const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
+        if (!requisition) return 'rfq';
+        if (['PreApproved', 'Accepting_Quotes'].includes(requisition.status) && !isDeadlinePassed) return 'rfq';
+        if (['Accepting_Quotes', 'Scoring_In_Progress'].includes(requisition.status) && isDeadlinePassed) return 'committee';
+        if (['Scoring_Complete', 'Award_Declined', 'PostApproved', 'Awarded'].includes(requisition.status) || requisition.status.startsWith('Pending_')) return 'award';
+        if (['PO_Created', 'Partially_Closed'].includes(requisition.status)) return 'finalize';
+        if (['Fulfilled', 'Closed'].includes(requisition.status)) return 'completed';
+        return 'rfq'; // Default fallback
+    };
+    const currentStep = getCurrentStep();
+    
+    if (loading || !requisition || !user) {
+       return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    }
+    
+    const isCommitteeStage = (isDeadlinePassed && quotations.length > 0) || ['Scoring_In_Progress', 'Scoring_Complete'].includes(requisition.status) || isAwarded;
+    const isReadyForNotification = requisition.status === 'PostApproved';
+    const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
+    const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
+    
     return (
-        // ... existing JSX structure ...
-        // The instances of `QuoteComparison` will now render with the updated color logic.
-        // ...
-    );
+        <div className="space-y-6">
+            <Button variant="outline" onClick={() => router.push('/quotations')}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to All Requisitions
+            </Button>
+            
+            <Card className="p-4 sm:p-6">
+                <WorkflowStepper step={currentStep} />
+            </Card>
+            
+            <Card>
+                 <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                        <CardTitle className="flex items-center gap-2"><ClipboardList /> Requisition Details</CardTitle>
+                        <CardDescription>Created by {requisition.requesterName} on {format(new Date(requisition.createdAt), 'PP')}</CardDescription>
+                    </div>
+                     <Button variant="outline" onClick={() => setIsDetailsOpen(true)} className="w-full sm:w-auto">
+                        <Eye className="mr-2 h-4 w-4" />
+                        View Full Details
+                    </Button>
+                </CardHeader>
+            </Card>
+
+            {noBidsAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
+                <Card className="border-amber-500">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> RFQ Closed: No Bids Received</CardTitle>
+                        <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardDescription>
+                    </CardHeader>
+                    <CardFooter className="gap-2">
+                        <RestartRfqDialog requisition={requisition} vendors={vendors} onRfqRestarted={fetchRequisitionAndQuotes}/>
+                        <Button variant="destructive" onClick={() => {}}><XCircle className="mr-2 h-4 w-4" /> Cancel RFQ</Button>
+                    </CardFooter>
+                </Card>
+            )}
+            
+            {quorumNotMetAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
+                <RestartRfqDialog requisition={requisition} vendors={vendors} onRfqRestarted={fetchRequisitionAndQuotes} isQuorumIssue={true}/>
+            )}
+
+            {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && (
+                <div className="grid md:grid-cols-2 gap-6 items-start">
+                    <RFQDistribution 
+                        requisition={requisition} 
+                        vendors={vendors} 
+                        onRfqSent={fetchRequisitionAndQuotes}
+                        isAuthorized={isAuthorized}
+                    />
+                    <ManageRFQ 
+                        requisition={requisition}
+                        onSuccess={fetchRequisitionAndQuotes}
+                        isAuthorized={isAuthorized}
+                    />
+                </div>
+            )}
+            
+            {isCommitteeStage && (
+                 <EvaluationCommitteeManagement
+                    requisition={requisition}
+                    onCommitteeUpdated={fetchRequisitionAndQuotes}
+                    open={isCommitteeDialogOpen}
+                    onOpenChange={setCommitteeDialogOpen}
+                    isAuthorized={isAuthorized}
+                    isEditDisabled={isAwarded || isScoringComplete || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed'}
+                />
+            )}
+
+            {isCommitteeStage && isCommitteeAssigned && (
+                <>
+                    <Card>
+                        <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div>
+                                <CardTitle>Quotations for {requisition.id}</CardTitle>
+                                <CardDescription>{requisition.title}</CardDescription>
+                            </div>
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                {isAwarded && (
+                                    <Button variant="secondary" onClick={() => setReportOpen(true)}>
+                                        <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
+                                    </Button>
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                        {loading ? (
+                            <div className="flex items-center justify-center h-24">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        ) : (
+                            <QuoteComparison 
+                                quotes={quotations} 
+                                requisition={requisition}
+                                onViewDetails={(q) => setSelectedQuoteForDetails(q)}
+                                onScore={handleScoreButtonClick}
+                                user={user}
+                                role={role}
+                                isDeadlinePassed={isDeadlinePassed}
+                                isScoringDeadlinePassed={isScoringDeadlinePassed}
+                                itemStatuses={itemStatuses}
+                                isAwarded={isAwarded}
+                                isScoringComplete={isScoringComplete}
+                                isAssignedCommitteeMember={isAssignedCommitteeMember}
+                            />
+                        )}
+                        </CardContent>
+                    </Card>
+                    
+                    {(role === 'Procurement_Officer' || role === 'Admin') && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Award Center</CardTitle>
+                                <CardDescription>Finalize scores and decide on the award strategy.</CardDescription>
+                            </CardHeader>
+                             <CardFooter className="flex-wrap gap-2">
+                                <BestItemAwardDialog 
+                                    requisition={requisition} 
+                                    quotations={quotations}
+                                    onFinalize={handleFinalizeScores}
+                                    disabled={!isScoringComplete || isFinalizing || isAwarded}
+                                />
+                                <AwardCenterDialog
+                                    requisition={requisition} 
+                                    quotations={quotations}
+                                    onFinalize={handleFinalizeScores}
+                                    disabled={!isScoringComplete || isFinalizing || isAwarded}
+                                />
+                                <AwardStandbyButton 
+                                    requisition={requisition}
+                                    quotations={quotations}
+                                    onPromote={handlePromoteStandby}
+                                    isChangingAward={isChangingAward}
+                                />
+                                <RestartRfqDialog
+                                    requisition={requisition}
+                                    vendors={vendors}
+                                    onRfqRestarted={fetchRequisitionAndQuotes}
+                                />
+                            </CardFooter>
+                        </Card>
+                    )}
+
+                    {isReadyForNotification && isAuthorized && (
+                        <Card className="mt-6 border-amber-500">
+                             <CardHeader>
+                                <CardTitle>Action Required: Notify Vendor</CardTitle>
+                                <CardDescription>The award has passed all reviews. You may now notify the winning vendor.</CardDescription>
+                            </CardHeader>
+                            <CardFooter>
+                                <Button onClick={() => setIsNotifyDialogOpen(true)} disabled={isNotifying}>
+                                    {isNotifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                                    Send Award Notification
+                                </Button>
+                            </CardFooter>
+                        </Card>
+                    )}
+                </>
+            )}
+
+            <Dialog open={isScoringFormOpen} onOpenChange={setScoringFormOpen}>
+                {selectedQuoteForScoring && requisition && user && (
+                    <ScoringDialog 
+                        quote={selectedQuoteForScoring} 
+                        requisition={requisition} 
+                        user={user} 
+                        onScoreSubmitted={handleScoreSubmitted}
+                        isScoringDeadlinePassed={isScoringDeadlinePassed}
+                        hidePrices={hidePricesForScoring}
+                    />
+                )}
+            </Dialog>
+            <QuoteDetailsDialog 
+                quote={selectedQuoteForDetails!}
+                requisition={requisition}
+                isOpen={!!selectedQuoteForDetails}
+                onClose={() => setSelectedQuoteForDetails(null)}
+            />
+            {requisition && (
+                <RequisitionDetailsDialog 
+                    requisition={requisition} 
+                    isOpen={isDetailsOpen} 
+                    onClose={() => setIsDetailsOpen(false)} 
+                />
+            )}
+            <NotifyVendorDialog
+                isOpen={isNotifyDialogOpen}
+                onClose={() => setIsNotifyDialogOpen(false)}
+                onConfirm={(deadline) => handleNotifyVendor(deadline)}
+            />
+        </div>
+      );
 }
-
-// Dummy export to satisfy the format
-const DummyComponent = () => null;
-export { DummyComponent as QuotationDetailsPage };
-
