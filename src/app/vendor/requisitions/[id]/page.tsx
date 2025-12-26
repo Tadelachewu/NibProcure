@@ -849,6 +849,8 @@ export default function VendorRequisitionPage() {
 
     const isResponseDeadlineExpired = requisition.awardResponseDeadline ? isPast(new Date(requisition.awardResponseDeadline)) : false;
     const isStandby = isPartiallyAwarded ? awardedItems.some(i => i.status === 'Standby') : submittedQuote?.status === 'Standby';
+    
+    const isPaid = purchaseOrders.some(po => po.invoices?.some(inv => inv.status === 'Paid'));
 
 
     const QuoteDisplayCard = ({ quote, itemsToShow, showActions }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean }) => {
@@ -868,7 +870,11 @@ export default function VendorRequisitionPage() {
                     <div>
                         <CardTitle>Your Submitted Quote</CardTitle>
                         <CardDescription>
-                            Status: <Badge variant={quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded' ? 'default' : 'secondary'}>{quote.status.replace(/_/g, ' ')}</Badge>
+                            Status: 
+                            {isPaid 
+                                ? <Badge variant="default" className="bg-emerald-600">You have been paid</Badge>
+                                : <Badge variant={quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded' ? 'default' : 'secondary'}>{quote.status.replace(/_/g, ' ')}</Badge>
+                            }
                         </CardDescription>
                     </div>
                     {canEditQuote && (
@@ -966,13 +972,16 @@ export default function VendorRequisitionPage() {
                      {isAccepted && relevantPOs.length > 0 && (
                         <CardFooter className="p-0 pt-4 flex-col gap-2">
                             {paidInvoices.length > 0 && (
-                                 <Alert variant="default" className="w-full">
-                                    <CheckCircle className="h-4 w-4"/>
+                                 <Alert variant="default" className="w-full border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800">
+                                    <CheckCircle className="h-4 w-4 !text-emerald-600"/>
                                     <AlertTitle>Payment Confirmed</AlertTitle>
                                     <AlertDescription className="space-y-2">
                                         {paidInvoices.map(inv => (
                                             <div key={inv.id} className="flex items-center justify-between">
-                                                <span>Invoice for PO {inv.purchaseOrderId} has been paid. Ref: {inv.paymentReference}</span>
+                                                <div>
+                                                    <p>Invoice for PO {inv.purchaseOrderId} has been paid.</p>
+                                                    <p className="text-xs">Ref: <span className="font-mono">{inv.paymentReference}</span></p>
+                                                </div>
                                                 {inv.paymentEvidenceUrl && (
                                                     <a href={inv.paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
                                                         <Button variant="link" size="sm">View Evidence</Button>
@@ -1234,5 +1243,3 @@ export default function VendorRequisitionPage() {
         </div>
     )
 }
-
-    
