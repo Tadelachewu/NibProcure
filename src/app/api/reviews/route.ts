@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -16,12 +18,15 @@ export async function GET(request: Request) {
     const userRoles = actor.roles as UserRole[];
     const userId = actor.id;
 
+    // Filter out pre-award approval statuses
+    const preAwardStatuses = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval'];
+
     // Build the main query conditions
     const orConditions: any[] = [
-      // The user is the direct current approver for a pending item, EXCLUDING the initial pre-approval.
-      { currentApproverId: userId, status: { startsWith: 'Pending_', not: 'Pending_Approval' } },
+      // The user is the direct current approver for a pending item, EXCLUDING pre-award ones.
+      { currentApproverId: userId, status: { startsWith: 'Pending_', notIn: preAwardStatuses } },
       // The status matches a committee role the user has.
-      { status: { in: userRoles.map(r => `Pending_${r}`).filter(s => s !== 'Pending_Approval') } },
+      { status: { in: userRoles.map(r => `Pending_${r}`).filter(s => !preAwardStatuses.includes(s)) } },
       // The user has already signed a minute for this requisition
       { minutes: { some: { signatures: { some: { signerId: userId } } } } },
        // The requisition is in a state of decline or partial closure, which might still have items needing action.
@@ -33,7 +38,7 @@ export async function GET(request: Request) {
         const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
         const allPossiblePendingStatuses = allSystemRoles
             .map(r => `Pending_${r.name}`)
-            .filter(s => s !== 'Pending_Approval'); // Exclude initial approval status
+            .filter(s => !preAwardStatuses.includes(s)); // Exclude pre-award statuses
         orConditions.push({ status: { in: allPossiblePendingStatuses } });
         // Also show items ready for notification and those declined/partially closed
         orConditions.push({ status: 'PostApproved' });
@@ -149,7 +154,7 @@ export async function GET(request: Request) {
       if (!hasAlreadyActed) {
         if (req.currentApproverId === userId) {
         isActionable = true;
-        } else if (req.status.startsWith('Pending_')) {
+        } else if (req.status.startsWith('Pending_') && !preAwardStatuses.includes(req.status)) {
         const requiredRole = req.status.replace('Pending_', '');
         if (userRoles.includes(requiredRole as UserRole)) {
           // This is a committee-level approval, so it's actionable if the user is part of that committee.
@@ -258,3 +263,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    

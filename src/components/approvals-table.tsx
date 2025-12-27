@@ -53,7 +53,7 @@ export function ApprovalsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, rfqSenderSetting, allUsers } = useAuth();
+  const { user, rfqSenderSetting, allUsers, token } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -82,23 +82,24 @@ export function ApprovalsTable() {
 
 
   const fetchRequisitions = useCallback(async () => {
-    if (!user) return;
+    if (!user || !token) return;
     try {
       setLoading(true);
-      const apiUrl = `/api/requisitions?status=Pending_Approval,PreApproved,Rejected&approverId=${user.id}`;
+      const apiUrl = `/api/requisitions?approverId=${user.id}`;
       
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) {
         throw new Error('Failed to fetch requisitions for approval');
       }
       const data = await response.json();
-      setRequisitions(data.requisitions || []);
+      const pendingReqs = (data.requisitions || []).filter((r: PurchaseRequisition) => r.status.startsWith('Pending_'));
+      setRequisitions(pendingReqs);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, token]);
 
   useEffect(() => {
     if (user) {
@@ -127,14 +128,18 @@ export function ApprovalsTable() {
   const submitAction = async () => {
     if (!selectedRequisition || !actionType || !user) return;
     
-    let rfqSenderId: string | null = null;
+    let newStatus = '';
     if (actionType === 'approve') {
-      if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userIds && rfqSenderSetting.userIds.length > 0) {
-        rfqSenderId = rfqSenderSetting.userIds[0];
-      } else {
-        const firstProcOfficer = allUsers.find(u => (u.roles as any[]).some(r => r.name === 'Procurement_Officer'));
-        rfqSenderId = firstProcOfficer?.id || null;
-      }
+      if(selectedRequisition.status === 'Pending_Approval') newStatus = 'Pending_Director_Approval';
+      else if(selectedRequisition.status === 'Pending_Director_Approval') newStatus = 'Pending_Managerial_Approval';
+      else if(selectedRequisition.status === 'Pending_Managerial_Approval') newStatus = 'PreApproved';
+    } else {
+      newStatus = 'Rejected';
+    }
+    
+    if(!newStatus) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not determine next approval step.' });
+      return;
     }
 
     try {
@@ -143,10 +148,9 @@ export function ApprovalsTable() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             id: selectedRequisition.id, 
-            status: actionType === 'approve' ? 'PreApproved' : 'Rejected', 
+            status: newStatus,
             userId: user.id, 
             comment,
-            rfqSenderId,
         }),
       });
       if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
@@ -191,9 +195,9 @@ export function ApprovalsTable() {
 
   const getStatusVariant = (status: string) => {
     const s = status.replace(/_/g, ' ');
-    if (s === 'PreApproved') return 'success';
-    if (s === 'Pending Approval') return 'warning';
-    if (s === 'Rejected') return 'destructive';
+    if (s.includes('PreApproved')) return 'success';
+    if (s.includes('Pending')) return 'warning';
+    if (s.includes('Rejected')) return 'destructive';
     return 'outline';
   };
 
@@ -207,7 +211,7 @@ export function ApprovalsTable() {
       <CardHeader>
         <CardTitle>Departmental Approvals</CardTitle>
         <CardDescription>
-          Review and act on items from your department.
+          Review and act on items from your department or those assigned to your role in the approval chain.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -243,10 +247,10 @@ export function ApprovalsTable() {
                           <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
                               <Eye className="mr-2 h-4 w-4" /> Details
                           </Button>
-                          <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={req.status !== 'Pending_Approval'}>
+                          <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')}>
                               <Check className="mr-2 h-4 w-4" /> Approve
                           </Button>
-                          <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={req.status !== 'Pending_Approval'}>
+                          <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')}>
                               <X className="mr-2 h-4 w-4" /> Reject
                           </Button>
                       </div>
@@ -260,7 +264,7 @@ export function ApprovalsTable() {
                       <Inbox className="h-16 w-16 text-muted-foreground/50" />
                       <div className="space-y-1">
                         <p className="font-semibold">All caught up!</p>
-                        <p className="text-muted-foreground">No items from your department require your attention.</p>
+                        <p className="text-muted-foreground">No items require your attention at this time.</p>
                       </div>
                     </div>
                   </TableCell>
@@ -357,3 +361,5 @@ export function ApprovalsTable() {
     </>
   );
 }
+
+    
