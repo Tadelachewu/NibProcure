@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
@@ -9,7 +9,6 @@ import { useAuth } from '@/contexts/auth-context';
 import { PurchaseRequisition, UserRole } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, CheckCircle } from 'lucide-react';
-import { useMemo } from 'react';
 
 export function CommitteeActions({
     user,
@@ -22,6 +21,7 @@ export function CommitteeActions({
 }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { toast } = useToast();
+    const { token } = useAuth();
     
     if (!user) {
         return null;
@@ -29,23 +29,23 @@ export function CommitteeActions({
     
     const isCommitteeUser = useMemo(() => (user.roles as UserRole[]).some(r => r.includes('Committee')), [user.roles]);
 
+    const assignment = useMemo(() => user.committeeAssignments?.find(a => a.requisitionId === requisition.id), [user.committeeAssignments, requisition.id]);
+    const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
+
     if (!isCommitteeUser) {
         return null;
     }
     
     const userScoredQuotesCount = requisition.quotations?.filter(q => q.scores?.some(s => s.scorerId === user.id)).length || 0;
     const allQuotesScored = (requisition.quotations?.length || 0) > 0 && userScoredQuotesCount === requisition.quotations?.length;
-    
-    const assignment = useMemo(() => user.committeeAssignments?.find(a => a.requisitionId === requisition.id), [user.committeeAssignments, requisition.id]);
-    
-    const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
 
     const handleSubmitScores = async () => {
+        if (!token) return;
         setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/submit-scores`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ userId: user.id })
             });
 
@@ -62,7 +62,11 @@ export function CommitteeActions({
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            setIsSubmitting(false);
+            // Keep isSubmitting true on success to disable button until re-render
+            const shouldKeepDisabled = await (await fetch(`/api/requisitions/${requisition.id}/submit-scores`, { method: 'HEAD' })).ok;
+            if(!shouldKeepDisabled) {
+              setIsSubmitting(false);
+            }
         }
     };
 
