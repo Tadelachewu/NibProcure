@@ -15,7 +15,7 @@ import { Checkbox } from './ui/checkbox';
 import { navItems } from '@/lib/roles';
 import { UserRole } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Save } from 'lucide-react';
 import { Label } from './ui/label';
 import { useAuth } from '@/contexts/auth-context';
 
@@ -58,12 +58,13 @@ export function RolePermissionsEditor() {
         toast({
             title: 'Permissions Saved',
             description: 'User role permissions have been updated.',
+            variant: 'success',
         });
     } catch(e) {
         toast({
             variant: 'destructive',
             title: 'Error Saving Permissions',
-            description: 'Could not update permissions in the database.'
+            description: e instanceof Error ? e.message : 'Could not update permissions.',
         });
     } finally {
         setIsSaving(false);
@@ -108,7 +109,7 @@ export function RolePermissionsEditor() {
       </CardContent>
       <CardFooter>
         <Button onClick={handleSave} disabled={isSaving}>
-            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save Changes
         </Button>
       </CardFooter>

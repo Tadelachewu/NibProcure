@@ -143,8 +143,8 @@ export function CommitteeSettings() {
         } catch (error) {
             toast({
                 variant: 'destructive',
-                title: 'Error',
-                description: 'Failed to save committee configurations.',
+                title: 'Error Saving Settings',
+                description: error instanceof Error ? error.message : 'Could not save committee configurations.',
             });
         } finally {
             setIsSaving(false);

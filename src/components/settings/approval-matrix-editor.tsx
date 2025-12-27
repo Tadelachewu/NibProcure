@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui/card';
 import { Button } from '../ui/button';
@@ -126,7 +126,7 @@ export function ApprovalMatrixEditor() {
         } catch (e) {
              toast({
                 variant: 'destructive',
-                title: 'Save Failed',
+                title: 'Error Saving Settings',
                 description: e instanceof Error ? e.message : 'Could not save approval matrix.',
             });
         } finally {

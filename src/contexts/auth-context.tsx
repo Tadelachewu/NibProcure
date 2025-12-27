@@ -286,10 +286,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             body: JSON.stringify({ key, value }),
         });
         if (response.status === 403) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'You do not have permission to perform this action.');
+            throw new Error('You do not have permission to perform this action.');
         }
-        if (!response.ok) throw new Error('Failed to save setting');
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to save setting');
+        }
         
         await fetchAllSettings();
     } catch(e) {
