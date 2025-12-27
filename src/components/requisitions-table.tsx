@@ -111,6 +111,7 @@ export function RequisitionsTable() {
       toast({
         title: "Success",
         description: `Requisition ${req.id} submitted for approval.`,
+        variant: 'success',
       });
       fetchRequisitions();
     } catch (error) {
@@ -178,22 +179,12 @@ export function RequisitionsTable() {
 
 
   const getStatusVariant = (status: string) => {
-    switch (status.replace(/_/g, ' ')) {
-      case 'PreApproved':
-        return 'default';
-      case 'PostApproved':
-        return 'default';
-      case 'Pending Approval':
-        return 'secondary';
-      case 'Pending Managerial Approval':
-        return 'secondary';
-      case 'Rejected':
-        return 'destructive';
-      case 'Draft':
-        return 'outline';
-      default:
-        return 'outline';
-    }
+    const s = status.replace(/_/g, ' ').toLowerCase();
+    if (s.includes('approve') || s.includes('complete') || s.includes('created')) return 'success';
+    if (s.includes('pending')) return 'warning';
+    if (s.includes('reject') || s.includes('decline')) return 'destructive';
+    if (s.includes('draft')) return 'outline';
+    return 'secondary';
   };
 
   const getUrgencyVariant = (urgency: Urgency) => {
@@ -202,7 +193,7 @@ export function RequisitionsTable() {
       case 'Critical':
         return 'destructive';
       case 'Medium':
-        return 'secondary';
+        return 'warning';
       default:
         return 'outline';
     }

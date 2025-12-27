@@ -129,8 +129,8 @@ export function ApprovalsTable() {
     
     let rfqSenderId: string | null = null;
     if (actionType === 'approve') {
-      if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userId) {
-        rfqSenderId = rfqSenderSetting.userId;
+      if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userIds && rfqSenderSetting.userIds.length > 0) {
+        rfqSenderId = rfqSenderSetting.userIds[0];
       } else {
         const firstProcOfficer = allUsers.find(u => (u.roles as any[]).some(r => r.name === 'Procurement_Officer'));
         rfqSenderId = firstProcOfficer?.id || null;
@@ -153,6 +153,7 @@ export function ApprovalsTable() {
       toast({
         title: "Success",
         description: `Requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,
+        variant: 'success',
       });
       localStorage.removeItem(`approval-comment-${selectedRequisition.id}`);
       fetchRequisitions();
@@ -182,19 +183,18 @@ export function ApprovalsTable() {
       case 'Critical':
         return 'destructive';
       case 'Medium':
-        return 'secondary';
+        return 'warning';
       default:
         return 'outline';
     }
   }
 
   const getStatusVariant = (status: string) => {
-    switch (status.replace(/_/g, ' ')) {
-      case 'PreApproved': return 'default';
-      case 'Pending Approval': return 'secondary';
-      case 'Rejected': return 'destructive';
-      default: return 'outline';
-    }
+    const s = status.replace(/_/g, ' ');
+    if (s === 'PreApproved') return 'success';
+    if (s === 'Pending Approval') return 'warning';
+    if (s === 'Rejected') return 'destructive';
+    return 'outline';
   };
 
 
