@@ -3,28 +3,31 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { users } from '@/lib/data-store';
-import { EvaluationCriterion } from '@/lib/types';
+import { EvaluationCriterion, ItemScore, User } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
-// This function needs to be defined locally or imported
-function calculateFinalScore(scores: { financialScores: any[], technicalScores: any[] }, criteria: any): number {
-    let totalFinancialScore = 0;
-    let totalTechnicalScore = 0;
+function calculateFinalItemScore(itemScore: any, criteria: any): { finalScore: number, allScores: any[] } {
+    let totalScore = 0;
+    
+    const allScores = [
+        ...(itemScore.financialScores || []).map((s: any) => ({...s, type: 'FINANCIAL'})),
+        ...(itemScore.technicalScores || []).map((s: any) => ({...s, type: 'TECHNICAL'}))
+    ];
 
-    criteria.financialCriteria.forEach((c: EvaluationCriterion) => {
-        const score = scores.financialScores.find(s => s.criterionId === c.id)?.score || 0;
-        totalFinancialScore += score * (c.weight / 100);
+    const allCriteria: {id: string, weight: number, type: 'FINANCIAL' | 'TECHNICAL'}[] = [
+        ...criteria.financialCriteria.map((c: any) => ({...c, type: 'FINANCIAL'})),
+        ...criteria.technicalCriteria.map((c: any) => ({...c, type: 'TECHNICAL'}))
+    ];
+    
+    allScores.forEach((s: any) => {
+        const criterion = allCriteria.find(c => c.id === s.criterionId);
+        if (criterion) {
+            const overallWeight = criterion.type === 'FINANCIAL' ? criteria.financialWeight : criteria.technicalWeight;
+            totalScore += s.score * (criterion.weight / 100) * (overallWeight / 100);
+        }
     });
 
-    criteria.technicalCriteria.forEach((c: EvaluationCriterion) => {
-        const score = scores.technicalScores.find(s => s.criterionId === c.id)?.score || 0;
-        totalTechnicalScore += score * (c.weight / 100);
-    });
-
-    const finalScore = (totalFinancialScore * (criteria.financialWeight / 100)) + 
-                       (totalTechnicalScore * (criteria.technicalWeight / 100));
-
-    return finalScore;
+    return { finalScore: totalScore, allScores };
 }
 
 
@@ -34,13 +37,9 @@ export async function POST(
 ) {
   const quoteId = params.id;
   try {
+    const actor = await getActorFromToken(request);
     const body = await request.json();
-    const { scores, userId } = body;
-
-    const user = users.find(u => u.id === userId);
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    const { scores } = body;
 
     const quoteToUpdate = await prisma.quotation.findUnique({ where: { id: quoteId } });
     if (!quoteToUpdate) {
@@ -55,64 +54,106 @@ export async function POST(
         return NextResponse.json({ error: 'Associated requisition or its evaluation criteria not found.' }, { status: 404 });
     }
     
-    const existingScore = await prisma.committeeScoreSet.findFirst({
-        where: {
-            quotationId: quoteId,
-            scorerId: userId
-        }
-    });
-
-    if (existingScore) {
-        return NextResponse.json({ error: 'You have already scored this quotation.' }, { status: 409 });
-    }
-
-    const finalScore = calculateFinalScore(scores, requisition.evaluationCriteria);
-
-    const createdScoreSet = await prisma.committeeScoreSet.create({
-        data: {
-            quotation: { connect: { id: quoteId } },
-            scorer: { connect: { id: user.id } },
-            scorerName: user.name,
-            committeeComment: scores.committeeComment,
-            finalScore,
-            financialScores: {
-                create: scores.financialScores.map((s: any) => ({
-                    criterionId: s.criterionId,
-                    score: s.score,
-                    comment: s.comment
-                }))
+    const transactionResult = await prisma.$transaction(async (tx) => {
+        const scoreSet = await tx.committeeScoreSet.upsert({
+            where: {
+                quotationId_scorerId: {
+                    quotationId: quoteId,
+                    scorerId: actor.id,
+                }
             },
-            technicalScores: {
-                create: scores.technicalScores.map((s: any) => ({
-                    criterionId: s.criterionId,
-                    score: s.score,
-                    comment: s.comment
-                }))
+            update: {
+                committeeComment: scores.committeeComment,
+            },
+            create: {
+                quotation: { connect: { id: quoteId } },
+                scorer: { connect: { id: actor.id } },
+                committeeComment: scores.committeeComment,
+                finalScore: 0, // Will be updated later
+            }
+        });
+
+        // Clear previous scores for this set to handle resubmission/updates
+        await tx.itemScore.deleteMany({ where: { scoreSetId: scoreSet.id }});
+
+        let totalWeightedScore = 0;
+        const totalItems = scores.itemScores.length;
+
+        for (const itemScoreData of scores.itemScores) {
+            if (!itemScoreData.quoteItemId) {
+              throw new Error(`Critical error: quoteItemId is missing for an item score. This should not happen.`);
+            }
+            const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
+            totalWeightedScore += finalScore;
+            
+            const createdItemScore = await tx.itemScore.create({
+                data: {
+                    scoreSetId: scoreSet.id,
+                    quoteItemId: itemScoreData.quoteItemId,
+                    finalScore: finalScore,
+                }
+            });
+
+            const scoresToCreate = allScores.map((s: any) => {
+                const isFinancial = requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId);
+                return {
+                  itemScoreId: createdItemScore.id,
+                  score: s.score,
+                  comment: s.comment || '', // Ensure comment is never undefined
+                  type: isFinancial ? 'FINANCIAL' : 'TECHNICAL',
+                  financialCriterionId: isFinancial ? s.criterionId : null,
+                  technicalCriterionId: !isFinancial ? s.criterionId : null,
+                };
+            });
+
+            if (scoresToCreate.length > 0) {
+              await tx.score.createMany({
+                data: scoresToCreate
+              });
             }
         }
-    });
+        
+        const finalAverageScoreForThisScorer = totalItems > 0 ? totalWeightedScore / totalItems : 0;
     
-    // Update the average score on the quotation
-    const allScores = await prisma.committeeScoreSet.findMany({ where: { quotationId: quoteId } });
-    const averageScore = allScores.reduce((acc, s) => acc + s.finalScore, 0) / allScores.length;
-    await prisma.quotation.update({ where: { id: quoteId }, data: { finalAverageScore: averageScore } });
+        await tx.committeeScoreSet.update({
+            where: { id: scoreSet.id },
+            data: { finalScore: finalAverageScoreForThisScorer }
+        });
 
+        const allScoreSetsForQuote = await tx.committeeScoreSet.findMany({ where: { quotationId: quoteId } });
+        const overallAverage = allScoreSetsForQuote.length > 0 
+            ? allScoreSetsForQuote.reduce((acc, s) => acc + s.finalScore, 0) / allScoreSetsForQuote.length
+            : 0;
 
-    await prisma.auditLog.create({
-        data: {
-            user: { connect: { id: user.id } },
-            action: 'SCORE_QUOTE',
-            entity: 'Quotation',
-            entityId: quoteId,
-            details: `Submitted scores for quote from ${quoteToUpdate.vendorName}. Final Score: ${finalScore.toFixed(2)}.`,
-        }
+        await tx.quotation.update({ where: { id: quoteId }, data: { finalAverageScore: overallAverage } });
+
+        await tx.auditLog.create({
+            data: {
+                timestamp: new Date(),
+                user: { connect: { id: actor.id } },
+                action: 'SCORE_QUOTE',
+                entity: 'Quotation',
+                entityId: quoteId,
+                details: `Submitted scores for quote from ${quoteToUpdate.vendorName}. Final Score: ${finalAverageScoreForThisScorer.toFixed(2)}.`,
+                transactionId: requisition.id,
+            }
+        });
+
+        return scoreSet;
     });
 
-    return NextResponse.json(createdScoreSet);
+
+    return NextResponse.json(transactionResult);
   } catch (error) {
     console.error('Failed to submit scores:', error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        if ((error as any).code === 'P2002') {
+             return NextResponse.json({ error: 'A unique constraint violation occurred. This might be due to a duplicate score entry.'}, { status: 409 });
+        }
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }

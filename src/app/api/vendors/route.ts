@@ -1,9 +1,10 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export async function GET() {
-  console.log('GET /api/vendors - Fetching all vendors.');
   try {
     const vendors = await prisma.vendor.findMany({
         include: {
@@ -18,14 +19,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  console.log('POST /api/vendors - Creating new vendor.');
   try {
     const body = await request.json();
-    console.log('Request body:', body);
-
     const { name, contactPerson, email, phone, address } = body;
     
-    // In a real app, this user would be created via the registration flow first
     const tempUserId = `TEMP-USER-${Date.now()}`;
 
     const newVendor = await prisma.vendor.create({
@@ -35,7 +32,7 @@ export async function POST(request: Request) {
           email,
           phone,
           address,
-          userId: tempUserId, // This is a temporary placeholder
+          userId: tempUserId,
           kycStatus: 'Pending',
           kycDocuments: {
               create: [
@@ -45,11 +42,9 @@ export async function POST(request: Request) {
           }
         }
     });
-    console.log('Created new vendor:', newVendor);
 
     await prisma.auditLog.create({
         data: {
-            // No user to connect yet, as this is a public action
             timestamp: new Date(),
             action: 'CREATE_VENDOR',
             entity: 'Vendor',
@@ -57,7 +52,6 @@ export async function POST(request: Request) {
             details: `Added new vendor "${newVendor.name}" (pending verification).`,
         }
     });
-    console.log('Added audit log:');
 
     return NextResponse.json(newVendor, { status: 201 });
   } catch (error) {

@@ -1,8 +1,10 @@
+
 'use server';
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { users } from '@/lib/auth-store';
+import { User } from '@/lib/types';
+
 
 export async function POST(
   request: Request,
@@ -18,11 +20,11 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const user = users.find(u => u.id === userId);
+    const user: User | null = await prisma.user.findUnique({where: {id: userId}});
     if (!user) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
-
+    
     return NextResponse.json({ message: "This endpoint is deprecated" }, { status: 410 });
 
   } catch (error) {

@@ -13,6 +13,7 @@ import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Reorder } from 'framer-motion';
 import { produce } from 'immer';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 
 export function ApprovalMatrixEditor() {
     const { approvalThresholds, updateApprovalThresholds, committeeConfig, rolePermissions } = useAuth();
@@ -202,47 +203,61 @@ export function ApprovalMatrixEditor() {
                     Define the approval chains for different procurement value thresholds.
                 </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-                {[...localThresholds].sort((a,b) => a.min - b.min).map(threshold => (
-                    <Card key={threshold.id} className="p-4">
-                        <div className="flex justify-between items-start">
-                             <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <Label>Tier Name</Label>
-                                    <Input value={threshold.name} onChange={(e) => handleThresholdChange(threshold.id, 'name', e.target.value)} />
-                                </div>
-                                 <div>
-                                    <Label>Min Amount (ETB)</Label>
-                                    <Input type="number" value={threshold.min} onChange={(e) => handleThresholdChange(threshold.id, 'min', Number(e.target.value))} />
-                                </div>
-                                 <div>
-                                    <Label>Max Amount (ETB)</Label>
-                                    <Input type="number" placeholder="No limit" value={threshold.max ?? ''} onChange={(e) => handleThresholdChange(threshold.id, 'max', e.target.value === '' ? null : Number(e.target.value))} />
-                                </div>
-                             </div>
-                            <Button variant="ghost" size="icon" onClick={() => removeThreshold(threshold.id)} className="ml-4"><Trash2 className="h-4 w-4"/></Button>
-                        </div>
-                        <div className="mt-4 pl-4 border-l-2">
-                             <h4 className="mb-2 font-medium text-sm">Approval Steps</h4>
-                             <Reorder.Group axis="y" values={threshold.steps} onReorder={(newOrder) => reorderSteps(threshold.id, newOrder)} className="space-y-2">
-                                {threshold.steps.map((step, index) => (
-                                    <Reorder.Item key={step.id || `step-${index}`} value={step} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
-                                        <GripVertical className="cursor-grab text-muted-foreground" />
-                                        <span className="font-mono text-xs">{index + 1}.</span>
-                                        <Select value={step.role} onValueChange={(role: UserRole) => handleStepChange(threshold.id, index, role)}>
-                                            <SelectTrigger><SelectValue/></SelectTrigger>
-                                            <SelectContent>
-                                                {availableRoles.map(r => <SelectItem key={r} value={r}>{r.replace(/_/g, ' ')}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                        <Button variant="ghost" size="icon" onClick={() => removeStep(threshold.id, index)}><Trash2 className="h-4 w-4"/></Button>
-                                    </Reorder.Item>
-                                ))}
-                            </Reorder.Group>
-                            <Button variant="outline" size="sm" onClick={() => addStep(threshold.id)} className="mt-2"><PlusCircle className="mr-2"/>Add Step</Button>
-                        </div>
-                    </Card>
-                ))}
+            <CardContent className="space-y-2">
+                <Accordion type="multiple" className="w-full space-y-2">
+                    {[...localThresholds].sort((a,b) => a.min - b.min).map(threshold => (
+                        <AccordionItem value={threshold.id} key={threshold.id} className="border-none">
+                            <Card className="p-0">
+                                <AccordionTrigger className="p-4 flex justify-between items-center w-full">
+                                    <div className="text-left">
+                                        <h4 className="font-semibold">{threshold.name}</h4>
+                                        <p className="text-sm text-muted-foreground">
+                                            {threshold.min.toLocaleString()} ETB - {threshold.max ? threshold.max.toLocaleString() : 'Infinity'} ETB
+                                        </p>
+                                    </div>
+                                </AccordionTrigger>
+                                <AccordionContent className="p-4 border-t">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div>
+                                                <Label>Tier Name</Label>
+                                                <Input value={threshold.name} onChange={(e) => handleThresholdChange(threshold.id, 'name', e.target.value)} />
+                                            </div>
+                                            <div>
+                                                <Label>Min Amount (ETB)</Label>
+                                                <Input type="number" value={threshold.min} onChange={(e) => handleThresholdChange(threshold.id, 'min', Number(e.target.value))} />
+                                            </div>
+                                            <div>
+                                                <Label>Max Amount (ETB)</Label>
+                                                <Input type="number" placeholder="No limit" value={threshold.max ?? ''} onChange={(e) => handleThresholdChange(threshold.id, 'max', e.target.value === '' ? null : Number(e.target.value))} />
+                                            </div>
+                                        </div>
+                                        <Button variant="ghost" size="icon" onClick={() => removeThreshold(threshold.id)} className="ml-4"><Trash2 className="h-4 w-4"/></Button>
+                                    </div>
+                                    <div className="mt-4 pl-4 border-l-2">
+                                        <h4 className="mb-2 font-medium text-sm">Approval Steps</h4>
+                                        <Reorder.Group axis="y" values={threshold.steps} onReorder={(newOrder) => reorderSteps(threshold.id, newOrder)} className="space-y-2">
+                                            {threshold.steps.map((step, index) => (
+                                                <Reorder.Item key={step.id || `step-${index}`} value={step} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
+                                                    <GripVertical className="cursor-grab text-muted-foreground" />
+                                                    <span className="font-mono text-xs">{index + 1}.</span>
+                                                    <Select value={step.role} onValueChange={(role: UserRole) => handleStepChange(threshold.id, index, role)}>
+                                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                                        <SelectContent>
+                                                            {availableRoles.map(r => <SelectItem key={r} value={r}>{r.replace(/_/g, ' ')}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <Button variant="ghost" size="icon" onClick={() => removeStep(threshold.id, index)}><Trash2 className="h-4 w-4"/></Button>
+                                                </Reorder.Item>
+                                            ))}
+                                        </Reorder.Group>
+                                        <Button variant="outline" size="sm" onClick={() => addStep(threshold.id)} className="mt-2"><PlusCircle className="mr-2"/>Add Step</Button>
+                                    </div>
+                                </AccordionContent>
+                            </Card>
+                        </AccordionItem>
+                    ))}
+                </Accordion>
                  <Button variant="secondary" onClick={addThreshold}><PlusCircle className="mr-2"/>Add New Approval Tier</Button>
             </CardContent>
             <CardFooter>

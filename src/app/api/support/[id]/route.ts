@@ -15,7 +15,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
         const ticketId = params.id;
         const body = await request.json();
-        const { response, status, adminId } = body;
+        const { response, status } = body;
 
         if (!response || !status) {
             return NextResponse.json({ error: 'Response and status are required.' }, { status: 400 });
@@ -31,7 +31,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
             data: {
                 response,
                 status,
-                adminId: adminId,
+                adminId: actor.id,
                 updatedAt: new Date(),
             }
         });
@@ -42,6 +42,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
     } catch (error) {
         console.error("Failed to update ticket:", error);
+        if (error instanceof Error && error.message === 'Unauthorized') {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
         return NextResponse.json({ error: 'Failed to update support ticket' }, { status: 500 });
     }
 }

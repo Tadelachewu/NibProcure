@@ -33,7 +33,6 @@ export async function POST(
       },
     });
 
-    // Correctly handle document updates with a find-then-update-or-create approach
     const updateOrCreateDocument = async (docName: string, docPath: string) => {
         const existingDoc = await prisma.kYC_Document.findFirst({
             where: {

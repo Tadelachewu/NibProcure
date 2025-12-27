@@ -40,8 +40,20 @@ export function SettingsPage() {
             <AccordionItem value="item-1">
                 <AccordionTrigger className="text-lg font-semibold p-4 bg-muted/50 rounded-md">RFQ & Requisition Permissions</AccordionTrigger>
                 <AccordionContent className="pt-4 space-y-6">
-                    <RfqSettings />
-                    <RequisitionCreatorSettings />
+                    <Accordion type="single" collapsible className="w-full space-y-4">
+                        <AccordionItem value="rfq-sender">
+                            <AccordionTrigger>RFQ Sender Configuration</AccordionTrigger>
+                            <AccordionContent className="pt-2">
+                                <RfqSettings />
+                            </AccordionContent>
+                        </AccordionItem>
+                        <AccordionItem value="req-creator">
+                            <AccordionTrigger>Requisition Creator Permissions</AccordionTrigger>
+                            <AccordionContent className="pt-2">
+                                <RequisitionCreatorSettings />
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
                 </AccordionContent>
             </AccordionItem>
             <AccordionItem value="item-2">

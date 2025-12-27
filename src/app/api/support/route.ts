@@ -31,6 +31,9 @@ export async function GET(request: Request) {
         return NextResponse.json(tickets);
     } catch (error) {
         console.error("Failed to fetch tickets:", error);
+        if (error instanceof Error && error.message === 'Unauthorized') {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
         return NextResponse.json({ error: "Failed to fetch tickets" }, { status: 500 });
     }
 }
@@ -64,6 +67,9 @@ export async function POST(request: Request) {
 
     } catch (error) {
         console.error("Failed to create ticket:", error);
+        if (error instanceof Error && error.message === 'Unauthorized') {
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
         return NextResponse.json({ error: 'Failed to create support ticket' }, { status: 500 });
     }
 }

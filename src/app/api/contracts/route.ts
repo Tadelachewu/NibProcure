@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ContractStatus } from '@/lib/types';
@@ -92,6 +94,9 @@ export async function POST(request: Request) {
         return NextResponse.json(newContract, { status: 201 });
     } catch (error) {
         console.error("Failed to create contract:", error);
+        if (error instanceof Error && error.message === 'Unauthorized') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
         if (error instanceof Error) {
             return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
         }
