@@ -38,6 +38,7 @@ export function RequisitionCreatorSettings() {
             toast({
                 title: 'Settings Saved',
                 description: 'Requisition creator permissions have been updated.',
+                variant: 'success',
             });
         } catch (error) {
              toast({

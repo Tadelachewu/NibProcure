@@ -35,6 +35,7 @@ export function RfqSettings() {
             toast({
                 title: 'Settings Saved',
                 description: 'RFQ sender configuration has been updated.',
+                variant: 'success',
             });
         } catch (error) {
              toast({
@@ -79,7 +80,7 @@ export function RfqSettings() {
                 >
                     <div className="flex items-center space-x-2">
                         <RadioGroupItem value="all" id="rfq-all" />
-                        <Label htmlFor="rfq-all">All Procurement Roles</Label>
+                        <Label htmlFor="rfq-all">All Procurement Officers</Label>
                     </div>
                     <p className="pl-6 text-sm text-muted-foreground">
                         Any user with the "Procurement Officer" role can send RFQs.

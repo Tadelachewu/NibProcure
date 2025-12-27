@@ -121,6 +121,7 @@ export function ApprovalMatrixEditor() {
             toast({
                 title: 'Settings Saved',
                 description: 'Approval matrix has been updated.',
+                variant: 'success',
             });
         } catch (e) {
              toast({

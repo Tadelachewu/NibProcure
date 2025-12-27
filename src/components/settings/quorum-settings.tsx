@@ -53,6 +53,7 @@ export function QuorumSettings() {
             toast({
                 title: 'Settings Saved',
                 description: 'Quorum configurations have been updated.',
+                variant: 'success',
             });
         } catch (error) {
             toast({

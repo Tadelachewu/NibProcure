@@ -138,6 +138,7 @@ export function CommitteeSettings() {
             toast({
                 title: 'Settings Saved',
                 description: 'Committee configurations have been updated.',
+                variant: 'success',
             });
         } catch (error) {
             toast({
@@ -192,6 +193,7 @@ export function CommitteeSettings() {
             toast({
                 title: `User Role Updated`,
                 description: `${userToUpdate.name} was ${action === 'add' ? 'added to' : 'removed from'} ${committeeRoleName.replace(/_/g, ' ')}.`,
+                variant: 'success',
             });
             await fetchAllUsers(); // Refresh the user list
         } catch (e) {
@@ -228,7 +230,7 @@ export function CommitteeSettings() {
             const newConfig = { ...localConfig, [committeeKey]: { min: 0, max: 0 } };
             await updateCommitteeConfig(newConfig);
 
-            toast({title: 'Committee Role Created', description: `Successfully created the ${committeeKey} committee. Please configure its financial range.`});
+            toast({title: 'Committee Role Created', description: `Successfully created the ${committeeKey} committee. Please configure its financial range.`, variant: 'success'});
             setNewCommitteeName('');
             setAddCommitteeOpen(false);
             await fetchAllSettings(); // Re-fetch settings to update roles across the app
