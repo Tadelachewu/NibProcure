@@ -38,6 +38,9 @@ export async function POST(request: Request) {
         return NextResponse.json(updatedSetting, { status: 200 });
 
     } catch (error) {
+        if (error instanceof Error && error.message === 'Unauthorized') {
+             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+        }
         console.error('Failed to save setting:', error);
         if (error instanceof Error) {
             return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });

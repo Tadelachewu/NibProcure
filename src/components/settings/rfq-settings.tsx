@@ -40,8 +40,8 @@ export function RfqSettings() {
         } catch (error) {
              toast({
                 variant: 'destructive',
-                title: 'Error',
-                description: 'Failed to save settings to the database.',
+                title: error instanceof Error && error.message.includes('permission') ? 'Permission Denied' : 'Error',
+                description: error instanceof Error ? error.message : 'Failed to save settings to the database.',
             });
         }
         finally {

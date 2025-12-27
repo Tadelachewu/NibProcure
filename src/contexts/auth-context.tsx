@@ -275,23 +275,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updateSetting = async (key: string, value: any) => {
-     if (!token) throw new Error("Authentication token not found.");
-     try {
+    if (!token) throw new Error("Authentication token not found.");
+    try {
         const response = await fetch('/api/settings', {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({ key, value }),
         });
+        if (response.status === 403) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'You do not have permission to perform this action.');
+        }
         if (!response.ok) throw new Error('Failed to save setting');
+        
         await fetchAllSettings();
     } catch(e) {
-        console.error(e);
+        console.error("Error in updateSetting:", e);
         throw e;
     }
-  }
+  };
 
   const updateRolePermissions = async (newPermissions: Record<UserRole, string[]>) => {
     await updateSetting('rolePermissions', newPermissions);
@@ -330,6 +335,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               },
               body: JSON.stringify(newThresholds)
           });
+          if (response.status === 403) {
+            throw new Error('You do not have permission to perform this action.');
+          }
           if (!response.ok) throw new Error("Failed to save approval matrix");
           const data = await response.json();
           setApprovalThresholds(data);

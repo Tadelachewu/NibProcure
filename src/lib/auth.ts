@@ -1,4 +1,6 @@
 
+'use server';
+
 import 'dotenv/config';
 import util from 'util';
 import type { User, UserRole } from './types';
@@ -59,12 +61,12 @@ export async function getActorFromToken(request: Request): Promise<User> {
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.split(' ')[1];
     if (!token) {
-      throw new Error('Unauthorized: No token provided');
+      throw new Error('Unauthorized');
     };
 
     const decoded = await verifyJwt(token);
     if (!decoded || !decoded.id) {
-        throw new Error('Unauthorized: Invalid token');
+        throw new Error('Unauthorized');
     }
 
     const user = await prisma.user.findUnique({
@@ -73,7 +75,7 @@ export async function getActorFromToken(request: Request): Promise<User> {
     });
     
     if (!user) {
-        throw new Error('Unauthorized: User not found');
+        throw new Error('Unauthorized');
     }
 
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
@@ -83,8 +85,6 @@ export async function getActorFromToken(request: Request): Promise<User> {
         const setting = rfqSenderSetting.value as RfqSenderSetting;
         if (setting.type === 'specific' && setting.userIds?.includes(user.id)) {
             effectiveRoles.add('Procurement_Officer');
-        } else if (setting.type === 'all' && user.roles.some(r => r.name === 'Procurement_Officer')) {
-            // This case is already handled by the initial roles, but it's good for clarity
         }
     }
 
