@@ -115,14 +115,22 @@ export function ApprovalMatrixEditor() {
             }
         }
         // --- END VALIDATION LOGIC ---
-
-        await updateApprovalThresholds(localThresholds);
-        localStorage.removeItem(storageKey);
-        toast({
-            title: 'Settings Saved',
-            description: 'Approval matrix has been updated.',
-        });
-        setIsSaving(false);
+        try {
+            await updateApprovalThresholds(localThresholds);
+            localStorage.removeItem(storageKey);
+            toast({
+                title: 'Settings Saved',
+                description: 'Approval matrix has been updated.',
+            });
+        } catch (e) {
+             toast({
+                variant: 'destructive',
+                title: 'Save Failed',
+                description: e instanceof Error ? e.message : 'Could not save approval matrix.',
+            });
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleThresholdChange = (id: string, field: 'min' | 'max' | 'name', value: string | number | null) => {

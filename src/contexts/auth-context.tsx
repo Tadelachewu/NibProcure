@@ -275,10 +275,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updateSetting = async (key: string, value: any) => {
+     if (!token) throw new Error("Authentication token not found.");
      try {
         const response = await fetch('/api/settings', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({ key, value }),
         });
         if (!response.ok) throw new Error('Failed to save setting');
@@ -316,10 +320,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const updateApprovalThresholds = async (newThresholds: ApprovalThreshold[]) => {
+      if (!token) throw new Error("Authentication token not found.");
       try {
           const response = await fetch('/api/settings/approval-matrix', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
               body: JSON.stringify(newThresholds)
           });
           if (!response.ok) throw new Error("Failed to save approval matrix");
