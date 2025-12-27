@@ -1,6 +1,4 @@
 
-'use server';
-
 import 'dotenv/config';
 import util from 'util';
 import type { User, UserRole } from './types';
