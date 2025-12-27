@@ -234,6 +234,8 @@ export function ApprovalsTable() {
               {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isCurrentUserApprover = req.currentApproverId === user?.id;
+                  const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
+                  const isRejectionComment = lastCommentLog?.action.includes('REJECT');
                   return (
                     <TableRow key={req.id}>
                         <TableCell className="text-muted-foreground">{index + 1}</TableCell>
@@ -253,7 +255,9 @@ export function ApprovalsTable() {
                                       <MessageSquare className="h-4 w-4 text-muted-foreground cursor-help" />
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      <p className="max-w-xs">Rejection Reason: {req.approverComment}</p>
+                                      <p className="max-w-xs">
+                                        <strong>{isRejectionComment ? 'Rejection Reason:' : 'Approval Comment:'}</strong> {req.approverComment}
+                                      </p>
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
@@ -349,12 +353,12 @@ export function ApprovalsTable() {
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="grid gap-2">
-              <Label htmlFor="comment">Comment</Label>
+              <Label htmlFor="comment">Justification / Remarks</Label>
               <Textarea 
                 id="comment" 
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="Type your comment here..."
+                placeholder="Type your justification here..."
               />
             </div>
           </div>

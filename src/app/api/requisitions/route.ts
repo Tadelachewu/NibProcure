@@ -390,23 +390,20 @@ export async function PATCH(
         dataToUpdate.approverComment = comment;
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Departmental approval for requisition ${id} granted by ${user.name}. Sent to Director.`;
-    }
-     else if (newStatus === 'Pending_Managerial_Approval' && requisition.status === 'Pending_Director_Approval') {
+    } else if (newStatus === 'Pending_Managerial_Approval' && requisition.status === 'Pending_Director_Approval') {
         const manager = await prisma.user.findFirst({ where: { roles: { some: { name: 'Manager_Procurement_Division' } } } });
         dataToUpdate.status = 'Pending_Managerial_Approval';
         dataToUpdate.currentApprover = manager ? { connect: { id: manager.id } } : { disconnect: true };
         dataToUpdate.approverComment = comment;
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Director approval for requisition ${id} granted by ${user.name}. Sent to Manager.`;
-    }
-     else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Managerial_Approval') {
+    } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Managerial_Approval') {
         dataToUpdate.status = 'PreApproved';
         dataToUpdate.currentApprover = { disconnect: true };
         dataToUpdate.approverComment = comment;
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Managerial approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;
-    }
-    else if (newStatus === 'Rejected') {
+    } else if (newStatus === 'Rejected') {
         if (requisition.status === 'Pending_Managerial_Approval') {
             const director = await prisma.user.findFirst({ where: { roles: { some: { name: 'Director_Supply_Chain_and_Property_Management' } } } });
             dataToUpdate.status = 'Pending_Director_Approval';
