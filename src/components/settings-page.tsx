@@ -2,13 +2,17 @@
 'use client';
 
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from './ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { RolePermissionsEditor } from './role-permissions-editor';
 import { RoleManagementEditor } from './role-management-editor';
 import { DepartmentManagementEditor } from './department-management-editor';
@@ -32,12 +36,27 @@ export function SettingsPage() {
         <TabsTrigger value="departments">Departments</TabsTrigger>
       </TabsList>
       <TabsContent value="general">
-        <div className="space-y-6">
-            <RfqSettings />
-            <RequisitionCreatorSettings />
-            <QuorumSettings />
-            <ApprovalMatrixEditor />
-        </div>
+        <Accordion type="single" collapsible className="w-full space-y-4">
+            <AccordionItem value="item-1">
+                <AccordionTrigger className="text-lg font-semibold p-4 bg-muted/50 rounded-md">RFQ & Requisition Permissions</AccordionTrigger>
+                <AccordionContent className="pt-4 space-y-6">
+                    <RfqSettings />
+                    <RequisitionCreatorSettings />
+                </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="item-2">
+                <AccordionTrigger className="text-lg font-semibold p-4 bg-muted/50 rounded-md">Quorum Settings</AccordionTrigger>
+                <AccordionContent className="pt-4">
+                    <QuorumSettings />
+                </AccordionContent>
+            </AccordionItem>
+            <AccordionItem value="item-3">
+                <AccordionTrigger className="text-lg font-semibold p-4 bg-muted/50 rounded-md">Approval Matrix</AccordionTrigger>
+                <AccordionContent className="pt-4">
+                    <ApprovalMatrixEditor />
+                </AccordionContent>
+            </AccordionItem>
+        </Accordion>
       </TabsContent>
       <TabsContent value="committees">
         <CommitteeSettings />
