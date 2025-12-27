@@ -1,4 +1,5 @@
 
+      
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -68,7 +69,7 @@ export function DepartmentManagementEditor() {
   useEffect(() => {
     fetchAllUsers();
     fetchAllDepartments();
-  }, []);
+  }, [fetchAllUsers, fetchAllDepartments]);
 
   useEffect(() => {
     if (isDialogOpen) {
@@ -110,29 +111,35 @@ export function DepartmentManagementEditor() {
       name: departmentName,
       description: departmentDesc,
       headId: departmentHeadId,
-      userId: actor.id,
     };
     
     try {
         const response = await fetch(url, {
             method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
             body: JSON.stringify(body),
         });
         if (!response.ok) {
+            if(response.status === 403) throw new Error("You do not have permission to perform this action.");
             const errorData = await response.json();
             throw new Error(errorData.error || `Failed to ${isEditing ? 'update' : 'create'} department.`);
         }
         toast({
             title: `Department ${isEditing ? 'Updated' : 'Added'}`,
             description: `The department "${departmentName}" has been successfully ${isEditing ? 'updated' : 'added'}.`,
+            variant: 'success'
         });
         localStorage.removeItem(storageKey);
         setDialogOpen(false);
         await fetchAllUsers(); 
         await fetchAllDepartments();
     } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
+        const isPermissionError = error instanceof Error && error.message.includes('permission');
+        toast({ 
+            variant: 'destructive', 
+            title: isPermissionError ? 'Permission Denied' : 'Error', 
+            description: error instanceof Error ? error.message : 'An unknown error occurred.'
+        });
     } finally {
         setIsLoading(false);
     }
@@ -145,20 +152,27 @@ export function DepartmentManagementEditor() {
     try {
          const response = await fetch(`/api/departments`, {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: departmentId, userId: actor.id }),
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+            body: JSON.stringify({ id: departmentId }),
         });
          if (!response.ok) {
+            if(response.status === 403) throw new Error("You do not have permission to perform this action.");
             const errorData = await response.json();
             throw new Error(errorData.error || 'Failed to delete department.');
         }
         toast({
             title: 'Department Deleted',
             description: `The department has been deleted.`,
+            variant: 'success'
         });
         await fetchAllDepartments();
     } catch (error) {
-         toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
+         const isPermissionError = error instanceof Error && error.message.includes('permission');
+         toast({ 
+            variant: 'destructive', 
+            title: isPermissionError ? 'Permission Denied' : 'Error', 
+            description: error instanceof Error ? error.message : 'An unknown error occurred.'
+        });
     } finally {
         setIsLoading(false);
     }
@@ -315,3 +329,5 @@ export function DepartmentManagementEditor() {
     </Card>
   );
 }
+
+    

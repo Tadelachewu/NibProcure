@@ -1,4 +1,5 @@
 
+      
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -125,11 +126,12 @@ export function ApprovalMatrixEditor() {
                 variant: 'success',
             });
         } catch (e) {
-            const isPermissionError = e instanceof Error && e.message.includes('permission');
+            const errorMessage = e instanceof Error ? e.message : 'Could not save approval matrix.';
+            const isPermissionError = errorMessage.includes('permission');
             toast({
                variant: 'destructive',
-               title: isPermissionError ? 'Permission Denied' : 'Error',
-               description: e instanceof Error ? e.message : 'Could not save approval matrix.',
+               title: isPermissionError ? 'Permission Denied' : 'Save Error',
+               description: errorMessage,
            });
         } finally {
             setIsSaving(false);
@@ -269,3 +271,5 @@ export function ApprovalMatrixEditor() {
         </Card>
     );
 }
+
+    

@@ -1,4 +1,5 @@
 
+      
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useMemo, useCallback } from 'react';
@@ -30,7 +31,7 @@ export interface ApprovalThreshold {
 interface CommitteeConfig {
     [key: string]: {
         min: number;
-        max: number;
+        max: number | null;
     }
 }
 
@@ -60,7 +61,7 @@ interface AuthContextType {
   updateRolePermissions: (newPermissions: Record<UserRole, string[]>) => Promise<void>;
   updateRfqSenderSetting: (newSetting: RfqSenderSetting) => Promise<void>;
   updateUserRole: (userId: string, newRole: UserRole) => void;
-  updateApprovalThresholds: (newThresholds: ApprovalThreshold[]) => void;
+  updateApprovalThresholds: (newThresholds: ApprovalThreshold[]) => Promise<void>;
   updateCommitteeConfig: (newConfig: any) => Promise<void>;
   updateSetting: (key: string, value: any) => Promise<void>;
   fetchAllUsers: () => Promise<User[]>;
@@ -295,6 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         await fetchAllSettings();
     } catch(e) {
+        console.error("Error in updateSetting:", e);
         throw e;
     }
   };
@@ -314,7 +316,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
         const response = await fetch('/api/users', {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ ...userToUpdate, role: newRole, actorUserId: user?.id })
         });
         if (!response.ok) throw new Error("Failed to update role");
@@ -395,3 +397,5 @@ export function useAuth() {
   }
   return context;
 }
+
+    

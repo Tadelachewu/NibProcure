@@ -1,4 +1,5 @@
 
+      
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -147,16 +148,17 @@ export function UserManagementEditor() {
       }
 
       const body = isEditing 
-        ? { ...apiValues, id: userToEdit.id, actorUserId: actor.id }
-        : { ...apiValues, actorUserId: actor.id };
+        ? { ...apiValues, id: userToEdit.id }
+        : { ...apiValues };
         
       const response = await fetch('/api/users', {
         method: isEditing ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
         body: JSON.stringify(body),
       });
 
       if (!response.ok) {
+        if(response.status === 403) throw new Error("You do not have permission to perform this action.");
         const errorData = await response.json();
         throw new Error(errorData.error || `Failed to ${isEditing ? 'update' : 'create'} user.`);
       }
@@ -164,6 +166,7 @@ export function UserManagementEditor() {
       toast({
         title: `User ${isEditing ? 'Updated' : 'Created'}`,
         description: `The user has been successfully ${isEditing ? 'updated' : 'created'}.`,
+        variant: 'success'
       });
       localStorage.removeItem(storageKey);
       setDialogOpen(false);
@@ -171,7 +174,12 @@ export function UserManagementEditor() {
       form.reset({ name: '', email: '', roles: [], departmentId: '', password: '' });
       fetchData();
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
+        const isPermissionError = error instanceof Error && error.message.includes('permission');
+        toast({ 
+            variant: 'destructive', 
+            title: isPermissionError ? 'Permission Denied' : 'Error', 
+            description: error instanceof Error ? error.message : 'An unknown error occurred.'
+        });
     } finally {
       setIsLoading(false);
     }
@@ -183,20 +191,27 @@ export function UserManagementEditor() {
     try {
         const response = await fetch(`/api/users`, {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: userId, actorUserId: actor.id }),
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+            body: JSON.stringify({ id: userId }),
         });
          if (!response.ok) {
+            if(response.status === 403) throw new Error("You do not have permission to perform this action.");
             const errorData = await response.json();
             throw new Error(errorData.error || 'Failed to delete user.');
         }
         toast({
             title: 'User Deleted',
             description: `The user has been deleted.`,
+            variant: 'success'
         });
         fetchData();
     } catch (error) {
-         toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
+         const isPermissionError = error instanceof Error && error.message.includes('permission');
+         toast({ 
+            variant: 'destructive', 
+            title: isPermissionError ? 'Permission Denied' : 'Error', 
+            description: error instanceof Error ? error.message : 'An unknown error occurred.'
+        });
     } finally {
         setIsLoading(false);
     }
@@ -408,3 +423,5 @@ export function UserManagementEditor() {
     </Card>
   );
 }
+
+    
