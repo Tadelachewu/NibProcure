@@ -30,6 +30,7 @@ import {
   Inbox,
   Loader2,
   X,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -45,6 +46,7 @@ import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { RequisitionDetailsDialog } from './requisition-details-dialog';
 import { Badge } from './ui/badge';
+import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 
 
 const PAGE_SIZE = 10;
@@ -53,7 +55,7 @@ export function ApprovalsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, rfqSenderSetting, allUsers, token } = useAuth();
+  const { user, token } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -85,15 +87,15 @@ export function ApprovalsTable() {
     if (!user || !token) return;
     try {
       setLoading(true);
-      const apiUrl = `/api/requisitions?approverId=${user.id}`;
+      const statusesToFetch = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval'];
+      const apiUrl = `/api/requisitions?status=${statusesToFetch.join(',')}`;
       
       const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) {
         throw new Error('Failed to fetch requisitions for approval');
       }
       const data = await response.json();
-      const pendingReqs = (data.requisitions || []).filter((r: PurchaseRequisition) => r.status.startsWith('Pending_'));
-      setRequisitions(pendingReqs);
+      setRequisitions(data.requisitions || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
     } finally {
@@ -145,7 +147,7 @@ export function ApprovalsTable() {
     try {
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ 
             id: selectedRequisition.id, 
             status: newStatus,
@@ -230,33 +232,50 @@ export function ApprovalsTable() {
             </TableHeader>
             <TableBody>
               {paginatedRequisitions.length > 0 ? (
-                paginatedRequisitions.map((req, index) => (
-                  <TableRow key={req.id}>
-                      <TableCell className="text-muted-foreground">{index + 1}</TableCell>
-                      <TableCell className="font-medium text-primary">{req.id}</TableCell>
-                      <TableCell>{req.title}</TableCell>
-                      <TableCell>{req.requesterName}</TableCell>
-                       <TableCell>
-                        <Badge variant={getUrgencyVariant(req.urgency)}>{req.urgency}</Badge>
-                      </TableCell>
-                       <TableCell>
-                        <Badge variant={getStatusVariant(req.status)}>{req.status.replace(/_/g, ' ')}</Badge>
-                      </TableCell>
-                      <TableCell>
-                      <div className="flex gap-2">
-                          <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
-                              <Eye className="mr-2 h-4 w-4" /> Details
-                          </Button>
-                          <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')}>
-                              <Check className="mr-2 h-4 w-4" /> Approve
-                          </Button>
-                          <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')}>
-                              <X className="mr-2 h-4 w-4" /> Reject
-                          </Button>
-                      </div>
-                      </TableCell>
-                  </TableRow>
-                ))
+                paginatedRequisitions.map((req, index) => {
+                  const isCurrentUserApprover = req.currentApproverId === user?.id;
+                  return (
+                    <TableRow key={req.id}>
+                        <TableCell className="text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell className="font-medium text-primary">{req.id}</TableCell>
+                        <TableCell>{req.title}</TableCell>
+                        <TableCell>{req.requesterName}</TableCell>
+                        <TableCell>
+                          <Badge variant={getUrgencyVariant(req.urgency)}>{req.urgency}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                              <Badge variant={getStatusVariant(req.status)}>{req.status.replace(/_/g, ' ')}</Badge>
+                              {req.approverComment && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <MessageSquare className="h-4 w-4 text-muted-foreground cursor-help" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="max-w-xs">Rejection Reason: {req.approverComment}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
+                                <Eye className="mr-2 h-4 w-4" /> Details
+                            </Button>
+                            <Button variant="default" size="sm" onClick={() => handleAction(req, 'approve')} disabled={!isCurrentUserApprover}>
+                                <Check className="mr-2 h-4 w-4" /> Approve
+                            </Button>
+                            <Button variant="destructive" size="sm" onClick={() => handleAction(req, 'reject')} disabled={!isCurrentUserApprover}>
+                                <X className="mr-2 h-4 w-4" /> Reject
+                            </Button>
+                        </div>
+                        </TableCell>
+                    </TableRow>
+                  )
+                })
               ) : (
                 <TableRow>
                   <TableCell colSpan={7} className="h-48 text-center">
@@ -361,5 +380,3 @@ export function ApprovalsTable() {
     </>
   );
 }
-
-    

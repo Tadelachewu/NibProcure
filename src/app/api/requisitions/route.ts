@@ -154,7 +154,7 @@ export async function GET(request: Request) {
         const statuses = statusParam.split(',').map(s => s.trim().replace(/ /g, '_'));
         whereClause.status = { in: statuses };
       }
-      if (approverId) {
+      if (approverId && !statusParam) {
         whereClause.currentApproverId = approverId;
       }
       
@@ -365,7 +365,7 @@ export async function PATCH(
                 // If requester is their own head, skip to Director
                 const director = await prisma.user.findFirst({ where: { roles: { some: { name: 'Director_Supply_Chain_and_Property_Management' } } } });
                 dataToUpdate.status = 'Pending_Director_Approval';
-                dataToUpdate.currentApprover = director ? { connect: { id: director.id } } : undefined;
+                dataToUpdate.currentApprover = director ? { connect: { id: director.id } } : { disconnect: true };
                 auditAction = 'SUBMIT_AND_AUTO_APPROVE';
                 auditDetails = `Requisition ${id} ("${body.title}") submitted by dept. head, auto-approved and sent to Director.`;
             } else if (department?.headId) {
@@ -376,7 +376,7 @@ export async function PATCH(
             } else {
                  const director = await prisma.user.findFirst({ where: { roles: { some: { name: 'Director_Supply_Chain_and_Property_Management' } } } });
                  dataToUpdate.status = 'Pending_Director_Approval';
-                 dataToUpdate.currentApprover = director ? { connect: { id: director.id } } : undefined;
+                 dataToUpdate.currentApprover = director ? { connect: { id: director.id } } : { disconnect: true };
                  auditAction = 'SUBMIT_FOR_APPROVAL';
                  auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted (no dept head, sent to Director).`;
             }
@@ -714,5 +714,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
