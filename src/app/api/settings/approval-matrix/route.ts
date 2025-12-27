@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ApprovalThreshold } from '@/lib/types';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function GET() {
   try {
@@ -41,6 +42,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const actor = await getActorFromToken(request);
+    if (!actor || !(actor.roles as string[]).includes('Admin')) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
     const newThresholds: ApprovalThreshold[] = await request.json();
 
     // Use a transaction to ensure atomicity
@@ -99,5 +105,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
