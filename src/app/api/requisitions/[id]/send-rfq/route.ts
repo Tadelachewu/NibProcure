@@ -1,11 +1,11 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { getActorFromToken } from '@/lib/auth';
-import 'dotenv/config';
-
 
 export async function POST(
   request: Request,
@@ -13,6 +13,9 @@ export async function POST(
 ) {
   try {
     const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
 
     const { id } = params;
     const body = await request.json();
@@ -23,14 +26,11 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
     
-    // Correct Authorization Logic
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     let isAuthorized = false;
     const userRoles = actor.roles as UserRole[];
 
-    if (userRoles.includes('Admin')) {
-        isAuthorized = true;
-    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
         if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
             isAuthorized = true;
@@ -128,9 +128,6 @@ export async function POST(
     return NextResponse.json(updatedRequisition);
   } catch (error) {
     console.error('Failed to send RFQ:', error);
-    if (error instanceof Error && error.message.includes('Unauthorized')) {
-        return NextResponse.json({ error: error.message }, { status: 401 });
-    }
     if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }

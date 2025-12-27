@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { UserRole } from '@/lib/types';
+import { User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format } from 'date-fns';
 import { getActorFromToken } from '@/lib/auth';
@@ -27,9 +27,7 @@ export async function POST(
     let isAuthorized = false;
     const userRoles = actor.roles as UserRole[];
 
-    if (userRoles.includes('Admin')) {
-        isAuthorized = true;
-    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
         if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
             isAuthorized = true;

@@ -1,5 +1,6 @@
 
-import 'dotenv/config';
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User, UserRole } from '@/lib/types';
@@ -12,6 +13,9 @@ export async function POST(
 ) {
   try {
     const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
 
     const { id } = params;
     const body = await request.json();
@@ -34,7 +38,8 @@ export async function POST(
     let isAuthorized = false;
     const userRoles = actor.roles as UserRole[];
 
-    if (userRoles.includes('Admin') || userRoles.includes('Committee')) {
+    // No longer giving Admin a default pass. They must be configured.
+    if (userRoles.includes('Committee')) {
         isAuthorized = true;
     } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
         const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
@@ -87,11 +92,11 @@ export async function POST(
         }
         
         // Members to be added
-        const membersToAdd = Array.from(newAllMemberIds).filter(memberId => !existingMemberIds.has(memberId as string));
+        const membersToAdd = Array.from(newAllMemberIds).filter(memberId => !existingMemberIds.has(memberId));
         if (membersToAdd.length > 0) {
             await tx.committeeAssignment.createMany({
                 data: membersToAdd.map(memberId => ({
-                    userId: memberId as string,
+                    userId: memberId,
                     requisitionId: id,
                     scoresSubmitted: false,
                 })),
@@ -120,11 +125,8 @@ export async function POST(
 
   } catch (error) {
     console.error('Failed to assign committee:', error);
-     if (error instanceof Error && error.message.includes('Unauthorized')) {
-        return NextResponse.json({ error: error.message }, { status: 401 });
-    }
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }

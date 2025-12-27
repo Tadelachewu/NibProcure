@@ -1,5 +1,6 @@
 
-import 'dotenv/config';
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PerItemAwardDetail, PerItemAwardStatus, User, UserRole } from '@/lib/types';
@@ -11,23 +12,23 @@ export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-    try {
-        const actor = await getActorFromToken(request);
+    const actor = await getActorFromToken(request);
+    if (!actor) {
+        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
 
-        const requisitionId = params.id;
-        console.log(`[NOTIFY-VENDOR] Received request for requisition: ${requisitionId}`);
+    const requisitionId = params.id;
+    console.log(`[NOTIFY-VENDOR] Received request for requisition: ${requisitionId}`);
+    try {
         const body = await request.json();
         const { awardResponseDeadline } = body;
         console.log(`[NOTIFY-VENDOR] Action by User ID: ${actor.id}, Award Response Deadline: ${awardResponseDeadline}`);
         
-        // Correct Authorization Logic
         const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
         let isAuthorized = false;
         const userRoles = actor.roles as UserRole[];
 
-        if (userRoles.includes('Admin')) {
-            isAuthorized = true;
-        } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
+        if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
             const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
             if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
                 isAuthorized = true;
@@ -203,9 +204,6 @@ export async function POST(
 
   } catch (error) {
     console.error("[NOTIFY-VENDOR] Failed to notify vendor:", error);
-    if (error instanceof Error && error.message.includes('Unauthorized')) {
-        return NextResponse.json({ error: error.message }, { status: 401 });
-    }
     if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
