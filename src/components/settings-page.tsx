@@ -36,7 +36,7 @@ export function SettingsPage() {
         <TabsTrigger value="departments">Departments</TabsTrigger>
       </TabsList>
       <TabsContent value="general">
-        <Accordion type="single" collapsible className="w-full space-y-4">
+        <Accordion type="single" collapsible className="w-full space-y-4" defaultValue="item-1">
             <AccordionItem value="item-1">
                 <AccordionTrigger className="text-lg font-semibold p-4 bg-muted/50 rounded-md">RFQ & Requisition Permissions</AccordionTrigger>
                 <AccordionContent className="pt-4 space-y-6">
