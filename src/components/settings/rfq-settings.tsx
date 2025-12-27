@@ -82,7 +82,7 @@ export function RfqSettings() {
                         <Label htmlFor="rfq-all">All Procurement Roles</Label>
                     </div>
                     <p className="pl-6 text-sm text-muted-foreground">
-                        Any user with the "Procurement Officer" or "Admin" role can send RFQs.
+                        Any user with the "Procurement Officer" role can send RFQs.
                     </p>
 
                     <div className="flex items-center space-x-2">
