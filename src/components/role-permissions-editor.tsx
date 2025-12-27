@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save } from 'lucide-react';
 import { Label } from './ui/label';
 import { useAuth } from '@/contexts/auth-context';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 
 type PermissionsState = Record<UserRole, string[]>;
 
@@ -34,7 +35,7 @@ export function RolePermissionsEditor() {
   }, [rolePermissions]);
 
   const editableRoles = Object.keys(permissions).filter(
-    role => role !== 'Vendor' && role !== 'Admin'
+    role => role !== 'Vendor' && role !== 'Admin' && role !== 'Combined'
   ) as UserRole[];
 
   const handlePermissionChange = (
@@ -81,32 +82,36 @@ export function RolePermissionsEditor() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {editableRoles.map(role => (
-          <Card key={role}>
-            <CardHeader>
-              <CardTitle className="text-lg">{role.replace(/_/g, ' ')}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {navItems.map(item => (
-                <div key={item.path} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`${role}-${item.path}`}
-                    checked={permissions[role]?.includes(item.path)}
-                    onCheckedChange={checked =>
-                      handlePermissionChange(role, item.path, !!checked)
-                    }
-                  />
-                  <Label
-                    htmlFor={`${role}-${item.path}`}
-                    className="text-sm font-normal"
-                  >
-                    {item.label}
-                  </Label>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ))}
+        <Accordion type="multiple" className="w-full space-y-4">
+            {editableRoles.map(role => (
+                <AccordionItem value={role} key={role}>
+                    <AccordionTrigger className="p-4 bg-muted/50 rounded-md">
+                        <CardTitle className="text-lg">{role.replace(/_/g, ' ')}</CardTitle>
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-4">
+                        <CardContent className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                        {navItems.map(item => (
+                            <div key={item.path} className="flex items-center space-x-2">
+                            <Checkbox
+                                id={`${role}-${item.path}`}
+                                checked={permissions[role]?.includes(item.path)}
+                                onCheckedChange={checked =>
+                                handlePermissionChange(role, item.path, !!checked)
+                                }
+                            />
+                            <Label
+                                htmlFor={`${role}-${item.path}`}
+                                className="text-sm font-normal"
+                            >
+                                {item.label}
+                            </Label>
+                            </div>
+                        ))}
+                        </CardContent>
+                    </AccordionContent>
+                </AccordionItem>
+            ))}
+        </Accordion>
       </CardContent>
       <CardFooter>
         <Button onClick={handleSave} disabled={isSaving}>

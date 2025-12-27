@@ -23,6 +23,7 @@ import {
   DialogClose,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 
 interface CommitteeConfig {
     [key: string]: {
@@ -91,6 +92,7 @@ export function CommitteeSettings() {
             }
         };
         fetchDepts();
+        fetchAllUsers();
     }, []);
 
     const handleSave = async () => {
@@ -253,83 +255,92 @@ export function CommitteeSettings() {
             .filter(u => u.name.toLowerCase().includes(searchTerms[committeeKey]?.toLowerCase() || ''));
 
         return (
-            <Card key={committeeKey}>
-                <CardHeader>
+            <AccordionItem value={committeeKey} key={committeeKey}>
+                <AccordionTrigger>
                     <CardTitle>Procurement Committee {committeeKey}</CardTitle>
-                    <CardDescription>
-                       Reviews and recommends on bids within its assigned value range.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                             <Label>Min Amount (ETB)</Label>
-                             <Input type="number" value={committee.min || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committeeKey]: {...prev[committeeKey], min: Number(e.target.value)}}))} />
+                </AccordionTrigger>
+                <AccordionContent>
+                    <CardContent className="space-y-4 pt-4">
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <Label>Min Amount (ETB)</Label>
+                                <Input type="number" value={committee.min || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committeeKey]: {...prev[committeeKey], min: Number(e.target.value)}}))} />
+                            </div>
+                            <div>
+                                <Label>Max Amount (ETB)</Label>
+                                <Input type="number" placeholder="No Limit" value={committee.max || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committeeKey]: {...prev[committeeKey], max: e.target.value === '' ? null : Number(e.target.value)}}))} />
+                            </div>
                         </div>
-                         <div>
-                             <Label>Max Amount (ETB)</Label>
-                             <Input type="number" placeholder="No Limit" value={committee.max || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committeeKey]: {...prev[committeeKey], max: e.target.value === '' ? null : Number(e.target.value)}}))} />
-                        </div>
-                    </div>
-                    <div className="grid md:grid-cols-2 gap-6 pt-4">
-                        <div className="space-y-2">
-                             <h4 className="font-semibold flex items-center gap-2"><Users /> Current Members</h4>
-                             <ScrollArea className="h-60 border rounded-md p-2">
-                                {members.length > 0 ? members.map(user => (
-                                    <div key={user.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                                         <div className="flex items-center gap-3">
-                                            <Avatar className="h-8 w-8"><AvatarImage src={`https://picsum.photos/seed/${user.id}/32/32`} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                            <div>
-                                                <p className="text-sm font-medium">{user.name}</p>
-                                                <p className="text-xs text-muted-foreground">{user.department}</p>
+                        <div className="grid md:grid-cols-2 gap-6 pt-4">
+                            <div className="space-y-2">
+                                <h4 className="font-semibold flex items-center gap-2"><Users /> Current Members</h4>
+                                <ScrollArea className="h-60 border rounded-md p-2">
+                                    {members.length > 0 ? members.map(user => (
+                                        <div key={user.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-8 w-8"><AvatarImage src={`https://picsum.photos/seed/${user.id}/32/32`} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                <div>
+                                                    <p className="text-sm font-medium">{user.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{user.department}</p>
+                                                </div>
                                             </div>
+                                            <Button size="sm" variant="ghost" onClick={() => handleRoleChange(user, roleName, 'remove')}><UserX className="h-4 w-4" /></Button>
                                         </div>
-                                        <Button size="sm" variant="ghost" onClick={() => handleRoleChange(user, roleName, 'remove')}><UserX className="h-4 w-4" /></Button>
+                                    )) : <p className="text-sm text-muted-foreground text-center py-4">No members assigned.</p>}
+                                </ScrollArea>
+                            </div>
+                            <div className="space-y-2">
+                                <h4 className="font-semibold">Add Members</h4>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input placeholder="Search users..." className="pl-8" value={searchTerms[committeeKey] || ''} onChange={(e) => setSearchTerms(prev => ({...prev, [committeeKey]: e.target.value}))}/>
                                     </div>
-                                )) : <p className="text-sm text-muted-foreground text-center py-4">No members assigned.</p>}
-                             </ScrollArea>
-                        </div>
-                        <div className="space-y-2">
-                             <h4 className="font-semibold">Add Members</h4>
-                             <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input placeholder="Search users..." className="pl-8" value={searchTerms[committeeKey] || ''} onChange={(e) => setSearchTerms(prev => ({...prev, [committeeKey]: e.target.value}))}/>
+                                    <Select value={departmentFilters[committeeKey] || 'all'} onValueChange={(val) => setDepartmentFilters(prev => ({...prev, [committeeKey]: val}))}>
+                                        <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Departments</SelectItem>
+                                            {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                                <Select value={departmentFilters[committeeKey] || 'all'} onValueChange={(val) => setDepartmentFilters(prev => ({...prev, [committeeKey]: val}))}>
-                                    <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Departments</SelectItem>
-                                        {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                             </div>
-                             <ScrollArea className="h-60 border rounded-md p-2">
-                                 {nonMembers.map(user => (
-                                    <div key={user.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                                        <div className="flex items-center gap-3">
-                                            <Avatar className="h-8 w-8"><AvatarImage src={`https://picsum.photos/seed/${user.id}/32/32`} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                            <div>
-                                                <p className="text-sm font-medium">{user.name}</p>
-                                                <p className="text-xs text-muted-foreground">{user.department}</p>
+                                <ScrollArea className="h-60 border rounded-md p-2">
+                                    {nonMembers.map(user => (
+                                        <div key={user.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-8 w-8"><AvatarImage src={`https://picsum.photos/seed/${user.id}/32/32`} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                <div>
+                                                    <p className="text-sm font-medium">{user.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{user.department}</p>
+                                                </div>
                                             </div>
+                                            <Button size="sm" variant="outline" onClick={() => handleRoleChange(user, roleName, 'add')}><UserCheck className="h-4 w-4 mr-2" /> Add</Button>
                                         </div>
-                                        <Button size="sm" variant="outline" onClick={() => handleRoleChange(user, roleName, 'add')}><UserCheck className="h-4 w-4 mr-2" /> Add</Button>
-                                    </div>
-                                ))}
-                             </ScrollArea>
+                                    ))}
+                                </ScrollArea>
+                            </div>
                         </div>
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </AccordionContent>
+            </AccordionItem>
         )
     }
 
     return (
-        <div className="space-y-6">
-            {Object.keys(localConfig).sort().map(key => renderCommitteeSection(key))}
-             <div className="flex justify-between items-center">
-                <Button onClick={handleSave} disabled={isSaving}>
+        <Card>
+             <CardHeader>
+                <CardTitle>Review Committee Settings</CardTitle>
+                <CardDescription>
+                    Configure value ranges for high-level review committees and manage their membership.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Accordion type="multiple" className="w-full space-y-4">
+                    {Object.keys(localConfig).sort().map(key => renderCommitteeSection(key))}
+                </Accordion>
+            </CardContent>
+            <CardFooter className="flex justify-between items-center">
+                 <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save All Changes
                 </Button>
@@ -363,7 +374,7 @@ export function CommitteeSettings() {
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
-            </div>
+            </CardFooter>
         </div>
     );
 }
