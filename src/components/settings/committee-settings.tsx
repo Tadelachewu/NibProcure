@@ -257,7 +257,7 @@ export function CommitteeSettings() {
         return (
             <AccordionItem value={committeeKey} key={committeeKey}>
                 <AccordionTrigger>
-                    <CardTitle>Procurement Committee {committeeKey}</CardTitle>
+                    <CardTitle className="text-base">Procurement Committee {committeeKey}</CardTitle>
                 </AccordionTrigger>
                 <AccordionContent>
                     <CardContent className="space-y-4 pt-4">
@@ -375,6 +375,6 @@ export function CommitteeSettings() {
                     </DialogContent>
                 </Dialog>
             </CardFooter>
-        </div>
+        </Card>
     );
 }
