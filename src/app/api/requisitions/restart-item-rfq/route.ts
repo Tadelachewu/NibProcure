@@ -1,6 +1,4 @@
 
-'use server';
-
 import 'dotenv/config';
 import { NextResponse } from 'next/server';
 import { Prisma, PrismaClient } from '@prisma/client';
