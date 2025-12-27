@@ -295,7 +295,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         await fetchAllSettings();
     } catch(e) {
-        console.error("Error in updateSetting:", e);
         throw e;
     }
   };
@@ -344,7 +343,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const data = await response.json();
           setApprovalThresholds(data);
       } catch (e) {
-          console.error("Failed to update approval thresholds", e);
           throw e;
       }
   }

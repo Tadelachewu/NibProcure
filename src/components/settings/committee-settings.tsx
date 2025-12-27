@@ -141,9 +141,10 @@ export function CommitteeSettings() {
                 variant: 'success',
             });
         } catch (error) {
+            const isPermissionError = error instanceof Error && error.message.includes('permission');
             toast({
                 variant: 'destructive',
-                title: 'Error Saving Settings',
+                title: isPermissionError ? 'Permission Denied' : 'Error',
                 description: error instanceof Error ? error.message : 'Could not save committee configurations.',
             });
         } finally {

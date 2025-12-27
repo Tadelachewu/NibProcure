@@ -124,11 +124,12 @@ export function ApprovalMatrixEditor() {
                 variant: 'success',
             });
         } catch (e) {
-             toast({
-                variant: 'destructive',
-                title: 'Error Saving Settings',
-                description: e instanceof Error ? e.message : 'Could not save approval matrix.',
-            });
+            const isPermissionError = e instanceof Error && e.message.includes('permission');
+            toast({
+               variant: 'destructive',
+               title: isPermissionError ? 'Permission Denied' : 'Error',
+               description: e instanceof Error ? e.message : 'Could not save approval matrix.',
+           });
         } finally {
             setIsSaving(false);
         }

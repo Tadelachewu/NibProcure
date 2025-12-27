@@ -60,11 +60,12 @@ export function RolePermissionsEditor() {
             description: 'User role permissions have been updated.',
             variant: 'success',
         });
-    } catch(e) {
+    } catch(error) {
+        const isPermissionError = error instanceof Error && error.message.includes('permission');
         toast({
             variant: 'destructive',
-            title: 'Error Saving Permissions',
-            description: e instanceof Error ? e.message : 'Could not update permissions.',
+            title: isPermissionError ? 'Permission Denied' : 'Error',
+            description: error instanceof Error ? error.message : 'Could not update permissions.',
         });
     } finally {
         setIsSaving(false);

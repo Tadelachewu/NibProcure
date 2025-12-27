@@ -56,10 +56,11 @@ export function QuorumSettings() {
                 variant: 'success',
             });
         } catch (error) {
+            const isPermissionError = error instanceof Error && error.message.includes('permission');
             toast({
                 variant: 'destructive',
-                title: 'Error',
-                description: 'Failed to save quorum settings.',
+                title: isPermissionError ? 'Permission Denied' : 'Error',
+                description: error instanceof Error ? error.message : 'Failed to save quorum settings.',
             });
         } finally {
             setIsSaving(false);
