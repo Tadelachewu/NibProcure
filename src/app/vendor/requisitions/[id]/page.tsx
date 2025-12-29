@@ -1,9 +1,10 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { PurchaseOrder, PurchaseRequisition, Quotation, QuoteItem, PerItemAwardDetail, EvaluationCriterion } from '@/lib/types';
+import { PurchaseOrder, PurchaseRequisition, Quotation, QuoteItem, PerItemAwardDetail, EvaluationCriterion, CustomQuestion } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -211,6 +212,63 @@ function InvoiceSubmissionForm({ po, onInvoiceSubmitted }: { po: PurchaseOrder; 
     );
 }
 
+const VendorQuestion = ({ question, index }: { question: CustomQuestion, index: number }) => {
+    const { control } = useFormContext();
+    const handleFileUpload = async (file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('directory', 'answers');
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'File upload failed');
+        return result.path;
+    }
+
+    return (
+        <FormField
+            key={question.id}
+            control={control}
+            name={`answers.${index}.answer`}
+            render={({ field }) => (
+                <FormItem>
+                    <FormLabel>
+                        {question.questionText}
+                        {question.isRequired && <span className="text-destructive"> *</span>}
+                    </FormLabel>
+                    {question.questionType === 'text' && (
+                        <FormControl><Textarea placeholder="Your answer..." {...field} /></FormControl>
+                    )}
+                    {question.questionType === 'boolean' && (
+                        <FormControl>
+                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4 pt-2">
+                                <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="true" id={`${question.id}-true`} /></FormControl><FormLabel htmlFor={`${question.id}-true`} className="font-normal">True</FormLabel></FormItem>
+                                <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="false" id={`${question.id}-false`} /></FormControl><FormLabel htmlFor={`${question.id}-false`} className="font-normal">False</FormLabel></FormItem>
+                            </RadioGroup>
+                        </FormControl>
+                    )}
+                    {question.questionType === 'multiple_choice' && (
+                        <FormControl>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <SelectTrigger><SelectValue placeholder="Select an option" /></SelectTrigger>
+                                <SelectContent>{question.options?.map(option => <SelectItem key={option} value={option}>{option}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </FormControl>
+                    )}
+                    {question.questionType === 'file' && (
+                        <FormControl>
+                            <Input type="file" onChange={async (e) => { if (e.target.files?.[0]) { const path = await handleFileUpload(e.target.files[0]); if (path) field.onChange(path); }}} />
+                        </FormControl>
+                    )}
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
+    )
+}
+
 function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisition: PurchaseRequisition; quote?: Quotation | null; onQuoteSubmitted: () => void; }) {
     const { user, token } = useAuth();
     const [isSubmitting, setSubmitting] = useState(false);
@@ -275,11 +333,21 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
         control: form.control,
         name: "items",
     });
+    
+    const generalQuestions = useMemo(() => requisition.customQuestions?.filter(q => !q.requisitionItemId || q.requisitionItemId === 'general'), [requisition.customQuestions]);
+    const itemSpecificQuestions = useMemo(() => {
+        const itemQuestions: Record<string, CustomQuestion[]> = {};
+        requisition.customQuestions?.forEach(q => {
+            if (q.requisitionItemId && q.requisitionItemId !== 'general') {
+                if (!itemQuestions[q.requisitionItemId]) {
+                    itemQuestions[q.requisitionItemId] = [];
+                }
+                itemQuestions[q.requisitionItemId].push(q);
+            }
+        });
+        return itemQuestions;
+    }, [requisition.customQuestions]);
 
-    const { fields: answerFields } = useFieldArray({
-        control: form.control,
-        name: "answers",
-    });
 
     const addAlternativeItem = (originalItem: { id: string, name: string, quantity: number }) => {
         append({
@@ -489,6 +557,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                         <Accordion type="single" collapsible defaultValue="item-0" className="space-y-4">
                             {originalItems.map((originalItem, itemIndex) => {
                                 const itemsForThisReqItem = fields.filter(f => f.requisitionItemId === originalItem.id);
+                                const questionsForThisItem = itemSpecificQuestions[originalItem.id] || [];
                                 return (
                                     <AccordionItem key={originalItem.id} value={`item-${itemIndex}`} className="border-none">
                                         <AccordionTrigger className="p-4 border rounded-lg bg-muted/20 hover:bg-muted/50 flex justify-between w-full">
@@ -546,6 +615,16 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                                     <FormItem><FormLabel>Delivery Time (Days)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                                                                 )}/>
                                                             </div>
+                                                            {questionsForThisItem.length > 0 && (
+                                                                <div className="mt-4 pt-4 border-t space-y-4">
+                                                                    <h5 className="font-semibold text-sm">Item-Specific Questions</h5>
+                                                                    {questionsForThisItem.map(q => {
+                                                                        const answerIndex = requisition.customQuestions?.findIndex(cq => cq.id === q.id);
+                                                                        if (answerIndex === undefined || answerIndex === -1) return null;
+                                                                        return <VendorQuestion key={q.id} question={q} index={answerIndex} />;
+                                                                    })}
+                                                                </div>
+                                                            )}
                                                         </Card>
                                                     )
                                                 })}
@@ -557,75 +636,16 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                         </Accordion>
 
 
-                         {requisition.customQuestions && requisition.customQuestions.length > 0 && (
+                         {generalQuestions && generalQuestions.length > 0 && (
                             <>
                                 <Separator />
-                                <h3 className="text-lg font-medium">Additional Questions</h3>
-                                <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                                {requisition.customQuestions.map((question, index) => (
-                                    <Card key={question.id} className="p-4">
-                                        <FormField
-                                            control={form.control}
-                                            name={`answers.${index}.answer`}
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>
-                                                        {question.questionText}
-                                                        {question.isRequired && <span className="text-destructive"> *</span>}
-                                                    </FormLabel>
-                                                        {question.questionType === 'text' && (
-                                                          <FormControl>
-                                                            <Textarea placeholder="Your answer..." {...field} />
-                                                          </FormControl>
-                                                        )}
-                                                        {question.questionType === 'boolean' && (
-                                                          <FormControl>
-                                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4 pt-2">
-                                                              <FormItem className="flex items-center space-x-2">
-                                                                <FormControl>
-                                                                  <RadioGroupItem value="true" id={`${question.id}-true`} />
-                                                                </FormControl>
-                                                                <FormLabel htmlFor={`${question.id}-true`} className="font-normal">True</FormLabel>
-                                                              </FormItem>
-                                                              <FormItem className="flex items-center space-x-2">
-                                                                <FormControl>
-                                                                  <RadioGroupItem value="false" id={`${question.id}-false`} />
-                                                                </FormControl>
-                                                                <FormLabel htmlFor={`${question.id}-false`} className="font-normal">False</FormLabel>
-                                                              </FormItem>
-                                                            </RadioGroup>
-                                                          </FormControl>
-                                                        )}
-                                                        {question.questionType === 'multiple_choice' && (
-                                                           <FormControl>
-                                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                                    <SelectTrigger>
-                                                                        <SelectValue placeholder="Select an option" />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {question.options?.map(option => (
-                                                                            <SelectItem key={option} value={option}>{option}</SelectItem>
-                                                                        ))}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            </FormControl>
-                                                        )}
-                                                        {question.questionType === 'file' && (
-                                                            <FormControl>
-                                                                <Input type="file" onChange={async (e) => {
-                                                                    if (e.target.files?.[0]) {
-                                                                        const path = await handleFileUpload(e.target.files[0]);
-                                                                        if (path) field.onChange(path);
-                                                                    }
-                                                                }} />
-                                                            </FormControl>
-                                                        )}
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </Card>
-                                ))}
+                                <h3 className="text-lg font-medium">General Questions</h3>
+                                <div className="space-y-4 p-4 border rounded-md">
+                                    {generalQuestions.map(question => {
+                                        const answerIndex = requisition.customQuestions?.findIndex(cq => cq.id === question.id);
+                                        if (answerIndex === undefined || answerIndex === -1) return null;
+                                        return <VendorQuestion key={question.id} question={question} index={answerIndex} />;
+                                    })}
                                 </div>
                             </>
                         )}
@@ -854,7 +874,7 @@ export default function VendorRequisitionPage() {
 
     const CriteriaTable = ({ title, weight, criteria }: { title: string, weight: number, criteria: EvaluationCriterion[] }) => (
         <div>
-            <h4 className="font-semibold mb-1">{title} (Overall Weight: {weight}%)</h4>
+            <h5 className="font-semibold mb-1">{title} (Overall Weight: {weight}%)</h5>
             <div className="border rounded-md">
                 <Table>
                     <TableHeader>
@@ -986,6 +1006,7 @@ export default function VendorRequisitionPage() {
                      </div>
                 </CardContent>
                 <CardFooter className="flex-col gap-4 items-stretch">
+                    {canEditQuote && <Button className="w-full" onClick={() => setIsEditingQuote(true)}><FileEdit className="mr-2"/>Edit Quote</Button>}
                      {isAccepted && purchaseOrders.length > 0 && (
                         <>
                             {paidInvoices.map(inv => (
@@ -1283,3 +1304,28 @@ export default function VendorRequisitionPage() {
         </div>
     )
 }
+
+const CriteriaTable = ({ title, weight, criteria }: { title: string, weight: number, criteria: EvaluationCriterion[] }) => (
+    <div>
+        <h5 className="font-semibold mb-1">{title} (Overall Weight: {weight}%)</h5>
+        <div className="border rounded-md">
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>Criterion</TableHead>
+                        <TableHead className="text-right w-24">Weight</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {criteria.map(c => (
+                        <TableRow key={c.id}>
+                            <TableCell>{c.name}</TableCell>
+                            <TableCell className="text-right font-mono">{c.weight}%</TableCell>
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        </div>
+    </div>
+);
+
