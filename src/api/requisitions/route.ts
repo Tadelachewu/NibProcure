@@ -69,8 +69,8 @@ export async function GET(request: Request) {
         }
 
         if (userRoles.some(r => r.name === 'Admin' || r.name === 'Procurement_Officer')) {
-            const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
-            const allPossiblePendingStatuses = allSystemRoles.map(r => `Pending_${r.name}`);
+            const allApprovalRoles = await prisma.approvalStep.findMany({ distinct: ['roleName'] });
+            const allPossiblePendingStatuses = allApprovalRoles.map(r => `Pending_${r.roleName}`);
             orConditions.push({ status: { in: allPossiblePendingStatuses } });
             orConditions.push({ status: 'PostApproved' });
         }
@@ -127,8 +127,8 @@ export async function GET(request: Request) {
         whereClause = { ...whereClause, ...vendorWhere };
 
     } else if (forQuoting) {
-        const allRoles = await prisma.role.findMany({ select: { name: true } });
-        const allPendingStatuses = allRoles.map(role => `Pending_${role.name}`);
+        const allApprovalRoles = await prisma.approvalStep.findMany({ distinct: ['roleName'] });
+        const allPendingStatuses = allApprovalRoles.map(role => `Pending_${role.roleName}`);
 
         const baseRfqLifecycleStatuses: RequisitionStatus[] = [
             'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
