@@ -79,7 +79,7 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
   }
 
   const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
-  const isAwarded = ['Awarded', 'Award_Declined', 'PO_Created', 'Fulfilled', 'Closed', 'PostApproved'].includes(requisition.status) || requisition.status.startsWith('Pending_');
+  const isAwarded = ['Awarded', 'Award_Declined', 'PO_Created', 'Fulfilled', 'Closed', 'PostApproved'].includes(requisition.status) || (requisition.status && requisition.status.startsWith('Pending_'));
   
   const winningQuote = awardStrategy === 'all' ? requisition.quotations?.find(q => q.status === 'Accepted' || q.status === 'Awarded') : null;
   
