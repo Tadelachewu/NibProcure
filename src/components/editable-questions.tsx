@@ -16,6 +16,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { Loader2, MessageSquareQuestion, PlusCircle, Save, Trash2 } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { CardTitle } from './ui/card';
 
 const questionSchema = z.object({
   id: z.string().optional(),
