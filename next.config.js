@@ -26,12 +26,12 @@ const nextConfig = {
   },
   async headers() {
     const cspHeader = `
-      default-src 'self';
+      default-src 'self' *.nibbank.com.et;
       script-src 'self' 'unsafe-eval' 'unsafe-inline';
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       img-src 'self' https://placehold.co https://picsum.photos data:;
       font-src 'self' https://fonts.gstatic.com;
-      object-src 'none';
+      object-src 'self';
       base-uri 'self';
       form-action 'self';
       frame-ancestors 'none';

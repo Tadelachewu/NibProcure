@@ -33,7 +33,7 @@ const formSchema = z.object({
 type QuestionsFormValues = z.infer<typeof formSchema>;
 
 function QuestionOptions({ index }: { index: number }) {
-  const { control } = useFormContext();
+  const { control } = useForm<QuestionsFormValues>();
   const { fields, append, remove } = useFieldArray({
     control,
     name: `customQuestions.${index}.options`,
