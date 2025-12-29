@@ -67,7 +67,9 @@ export type RequisitionStatus =
   | 'Pending_Managerial_Approval'
   | 'Pending_Director_Approval'
   | 'Pending_VP_Approval'
-  | 'Pending_President_Approval';
+  | 'Pending_President_Approval'
+  | 'Pending_Finance_Director_Approval'
+  | 'Pending_Facility_Director_Approval';
 
 export type Urgency = 'Low' | 'Medium' | 'High' | 'Critical';
 
