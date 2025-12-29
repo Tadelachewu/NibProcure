@@ -156,6 +156,13 @@ export type Minute = {
     signatures?: Signature[];
 }
 
+export type DigitalSeal = {
+    id: string;
+    requisitionId: string;
+    role: string;
+    isVerified: boolean;
+    createdAt: Date;
+}
 
 export type PurchaseRequisition = {
   id:string; // Will be UUID
@@ -205,6 +212,7 @@ export type PurchaseRequisition = {
   };
   minutes?: Minute[];
   auditTrail?: AuditLog[];
+  digitalSeals?: DigitalSeal[];
 };
 
 export type AuditLog = {
@@ -371,6 +379,7 @@ export type GoodsReceiptNote = {
     receivedDate: Date;
     items: ReceiptItem[];
     photos?: { name: string; url: string }[];
+    status: 'Processed' | 'Disputed';
 }
 
 export type InvoiceItem = {
