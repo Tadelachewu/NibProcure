@@ -58,6 +58,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
                         questionType: q.questionType.replace(/-/g, '_'),
                         isRequired: q.isRequired,
                         options: q.options || [],
+                        requisitionItemId: q.requisitionItemId === 'general' ? null : q.requisitionItemId,
                     }))
                 });
             }

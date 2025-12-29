@@ -2,10 +2,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
+import { AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Label } from './ui/label';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -18,12 +17,15 @@ import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { CardTitle } from './ui/card';
 
+const optionSchema = z.object({ value: z.string().min(1, "Option cannot be empty.") });
+
 const questionSchema = z.object({
   id: z.string().optional(),
   questionText: z.string().min(5, 'Question must be at least 5 characters.'),
   questionType: z.enum(['text', 'boolean', 'multiple_choice', 'file']),
   isRequired: z.boolean(),
-  options: z.array(z.object({ value: z.string().min(1, "Option cannot be empty.") })).optional(),
+  options: z.array(optionSchema).optional(),
+  requisitionItemId: z.string().optional(),
 });
 
 const formSchema = z.object({
@@ -32,11 +34,11 @@ const formSchema = z.object({
 
 type QuestionsFormValues = z.infer<typeof formSchema>;
 
-function QuestionOptions({ index }: { index: number }) {
-  const { control } = useForm<QuestionsFormValues>();
+function QuestionOptions({ nestIndex }: { nestIndex: number }) {
+  const { control } = useFormContext<QuestionsFormValues>();
   const { fields, append, remove } = useFieldArray({
     control,
-    name: `customQuestions.${index}.options`,
+    name: `customQuestions.${nestIndex}.options`,
   });
 
   return (
@@ -45,7 +47,7 @@ function QuestionOptions({ index }: { index: number }) {
         <div key={field.id} className="flex items-center gap-2">
            <FormField
               control={control}
-              name={`customQuestions.${index}.options.${optionIndex}.value`}
+              name={`customQuestions.${nestIndex}.options.${optionIndex}.value`}
               render={({ field }) => (
                 <FormItem className="flex-1">
                   <FormControl>
@@ -76,6 +78,7 @@ export function EditableQuestions({ requisition, onUpdate }: { requisition: Purc
     defaultValues: {
         customQuestions: requisition.customQuestions?.map(q => ({
             ...q,
+            requisitionItemId: q.requisitionItemId || 'general',
             options: q.options?.map(opt => ({ value: opt })) || []
         })) || []
     },
@@ -140,14 +143,35 @@ export function EditableQuestions({ requisition, onUpdate }: { requisition: Purc
                                     <FormField control={form.control} name={`customQuestions.${index}.questionType`} render={({ field }) => (
                                         <FormItem><FormLabel>Question Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger></FormControl><SelectContent><SelectItem value="text">Open-ended Text</SelectItem><SelectItem value="boolean">True/False</SelectItem><SelectItem value="multiple_choice">Multiple Choice</SelectItem><SelectItem value="file">File Upload</SelectItem></SelectContent></Select><FormMessage /></FormItem>
                                     )} />
+                                     <FormField
+                                        control={form.control}
+                                        name={`customQuestions.${index}.requisitionItemId`}
+                                        render={({ field }) => (
+                                            <FormItem>
+                                            <FormLabel>Link to Item</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value} defaultValue="general">
+                                                <FormControl><SelectTrigger><SelectValue placeholder="Select an item" /></SelectTrigger></FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="general">General (Not item-specific)</SelectItem>
+                                                    {requisition.items.map((item, itemIndex) => (
+                                                        <SelectItem key={item.id} value={item.id!}>
+                                                            {`Item ${itemIndex + 1}: ${item.name || 'Untitled Item'}`}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
                                     <FormField control={form.control} name={`customQuestions.${index}.isRequired`} render={({ field }) => (
-                                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm col-span-2"><div className="space-y-0.5"><FormLabel>Required</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
+                                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3"><div className="space-y-0.5"><FormLabel>Required</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
                                     )} />
                                     </div>
                                     {questionType === 'multiple_choice' && (
                                     <div className="pl-4 space-y-2">
                                         <FormLabel>Multiple Choice Options</FormLabel>
-                                        <QuestionOptions index={index} />
+                                        <QuestionOptions nestIndex={index} />
                                     </div>
                                     )}
                                 </div>
@@ -161,7 +185,7 @@ export function EditableQuestions({ requisition, onUpdate }: { requisition: Purc
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => appendQuestion({ questionText: '', questionType: 'text', isRequired: true, options: [] })}
+                            onClick={() => appendQuestion({ questionText: '', questionType: 'text', isRequired: true, options: [], requisitionItemId: 'general' })}
                             >
                             <PlusCircle className="mr-2 h-4 w-4" />
                             Add Question
