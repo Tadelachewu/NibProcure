@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState } from 'react';
@@ -157,8 +156,14 @@ export function EditableQuestions({ requisition, onUpdate }: { requisition: Purc
                         })}
                     </div>
                     <div className="flex justify-between items-center mt-4">
-                        <Button type="button" variant="outline" size="sm" onClick={() => appendQuestion({ questionText: '', questionType: 'text', isRequired: true, options: [] })}>
-                            <PlusCircle className="mr-2 h-4 w-4" /> Add Question
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => appendQuestion({ questionText: '', questionType: 'text', isRequired: true, options: [] })}
+                            >
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Add Question
                         </Button>
                     </div>
                      <div className="flex justify-end">
