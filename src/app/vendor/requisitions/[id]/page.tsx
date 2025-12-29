@@ -560,18 +560,17 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                 const questionsForThisItem = itemSpecificQuestions[originalItem.id] || [];
                                 return (
                                     <AccordionItem key={originalItem.id} value={`item-${itemIndex}`} className="border-none">
-                                        <AccordionTrigger className="p-4 border rounded-lg bg-muted/20 hover:bg-muted/50 flex justify-between w-full">
-                                            <div className="flex items-center gap-2 text-left">
-                                                <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
-                                                <div>
+                                        <div className="flex justify-between w-full items-center p-4 border rounded-lg bg-muted/20 hover:bg-muted/50">
+                                            <AccordionTrigger className="flex-1 py-0">
+                                                <div className="flex items-center gap-2 text-left">
                                                     <h4 className="font-semibold">Requested: {originalItem.name}</h4>
                                                     <p className="text-xs text-muted-foreground">Quantity: {originalItem.quantity}</p>
                                                 </div>
-                                            </div>
-                                            <Button type="button" variant="outline" size="sm" onClick={(e) => {e.stopPropagation(); addAlternativeItem(originalItem)}}>
+                                            </AccordionTrigger>
+                                            <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addAlternativeItem(originalItem) }}>
                                                 <PlusCircle className="mr-2 h-4 w-4" /> Propose Alternative
                                             </Button>
-                                        </AccordionTrigger>
+                                        </div>
                                         <AccordionContent className="pt-2">
                                             <div className="space-y-4 pl-6 border-l-2 ml-3">
                                                 {itemsForThisReqItem.map((field) => {
@@ -947,7 +946,7 @@ export default function VendorRequisitionPage() {
                             <h3 className="font-semibold">Experience Document</h3>
                             <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
                                  <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                                    <FileText className="h-4 w-4 text-primary"/>
+                                    <UserCog className="h-4 w-4 text-primary"/>
                                     <span>{quote.experienceDocumentUrl.split('/').pop()}</span>
                                 </a>
                             </div>
@@ -1263,8 +1262,8 @@ export default function VendorRequisitionPage() {
                                                 </div>
                                                 <Separator />
                                                 <div className="grid md:grid-cols-2 gap-4">
-                                                    <CriteriaTable title="Financial Criteria" weight={requisition.evaluationCriteria.financialWeight} criteria={requisition.evaluationCriteria.financialCriteria} />
-                                                    <CriteriaTable title="Technical Criteria" weight={requisition.evaluationCriteria.technicalWeight} criteria={requisition.evaluationCriteria.technicalCriteria} />
+                                                    <CriteriaTable title="Financial" weight={requisition.evaluationCriteria.financialWeight} criteria={requisition.evaluationCriteria.financialCriteria} />
+                                                    <CriteriaTable title="Technical" weight={requisition.evaluationCriteria.technicalWeight} criteria={requisition.evaluationCriteria.technicalCriteria} />
                                                 </div>
                                             </div>
                                         </AccordionContent>
@@ -1334,5 +1333,6 @@ const CriteriaTable = ({ title, weight, criteria }: { title: string, weight: num
         </div>
     </div>
 );
+
 
 
