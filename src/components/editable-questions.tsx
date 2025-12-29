@@ -173,5 +173,3 @@ export function EditableQuestions({ requisition, onUpdate }: { requisition: Purc
     </AccordionItem>
   );
 }
-
-    
