@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { PurchaseOrder, PurchaseRequisition, Quotation, QuoteItem, PerItemAwardDetail } from '@/lib/types';
+import { PurchaseOrder, PurchaseRequisition, Quotation, QuoteItem, PerItemAwardDetail, EvaluationCriterion } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -14,7 +14,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Loader2, Send, ArrowLeft, CheckCircle, FileText, BadgeInfo, FileUp, CircleCheck, Info, Edit, FileEdit, PlusCircle, Trash2, ThumbsDown, ThumbsUp, Timer, Image as ImageIcon, Download, AlertCircle, ChevronDown } from 'lucide-react';
+import { Loader2, Send, ArrowLeft, CheckCircle, FileText, BadgeInfo, FileUp, CircleCheck, Info, Edit, FileEdit, PlusCircle, Trash2, ThumbsDown, ThumbsUp, Timer, Image as ImageIcon, Download, AlertCircle, ChevronDown, Percent } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -852,6 +852,30 @@ export default function VendorRequisitionPage() {
     const isPaid = purchaseOrders.some(po => po.invoices?.some(inv => inv.status === 'Paid'));
 
 
+    const CriteriaTable = ({ title, weight, criteria }: { title: string, weight: number, criteria: EvaluationCriterion[] }) => (
+        <div>
+            <h4 className="font-semibold mb-1">{title} (Overall Weight: {weight}%)</h4>
+            <div className="border rounded-md">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Criterion</TableHead>
+                            <TableHead className="text-right w-24">Weight</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {criteria.map(c => (
+                            <TableRow key={c.id}>
+                                <TableCell>{c.name}</TableCell>
+                                <TableCell className="text-right font-mono">{c.weight}%</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+        </div>
+    )
+
     const QuoteDisplayCard = ({ quote, itemsToShow, showActions, purchaseOrders }: { quote: Quotation, itemsToShow: QuoteItem[], showActions: boolean, purchaseOrders: PurchaseOrder[] }) => {
         const totalQuotedPrice = itemsToShow.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
 
@@ -1178,6 +1202,7 @@ export default function VendorRequisitionPage() {
                         </div>
                         
                         <Separator />
+
                         <div>
                             <h3 className="font-semibold text-sm mb-2">Items Requested</h3>
                             <div className="space-y-4">
@@ -1194,6 +1219,33 @@ export default function VendorRequisitionPage() {
                                 ))}
                             </div>
                         </div>
+
+                         {requisition.evaluationCriteria && (
+                            <>
+                                <Separator />
+                                <div>
+                                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2"><Percent /> How Your Quote Will Be Judged</h4>
+                                    <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
+                                        <div className="flex justify-around text-center">
+                                            <div>
+                                                <p className="text-2xl font-bold text-primary">{requisition.evaluationCriteria.financialWeight}%</p>
+                                                <p className="text-xs font-medium text-muted-foreground">Financial</p>
+                                            </div>
+                                             <div>
+                                                <p className="text-2xl font-bold text-primary">{requisition.evaluationCriteria.technicalWeight}%</p>
+                                                <p className="text-xs font-medium text-muted-foreground">Technical</p>
+                                            </div>
+                                        </div>
+                                        <Separator />
+                                        <div className="grid md:grid-cols-2 gap-4">
+                                            <CriteriaTable title="Financial Criteria" weight={requisition.evaluationCriteria.financialWeight} criteria={requisition.evaluationCriteria.financialCriteria} />
+                                            <CriteriaTable title="Technical Criteria" weight={requisition.evaluationCriteria.technicalWeight} criteria={requisition.evaluationCriteria.technicalCriteria} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                        
                          {requisition.customQuestions && requisition.customQuestions.length > 0 && (
                             <>
                                 <Separator />
@@ -1231,5 +1283,3 @@ export default function VendorRequisitionPage() {
         </div>
     )
 }
-
-    
