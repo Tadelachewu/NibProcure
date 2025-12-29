@@ -52,7 +52,8 @@ export type RequisitionStatus =
   | 'Rejected'
   | 'PreApproved' // Department head approved, ready for RFQ
   | 'Accepting_Quotes' // RFQ sent, vendors can submit quotes
-  | 'Scoring_In_Progress' // Deadline passed, committee is scoring
+  | 'Awaiting_Unsealing' // Deadline passed, waiting for PINs
+  | 'Scoring_In_Progress' // Committee assigned, scoring is active
   | 'Scoring_Complete' // All scores are in, ready to finalize award
   | 'Awarded' // Award has been sent to vendor(s) and is pending response
   | 'Award_Declined' // The winning vendor has declined the award
