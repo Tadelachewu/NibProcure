@@ -1220,53 +1220,38 @@ export default function VendorRequisitionPage() {
                             </div>
                         </div>
 
-                         {requisition.evaluationCriteria && (
+                        {requisition.evaluationCriteria && (
                             <>
-                                <Separator />
-                                <div>
-                                    <h4 className="font-semibold text-sm mb-2 flex items-center gap-2"><Percent /> How Your Quote Will Be Judged</h4>
-                                    <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
-                                        <div className="flex justify-around text-center">
-                                            <div>
-                                                <p className="text-2xl font-bold text-primary">{requisition.evaluationCriteria.financialWeight}%</p>
-                                                <p className="text-xs font-medium text-muted-foreground">Financial</p>
+                            <Separator/>
+                             <Accordion type="single" collapsible className="w-full">
+                                <AccordionItem value="evaluation-criteria">
+                                    <AccordionTrigger>
+                                        <h4 className="font-medium text-sm flex items-center gap-2"><Percent /> How Your Quote Will Be Judged</h4>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pt-2">
+                                        <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
+                                            <div className="flex justify-around text-center">
+                                                <div>
+                                                    <p className="text-2xl font-bold text-primary">{requisition.evaluationCriteria.financialWeight}%</p>
+                                                    <p className="text-xs font-medium text-muted-foreground">Financial</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-2xl font-bold text-primary">{requisition.evaluationCriteria.technicalWeight}%</p>
+                                                    <p className="text-xs font-medium text-muted-foreground">Technical</p>
+                                                </div>
                                             </div>
-                                             <div>
-                                                <p className="text-2xl font-bold text-primary">{requisition.evaluationCriteria.technicalWeight}%</p>
-                                                <p className="text-xs font-medium text-muted-foreground">Technical</p>
+                                            <Separator />
+                                            <div className="grid md:grid-cols-2 gap-4">
+                                                <CriteriaTable title="Financial" weight={requisition.evaluationCriteria.financialWeight} criteria={requisition.evaluationCriteria.financialCriteria} />
+                                                <CriteriaTable title="Technical" weight={requisition.evaluationCriteria.technicalWeight} criteria={requisition.evaluationCriteria.technicalCriteria} />
                                             </div>
                                         </div>
-                                        <Separator />
-                                        <div className="grid md:grid-cols-2 gap-4">
-                                            <CriteriaTable title="Financial Criteria" weight={requisition.evaluationCriteria.financialWeight} criteria={requisition.evaluationCriteria.financialCriteria} />
-                                            <CriteriaTable title="Technical Criteria" weight={requisition.evaluationCriteria.technicalWeight} criteria={requisition.evaluationCriteria.technicalCriteria} />
-                                        </div>
-                                    </div>
-                                </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
                             </>
                         )}
                         
-                         {requisition.customQuestions && requisition.customQuestions.length > 0 && (
-                            <>
-                                <Separator />
-                                <div>
-                                    <h3 className="font-semibold text-sm mb-2">Additional Questions from Requester</h3>
-                                    <div className="space-y-3 text-sm border rounded-md p-4">
-                                        {requisition.customQuestions.map((q,i) => (
-                                            <div key={`${q.id}-${i}`}>
-                                                <p className="font-medium">{q.questionText}</p>
-                                                {q.questionType === 'boolean' && <p className="text-muted-foreground text-xs italic">Please answer with True/False.</p>}
-                                                {q.questionType === 'multiple_choice' && (
-                                                    <p className="text-muted-foreground text-xs italic">
-                                                        Please choose from: {q.options?.join(', ')}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </>
-                        )}
                     </CardContent>
                 </Card>
 
