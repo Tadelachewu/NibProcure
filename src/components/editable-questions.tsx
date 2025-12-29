@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -12,7 +13,7 @@ import * as z from 'zod';
 import { PurchaseRequisition } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
-import { Loader2, PlusCircle, Save, Trash2, MessageSquareQuestion } from 'lucide-react';
+import { Loader2, PlusCircle, Save, Trash2, MessageCircleQuestion } from 'lucide-react';
 import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { CardTitle } from './ui/card';
@@ -120,7 +121,7 @@ export function EditableQuestions({ requisition, onUpdate }: { requisition: Purc
     <AccordionItem value="custom-questions">
         <AccordionTrigger>
             <CardTitle className="flex items-center gap-2 text-lg">
-            <MessageSquareQuestion /> Custom Questions for Vendors
+            <MessageCircleQuestion /> Custom Questions for Vendors
             </CardTitle>
         </AccordionTrigger>
         <AccordionContent>
