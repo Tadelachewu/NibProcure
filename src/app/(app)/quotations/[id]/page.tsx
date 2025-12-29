@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -37,7 +36,7 @@ import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'r
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem, PerItemAwardDetail, UserRole } from '@/lib/types';
+import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem, PerItemAwardDetail, UserRole, CustomQuestion } from '@/lib/types';
 import { format, formatDistanceToNow, isBefore, isPast, setHours, setMinutes } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -71,6 +70,8 @@ import { RestartRfqDialog } from '@/components/restart-rfq-dialog';
 import { QuoteDetailsDialog } from '@/components/quote-details-dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { CommitteeActions } from '@/components/committee-actions';
+import { EditableCriteria } from '@/components/editable-criteria';
+import { EditableQuestions } from '@/components/editable-questions';
 
 
 const PAGE_SIZE = 6;
@@ -2723,29 +2724,7 @@ export default function QuotationDetailsPage() {
       fetchRequisitionAndQuotes();
   }
 
-  const formatEvaluationCriteria = (criteria?: EvaluationCriteria) => {
-      if (!criteria) return "No specific criteria defined.";
-
-      const formatSection = (title: string, weight: number, items: any[]) => {
-          if (!items || items.length === 0) return `${title} (Overall Weight: ${weight}%):\n- No criteria defined.`;
-          const itemDetails = items.map(item => `- ${item.name} (${item.weight}%)`).join('\n');
-          return `${title} (Overall Weight: ${weight}%):\n${itemDetails}`;
-      };
-
-      const financialPart = formatSection(
-          'Financial Criteria',
-          criteria.financialWeight,
-          criteria.financialCriteria
-      );
-
-      const technicalPart = formatSection(
-          'Technical Criteria',
-          criteria.technicalWeight,
-          criteria.technicalCriteria
-      );
-
-      return `${financialPart}\n\n${technicalPart}`;
-  };
+  const isProcurementActionAllowed = isAuthorized && (requisition?.status === 'PreApproved' || requisition?.status === 'Accepting_Quotes');
 
   if (loading || !user || !requisition) {
      return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -2772,6 +2751,8 @@ export default function QuotationDetailsPage() {
   });
   
   const hasAssignedCommittee = (requisition.financialCommitteeMemberIds && requisition.financialCommitteeMemberIds.length > 0) || (requisition.technicalCommitteeMemberIds && requisition.technicalCommitteeMemberIds.length > 0);
+  const isScoringStarted = requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes';
+
 
   return (
     <div className="space-y-6">
@@ -2799,29 +2780,12 @@ export default function QuotationDetailsPage() {
             <WorkflowStepper step={currentStep} />
         </Card>
 
-        <Accordion type="single" collapsible className="w-full" defaultValue="evaluation-criteria">
-            <AccordionItem value="evaluation-criteria">
-                <AccordionTrigger>
-                    <CardTitle className="flex items-center gap-2 text-lg"><ClipboardList /> Evaluation Criteria</CardTitle>
-                </AccordionTrigger>
-                <AccordionContent>
-                    <Card className="border-0 shadow-none">
-                        <CardHeader>
-                            <CardDescription>The following criteria were set by the requester to guide quote evaluation.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-md whitespace-pre-wrap">{formatEvaluationCriteria(requisition.evaluationCriteria)}</p>
-                        </CardContent>
-                         <CardFooter>
-                            <Button variant="outline" onClick={() => setIsDetailsOpen(true)} className="w-full sm:w-auto">
-                                <Eye className="mr-2 h-4 w-4" />
-                                View Full Requisition Details
-                            </Button>
-                        </CardFooter>
-                    </Card>
-                </AccordionContent>
-            </AccordionItem>
-        </Accordion>
+        {isProcurementActionAllowed && (
+          <Accordion type="multiple" className="w-full space-y-4">
+              <EditableCriteria requisition={requisition} onUpdate={fetchRequisitionAndQuotes} />
+              <EditableQuestions requisition={requisition} onUpdate={fetchRequisitionAndQuotes} />
+          </Accordion>
+        )}
 
         {noBidsAndDeadlinePassed && isAuthorized && (
             <Card className="border-amber-500">
