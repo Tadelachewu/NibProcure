@@ -137,6 +137,8 @@ const seedData: AppData = {
         { id: '17', name: 'VP of Resources', email: 'vp.resources@example.com', password: 'password123', role: 'VP_Resources_and_Facilities', departmentId: 'DEPT-2', department: 'Operations' },
         { id: '18', name: 'President', email: 'president@example.com', password: 'password123', role: 'President', departmentId: 'DEPT-2', department: 'Operations' },
         { id: '19', name: 'HP Inc.', email: 'vendor@hp.com', password: 'password123', role: 'Vendor', vendorId: 'VENDOR-004' },
+        { id: '20', name: 'Finance Director', email: 'director.finance@example.com', password: 'password123', role: 'Finance_Director', departmentId: 'DEPT-5', department: 'Finance' },
+        { id: '21', name: 'Facility Director', email: 'director.facility@example.com', password: 'password123', role: 'Facility_Director', departmentId: 'DEPT-2', department: 'Operations' },
     ],
     departments: [
         { id: 'DEPT-1', name: 'Design', description: 'Handles all creative and design tasks.', headId: '12' },

@@ -122,6 +122,8 @@ export const rolePermissions: Record<UserRole, string[]> = {
   ],
   Manager_Procurement_Division: ['/dashboard', '/award-reviews', '/records', '/support'],
   Director_Supply_Chain_and_Property_Management: ['/dashboard', '/award-reviews', '/records', '/support'],
+  Finance_Director: ['/dashboard', '/award-reviews', '/records', '/support'],
+  Facility_Director: ['/dashboard', '/award-reviews', '/records', '/support'],
   VP_Resources_and_Facilities: ['/dashboard', '/award-reviews', '/records', '/support'],
   President: ['/dashboard', '/award-reviews', '/records', '/support'],
 };

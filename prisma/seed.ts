@@ -62,6 +62,8 @@ async function main() {
       { name: 'Committee', description: 'Manages evaluation committees.' },
       { name: 'Manager_Procurement_Division', description: 'Approves low-value awards.' },
       { name: 'Director_Supply_Chain_and_Property_Management', description: 'Approves mid-value awards.' },
+      { name: 'Finance_Director', description: 'Approves finance-related awards.' },
+      { name: 'Facility_Director', description: 'Approves facility-related awards.' },
       { name: 'VP_Resources_and_Facilities', description: 'Approves high-value awards.' },
       { name: 'President', description: 'Approves very-high-value awards.' },
   ];

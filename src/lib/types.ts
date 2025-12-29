@@ -15,7 +15,9 @@ export type UserRole =
   | 'Manager_Procurement_Division'
   | 'Director_Supply_Chain_and_Property_Management'
   | 'VP_Resources_and_Facilities'
-  | 'President';
+  | 'President'
+  | 'Finance_Director'
+  | 'Facility_Director';
 
 export type CommitteeAssignment = {
   requisitionId: string;
