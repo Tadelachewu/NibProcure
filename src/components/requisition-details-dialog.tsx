@@ -79,7 +79,7 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
   }
 
   const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
-  const isAwarded = ['Awarded', 'Award_Declined', 'PO_Created', 'Fulfilled', 'Closed', 'PostApproved'].includes(requisition.status) || (requisition.status && requisition.status.startsWith('Pending_'));
+  const isAwarded = requisition.status && (['Awarded', 'Award_Declined', 'PO_Created', 'Fulfilled', 'Closed', 'PostApproved'].includes(requisition.status) || requisition.status.startsWith('Pending_'));
   
   const winningQuote = awardStrategy === 'all' ? requisition.quotations?.find(q => q.status === 'Accepted' || q.status === 'Awarded') : null;
   
@@ -164,7 +164,7 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                             <DetailItem label="Department">{requisition.department}</DetailItem>
                             <DetailItem label="Created">{requisition.createdAt ? format(new Date(requisition.createdAt), 'PP') : 'N/A'}</DetailItem>
                             <DetailItem label="Urgency"><Badge variant={requisition.urgency === 'High' || requisition.urgency === 'Critical' ? 'destructive' : 'secondary'}>{requisition.urgency}</Badge></DetailItem>
-                            <DetailItem label="Total Value">{requisition.totalPrice.toLocaleString()} ETB</DetailItem>
+                            <DetailItem label="Total Value">{(typeof requisition.totalPrice === 'number') ? `${requisition.totalPrice.toLocaleString()} ETB` : 'N/A'}</DetailItem>
                             <DetailItem label="CPO Requirement">{requisition.cpoAmount ? `${requisition.cpoAmount.toLocaleString()} ETB` : 'None'}</DetailItem>
                         </div>
 
