@@ -256,7 +256,7 @@ export default function VendorDashboardPage() {
         
         return { 
             activeRequisitions: active.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
-            openForQuoting: open.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+            openForQuoting: open.sort((a,b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()),
         };
 
     }, [allRequisitions, user]);
