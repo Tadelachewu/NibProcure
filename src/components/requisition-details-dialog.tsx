@@ -63,7 +63,7 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
   const getTimelineStatus = (step: number) => {
     const stepOrder = ['Draft', 'Pending_Approval', 'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 'Pending_Review', 'PostApproved', 'Awarded', 'PO_Created', 'Fulfilled', 'Closed'];
     
-    let normalizedStatus = requisition.status.replace(/ /g, '_');
+    let normalizedStatus = requisition.status ? requisition.status.replace(/ /g, '_') : 'Draft';
     if (normalizedStatus.startsWith('Pending_') && normalizedStatus !== 'Pending_Approval') {
         normalizedStatus = 'Pending_Review';
     }
@@ -117,7 +117,7 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                return <Badge variant="destructive">Award Declined</Badge>
            }
       }
-      return <Badge variant="outline">{requisition.status.replace(/_/g, ' ')}</Badge>;
+      return <Badge variant="outline">{requisition.status ? requisition.status.replace(/_/g, ' ') : 'N/A'}</Badge>;
   }
   
   const financialCommittee = allUsers.filter(u => requisition.financialCommitteeMemberIds?.includes(u.id));
@@ -164,7 +164,7 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                             <DetailItem label="Department">{requisition.department}</DetailItem>
                             <DetailItem label="Created">{requisition.createdAt ? format(new Date(requisition.createdAt), 'PP') : 'N/A'}</DetailItem>
                             <DetailItem label="Urgency"><Badge variant={requisition.urgency === 'High' || requisition.urgency === 'Critical' ? 'destructive' : 'secondary'}>{requisition.urgency}</Badge></DetailItem>
-                            <DetailItem label="Total Value">{(typeof requisition.totalPrice === 'number') ? `${requisition.totalPrice.toLocaleString()} ETB` : 'N/A'}</DetailItem>
+                            <DetailItem label="Total Value">{typeof requisition.totalPrice === 'number' ? `${requisition.totalPrice.toLocaleString()} ETB` : 'N/A'}</DetailItem>
                             <DetailItem label="CPO Requirement">{requisition.cpoAmount ? `${requisition.cpoAmount.toLocaleString()} ETB` : 'None'}</DetailItem>
                         </div>
 
@@ -218,9 +218,22 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                                 <Separator />
                                 <div>
                                     <h4 className="font-medium mb-2 flex items-center gap-2"><Percent /> Evaluation Criteria</h4>
-                                    <div className="grid md:grid-cols-2 gap-4">
-                                        <CriteriaTable title="Financial" weight={requisition.evaluationCriteria.financialWeight} criteria={requisition.evaluationCriteria.financialCriteria} />
-                                        <CriteriaTable title="Technical" weight={requisition.evaluationCriteria.technicalWeight} criteria={requisition.evaluationCriteria.technicalCriteria} />
+                                    <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
+                                        <div className="flex justify-around text-center">
+                                            <div>
+                                                <p className="text-2xl font-bold text-primary">{requisition.evaluationCriteria.financialWeight}%</p>
+                                                <p className="text-xs font-medium text-muted-foreground">Financial</p>
+                                            </div>
+                                             <div>
+                                                <p className="text-2xl font-bold text-primary">{requisition.evaluationCriteria.technicalWeight}%</p>
+                                                <p className="text-xs font-medium text-muted-foreground">Technical</p>
+                                            </div>
+                                        </div>
+                                        <Separator />
+                                        <div className="grid md:grid-cols-2 gap-4">
+                                            <CriteriaTable title="Financial" weight={requisition.evaluationCriteria.financialWeight} criteria={requisition.evaluationCriteria.financialCriteria} />
+                                            <CriteriaTable title="Technical" weight={requisition.evaluationCriteria.technicalWeight} criteria={requisition.evaluationCriteria.technicalCriteria} />
+                                        </div>
                                     </div>
                                 </div>
                             </>
