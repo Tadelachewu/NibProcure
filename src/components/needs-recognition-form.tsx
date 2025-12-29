@@ -37,7 +37,7 @@ import {
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { cn } from '@/lib/utils';
-import { PurchaseRequisition, Urgency } from '@/lib/types';
+import { PurchaseRequisition, Urgency, Attachment } from '@/lib/types';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Slider } from './ui/slider';
 import { Badge } from './ui/badge';
@@ -70,7 +70,10 @@ const baseFormSchema = z.object({
   justification: z
     .string()
     .min(10, 'Justification must be at least 10 characters.'),
-  attachments: z.any().optional(),
+  attachments: z.array(z.object({
+    name: z.string(),
+    url: z.string(),
+  })).optional(),
   items: z
     .array(
       z.object({
@@ -136,6 +139,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   const { user, departments } = useAuth();
   const isEditMode = !!existingRequisition;
   const storageKey = isEditMode ? `requisition-form-${existingRequisition.id}` : 'new-requisition-form';
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -157,7 +161,8 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
         customQuestions: existingRequisition.customQuestions?.map(q => ({
             ...q,
             options: q.options?.map(opt => ({ value: opt })) || []
-        }))
+        })),
+        attachments: existingRequisition.attachments || [],
     } : {
       requesterId: user?.id || '',
       department: user?.department || '',
@@ -175,6 +180,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
       },
       items: [{ id: `ITEM-${Date.now()}`, name: '', quantity: 1, unitPrice: 0, description: '' }],
       customQuestions: [],
+      attachments: [],
     },
   });
 
@@ -248,12 +254,35 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
     }
     
     try {
+        const uploadedAttachments: Attachment[] = [];
+        for (const file of attachmentFiles) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('directory', 'requisition-attachments');
+            
+            const uploadResponse = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!uploadResponse.ok) {
+                throw new Error(`Failed to upload ${file.name}`);
+            }
+
+            const result = await uploadResponse.json();
+            uploadedAttachments.push({ name: file.name, url: result.path });
+        }
+        
+        const currentAttachments = values.attachments || [];
+        const finalAttachments = [...currentAttachments, ...uploadedAttachments];
+
         const formattedValues = {
             ...validationResult.data,
             customQuestions: validationResult.data.customQuestions?.map(q => ({
             ...q,
             options: q.options?.map(opt => opt.value)
-            }))
+            })),
+            attachments: finalAttachments,
         };
 
         const status = isDraft ? 'Draft' : 'Pending_Approval';
@@ -275,7 +304,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
             description: `Your purchase requisition has been successfully ${isEditMode ? 'updated' : (isDraft ? 'saved as a draft' : 'submitted for approval')}.`,
         });
         
-        localStorage.removeItem(storageKey); // Clear saved data on success
+        localStorage.removeItem(storageKey);
 
         if (onSuccess) {
             onSuccess();
@@ -722,31 +751,43 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
             />
             
             <Separator />
-
-            <div className="grid md:grid-cols-2 gap-8">
-              <FormField
-                control={form.control}
-                name="attachments"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>File Attachments</FormLabel>
-                    <FormControl>
-                      <Input type="file" {...form.register('attachments')} />
-                    </FormControl>
-                    <FormDescription>
-                      Attach any relevant documents (quotes, specs, etc.).
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            
+            <FormItem>
+              <FormLabel>File Attachments</FormLabel>
+              <FormControl>
+                  <Input type="file" multiple onChange={(e) => setAttachmentFiles(Array.from(e.target.files || []))} />
+              </FormControl>
+              <FormDescription>
+                  Attach any relevant documents (e.g., quotes, specifications). New files will be added to existing ones.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
             
             <div className="flex justify-end items-center gap-4">
                 <Button type="button" onClick={handleSaveDraft} variant="secondary" disabled={loading}>
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save as Draft
                 </Button>
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button type="button" disabled={loading}>
+                             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                            {isEditMode ? 'Resubmit for Approval' : 'Submit for Approval'}
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will submit the requisition to your department head for approval. You will not be able to edit it after submission unless it is rejected.
+                        </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => onFinalSubmit(form.getValues(), false)}>Continue</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
           </form>
         </Form>
@@ -755,7 +796,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   );
 }
 
-function QuestionOptions({ index }: { index: number }) {
+export function QuestionOptions({ index }: { index: number }) {
   const { control } = useFormContext();
   const { fields, append, remove } = useFieldArray({
     control,
@@ -788,6 +829,3 @@ function QuestionOptions({ index }: { index: number }) {
     </div>
   );
 }
-
-
-    
