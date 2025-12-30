@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -81,7 +80,7 @@ export async function POST(
             if (requisition) {
                 const isPerItem = (requisition.rfqSettings as any)?.awardStrategy === 'item';
                 
-                // New logic: When an item is paid, reject standby offers for it.
+                // When an item is paid, reject standby offers for it.
                 if (isPerItem && invoiceToUpdate.po?.items) {
                     const paidRequisitionItemIds = new Set(invoiceToUpdate.po.items.map(item => item.requisitionItemId));
                     
@@ -124,13 +123,13 @@ export async function POST(
                         return isRestarted || isFailed;
                     });
 
-                } else {
+                } else { // Single vendor logic
                     const allPOsForRequisition = await tx.purchaseOrder.findMany({
                         where: { requisitionId: requisition.id },
                         include: { invoices: true }
                     });
                     
-                    const allPOsClosed = allPOsForRequisition.length > 0 && allPOsForRequisition.every(po => 
+                    const allPOsClosedOrDelivered = allPOsForRequisition.length > 0 && allPOsForRequisition.every(po => 
                         ['Delivered', 'Closed', 'Cancelled'].includes(po.status.replace(/_/g, ' '))
                     );
                     
@@ -139,7 +138,7 @@ export async function POST(
                          return po.invoices.every(inv => inv.status === 'Paid');
                     });
 
-                    isFullyComplete = allPOsClosed && allInvoicesPaidOrNotRequired;
+                    isFullyComplete = allPOsClosedOrDelivered && allInvoicesPaidOrNotRequired;
                 }
 
                 if (isFullyComplete) {
@@ -147,6 +146,17 @@ export async function POST(
                         where: { id: requisition.id },
                         data: { status: 'Closed' }
                     });
+                    
+                    if (!isPerItem) {
+                        // For single vendor awards, when the process is complete, reject all standby quotes.
+                        await tx.quotation.updateMany({
+                            where: {
+                                requisitionId: requisition.id,
+                                status: 'Standby'
+                            },
+                            data: { status: 'Rejected' }
+                        });
+                    }
                 }
             }
         }
