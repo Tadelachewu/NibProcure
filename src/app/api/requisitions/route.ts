@@ -107,7 +107,8 @@ export async function GET(request: Request) {
                     items: {
                       some: {
                         perItemAwardDetails: {
-                          array_contains: [{vendorId: userPayload.vendorId}],
+                          path: '$[*].vendorId',
+                          array_contains: userPayload.vendorId,
                         },
                       },
                     },
@@ -665,7 +666,7 @@ export async function POST(request: Request) {
     }
 
     const transactionResult = await prisma.$transaction(async (tx) => {
-      const data: any = {
+      let data: any = {
         requester: { connect: { id: actor.id } },
         department: { connect: { id: department.id } },
         title: body.title,
@@ -703,39 +704,46 @@ export async function POST(request: Request) {
         } : undefined,
       };
 
-      const newRequisition = await tx.purchaseRequisition.create({ data });
+      const newRequisition = await tx.purchaseRequisition.create({
+        data,
+      });
 
-      // If submitting, check if user is their own dept head
+      let finalStatus = data.status;
+      let finalApprover = undefined;
+      let auditAction = 'CREATE_REQUISITION';
+      let auditDetails = `Created new requisition: "${newRequisition.title}".`;
+
       if (body.status === 'Pending_Approval') {
           if (department.headId === actor.id) {
-              data.status = 'PreApproved';
+              finalStatus = 'Pending_Director_Approval';
+              const director = await tx.user.findFirst({where: {roles: {some: {name: 'Director_Supply_Chain_and_Property_Management'}}}});
+              if (director) finalApprover = { connect: { id: director.id } };
+              auditAction = 'SUBMIT_AND_AUTO_APPROVE';
+              auditDetails = `Requisition "${newRequisition.title}" submitted by department head and auto-routed to Director.`;
           } else if (department.headId) {
-              data.status = 'Pending_Approval';
-              data.currentApprover = { connect: { id: department.headId } };
+              finalStatus = 'Pending_Approval';
+              finalApprover = { connect: { id: department.headId } };
+              auditAction = 'SUBMIT_FOR_APPROVAL';
+              auditDetails = `Requisition "${newRequisition.title}" submitted for departmental approval.`;
           } else {
-              data.status = 'PreApproved'; // No head, auto-approve
+              finalStatus = 'Pending_Director_Approval'; // No head, auto-approve to next stage
+              const director = await tx.user.findFirst({where: {roles: {some: {name: 'Director_Supply_Chain_and_Property_Management'}}}});
+              if (director) finalApprover = { connect: { id: director.id } };
+              auditAction = 'SUBMIT_FOR_APPROVAL';
+              auditDetails = `Requisition "${newRequisition.title}" submitted (no department head found, auto-routed to Director).`;
           }
       }
       
       const finalRequisition = await tx.purchaseRequisition.update({
         where: { id: newRequisition.id },
-        data: { transactionId: newRequisition.id, status: data.status, currentApprover: data.currentApprover },
+        data: {
+            transactionId: newRequisition.id,
+            status: finalStatus,
+            currentApprover: finalApprover
+        },
         include: { items: true, customQuestions: true, evaluationCriteria: true }
       });
       
-      let auditAction = 'CREATE_REQUISITION';
-      let auditDetails = `Created new requisition: "${finalRequisition.title}".`;
-
-      if (body.status === 'Pending_Approval') {
-          if (data.status === 'PreApproved') {
-            auditAction = 'SUBMIT_AND_AUTO_APPROVE';
-            auditDetails = `Requisition "${finalRequisition.title}" submitted by department head and automatically approved.`;
-          } else {
-            auditAction = 'SUBMIT_FOR_APPROVAL';
-            auditDetails = `Requisition "${finalRequisition.title}" submitted for approval.`;
-          }
-      }
-
       await tx.auditLog.create({
         data: {
           transactionId: finalRequisition.id,
