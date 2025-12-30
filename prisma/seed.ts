@@ -37,6 +37,7 @@ async function main() {
   await prisma.requisitionItem.deleteMany({});
   await prisma.purchaseRequisition.deleteMany({});
   await prisma.kYC_Document.deleteMany({});
+  await prisma.directorPin.deleteMany({});
   await prisma.vendor.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.department.deleteMany({});
@@ -145,8 +146,8 @@ async function main() {
         value: 3,
     },
     create: {
-        key: 'rfqQuorum',
-        value: 3,
+      key: 'rfqQuorum',
+      value: 3,
     }
   });
 
@@ -156,8 +157,8 @@ async function main() {
         value: 2,
     },
     create: {
-        key: 'committeeQuorum',
-        value: 2,
+      key: 'committeeQuorum',
+      value: 2,
     }
   });
 
@@ -290,7 +291,7 @@ async function main() {
           phone: vendor.phone,
           address: vendor.address,
           kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
-          userId: createdUser.id,
+          user: { connect: { id: createdUser.id } },
       },
       create: {
           id: vendor.id,
@@ -300,14 +301,8 @@ async function main() {
           phone: vendor.phone,
           address: vendor.address,
           kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
-          userId: createdUser.id,
+          user: { connect: { id: createdUser.id } },
       },
-    });
-
-    // Now, update the user with the vendorId
-    await prisma.user.update({
-        where: { id: createdUser.id },
-        data: { vendorId: createdVendor.id }
     });
 
     if (kycDocuments) {
@@ -582,3 +577,5 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+    
