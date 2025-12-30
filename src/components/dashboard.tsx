@@ -26,9 +26,10 @@ import {
   Wallet,
   Edit,
   CheckCircle,
+  Pin,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { Invoice, PurchaseOrder, PurchaseRequisition } from '@/lib/types';
+import { Invoice, PurchaseOrder, PurchaseRequisition, DirectorPin } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from './ui/table';
 import { Badge } from './ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
@@ -70,6 +71,32 @@ const StatCard = ({
     )}
   </Card>
 );
+
+const DirectorPinCard = ({ pins }: { pins: DirectorPin[] }) => (
+    <Card className="col-span-1 lg:col-span-2 border-amber-500/50">
+        <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-600"><Pin/> Director PINs for Bid Opening</CardTitle>
+            <CardDescription>Use these PINs to authorize the opening of quotations for the respective requisitions.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            {pins.length > 0 ? (
+                <Table>
+                    <TableHeader><TableRow><TableHead>Requisition ID</TableHead><TableHead>Your PIN</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                        {pins.map(pin => (
+                            <TableRow key={pin.id}>
+                                <TableCell className="font-medium">{pin.requisitionId}</TableCell>
+                                <TableCell><Badge variant="outline" className="font-mono text-lg tracking-widest">{pin.pin}</Badge></TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            ) : (
+                <p className="text-sm text-muted-foreground">No active PINs assigned to you at this moment.</p>
+            )}
+        </CardContent>
+    </Card>
+)
 
 const RecentRequisitionsTable = ({ requisitions }: { requisitions: PurchaseRequisition[] }) => {
     const router = useRouter();
@@ -156,6 +183,31 @@ function RequesterDashboard() {
     );
 }
 
+function DirectorDashboard() {
+    const { user, token } = useAuth();
+    const [pins, setPins] = useState<DirectorPin[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!user || !token) return;
+        setLoading(true);
+        fetch(`/api/pins`, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(res => res.json())
+            .then(data => setPins(Array.isArray(data) ? data : []))
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [user, token]);
+
+    if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+
+    return (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <ApproverDashboard forAwardReviews={true} />
+            <DirectorPinCard pins={pins} />
+        </div>
+    )
+}
+
 function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: boolean }) {
     const { user, token } = useAuth();
     const [pendingCount, setPendingCount] = useState(0);
@@ -217,6 +269,7 @@ function ProcurementOfficerDashboard() {
     const stats = useMemo(() => {
         const readyForRfq = data.requisitions.filter(r => r.status === 'PreApproved').length;
         const acceptingQuotes = data.requisitions.filter(r => r.status === 'Accepting_Quotes').length;
+        const readyForOpening = data.requisitions.filter(r => r.status === 'Ready_for_Opening').length;
         const inCommitteeScoring = data.requisitions.filter(r => r.status === 'Scoring_In_Progress').length;
         const readyToAward = data.requisitions.filter(r => r.status === 'Scoring_Complete').length;
         const pendingFinalReview = data.requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
@@ -230,7 +283,7 @@ function ProcurementOfficerDashboard() {
             .filter(i => i.status !== 'Paid' && !(i.po?.receipts?.some((r: any) => r.status === 'Disputed')))
             .reduce((sum, i) => sum + i.totalAmount, 0);
 
-        return { readyForRfq, acceptingQuotes, inCommitteeScoring, readyToAward, pendingFinalReview, awardDeclined, paidInvoicesValue, unpaidInvoicesValue };
+        return { readyForRfq, readyForOpening, acceptingQuotes, inCommitteeScoring, readyToAward, pendingFinalReview, awardDeclined, paidInvoicesValue, unpaidInvoicesValue };
     }, [data]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -239,8 +292,8 @@ function ProcurementOfficerDashboard() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             <StatCard title="Ready for RFQ" value={stats.readyForRfq.toString()} description="Approved and waiting for RFQ" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Manage Quotations"/>
             <StatCard title="Accepting Quotes" value={stats.acceptingQuotes.toString()} description="RFQs currently active with vendors" icon={<FileBadge className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="View Active RFQs"/>
-            <StatCard title="In Committee Scoring" value={stats.inCommitteeScoring.toString()} description="Quotes being evaluated by committee" icon={<Users className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Monitor Progress"/>
-            <StatCard title="Ready to Award" value={stats.readyToAward.toString()} description="Scoring is complete" icon={<Trophy className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Finalize Awards"/>
+            <StatCard title="Ready for Opening" value={stats.readyForOpening.toString()} description="Quote deadline passed, pending PIN opening" icon={<Pin className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Open Bids" variant={stats.readyForOpening > 0 ? "default" : "default"}/>
+            <StatCard title="Ready to Award" value={stats.readyToAward.toString()} description="Bids opened, scoring complete" icon={<Trophy className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Finalize Awards"/>
             <StatCard title="Pending Award Review" value={stats.pendingFinalReview.toString()} description="Awards in hierarchical approval" icon={<GanttChartSquare className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/award-reviews')} cta="Track Reviews"/>
             <StatCard title="Award Declined" value={stats.awardDeclined.toString()} description="Vendor declined, action needed" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Promote Standby" variant="destructive"/>
             <StatCard title="Total Unpaid" value={`${stats.unpaidInvoicesValue.toLocaleString()} ETB`} description="Invoices pending or approved" icon={<Wallet className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View Invoices"/>
@@ -368,9 +421,9 @@ function CommitteeDashboard() {
             const hasScored = r.committeeAssignments?.some((a: any) => a.userId === user?.id && a.scoresSubmitted);
             
             // Corrected Logic: Scoring is active if the deadline has passed and the process is not yet finished.
-            const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
-            const isRelevantStatus = ['Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete'].includes(r.status);
-            const inScoring = deadlinePassed && isRelevantStatus;
+            const bidsOpened = r.bidsOpened;
+            const isRelevantStatus = ['Scoring_In_Progress', 'Scoring_Complete'].includes(r.status);
+            const inScoring = bidsOpened && isRelevantStatus;
 
             return !hasScored && inScoring;
         }).length;
@@ -421,7 +474,9 @@ export function Dashboard() {
       case 'Director_Supply_Chain_and_Property_Management':
       case 'VP_Resources_and_Facilities':
       case 'President':
-        return <ApproverDashboard forAwardReviews={true} />;
+      case 'Finance_Director':
+      case 'Facility_Director':
+        return <DirectorDashboard />;
       case 'Procurement_Officer': return <ProcurementOfficerDashboard />;
       case 'Admin': return <ProcurementOfficerDashboard />; // Admin gets the same overview
       case 'Finance': return <FinanceDashboard />;

@@ -1,5 +1,4 @@
 
-
 export type UserRole =
   | 'Requester'
   | 'Approver'
@@ -52,6 +51,7 @@ export type RequisitionStatus =
   | 'Rejected'
   | 'PreApproved' // Department head approved, ready for RFQ
   | 'Accepting_Quotes' // RFQ sent, vendors can submit quotes
+  | 'Ready_for_Opening' // New status: Deadline passed, waiting for PINs
   | 'Scoring_In_Progress' // Deadline passed, committee is scoring
   | 'Scoring_Complete' // All scores are in, ready to finalize award
   | 'Awarded' // Award has been sent to vendor(s) and is pending response
@@ -202,7 +202,16 @@ export type PurchaseRequisition = {
   };
   minutes?: Minute[];
   auditTrail?: AuditLog[];
+  bidsOpened: boolean;
+  directorPins: DirectorPin[];
 };
+
+export type DirectorPin = {
+    id: string;
+    requisitionId: string;
+    userId: string;
+    pin: string; // This will be the plain text pin for display on the dashboard
+}
 
 export type AuditLog = {
   id: string; // Will be UUID
@@ -236,6 +245,7 @@ export type Vendor = {
   kycStatus: KycStatus;
   kycDocuments?: KycDocument[];
   rejectionReason?: string;
+  invoices: Invoice[];
 };
 
 export type QuoteItem = {
