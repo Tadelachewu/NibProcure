@@ -72,6 +72,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { CommitteeActions } from '@/components/committee-actions';
 import { EditableCriteria } from '@/components/editable-criteria';
 import { EditableQuestions } from '@/components/editable-questions';
+import { RfqStatusManager } from '@/components/rfq-status-manager';
 
 
 const PAGE_SIZE = 6;
@@ -364,7 +365,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                     </a>
                                 </Button>
                             )}
-                             {(isDeadlinePassed || quote.cpoDocumentUrl) ? (
+                             {(requisition.bidsOpened || quote.cpoDocumentUrl) ? (
                                 <>
                                     {hidePrices ? (
                                         <div className="text-center py-4">
@@ -372,8 +373,8 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                         </div>
                                     ) : (
                                         <>
-                                            {isDeadlinePassed && <div className="text-3xl font-bold text-center">{quote.totalPrice.toLocaleString()} ETB</div>}
-                                            {isDeadlinePassed && <div className="text-center text-muted-foreground">Est. Delivery: {format(new Date(quote.deliveryDate), 'PP')}</div>}
+                                            {requisition.bidsOpened && <div className="text-3xl font-bold text-center">{quote.totalPrice.toLocaleString()} ETB</div>}
+                                            {requisition.bidsOpened && <div className="text-center text-muted-foreground">Est. Delivery: {format(new Date(quote.deliveryDate), 'PP')}</div>}
                                         </>
                                     )}
 
@@ -417,7 +418,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             <Button className="w-full" variant="outline" onClick={() => onViewDetails(quote)}>
                                 <Eye className="mr-2 h-4 w-4" /> View Full Quote
                             </Button>
-                             {isAssignedCommitteeMember && isDeadlinePassed && (
+                             {isAssignedCommitteeMember && requisition.bidsOpened && (
                                 <Button className="w-full" variant={hasUserScored ? "secondary" : "default"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
                                     {hasUserScored ? 'View Your Score' : 'Score this Quote'}
@@ -1025,7 +1026,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const { user, token } = useAuth();
     const { toast } = useToast();
 
-    const isSent = requisition.status === 'Accepting_Quotes' || requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
+    const isSent = requisition.status === 'Accepting_Quotes' || requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Ready_for_Opening';
 
 
      useEffect(() => {
@@ -2609,9 +2610,8 @@ export default function QuotationDetailsPage() {
 
   const readyForCommitteeAssignment = useMemo(() => {
     if (!requisition) return false;
-    const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
     const hasEnoughQuotes = quotations.length >= committeeQuorum;
-    return deadlinePassed && hasEnoughQuotes && requisition.status === 'Accepting_Quotes';
+    return requisition.status === 'Ready_for_Opening' && hasEnoughQuotes;
   }, [requisition, quotations.length, committeeQuorum]);
   
   const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
@@ -2627,7 +2627,7 @@ export default function QuotationDetailsPage() {
     const awardStatuses = ['Awarded', 'PostApproved', 'Award_Declined'];
     if (awardStatuses.includes(requisition.status) || requisition.status.startsWith('Pending_')) return 'award';
     
-    const committeeStatuses = ['Scoring_In_Progress', 'Scoring_Complete'];
+    const committeeStatuses = ['Scoring_In_Progress', 'Scoring_Complete', 'Ready_for_Opening'];
     if (committeeStatuses.includes(requisition.status)) return 'committee';
     
     if (requisition.status === 'Accepting_Quotes' && isDeadlinePassed) return 'committee';
@@ -2973,11 +2973,11 @@ export default function QuotationDetailsPage() {
   });
   
   const hasAssignedCommittee = (requisition.financialCommitteeMemberIds && requisition.financialCommitteeMemberIds.length > 0) || (requisition.technicalCommitteeMemberIds && requisition.technicalCommitteeMemberIds.length > 0);
-  const isScoringStarted = requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes';
 
 
   return (
     <div className="space-y-6">
+       { requisition && <RfqStatusManager requisition={requisition} onStatusChange={fetchRequisitionAndQuotes} /> }
        <div className="flex items-center justify-between">
           <Button variant="outline" onClick={() => router.back()}>
               <ArrowLeft className="mr-2 h-4 w-4" />
@@ -3025,6 +3025,19 @@ export default function QuotationDetailsPage() {
                 </CardFooter>
             </Card>
         )}
+        
+        {requisition.status === 'Ready_for_Opening' && isAuthorized && (
+            <Card className="border-primary">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-primary">Bids Ready for Opening</CardTitle>
+                    <CardDescription>The submission deadline has passed. You can now open the bids to view prices and begin the evaluation process.</CardDescription>
+                </CardHeader>
+                <CardFooter>
+                    <Button disabled>Open Bids</Button>
+                </CardFooter>
+            </Card>
+        )}
+
 
         {quorumNotMetAndDeadlinePassed && isAuthorized && (
             <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
@@ -3070,7 +3083,7 @@ export default function QuotationDetailsPage() {
                             open={isCommitteeDialogOpen}
                             onOpenChange={setCommitteeDialogOpen}
                             isAuthorized={isAuthorized}
-                            isEditDisabled={isScoringDeadlinePassed || isAwarded}
+                            isEditDisabled={isAwarded || requisition.status === 'Scoring_Complete' || scoringDeadlinePassed}
                         />
                     </AccordionContent>
                 </AccordionItem>
@@ -3407,3 +3420,6 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
     
 
+
+
+    
