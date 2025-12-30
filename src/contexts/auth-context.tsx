@@ -87,6 +87,8 @@ const rolePrecedence: Record<string, number> = {
   Director_Supply_Chain_and_Property_Management: 7,
   VP_Resources_and_Facilities: 7,
   President: 7,
+  Finance_Director: 7,
+  Facility_Director: 7,
   Vendor: 1,
 };
 
@@ -397,5 +399,3 @@ export function useAuth() {
   }
   return context;
 }
-
-    
