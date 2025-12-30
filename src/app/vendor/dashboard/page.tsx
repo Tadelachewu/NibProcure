@@ -205,7 +205,10 @@ export default function VendorDashboardPage() {
                 const wonAwards = vendorItemDetails.filter(d => d.status === 'Awarded' || d.status === 'Accepted').length;
                 return { status: wonAwards === totalAwardsPossible ? 'Awarded' : 'Partially Awarded' };
             }
-            if (vendorItemDetails.some(d => d.status === 'Standby')) return { status: 'Standby' };
+            if (vendorItemDetails.some(d => d.status === 'Standby')) {
+                if (req.status === 'Closed' || req.status === 'Fulfilled') return { status: 'Not Awarded' };
+                return { status: 'Standby' };
+            }
         }
         
         if (vendorQuote) {
@@ -213,7 +216,12 @@ export default function VendorDashboardPage() {
             if (vendorQuote.status === 'Accepted') return { status: 'Accepted' };
             if (vendorQuote.status === 'Declined') return { status: 'Declined', reason: vendorQuote.rejectionReason };
             if (vendorQuote.status === 'Awarded') return { status: 'Awarded' };
-            if (vendorQuote.status === 'Standby') return { status: 'Standby' };
+            if (vendorQuote.status === 'Standby') {
+                if (req.status === 'Closed' || req.status === 'Fulfilled') return { status: 'Not Awarded' };
+                return { status: 'Standby' };
+            }
+            if (vendorQuote.status === 'Rejected') return { status: 'Not Awarded' };
+
 
             if (vendorQuote.status === 'Submitted') {
                 if (req.status === 'Closed' || req.status === 'Fulfilled') return { status: 'Not Awarded' };
