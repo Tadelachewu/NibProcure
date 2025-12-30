@@ -87,7 +87,6 @@ export function ApprovalsTable() {
     if (!user || !token) return;
     try {
       setLoading(true);
-      // This page is ONLY for initial departmental approvals.
       const apiUrl = `/api/requisitions?status=Pending_Approval&approverId=${user.id}`;
       
       const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}` } });
@@ -130,7 +129,6 @@ export function ApprovalsTable() {
   const submitAction = async () => {
     if (!selectedRequisition || !actionType || !user) return;
     
-    // On departmental approval, the status becomes 'PreApproved'
     const newStatus = actionType === 'approve' ? 'PreApproved' : 'Rejected';
 
     try {
@@ -376,5 +374,3 @@ export function ApprovalsTable() {
     </>
   );
 }
-
-    

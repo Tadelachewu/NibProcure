@@ -131,21 +131,19 @@ export async function GET(request: Request) {
             'PreApproved', 'Accepting_Quotes', 'Ready_for_Opening', 'Scoring_In_Progress', 
             'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
             'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed',
-            // Add the correct, granular pending statuses from your schema
-            'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review',
-            'Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval',
-            'Pending_President_Approval'
+            'Pending_Review'
         ];
         
-        whereClause.status = { in: rfqLifecycleStatuses };
-
         const userRoles = userPayload?.roles.map(r => (r as any).name) || [];
 
         if (userRoles.includes('Committee_Member')) {
+            whereClause.status = { in: rfqLifecycleStatuses };
             whereClause.OR = [
                     { financialCommitteeMembers: { some: { id: userPayload?.id } } },
                     { technicalCommitteeMembers: { some: { id: userPayload?.id } } },
                 ];
+        } else {
+            whereClause.status = { in: rfqLifecycleStatuses };
         }
     } else {
       if (statusParam) {
@@ -153,7 +151,10 @@ export async function GET(request: Request) {
         whereClause.status = { in: statuses };
       }
       if (approverId) {
-        whereClause.currentApproverId = approverId;
+        whereClause.OR = [
+            { currentApproverId: approverId },
+            { reviews: { some: { reviewerId: approverId } } }
+        ];
       }
       
       if (userPayload && userPayload.roles.some(r => (r as any).name === 'Requester') && !statusParam && !approverId) {
@@ -317,7 +318,6 @@ export async function PATCH(
             urgency: body.urgency,
             department: { connect: { name: body.department } },
             totalPrice: totalPrice,
-            status: status ? status.replace(/ /g, '_') : requisition.status,
             approver: { disconnect: true },
             approverComment: null, // *** FIX: Clear the rejection comment on resubmission ***
             items: {
@@ -359,17 +359,27 @@ export async function PATCH(
         
         if (newStatus === 'Pending_Approval') {
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
-            if (department?.headId) {
+            
+            if (department?.headId === user.id) { // User is their own head, bypass dept approval
+                 const { nextStatus: hierarchyNextStatus, nextApproverId: hierarchyNextApproverId } = await getNextApprovalStep(prisma, { ...requisition, totalPrice: totalPrice }, user);
+                 dataToUpdate.status = hierarchyNextStatus;
+                 dataToUpdate.currentApproverId = hierarchyNextApproverId;
+                 auditAction = 'SUBMIT_AND_AUTO_APPROVE';
+                 auditDetails = `Requisition "${body.title}" submitted by department head; bypassed self-approval and routed for managerial review.`;
+            } else if (department?.headId) { // Route to department head
                 dataToUpdate.status = 'Pending_Approval';
                 dataToUpdate.currentApprover = { connect: { id: department.headId } };
                 auditAction = 'SUBMIT_FOR_APPROVAL';
                 auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
-            } else {
-                 dataToUpdate.status = 'PreApproved';
-                 dataToUpdate.currentApproverId = undefined; // Use undefined instead of disconnect
+            } else { // No department head, bypass to managerial
+                 const { nextStatus: hierarchyNextStatus, nextApproverId: hierarchyNextApproverId } = await getNextApprovalStep(prisma, { ...requisition, totalPrice: totalPrice }, user);
+                 dataToUpdate.status = hierarchyNextStatus;
+                 dataToUpdate.currentApproverId = hierarchyNextApproverId;
                  auditAction = 'SUBMIT_FOR_APPROVAL';
-                 auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval (no department head found, auto-approved).`;
+                 auditDetails = `Requisition ${id} ("${body.title}") submitted; no department head found, routed directly for managerial review.`;
             }
+        } else {
+            dataToUpdate.status = status ? status.replace(/ /g, '_') : requisition.status;
         }
 
     } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Approval') {
@@ -578,22 +588,6 @@ export async function PATCH(
         console.log(`[PATCH /api/requisitions] Award action transaction complete for Req ID: ${id}`);
         return NextResponse.json(updatedRequisition);
     }
-
-    else if (newStatus === 'Pending_Approval' && (requisition.status === 'Draft' || requisition.status === 'Rejected')) {
-        const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
-        if (department?.headId) { 
-            dataToUpdate.currentApprover = { connect: { id: department.headId } };
-        } else {
-            // If no department head, auto-approve to the next stage
-            dataToUpdate.status = 'PreApproved';
-            dataToUpdate.currentApproverId = null;
-        }
-        dataToUpdate.status = 'Pending_Approval';
-        dataToUpdate.approverComment = null; // Clear rejection comment
-        auditAction = 'SUBMIT_FOR_APPROVAL';
-        auditDetails = `Requisition ${id} was submitted for approval.`;
-    }
-    
     else {
         return NextResponse.json({ error: 'Invalid operation for current status.' }, { status: 400 });
     }
@@ -668,7 +662,7 @@ export async function POST(request: Request) {
     }
 
     const transactionResult = await prisma.$transaction(async (tx) => {
-      const data: any = {
+      let data: any = {
         requester: { connect: { id: actor.id } },
         department: { connect: { id: department.id } },
         title: body.title,
@@ -706,18 +700,18 @@ export async function POST(request: Request) {
         } : undefined,
       };
 
-      // If submitting, check if user is their own dept head
       if (body.status === 'Pending_Approval') {
-          if (department.headId && department.headId !== actor.id) {
+          if (department.headId === actor.id) { // User is their own head, bypass dept approval
+                const { nextStatus: hierarchyNextStatus, nextApproverId: hierarchyNextApproverId } = await getNextApprovalStep(tx, { ...body, totalPrice }, actor as User);
+                data.status = hierarchyNextStatus;
+                data.currentApproverId = hierarchyNextApproverId;
+          } else if (department.headId) { // Route to department head
               data.status = 'Pending_Approval';
               data.currentApprover = { connect: { id: department.headId } };
-          } else {
-              // If user is their own dept head or no head exists, start the hierarchical chain
-              const { nextStatus, nextApproverId } = await getNextApprovalStep(tx, { ...body, totalPrice }, actor);
-              data.status = nextStatus;
-              if (nextApproverId) {
-                data.currentApprover = { connect: { id: nextApproverId } };
-              }
+          } else { // No department head, bypass to managerial
+               const { nextStatus: hierarchyNextStatus, nextApproverId: hierarchyNextApproverId } = await getNextApprovalStep(tx, { ...body, totalPrice }, actor as User);
+               data.status = hierarchyNextStatus;
+               data.currentApproverId = hierarchyNextApproverId;
           }
       }
 
@@ -826,6 +820,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-
-    

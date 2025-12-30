@@ -19,14 +19,14 @@ export async function GET(request: Request) {
     const userId = actor.id;
 
     // This route is for POST-AWARD reviews. It should not show initial departmental approvals.
-    const preAwardStatuses = ['Pending_Approval', 'Draft', 'Rejected', 'PreApproved'];
+    const preAwardStatuses: RequisitionStatus[] = ['Pending_Approval', 'Draft', 'Rejected', 'PreApproved'];
 
     // Build the main query conditions
     const orConditions: any[] = [
       // The user is the direct current approver for a pending item, EXCLUDING pre-award ones.
       { currentApproverId: userId, status: { startsWith: 'Pending_', notIn: preAwardStatuses } },
       // The status matches a committee role the user has.
-      { status: { in: userRoles.map(r => `Pending_${r}`).filter(s => !preAwardStatuses.includes(s)) } },
+      { status: { in: userRoles.map(r => `Pending_${r}`).filter(s => !preAwardStatuses.includes(s as RequisitionStatus)) } },
       // The user has already signed a minute for this requisition
       { minutes: { some: { signatures: { some: { signerId: userId } } } } },
        // The requisition is in a state of decline or partial closure, which might still have items needing action.
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
         const allSystemRoles = await prisma.role.findMany({ select: { name: true } });
         const allPossiblePendingStatuses = allSystemRoles
             .map(r => `Pending_${r.name}`)
-            .filter(s => !preAwardStatuses.includes(s)); // Exclude pre-award statuses
+            .filter(s => !preAwardStatuses.includes(s as RequisitionStatus)); // Exclude pre-award statuses
         orConditions.push({ status: { in: allPossiblePendingStatuses } });
         // Also show items ready for notification and those declined/partially closed
         orConditions.push({ status: 'PostApproved' });
@@ -258,5 +258,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    
