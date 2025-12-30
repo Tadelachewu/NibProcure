@@ -87,12 +87,15 @@ export function ApprovalsTable() {
     if (!user || !token) return;
     try {
       setLoading(true);
+      // This API call now fetches items pending for the user OR items they have already actioned.
       const response = await fetch(`/api/requisitions?approverId=${user.id}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) {
         throw new Error('Failed to fetch requisitions for approval');
       }
       const data = await response.json();
-      setRequisitions(data.requisitions || []);
+      // Filter for only statuses relevant to the departmental approval workflow
+      const preApprovalWorkflowStatuses = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval'];
+      setRequisitions((data.requisitions || []).filter((r: PurchaseRequisition) => preApprovalWorkflowStatuses.includes(r.status)));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
     } finally {

@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     const userRoles = actor.roles as UserRole[];
     const userId = actor.id;
 
-    // Filter out pre-award approval statuses
+    // This API should only handle POST-AWARD reviews. Pre-award approvals are on a different page.
     const preAwardStatuses = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval'];
 
     // Build the main query conditions
