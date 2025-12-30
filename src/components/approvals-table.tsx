@@ -87,10 +87,7 @@ export function ApprovalsTable() {
     if (!user || !token) return;
     try {
       setLoading(true);
-      const statusesToFetch = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval'];
-      const apiUrl = `/api/requisitions?status=${statusesToFetch.join(',')}`;
-      
-      const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(`/api/requisitions?approverId=${user.id}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) {
         throw new Error('Failed to fetch requisitions for approval');
       }
@@ -132,9 +129,9 @@ export function ApprovalsTable() {
     
     let newStatus = '';
     if (actionType === 'approve') {
-      if(selectedRequisition.status === 'Pending_Approval') newStatus = 'Pending_Director_Approval';
-      else if(selectedRequisition.status === 'Pending_Director_Approval') newStatus = 'Pending_Managerial_Approval';
-      else if(selectedRequisition.status === 'Pending_Managerial_Approval') newStatus = 'PreApproved';
+        if(selectedRequisition.status === 'Pending_Approval') newStatus = 'Pending_Director_Approval';
+        else if(selectedRequisition.status === 'Pending_Director_Approval') newStatus = 'Pending_Managerial_Approval';
+        else if(selectedRequisition.status === 'Pending_Managerial_Approval') newStatus = 'PreApproved';
     } else {
       newStatus = 'Rejected';
     }
