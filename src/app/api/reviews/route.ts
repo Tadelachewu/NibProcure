@@ -1,4 +1,6 @@
 
+'use server';
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
@@ -16,8 +18,8 @@ export async function GET(request: Request) {
     const userRoles = actor.roles as UserRole[];
     const userId = actor.id;
 
-    // Filter out pre-award approval statuses
-    const preAwardStatuses = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval'];
+    // This route is for POST-AWARD reviews. It should not show initial departmental approvals.
+    const preAwardStatuses = ['Pending_Approval'];
 
     // Build the main query conditions
     const orConditions: any[] = [
@@ -167,7 +169,7 @@ export async function GET(request: Request) {
             const awardStrategy = (req as any).rfqSettings?.awardStrategy;
             const hasPendingPerItemAwards = (req.items || []).some((item: any) => {
               const details = (item.perItemAwardDetails as any[]) || [];
-              return details.some(d => d.status === 'Pending_AWARD' || d.status === 'Pending_Award');
+              return details.some(d => d.status === 'Pending_Award');
             });
 
             if (awardStrategy === 'item' && hasPendingPerItemAwards) {

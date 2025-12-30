@@ -87,8 +87,7 @@ export function ApprovalsTable() {
     if (!user || !token) return;
     try {
       setLoading(true);
-      const statusesToFetch = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval'];
-      const apiUrl = `/api/requisitions?status=${statusesToFetch.join(',')}`;
+      const apiUrl = `/api/requisitions?status=Pending_Approval&approverId=${user.id}`;
       
       const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) {
@@ -132,16 +131,9 @@ export function ApprovalsTable() {
     
     let newStatus = '';
     if (actionType === 'approve') {
-      if(selectedRequisition.status === 'Pending_Approval') newStatus = 'Pending_Director_Approval';
-      else if(selectedRequisition.status === 'Pending_Director_Approval') newStatus = 'Pending_Managerial_Approval';
-      else if(selectedRequisition.status === 'Pending_Managerial_Approval') newStatus = 'PreApproved';
+        newStatus = 'PreApproved';
     } else {
-      newStatus = 'Rejected';
-    }
-    
-    if(!newStatus) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Could not determine next approval step.' });
-      return;
+        newStatus = 'Rejected';
     }
 
     try {
@@ -213,7 +205,7 @@ export function ApprovalsTable() {
       <CardHeader>
         <CardTitle>Departmental Approvals</CardTitle>
         <CardDescription>
-          Review and act on items from your department or those assigned to your role in the approval chain.
+          Review and act on items from your department that are pending your approval.
         </CardDescription>
       </CardHeader>
       <CardContent>
