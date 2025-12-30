@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -29,6 +30,7 @@ export async function POST(
         include: { 
             po: { 
                 include: { 
+                    items: true, // Include PO items to find requisition items
                     receipts: true,
                     vendor: true, // Fetch vendor details
                     requisition: true, // Fetch requisition details
@@ -78,6 +80,29 @@ export async function POST(
             
             if (requisition) {
                 const isPerItem = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+                
+                // New logic: When an item is paid, reject standby offers for it.
+                if (isPerItem && invoiceToUpdate.po?.items) {
+                    const paidRequisitionItemIds = new Set(invoiceToUpdate.po.items.map(item => item.requisitionItemId));
+                    
+                    for (const reqItemId of paidRequisitionItemIds) {
+                        const originalReqItem = await tx.requisitionItem.findUnique({ where: { id: reqItemId } });
+                        if (originalReqItem && originalReqItem.perItemAwardDetails) {
+                            const updatedDetails = (originalReqItem.perItemAwardDetails as PerItemAwardDetail[]).map(detail => {
+                                if (detail.status === 'Standby') {
+                                    return { ...detail, status: 'Rejected' as const };
+                                }
+                                return detail;
+                            });
+                             await tx.requisitionItem.update({
+                                where: { id: reqItemId },
+                                data: { perItemAwardDetails: updatedDetails }
+                            });
+                        }
+                    }
+                }
+
+
                 let isFullyComplete = false;
 
                 if (isPerItem) {
@@ -95,7 +120,8 @@ export async function POST(
                         }
                         
                         const isRestarted = details.some(d => d.status === 'Restarted');
-                        return isRestarted;
+                        const isFailed = details.every(d => ['Failed_to_Award', 'Declined', 'Rejected'].includes(d.status));
+                        return isRestarted || isFailed;
                     });
 
                 } else {
