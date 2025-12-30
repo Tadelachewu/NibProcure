@@ -59,12 +59,12 @@ export async function getActorFromToken(request: Request): Promise<User> {
     const authHeader = request.headers.get('Authorization');
     const token = authHeader?.split(' ')[1];
     if (!token) {
-      throw new Error('Unauthorized');
+      throw new Error('Unauthorized: No token provided');
     };
 
     const decoded = await verifyJwt(token);
     if (!decoded || !decoded.id) {
-        throw new Error('Unauthorized');
+        throw new Error('Unauthorized: Invalid token');
     }
 
     const user = await prisma.user.findUnique({
@@ -73,22 +73,14 @@ export async function getActorFromToken(request: Request): Promise<User> {
     });
     
     if (!user) {
-        throw new Error('Unauthorized');
+        throw new Error('Unauthorized: User not found');
     }
-
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    const effectiveRoles = new Set(user.roles.map(r => r.name as UserRole));
-
-    if (rfqSenderSetting) {
-        const setting = rfqSenderSetting.value as RfqSenderSetting;
-        if (setting.type === 'specific' && setting.userIds?.includes(user.id)) {
-            effectiveRoles.add('Procurement_Officer');
-        }
-    }
+    
+    const roleNames = user.roles.map(r => r.name as UserRole);
 
     return {
       ...user,
       department: user.department?.name,
-      roles: Array.from(effectiveRoles),
+      roles: roleNames,
     } as User;
 }

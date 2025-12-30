@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail, RequisitionItem, QuoteItem, PurchaseOrder } from '@/lib/types';
+import { PurchaseRequisition, Quotation, Vendor, PerItemAwardDetail, PurchaseOrder } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -115,48 +115,6 @@ export default function VendorDashboardPage() {
             const poData: PurchaseOrder[] = await poRes.json();
             setAllPOs(poData);
 
-            let needsRefetch = false;
-            for (const req of requisitionsData) {
-                if (req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline))) {
-                    const awardStrategy = (req.rfqSettings as any)?.awardStrategy;
-                    
-                    if (awardStrategy === 'item') {
-                        for (const item of req.items) {
-                            const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-                            const awardedDetail = perItemDetails.find(d => d.vendorId === user.vendorId && d.status === 'Awarded');
-                            if (awardedDetail) {
-                                needsRefetch = true;
-                                await fetch(`/api/quotations/${awardedDetail.quotationId}/respond`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                    body: JSON.stringify({ userId: user.id, action: 'reject', quoteItemId: awardedDetail.quoteItemId, rejectionReason: 'deadline is passed' })
-                                });
-                            }
-                        }
-                    } else { // Single award
-                        const awardedQuote = req.quotations?.find(q => q.vendorId === user.vendorId && q.status === 'Awarded');
-                        if (awardedQuote) {
-                            needsRefetch = true;
-                            await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                body: JSON.stringify({ userId: user.id, action: 'reject', rejectionReason: 'deadline is passed' })
-                            });
-                        }
-                    }
-                }
-            }
-
-            if (needsRefetch) {
-                toast({
-                    variant: 'destructive',
-                    title: 'Deadline Expired',
-                    description: `An award was automatically declined because the response deadline passed.`
-                });
-                fetchAllData(); // Re-trigger the fetch to get the updated state
-                return;
-            }
-
             setAllRequisitions(requisitionsData);
 
         } catch (err) {
@@ -164,7 +122,7 @@ export default function VendorDashboardPage() {
         } finally {
             setLoading(false);
         }
-    }, [token, user, toast]);
+    }, [token, user]);
 
     useEffect(() => {
         fetchAllData();
@@ -251,18 +209,12 @@ export default function VendorDashboardPage() {
 
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
-            
-            const hasReopenedItemForVendor = req.items.some(item => 
-                item.reopenDeadline && isPast(new Date(item.reopenDeadline)) === false &&
-                item.reopenVendorIds?.includes(user?.vendorId || '')
-            );
-
             const isRelated = vendorQuote || 
                               req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
 
             if (isRelated) {
                 active.push(req);
-            } else if (hasReopenedItemForVendor || req.status === 'Accepting_Quotes') {
+            } else if (req.status === 'Accepting_Quotes') {
                 open.push(req);
             }
         });
@@ -460,4 +412,3 @@ export default function VendorDashboardPage() {
             )}
         </div>
     )
-}
