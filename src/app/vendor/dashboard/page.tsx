@@ -206,7 +206,19 @@ export default function VendorDashboardPage() {
                 return { status: wonAwards === totalAwardsPossible ? 'Awarded' : 'Partially Awarded' };
             }
             if (vendorItemDetails.some(d => d.status === 'Standby')) {
-                if (req.status === 'Closed' || req.status === 'Fulfilled') return { status: 'Not Awarded' };
+                // If any item this vendor is on standby for is already won by someone else, it's not really an active standby.
+                const isStandbyRelevant = vendorItemDetails.some(detail => {
+                    if (detail.status !== 'Standby') return false;
+                    const item = req.items.find(i => i.id === detail.requisitionItemId);
+                    if (!item) return false;
+                    const allDetailsForItem = (item.perItemAwardDetails as PerItemAwardDetail[] || []);
+                    // It's a relevant standby if no one else has 'Accepted' for this item yet.
+                    return !allDetailsForItem.some(d => d.status === 'Accepted');
+                });
+
+                if (!isStandbyRelevant || req.status === 'Closed' || req.status === 'Fulfilled') {
+                    return { status: 'Not Awarded' };
+                }
                 return { status: 'Standby' };
             }
         }
