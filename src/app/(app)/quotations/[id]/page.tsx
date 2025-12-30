@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, ChevronDown, ChevronsRight, ChevronLeft, FileBadge, AlertTriangle } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, ChevronDown, ChevronsRight, ChevronLeft, FileBadge, MessageSquare } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -1737,12 +1737,14 @@ const ScoringDialog = ({
                         </div>
                         {quote.answers && quote.answers.length > 0 && (
                             <Card className="bg-muted/30">
-                                <CardHeader><CardTitle>Vendor's Answers to Custom Questions</CardTitle></CardHeader>
-                                <CardContent className="space-y-2 text-sm">
+                                <CardHeader>
+                                    <CardTitle className="text-lg flex items-center gap-2"><MessageSquare/>Vendor's Answers</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3 text-sm">
                                     {quote.answers.map(answer => (
                                         <div key={answer.questionId}>
                                             <p className="font-semibold">{findQuestionText(answer.questionId)}</p>
-                                            <p className="text-muted-foreground pl-2 border-l-2 ml-2">{answer.answer}</p>
+                                            <p className="text-muted-foreground pl-2 border-l-2 ml-2 mt-1">{answer.answer}</p>
                                         </div>
                                     ))}
                                 </CardContent>
@@ -2218,6 +2220,226 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
 };
     
 
+
+const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess }: { isOpen: boolean, onClose: () => void, member: User, requisition: PurchaseRequisition, onSuccess: () => void }) => {
+    const { toast } = useToast();
+    const { user } = useAuth();
+    const [isSubmitting, setSubmitting] = useState(false);
+    const [newDeadline, setNewDeadline] = useState<Date|undefined>();
+    const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
+
+    const finalNewDeadline = useMemo(() => {
+        if (!newDeadline) return undefined;
+        const [hours, minutes] = newDeadlineTime.split(':').map(Number);
+        return setMinutes(setHours(newDeadline, hours), minutes);
+    }, [newDeadline, newDeadlineTime]);
+    
+    const handleSubmit = async () => {
+        if (!user || !finalNewDeadline) return;
+        if (isBefore(finalNewDeadline, new Date())) {
+            toast({ variant: 'destructive', title: 'Error', description: 'The new deadline must be in the future.' });
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const response = await fetch(`/api/requisitions/${requisition.id}/extend-scoring-deadline`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, newDeadline: finalNewDeadline })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to extend deadline.');
+            }
+
+            toast({ title: 'Success', description: 'Scoring deadline has been extended for all committee members.' });
+            onSuccess();
+            onClose();
+
+        } catch (error) {
+             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Extend Scoring Deadline</DialogTitle>
+                    <DialogDescription>Set a new scoring deadline for all committee members of this requisition.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                        <Label>New Scoring Deadline</Label>
+                        <div className="flex gap-2">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newDeadline && "text-muted-foreground")}>
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {newDeadline ? format(newDeadline, "PPP") : <span>Pick a date</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newDeadline} onSelect={setNewDeadline} initialFocus disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} /></PopoverContent>
+                            </Popover>
+                             <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)} />
+                        </div>
+                    </div>
+                </div>
+                 <DialogFooter>
+                    <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+                    <Button onClick={handleSubmit} disabled={isSubmitting || !finalNewDeadline}>
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Confirm Extension
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+const OverdueReportDialog = ({ isOpen, onClose, member }: { isOpen: boolean, onClose: () => void, member: User }) => {
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Overdue Member Report</DialogTitle>
+                    <DialogDescription>
+                        This is a placeholder for a detailed report about the overdue committee member for internal follow-up.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                     <p>This is a placeholder for a detailed report about the overdue committee member for internal follow-up.</p>
+                     <div className="p-4 border rounded-md bg-muted/50">
+                        <p><span className="font-semibold">Member Name:</span> {member.name}</p>
+                        <p><span className="font-semibold">Email:</span> {member.email}</p>
+                        <p><span className="font-semibold">Assigned Role:</span> {(member.roles as any[])?.map(r => r.name).join(', ').replace(/_/g, ' ')}</p>
+                     </div>
+                </div>
+                <DialogFooter>
+                    <Button onClick={onClose}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+
+const CommitteeActions = ({
+    user,
+    requisition,
+    onFinalScoresSubmitted,
+}: {
+    user: ReturnType<typeof useAuth>['user'],
+    requisition: PurchaseRequisition,
+    onFinalScoresSubmitted: () => void,
+}) => {
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const { toast } = useToast();
+    const { token } = useAuth();
+    
+    if (!user) {
+        return null;
+    }
+    
+    const isCommitteeUser = useMemo(() => (user.roles as UserRole[]).some(r => r.includes('Committee')), [user.roles]);
+
+    const assignment = useMemo(() => user.committeeAssignments?.find(a => a.requisitionId === requisition.id), [user.committeeAssignments, requisition.id]);
+    const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
+
+    if (!isCommitteeUser) {
+        return null;
+    }
+    
+    const userScoredQuotesCount = requisition.quotations?.filter(q => q.scores?.some(s => s.scorerId === user.id)).length || 0;
+    const allQuotesScored = (requisition.quotations?.length || 0) > 0 && userScoredQuotesCount === requisition.quotations?.length;
+
+    const handleSubmitScores = async () => {
+        if (!token) return;
+        setIsSubmitting(true);
+        try {
+            const response = await fetch(`/api/requisitions/${requisition.id}/submit-scores`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ userId: user.id })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to submit scores');
+            }
+            toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
+            onFinalScoresSubmitted();
+        } catch (error) {
+             toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            // Keep isSubmitting true on success to disable button until re-render
+            const shouldKeepDisabled = await (await fetch(`/api/requisitions/${requisition.id}/submit-scores`, { method: 'HEAD' })).ok;
+            if(!shouldKeepDisabled) {
+              setIsSubmitting(false);
+            }
+        }
+    };
+
+    if (scoresAlreadyFinalized) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Committee Actions</CardTitle>
+                    <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button variant="outline" disabled>
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Scores Submitted
+                    </Button>
+                </CardContent>
+            </Card>
+        )
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Committee Actions</CardTitle>
+                <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {requisition.quotations?.length || 0} quotes.</p>
+            </CardContent>
+            <CardFooter>
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button disabled={!allQuotesScored || isSubmitting}>
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Submit Final Scores
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure you want to submit?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will finalize your scores for this requisition. You will not be able to make further changes.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </CardFooter>
+        </Card>
+    );
+};
 
 const NotifyVendorDialog = ({
     isOpen,
@@ -3184,3 +3406,4 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
