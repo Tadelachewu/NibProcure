@@ -88,7 +88,6 @@ export async function GET(request: Request) {
         const vendorWhere: any = {
             OR: [
                 // 1. It's an active RFQ (open to all OR this vendor is specifically invited)
-                //    AND the vendor has NOT yet submitted a quote for it.
                 {
                     status: 'Accepting_Quotes',
                     deadline: { gt: new Date() },
@@ -96,11 +95,6 @@ export async function GET(request: Request) {
                         { allowedVendorIds: { isEmpty: true } }, // Open to all
                         { allowedVendorIds: { has: userPayload.vendorId } }, // Specifically invited
                     ],
-                    NOT: {
-                        quotations: {
-                            some: { vendorId: userPayload.vendorId }
-                        }
-                    }
                 },
                 // 2. This vendor has already submitted a quotation for it (regardless of status)
                 {
@@ -724,6 +718,7 @@ export async function POST(request: Request) {
 
       const newRequisition = await tx.purchaseRequisition.create({ data });
 
+      // FIX: Add transactionId here
       const finalRequisition = await tx.purchaseRequisition.update({
         where: { id: newRequisition.id },
         data: { transactionId: newRequisition.id },
@@ -832,5 +827,3 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
-    

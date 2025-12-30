@@ -76,9 +76,12 @@ export async function getActorFromToken(request: Request): Promise<User> {
         throw new Error('Unauthorized');
     }
 
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    const effectiveRoles = new Set(user.roles.map(r => r.name as UserRole));
+    // This is the crucial fix. The roles from the token should be used as the source of truth,
+    // and combined with any dynamic role assignments.
+    const tokenRoles = (decoded.roles || []) as UserRole[];
+    const effectiveRoles = new Set(tokenRoles);
 
+    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     if (rfqSenderSetting) {
         const setting = rfqSenderSetting.value as RfqSenderSetting;
         if (setting.type === 'specific' && setting.userIds?.includes(user.id)) {
