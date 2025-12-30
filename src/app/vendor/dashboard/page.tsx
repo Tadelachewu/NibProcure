@@ -252,18 +252,26 @@ export default function VendorDashboardPage() {
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
             
+            // If the vendor has already submitted a quote, it's an "active" requisition for them.
             if (vendorQuote) {
-                // If they have a quote, it's always an "active" one for them
                 active.push(req);
-            } else if (req.status === 'Accepting_Quotes') {
-                // If it's open for quotes and they haven't submitted, it's "open for quoting"
-                open.push(req);
-            } else {
-                // This handles the case where they are involved via per-item awards but haven't submitted a top-level quote
-                 const isRelated = req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
-                 if (isRelated) {
-                     active.push(req);
-                 }
+                return; // Go to the next requisition
+            }
+            
+            // If it's open for quoting AND the vendor is allowed to quote, it's "open for quoting".
+            if (req.status === 'Accepting_Quotes') {
+                const isPublic = !req.allowedVendorIds || req.allowedVendorIds.length === 0;
+                const isInvited = req.allowedVendorIds?.includes(user?.vendorId || '');
+                if (isPublic || isInvited) {
+                    open.push(req);
+                }
+                return;
+            }
+
+            // Also check for per-item award involvement if no direct quote was found
+            const isRelated = req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
+            if (isRelated) {
+                active.push(req);
             }
         });
         
@@ -461,3 +469,5 @@ export default function VendorDashboardPage() {
         </div>
     )
 }
+
+    

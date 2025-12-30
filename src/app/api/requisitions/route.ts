@@ -87,22 +87,28 @@ export async function GET(request: Request) {
         // The frontend will then do the work of separating them into "Open for Quoting" and "Active Requisitions".
         const vendorWhere: any = {
             OR: [
-                // It's an active RFQ (open to all or this vendor is specifically invited)
+                // 1. It's an active RFQ (open to all OR this vendor is specifically invited)
+                //    AND the vendor has NOT yet submitted a quote for it.
                 {
                     status: 'Accepting_Quotes',
                     deadline: { gt: new Date() },
                     OR: [
-                        { allowedVendorIds: { isEmpty: true } },
-                        { allowedVendorIds: { has: userPayload.vendorId } },
+                        { allowedVendorIds: { isEmpty: true } }, // Open to all
+                        { allowedVendorIds: { has: userPayload.vendorId } }, // Specifically invited
                     ],
+                    NOT: {
+                        quotations: {
+                            some: { vendorId: userPayload.vendorId }
+                        }
+                    }
                 },
-                // This vendor has already submitted a quotation for it
+                // 2. This vendor has already submitted a quotation for it (regardless of status)
                 {
                     quotations: {
                         some: { vendorId: userPayload.vendorId },
                     }
                 },
-                // This vendor has been involved in a per-item award decision
+                // 3. This vendor has been involved in a per-item award decision
                 {
                     items: {
                       some: {
@@ -704,46 +710,39 @@ export async function POST(request: Request) {
         } : undefined,
       };
 
-      const newRequisition = await tx.purchaseRequisition.create({
-        data,
-      });
-
-      let finalStatus = data.status;
-      let finalApprover = undefined;
-      let auditAction = 'CREATE_REQUISITION';
-      let auditDetails = `Created new requisition: "${newRequisition.title}".`;
-
+      // If submitting, check if user is their own dept head
       if (body.status === 'Pending_Approval') {
           if (department.headId === actor.id) {
-              finalStatus = 'Pending_Director_Approval';
-              const director = await tx.user.findFirst({where: {roles: {some: {name: 'Director_Supply_Chain_and_Property_Management'}}}});
-              if (director) finalApprover = { connect: { id: director.id } };
-              auditAction = 'SUBMIT_AND_AUTO_APPROVE';
-              auditDetails = `Requisition "${newRequisition.title}" submitted by department head and auto-routed to Director.`;
+              data.status = 'PreApproved';
           } else if (department.headId) {
-              finalStatus = 'Pending_Approval';
-              finalApprover = { connect: { id: department.headId } };
-              auditAction = 'SUBMIT_FOR_APPROVAL';
-              auditDetails = `Requisition "${newRequisition.title}" submitted for departmental approval.`;
+              data.status = 'Pending_Approval';
+              data.currentApprover = { connect: { id: department.headId } };
           } else {
-              finalStatus = 'Pending_Director_Approval'; // No head, auto-approve to next stage
-              const director = await tx.user.findFirst({where: {roles: {some: {name: 'Director_Supply_Chain_and_Property_Management'}}}});
-              if (director) finalApprover = { connect: { id: director.id } };
-              auditAction = 'SUBMIT_FOR_APPROVAL';
-              auditDetails = `Requisition "${newRequisition.title}" submitted (no department head found, auto-routed to Director).`;
+              data.status = 'PreApproved'; // No head, auto-approve
           }
       }
-      
+
+      const newRequisition = await tx.purchaseRequisition.create({ data });
+
       const finalRequisition = await tx.purchaseRequisition.update({
         where: { id: newRequisition.id },
-        data: {
-            transactionId: newRequisition.id,
-            status: finalStatus,
-            currentApprover: finalApprover
-        },
+        data: { transactionId: newRequisition.id },
         include: { items: true, customQuestions: true, evaluationCriteria: true }
       });
       
+      let auditAction = 'CREATE_REQUISITION';
+      let auditDetails = `Created new requisition: "${finalRequisition.title}".`;
+
+      if (body.status === 'Pending_Approval') {
+          if (data.status === 'PreApproved') {
+            auditAction = 'SUBMIT_AND_AUTO_APPROVE';
+            auditDetails = `Requisition "${finalRequisition.title}" submitted by department head and automatically approved.`;
+          } else {
+            auditAction = 'SUBMIT_FOR_APPROVAL';
+            auditDetails = `Requisition "${finalRequisition.title}" submitted for approval.`;
+          }
+      }
+
       await tx.auditLog.create({
         data: {
           transactionId: finalRequisition.id,
@@ -833,3 +832,5 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
