@@ -66,7 +66,9 @@ export type RequisitionStatus =
   | 'Pending_Managerial_Approval'
   | 'Pending_Director_Approval'
   | 'Pending_VP_Approval'
-  | 'Pending_President_Approval';
+  | 'Pending_President_Approval'
+  | 'Pending_Finance_Director_Approval'
+  | 'Pending_Facility_Director_Approval';
 
 export type Urgency = 'Low' | 'Medium' | 'High' | 'Critical';
 
@@ -202,7 +204,16 @@ export type PurchaseRequisition = {
   };
   minutes?: Minute[];
   auditTrail?: AuditLog[];
+  directorPins?: DirectorPin[];
 };
+
+export type DirectorPin = {
+  id: string;
+  pin: string;
+  requisitionId: string;
+  userId: string;
+  expiresAt: Date;
+}
 
 export type AuditLog = {
   id: string; // Will be UUID

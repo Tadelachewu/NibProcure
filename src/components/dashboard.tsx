@@ -26,9 +26,10 @@ import {
   Wallet,
   Edit,
   CheckCircle,
+  Pin,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { Invoice, PurchaseOrder, PurchaseRequisition } from '@/lib/types';
+import { Invoice, PurchaseOrder, PurchaseRequisition, DirectorPin } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from './ui/table';
 import { Badge } from './ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
@@ -103,6 +104,39 @@ const RecentRequisitionsTable = ({ requisitions }: { requisitions: PurchaseRequi
     )
 }
 
+function DirectorPinsCard({ pins }: { pins: DirectorPin[] }) {
+    if (pins.length === 0) return null;
+
+    return (
+        <Card className="col-span-full md:col-span-2 lg:col-span-4 border-amber-500/50">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-600"><Pin /> Your Active Approval PINs</CardTitle>
+                <CardDescription>Use these PINs to digitally sign and authorize award reviews.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Requisition ID</TableHead>
+                            <TableHead>PIN</TableHead>
+                            <TableHead>Expires</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {pins.map(pin => (
+                            <TableRow key={pin.id}>
+                                <TableCell className="font-medium">{pin.requisitionId}</TableCell>
+                                <TableCell className="font-mono text-lg font-bold text-primary tracking-widest">{pin.pin}</TableCell>
+                                <TableCell>{formatDistanceToNow(new Date(pin.expiresAt), { addSuffix: true })}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    );
+}
+
 function RequesterDashboard() {
     const { user, token } = useAuth();
     const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
@@ -160,6 +194,7 @@ function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: bool
     const { user, token } = useAuth();
     const [pendingCount, setPendingCount] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [directorPins, setDirectorPins] = useState<DirectorPin[]>([]);
     const router = useRouter();
 
     const pageTitle = forAwardReviews ? "Award Reviews" : "Departmental Approvals";
@@ -169,11 +204,28 @@ function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: bool
     useEffect(() => {
         if (!user || !token) return;
         setLoading(true);
-        fetch(apiEndpoint, { headers: { 'Authorization': `Bearer ${token}` } })
-            .then(res => res.json())
-            .then(data => setPendingCount(Array.isArray(data) ? data.filter((req: any) => req.isActionable !== false).length : 0))
-            .catch(console.error)
-            .finally(() => setLoading(false));
+        const fetchDashboardData = async () => {
+            try {
+                const [reviewsRes, pinsRes] = await Promise.all([
+                    fetch(apiEndpoint, { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch('/api/users/pins', { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
+                
+                const reviewsData = await reviewsRes.json();
+                setPendingCount(Array.isArray(reviewsData) ? reviewsData.filter((req: any) => req.isActionable !== false).length : 0)
+
+                if (pinsRes.ok) {
+                    const pinsData = await pinsRes.json();
+                    setDirectorPins(pinsData);
+                }
+            } catch(e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDashboardData();
     }, [user, token, apiEndpoint]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -189,6 +241,7 @@ function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: bool
                 cta="Review Now"
                 variant={pendingCount > 0 ? "default" : "default"}
             />
+            {directorPins.length > 0 && <DirectorPinsCard pins={directorPins} />}
         </div>
     )
 }
@@ -421,6 +474,8 @@ export function Dashboard() {
       case 'Director_Supply_Chain_and_Property_Management':
       case 'VP_Resources_and_Facilities':
       case 'President':
+      case 'Finance_Director':
+      case 'Facility_Director':
         return <ApproverDashboard forAwardReviews={true} />;
       case 'Procurement_Officer': return <ProcurementOfficerDashboard />;
       case 'Admin': return <ProcurementOfficerDashboard />; // Admin gets the same overview
