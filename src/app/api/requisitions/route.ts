@@ -127,35 +127,48 @@ export async function GET(request: Request) {
         whereClause = { ...whereClause, ...vendorWhere };
 
     } else if (forQuoting) {
-        const allRoles = await prisma.role.findMany({ select: { name: true } });
-        const allPendingStatuses = allRoles.map(role => `Pending_${role.name}`);
-
-        const baseRfqLifecycleStatuses: RequisitionStatus[] = [
-            'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 
-            'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
-            'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed'
+        // Corrected, hardcoded list of valid statuses for the quoting page.
+        const rfqLifecycleStatuses: RequisitionStatus[] = [
+            'PreApproved',
+            'Accepting_Quotes',
+            'Scoring_In_Progress',
+            'Scoring_Complete',
+            'Award_Declined',
+            'Awarded',
+            'PostApproved',
+            'PO_Created',
+            'Fulfilled',
+            'Closed',
+            'Partially_Closed',
+            'Pending_Committee_A_Recommendation',
+            'Pending_Committee_B_Review',
+            'Pending_Director_Approval',
+            'Pending_Managerial_Approval',
+            'Pending_President_Approval',
+            'Pending_VP_Approval'
         ];
-        
-        const rfqLifecycleStatuses = [...baseRfqLifecycleStatuses, ...allPendingStatuses];
 
+        whereClause.status = { in: rfqLifecycleStatuses };
+        
         const userRoles = userPayload?.roles.map(r => (r as any).name) || [];
 
         if (userRoles.includes('Committee_Member')) {
-            whereClause.status = { in: rfqLifecycleStatuses };
             whereClause.OR = [
-                    { financialCommitteeMembers: { some: { id: userPayload?.id } } },
-                    { technicalCommitteeMembers: { some: { id: userPayload?.id } } },
-                ];
-        } else {
-            whereClause.status = { in: rfqLifecycleStatuses };
+                ...(whereClause.OR || []),
+                { financialCommitteeMembers: { some: { id: userPayload?.id } } },
+                { technicalCommitteeMembers: { some: { id: userPayload?.id } } },
+            ];
         }
+    } else if (approverId) {
+        // Logic for the Approvals page
+        whereClause.OR = [
+            { currentApproverId: approverId },
+            { approverId: approverId, status: { in: ['PreApproved', 'Rejected'] } }
+        ];
     } else {
       if (statusParam) {
         const statuses = statusParam.split(',').map(s => s.trim().replace(/ /g, '_'));
         whereClause.status = { in: statuses };
-      }
-      if (approverId && !statusParam) {
-        whereClause.currentApproverId = approverId;
       }
       
       if (userPayload && userPayload.roles.some(r => (r as any).name === 'Requester') && !statusParam && !approverId) {
@@ -321,7 +334,7 @@ export async function PATCH(
             totalPrice: totalPrice,
             status: status ? status.replace(/ /g, '_') : requisition.status,
             approver: { disconnect: true },
-            approverComment: null, // *** FIX: Clear the rejection comment on resubmission ***
+            approverComment: requisition.status === 'Rejected' ? requisition.approverComment : null,
             items: {
                 deleteMany: {},
                 create: body.items.map((item: any) => ({
@@ -329,6 +342,15 @@ export async function PATCH(
                     quantity: Number(item.quantity) || 0,
                     unitPrice: Number(item.unitPrice) || 0,
                     description: item.description || ''
+                })),
+            },
+            customQuestions: {
+                deleteMany: {},
+                create: body.customQuestions?.map((q: any) => ({
+                    questionText: q.questionText,
+                    questionType: q.questionType.replace(/-/g, '_'),
+                    isRequired: q.isRequired,
+                    options: q.options || [],
                 })),
             },
             customQuestions: {
@@ -361,7 +383,7 @@ export async function PATCH(
         
         if (newStatus === 'Pending_Approval') {
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
-            if (department?.headId === user.id) {
+             if (department?.headId === user.id) {
                 // If requester is their own head, skip to Director
                 const director = await prisma.user.findFirst({ where: { roles: { some: { name: 'Director_Supply_Chain_and_Property_Management' } } } });
                 dataToUpdate.status = 'Pending_Director_Approval';
@@ -422,7 +444,7 @@ export async function PATCH(
         auditAction = 'REJECT_REQUISITION';
         auditDetails = `Requisition ${id} was rejected by ${user.name} with comment: "${comment}".`;
     }
-    else if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
+    else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') {
         
         if (newStatus !== 'Approved' && newStatus !== 'Rejected') {
              return NextResponse.json({ error: 'Invalid action. Only approve or reject is allowed at this stage.' }, { status: 400 });
@@ -711,3 +733,71 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  request: Request,
+) {
+  try {
+    const body = await request.json();
+    const { id, userId } = body;
+
+    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
+    if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
+
+    if (!requisition) {
+      return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
+    }
+
+    const canDelete = (requisition.requesterId === userId) || ((user.roles as any[]).some(r => r.name === 'Procurement_Officer' || r.name === 'Admin'));
+
+    if (!canDelete) {
+      return NextResponse.json({ error: 'You are not authorized to delete this requisition.' }, { status: 403 });
+    }
+    
+    if (requisition.status !== 'Draft' && requisition.status !== 'Rejected') {
+        return NextResponse.json({ error: `Cannot delete a requisition with status "${requisition.status}".` }, { status: 400 });
+    }
+    
+    await prisma.requisitionItem.deleteMany({ where: { requisitionId: id } });
+    await prisma.customQuestion.deleteMany({ where: { requisitionId: id } });
+    
+    const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id }});
+    if (oldCriteria) {
+        await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
+        await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
+        await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id }});
+    }
+
+    await prisma.purchaseRequisition.delete({ where: { id } });
+
+    await prisma.auditLog.create({
+        data: {
+            transactionId: requisition.transactionId,
+            user: { connect: { id: user.id } },
+            timestamp: new Date(),
+            action: 'DELETE_REQUISITION',
+            entity: 'Requisition',
+            entityId: id,
+            details: `Deleted requisition: "${requisition.title}".`,
+        }
+    });
+
+    return NextResponse.json({ message: 'Requisition deleted successfully.' });
+  } catch (error) {
+     console.error('Failed to delete requisition:', error);
+     if (error instanceof Error) {
+        const prismaError = error as any;
+        if(prismaError.code === 'P2025') {
+            return NextResponse.json({ error: 'Failed to delete related data. The requisition may have already been deleted.' }, { status: 404 });
+        }
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+  }
+}
+
+    
