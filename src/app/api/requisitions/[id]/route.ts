@@ -97,8 +97,8 @@ export async function DELETE(
     
     const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id }});
     if (oldCriteria) {
-        await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
-        await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+        await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
+        await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
         await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id }});
     }
 

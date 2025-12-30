@@ -87,6 +87,7 @@ export function ApprovalsTable() {
     if (!user || !token) return;
     try {
       setLoading(true);
+      // This page is ONLY for initial departmental approvals.
       const apiUrl = `/api/requisitions?status=Pending_Approval&approverId=${user.id}`;
       
       const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}` } });
@@ -131,7 +132,8 @@ export function ApprovalsTable() {
     
     let newStatus = '';
     if (actionType === 'approve') {
-        newStatus = 'PreApproved';
+        // This is the key change: On approval, it goes to the next step, not straight to PreApproved.
+        newStatus = 'Approved'; // The backend will interpret this and move it to the next step.
     } else {
         newStatus = 'Rejected';
     }
@@ -147,7 +149,10 @@ export function ApprovalsTable() {
             comment,
         }),
       });
-      if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
+      if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Failed to ${actionType} requisition`);
+      }
       toast({
         title: "Success",
         description: `Requisition ${selectedRequisition.id} has been ${actionType === 'approve' ? 'processed' : 'rejected'}.`,

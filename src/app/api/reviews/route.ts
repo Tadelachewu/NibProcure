@@ -19,7 +19,7 @@ export async function GET(request: Request) {
     const userId = actor.id;
 
     // This route is for POST-AWARD reviews. It should not show initial departmental approvals.
-    const preAwardStatuses = ['Pending_Approval'];
+    const preAwardStatuses = ['Pending_Approval', 'Draft', 'Rejected', 'PreApproved'];
 
     // Build the main query conditions
     const orConditions: any[] = [
@@ -154,7 +154,7 @@ export async function GET(request: Request) {
       if (!hasAlreadyActed) {
         if (req.currentApproverId === userId) {
         isActionable = true;
-        } else if (req.status.startsWith('Pending_') && !preAwardStatuses.includes(req.status)) {
+        } else if (req.status.startsWith('Pending_')) {
         const requiredRole = req.status.replace('Pending_', '');
         if (userRoles.includes(requiredRole as UserRole)) {
           // This is a committee-level approval, so it's actionable if the user is part of that committee.
@@ -162,8 +162,6 @@ export async function GET(request: Request) {
         }
         }
 
-        // Allow action when requisition is in Award_Declined but there are still per-item pending awards
-        // and the user is part of the financial/technical committee or appears in the approval matrix tier.
         try {
           if (!isActionable && req.status === 'Award_Declined') {
             const awardStrategy = (req as any).rfqSettings?.awardStrategy;
@@ -178,7 +176,6 @@ export async function GET(request: Request) {
               if (fcIds.includes(userId) || tcIds.includes(userId)) {
                 isActionable = true;
               } else {
-                // fallback: check approval matrix membership for remaining pending total
                 let effectiveTotal = req.totalPrice || 0;
                 try {
                   let newTotal = 0;
@@ -217,11 +214,9 @@ export async function GET(request: Request) {
         }
       }
       
-      // Determine if promote-standby or restart-rfq actions should be exposed
       let canPromoteStandby = false;
       let canRestartRfq = false;
       try {
-        // Check per-item award details
         for (const item of (req.items || [])) {
           const details = (item.perItemAwardDetails || []) as any[];
           const hasDeclined = details.some(d => d.status === 'Declined');
@@ -236,7 +231,6 @@ export async function GET(request: Request) {
           }
         }
 
-        // Also check quotations for standby/failed/declined statuses
         for (const q of (req.quotations || [])) {
           if (q.status === 'Standby') canPromoteStandby = true;
           if (q.status === 'Failed' || q.status === 'Declined') canRestartRfq = true;
