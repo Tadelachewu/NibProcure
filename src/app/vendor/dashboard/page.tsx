@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail, RequisitionItem, QuoteItem, PurchaseOrder } from '@/lib/types';
+import { PurchaseRequisition, Quotation, Vendor, KycStatus, PerItemAwardDetail, PurchaseOrder } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -16,12 +16,12 @@ import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert, List, AlertCircle, FileText } from 'lucide-react';
+import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert, FileText, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 const OPEN_PAGE_SIZE = 9;
 const ACTIVE_PAGE_SIZE = 6;
@@ -252,18 +252,18 @@ export default function VendorDashboardPage() {
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
             
-            const hasReopenedItemForVendor = req.items.some(item => 
-                item.reopenDeadline && isPast(new Date(item.reopenDeadline)) === false &&
-                item.reopenVendorIds?.includes(user?.vendorId || '')
-            );
-
-            const isRelated = vendorQuote || 
-                              req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
-
-            if (isRelated) {
+            if (vendorQuote) {
+                // If they have a quote, it's always an "active" one for them
                 active.push(req);
-            } else if (hasReopenedItemForVendor || req.status === 'Accepting_Quotes') {
+            } else if (req.status === 'Accepting_Quotes') {
+                // If it's open for quotes and they haven't submitted, it's "open for quoting"
                 open.push(req);
+            } else {
+                // This handles the case where they are involved via per-item awards but haven't submitted a top-level quote
+                 const isRelated = req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
+                 if (isRelated) {
+                     active.push(req);
+                 }
             }
         });
         
