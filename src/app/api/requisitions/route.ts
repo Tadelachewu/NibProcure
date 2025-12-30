@@ -678,95 +678,91 @@ export async function POST(request: Request) {
     }
 
     const transactionResult = await prisma.$transaction(async (tx) => {
-        
-        // This is a temporary ID. We will replace it with the actual ID after creation.
-        const tempTransactionId = `TEMP-${Date.now()}`;
-
-        const data: any = {
-            transactionId: tempTransactionId, // Provide a temporary placeholder
-            requester: { connect: { id: actor.id } },
-            department: { connect: { id: department.id } },
-            title: body.title,
-            urgency: body.urgency,
-            justification: body.justification,
-            status: body.status || 'Draft',
-            totalPrice: totalPrice,
-            items: {
-            create: body.items.map((item: any) => ({
-                name: item.name,
-                quantity: Number(item.quantity) || 0,
-                unitPrice: Number(item.unitPrice) || 0,
-                description: item.description || ''
-            }))
-            },
-            customQuestions: {
-            create: body.customQuestions?.map((q: any) => ({
-                questionText: q.questionText,
-                questionType: q.questionType.replace(/-/g, '_'),
-                isRequired: q.isRequired,
-                options: q.options || [],
-            }))
-            },
-            evaluationCriteria: body.evaluationCriteria ? {
-            create: {
-                financialWeight: body.evaluationCriteria.financialWeight,
-                technicalWeight: body.evaluationCriteria.technicalWeight,
-                financialCriteria: {
-                create: body.evaluationCriteria.financialCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
-                },
-                technicalCriteria: {
-                create: body.evaluationCriteria.technicalCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
-                }
-            }
-            } : undefined,
-        };
-
-        // If submitting, check if user is their own dept head
-        if (body.status === 'Pending_Approval') {
-            if (department.headId === actor.id) {
-                data.status = 'PreApproved';
-            } else if (department.headId) {
-                data.status = 'Pending_Approval';
-                data.currentApprover = { connect: { id: department.headId } };
-            } else {
-                data.status = 'PreApproved'; // No head, auto-approve
-            }
-        }
-
-        const newRequisition = await tx.purchaseRequisition.create({ data });
-
-        // Now update the transactionId with the actual ID
-        const finalRequisition = await tx.purchaseRequisition.update({
-            where: { id: newRequisition.id },
-            data: { transactionId: newRequisition.id },
-            include: { items: true, customQuestions: true, evaluationCriteria: true }
-        });
       
-        let auditAction = 'CREATE_REQUISITION';
-        let auditDetails = `Created new requisition: "${finalRequisition.title}".`;
-
-        if (body.status === 'Pending_Approval') {
-            if (data.status === 'PreApproved') {
-                auditAction = 'SUBMIT_AND_AUTO_APPROVE';
-                auditDetails = `Requisition "${finalRequisition.title}" submitted by department head and automatically approved.`;
-            } else {
-                auditAction = 'SUBMIT_FOR_APPROVAL';
-                auditDetails = `Requisition "${finalRequisition.title}" submitted for approval.`;
+      const newRequisition = await tx.purchaseRequisition.create({
+        data: {
+          requester: { connect: { id: actor.id } },
+          department: { connect: { id: department.id } },
+          title: body.title,
+          urgency: body.urgency,
+          justification: body.justification,
+          status: 'Draft', // Always start as draft
+          totalPrice: totalPrice,
+          items: {
+            create: body.items.map((item: any) => ({
+              name: item.name,
+              quantity: Number(item.quantity) || 0,
+              unitPrice: Number(item.unitPrice) || 0,
+              description: item.description || ''
+            }))
+          },
+          customQuestions: {
+            create: body.customQuestions?.map((q: any) => ({
+              questionText: q.questionText,
+              questionType: q.questionType.replace(/-/g, '_'),
+              isRequired: q.isRequired,
+              options: q.options || [],
+            }))
+          },
+          evaluationCriteria: body.evaluationCriteria ? {
+            create: {
+              financialWeight: body.evaluationCriteria.financialWeight,
+              technicalWeight: body.evaluationCriteria.technicalWeight,
+              financialCriteria: {
+                create: body.evaluationCriteria.financialCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
+              },
+              technicalCriteria: {
+                create: body.evaluationCriteria.technicalCriteria.map((c: any) => ({ name: c.name, weight: Number(c.weight) }))
+              }
             }
+          } : undefined,
+        },
+      });
+
+      // Update the new requisition to have its own transactionId
+      let finalRequisition = await tx.purchaseRequisition.update({
+          where: { id: newRequisition.id },
+          data: { transactionId: newRequisition.id },
+      });
+      
+      let auditAction = 'CREATE_REQUISITION';
+      let auditDetails = `Created new requisition: "${finalRequisition.title}".`;
+
+      if (body.status === 'Pending_Approval') {
+          let statusUpdateData: any = {};
+          if (department.headId === actor.id) {
+              statusUpdateData.status = 'PreApproved';
+              auditAction = 'SUBMIT_AND_AUTO_APPROVE';
+              auditDetails = `Requisition "${finalRequisition.title}" submitted by department head and automatically approved.`;
+          } else if (department.headId) {
+              statusUpdateData.status = 'Pending_Approval';
+              statusUpdateData.currentApprover = { connect: { id: department.headId } };
+              auditAction = 'SUBMIT_FOR_APPROVAL';
+              auditDetails = `Requisition "${finalRequisition.title}" submitted for approval.`;
+          } else {
+              statusUpdateData.status = 'PreApproved'; // No head, auto-approve
+              auditAction = 'SUBMIT_FOR_APPROVAL';
+              auditDetails = `Requisition "${finalRequisition.title}" submitted (no department head, auto-approved).`;
+          }
+          finalRequisition = await tx.purchaseRequisition.update({
+              where: { id: newRequisition.id },
+              data: statusUpdateData
+          });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          transactionId: finalRequisition.id,
+          user: { connect: { id: actor.id } },
+          timestamp: new Date(),
+          action: auditAction,
+          entity: 'Requisition',
+          entityId: finalRequisition.id,
+          details: auditDetails,
         }
-
-        await tx.auditLog.create({
-            data: {
-            transactionId: finalRequisition.id,
-            user: { connect: { id: actor.id } },
-            timestamp: new Date(),
-            action: auditAction,
-            entity: 'Requisition',
-            entityId: finalRequisition.id,
-            details: auditDetails,
-            }
-        });
-        return finalRequisition;
+      });
+      
+      return finalRequisition;
     });
     return NextResponse.json(transactionResult, { status: 201 });
   } catch (error) {
