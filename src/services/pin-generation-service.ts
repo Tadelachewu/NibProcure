@@ -59,6 +59,10 @@ export async function generateAndAssignPins(requisitionId: string) {
 
     try {
         await Promise.all(pinCreationPromises);
+        await prisma.purchaseRequisition.update({
+            where: { id: requisitionId },
+            data: { bidsOpened: false }
+        });
         console.log(`Successfully generated and assigned PINs for ${directors.length} directors for requisition ${requisitionId}.`);
     } catch (error) {
         console.error('Failed to generate one or more director PINs:', error);
@@ -81,7 +85,8 @@ export async function getActivePinsForUser(userId: string) {
                 requisition: {
                     status: {
                         notIn: ['Closed', 'Fulfilled', 'Rejected']
-                    }
+                    },
+                    bidsOpened: false, // Only show PINs for requisitions where bids are not yet opened.
                 }
             },
             include: {

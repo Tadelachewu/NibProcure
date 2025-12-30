@@ -114,8 +114,8 @@ function DirectorPinCard({ pins, isLoading }: { pins: DirectorPin[], isLoading: 
     return (
         <Card className="col-span-1 md:col-span-2 lg:col-span-4 border-primary/50">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2"><KeyRound /> Director PINs for Award Review</CardTitle>
-                <CardDescription>Use these one-time PINs when providing your final approval on an award recommendation.</CardDescription>
+                <CardTitle className="flex items-center gap-2"><KeyRound /> Your PINs for Opening Quotations</CardTitle>
+                <CardDescription>Provide this one-time PIN to the Procurement Officer when they are ready to open the submitted bids for a requisition.</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>
@@ -205,7 +205,7 @@ function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: bool
     const router = useRouter();
 
     const pageTitle = forAwardReviews ? "Award Reviews" : "Departmental Approvals";
-    const apiEndpoint = forAwardReviews ? '/api/reviews' : `/api/requisitions?status=Pending_Approval&approverId=${user?.id}`;
+    const apiEndpoint = forAwardReviews ? '/api/reviews' : `/api/requisitions?approverId=${user?.id}`;
     const targetPage = forAwardReviews ? '/award-reviews' : '/approvals';
 
     useEffect(() => {
@@ -213,7 +213,10 @@ function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: bool
         setLoading(true);
         fetch(apiEndpoint, { headers: { 'Authorization': `Bearer ${token}` } })
             .then(res => res.json())
-            .then(data => setPendingCount(Array.isArray(data) ? data.filter((req: any) => req.isActionable !== false).length : 0))
+            .then(data => {
+                const items = forAwardReviews ? data : data.requisitions;
+                setPendingCount(Array.isArray(items) ? items.filter((req: any) => req.isActionable !== false).length : 0)
+            })
             .catch(console.error)
             .finally(() => setLoading(false));
 
