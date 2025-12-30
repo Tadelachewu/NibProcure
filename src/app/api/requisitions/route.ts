@@ -141,7 +141,7 @@ export async function GET(request: Request) {
             'Fulfilled',
             'Closed',
             'Partially_Closed',
-            'Pending_Review', // This is the correct, generic status
+            'Pending_Review',
         ];
 
         const userRoles = userPayload?.roles.map(r => (r as any).name) || [];
@@ -160,7 +160,7 @@ export async function GET(request: Request) {
         const statuses = statusParam.split(',').map(s => s.trim().replace(/ /g, '_'));
         whereClause.status = { in: statuses };
       }
-      if (approverId && !statusParam) {
+      if (approverId) {
         whereClause.currentApproverId = approverId;
       }
       
