@@ -2,7 +2,7 @@
 'use server';
 
 import { NextResponse } from 'next/server';
-import type { PurchaseRequisition, User, UserRole, Vendor } from '@/lib/types';
+import type { PurchaseRequisition, User, UserRole, Vendor, RequisitionStatus } from '@/lib/types';
 import { prisma } from '@/lib/prisma';
 import { decodeJwt, getActorFromToken } from '@/lib/auth';
 import { headers } from 'next/headers';
@@ -141,12 +141,7 @@ export async function GET(request: Request) {
             'Fulfilled',
             'Closed',
             'Partially_Closed',
-            'Pending_Committee_A_Member',
-            'Pending_Committee_B_Member',
-            'Pending_Managerial_Approval',
-            'Pending_Director_Approval',
-            'Pending_VP_Approval',
-            'Pending_President_Approval'
+            'Pending_Review', // This is the correct, generic status
         ];
 
         const userRoles = userPayload?.roles.map(r => (r as any).name) || [];
@@ -415,6 +410,59 @@ export async function PATCH(
         let isAuthorizedToAct = (requisition.currentApproverId === userId) || 
                       (user.roles as any[]).some(r => requisition.status === `Pending_${r.name}`) ||
                       (user.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer');
+
+        try {
+          const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
+          const hasPendingPerItemAwards = requisition.items.some((item: any) => {
+            const details = (item.perItemAwardDetails as any[]) || [];
+            return details.some(d => d.status === 'Pending_AWARD' || d.status === 'Pending_Award');
+          });
+
+          if (!isAuthorizedToAct && requisition.status === 'Award_Declined' && awardStrategy === 'item' && hasPendingPerItemAwards) {
+            const fcIds = (requisition.financialCommitteeMembers || []).map((m: any) => m.id);
+            const tcIds = (requisition.technicalCommitteeMembers || []).map((m: any) => m.id);
+            if (fcIds.includes(userId) || tcIds.includes(userId) || (user.roles as any[]).some(r => (r.name as string).includes('Committee'))) {
+              isAuthorizedToAct = true;
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to evaluate per-item committee authorization fallback:', e);
+        }
+
+        try {
+          let effectiveTotal = requisition.totalPrice || 0;
+          const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
+          if (requisition.status === 'Award_Declined' && awardStrategy === 'item') {
+            let newTotal = 0;
+            for (const item of requisition.items) {
+              const details = (item.perItemAwardDetails as any[]) || [];
+              const pending = details.find(d => d.status === 'Pending_Award');
+              if (pending) {
+                newTotal += (pending.unitPrice || pending.unitPrice === 0 ? pending.unitPrice : item.unitPrice) * (item.quantity || 1);
+              }
+            }
+            effectiveTotal = newTotal;
+          }
+
+          const approvalMatrix = await prisma.approvalThreshold.findMany({
+            include: { steps: { include: { role: { select: { name: true } } }, orderBy: { order: 'asc' } } },
+            orderBy: { min: 'asc' }
+          });
+
+          const relevantTier = approvalMatrix.find((tier: any) =>
+            (effectiveTotal >= tier.min) && (tier.max === null || effectiveTotal <= tier.max)
+          );
+
+          if (relevantTier) {
+            const tierRoleNames = (relevantTier.steps || []).map((s: any) => s.role.name);
+            const userRoleNames = (user.roles as any[]).map(r => r.name);
+            if (!isAuthorizedToAct && userRoleNames.some((rn: string) => tierRoleNames.includes(rn))) {
+              isAuthorizedToAct = true;
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to evaluate approval matrix membership for authorization:', err);
+        }
 
         if (!isAuthorizedToAct) {
             console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
@@ -726,3 +774,72 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+
+export async function DELETE(
+  request: Request,
+) {
+  try {
+    const body = await request.json();
+    const { id, userId } = body;
+
+    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
+    if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
+
+    if (!requisition) {
+      return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
+    }
+
+    const canDelete = (requisition.requesterId === userId) || ((user.roles as any[]).some(r => r.name === 'Procurement_Officer' || r.name === 'Admin'));
+
+    if (!canDelete) {
+      return NextResponse.json({ error: 'You are not authorized to delete this requisition.' }, { status: 403 });
+    }
+    
+    if (requisition.status !== 'Draft' && requisition.status !== 'Rejected') {
+        return NextResponse.json({ error: `Cannot delete a requisition with status "${requisition.status}".` }, { status: 400 });
+    }
+    
+    await prisma.requisitionItem.deleteMany({ where: { requisitionId: id } });
+    await prisma.customQuestion.deleteMany({ where: { requisitionId: id } });
+    
+    const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id }});
+    if (oldCriteria) {
+        await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
+        await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
+        await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id }});
+    }
+
+    await prisma.purchaseRequisition.delete({ where: { id } });
+
+    await prisma.auditLog.create({
+        data: {
+            transactionId: requisition.transactionId,
+            user: { connect: { id: user.id } },
+            timestamp: new Date(),
+            action: 'DELETE_REQUISITION',
+            entity: 'Requisition',
+            entityId: id,
+            details: `Deleted requisition: "${requisition.title}".`,
+        }
+    });
+
+    return NextResponse.json({ message: 'Requisition deleted successfully.' });
+  } catch (error) {
+     console.error('Failed to delete requisition:', error);
+     if (error instanceof Error) {
+        const prismaError = error as any;
+        if(prismaError.code === 'P2025') {
+            return NextResponse.json({ error: 'Failed to delete related data. The requisition may have already been deleted.' }, { status: 404 });
+        }
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+  }
+}
+
+    
