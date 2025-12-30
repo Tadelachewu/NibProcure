@@ -319,7 +319,7 @@ export async function PATCH(
             totalPrice: totalPrice,
             status: status ? status.replace(/ /g, '_') : requisition.status,
             approver: { disconnect: true },
-            approverComment: null,
+            approverComment: null, // *** FIX: Clear the rejection comment on resubmission ***
             items: {
                 deleteMany: {},
                 create: body.items.map((item: any) => ({
@@ -365,7 +365,10 @@ export async function PATCH(
                 auditAction = 'SUBMIT_FOR_APPROVAL';
                 auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
             } else {
-                 throw new Error("Cannot submit for approval: No department head is assigned.");
+                 dataToUpdate.status = 'PreApproved';
+                 dataToUpdate.currentApproverId = undefined; // Use undefined instead of disconnect
+                 auditAction = 'SUBMIT_FOR_APPROVAL';
+                 auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval (no department head found, auto-approved).`;
             }
         }
 
@@ -395,6 +398,59 @@ export async function PATCH(
                       (user.roles as any[]).some(r => requisition.status === `Pending_${r.name}`) ||
                       (user.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer');
 
+        try {
+          const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
+          const hasPendingPerItemAwards = requisition.items.some((item: any) => {
+            const details = (item.perItemAwardDetails as any[]) || [];
+            return details.some(d => d.status === 'Pending_AWARD' || d.status === 'Pending_Award');
+          });
+
+          if (!isAuthorizedToAct && requisition.status === 'Award_Declined' && awardStrategy === 'item' && hasPendingPerItemAwards) {
+            const fcIds = (requisition.financialCommitteeMembers || []).map((m: any) => m.id);
+            const tcIds = (requisition.technicalCommitteeMembers || []).map((m: any) => m.id);
+            if (fcIds.includes(userId) || tcIds.includes(userId) || (user.roles as any[]).some(r => (r.name as string).includes('Committee'))) {
+              isAuthorizedToAct = true;
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to evaluate per-item committee authorization fallback:', e);
+        }
+
+        try {
+          let effectiveTotal = requisition.totalPrice || 0;
+          const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
+          if (requisition.status === 'Award_Declined' && awardStrategy === 'item') {
+            let newTotal = 0;
+            for (const item of requisition.items) {
+              const details = (item.perItemAwardDetails as any[]) || [];
+              const pending = details.find(d => d.status === 'Pending_Award');
+              if (pending) {
+                newTotal += (pending.unitPrice || pending.unitPrice === 0 ? pending.unitPrice : item.unitPrice) * (item.quantity || 1);
+              }
+            }
+            effectiveTotal = newTotal;
+          }
+
+          const approvalMatrix = await prisma.approvalThreshold.findMany({
+            include: { steps: { include: { role: { select: { name: true } } }, orderBy: { order: 'asc' } } },
+            orderBy: { min: 'asc' }
+          });
+
+          const relevantTier = approvalMatrix.find((tier: any) =>
+            (effectiveTotal >= tier.min) && (tier.max === null || effectiveTotal <= tier.max)
+          );
+
+          if (relevantTier) {
+            const tierRoleNames = (relevantTier.steps || []).map((s: any) => s.role.name);
+            const userRoleNames = (user.roles as any[]).map(r => r.name);
+            if (!isAuthorizedToAct && userRoleNames.some((rn: string) => tierRoleNames.includes(rn))) {
+              isAuthorizedToAct = true;
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to evaluate approval matrix membership for authorization:', err);
+        }
+
         if (!isAuthorizedToAct) {
             console.error(`[PATCH /api/requisitions] User ${userId} not authorized for status ${requisition.status}.`);
             return NextResponse.json({ error: 'You are not authorized to act on this item at its current step.' }, { status: 403 });
@@ -402,6 +458,8 @@ export async function PATCH(
         
         console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
         updatedRequisition = await prisma.$transaction(async (tx) => {
+            const committeeName = requisition.status.replace('Pending_', '').replace(/_/g, ' ');
+
             await tx.review.create({
               data: {
                 requisitionId: requisition.id,
@@ -420,6 +478,23 @@ export async function PATCH(
                 auditAction = 'REJECT_AWARD_STEP';
             } else { // Approved
               let effectiveRequisition = requisition;
+              try {
+                const awardStrategy = (requisition as any).rfqSettings?.awardStrategy;
+                if (requisition.status === 'Award_Declined' && awardStrategy === 'item') {
+                  let newTotal = 0;
+                  for (const item of requisition.items) {
+                    const details = (item.perItemAwardDetails as any[]) || [];
+                    const pending = details.find(d => d.status === 'Pending_Award');
+                    if (pending) {
+                      newTotal += (pending.unitPrice || pending.unitPrice === 0 ? pending.unitPrice : item.unitPrice) * (item.quantity || 1);
+                    }
+                  }
+                  effectiveRequisition = { ...requisition, totalPrice: newTotal } as any;
+                }
+              } catch (e) {
+                console.warn('Failed to compute adjusted total for per-item approval routing:', e);
+              }
+
               const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, effectiveRequisition, user);
                 dataToUpdate.status = nextStatus;
                 dataToUpdate.currentApproverId = nextApproverId;
@@ -451,6 +526,39 @@ export async function PATCH(
                 }
               });
               auditDetails += ` Signature recorded as ${signatureRecord.id}.`;
+              
+              const filePath = path.join(process.cwd(), 'public', latestMinute.documentUrl);
+              try {
+                const pdfBytes = await fs.readFile(filePath);
+                const pdfDoc = await PDFDocument.load(pdfBytes);
+                const newPage = pdfDoc.addPage();
+                
+                const { width, height } = newPage.getSize();
+                let y = height - 50;
+
+                const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+                const drawText = (text: string, size: number, options: { y: number, color?: any, font?: any }) => {
+                    newPage.drawText(text, { x: 50, y: options.y, size, font: options.font || font, color: options.color || rgb(0,0,0) });
+                    return options.y - (size * 1.5);
+                }
+
+                y = drawText(`Digital Signature Record`, 18, { y });
+                y -= 20;
+
+                y = drawText(`Decision: ${signatureRecord.decision}`, 14, { y, color: signatureRecord.decision === 'APPROVED' ? rgb(0.1, 0.5, 0.1) : rgb(0.7, 0, 0) });
+                y = drawText(`Signer: ${signatureRecord.signerName} (${signatureRecord.signerRole})`, 12, { y });
+                y = drawText(`Date: ${new Date(signatureRecord.signedAt).toLocaleString()}`, 12, { y });
+                y -= 10;
+                y = drawText(`Justification:`, 12, { y });
+                y = drawText(signatureRecord.comment || 'No comment provided.', 11, { y, font: await pdfDoc.embedFont(StandardFonts.HelveticaOblique) });
+
+                const modifiedPdfBytes = await pdfDoc.save();
+                await fs.writeFile(filePath, modifiedPdfBytes);
+                auditDetails += ` Signature appended to document.`;
+              } catch(e) {
+                  console.error("Failed to append signature to PDF:", e);
+                  auditDetails += ` (Failed to append signature to PDF).`;
+              }
             }
 
             await tx.auditLog.create({
@@ -469,6 +577,21 @@ export async function PATCH(
         });
         console.log(`[PATCH /api/requisitions] Award action transaction complete for Req ID: ${id}`);
         return NextResponse.json(updatedRequisition);
+    }
+
+    else if (newStatus === 'Pending_Approval' && (requisition.status === 'Draft' || requisition.status === 'Rejected')) {
+        const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
+        if (department?.headId) { 
+            dataToUpdate.currentApprover = { connect: { id: department.headId } };
+        } else {
+            // If no department head, auto-approve to the next stage
+            dataToUpdate.status = 'PreApproved';
+            dataToUpdate.currentApproverId = null;
+        }
+        dataToUpdate.status = 'Pending_Approval';
+        dataToUpdate.approverComment = null; // Clear rejection comment
+        auditAction = 'SUBMIT_FOR_APPROVAL';
+        auditDetails = `Requisition ${id} was submitted for approval.`;
     }
     
     else {
@@ -583,15 +706,18 @@ export async function POST(request: Request) {
         } : undefined,
       };
 
+      // If submitting, check if user is their own dept head
       if (body.status === 'Pending_Approval') {
           if (department.headId && department.headId !== actor.id) {
               data.status = 'Pending_Approval';
               data.currentApprover = { connect: { id: department.headId } };
           } else {
               // If user is their own dept head or no head exists, start the hierarchical chain
-              const { nextStatus, nextApproverId } = await getNextApprovalStep(tx, { totalPrice }, actor);
+              const { nextStatus, nextApproverId } = await getNextApprovalStep(tx, { ...body, totalPrice }, actor);
               data.status = nextStatus;
-              data.currentApproverId = nextApproverId;
+              if (nextApproverId) {
+                data.currentApprover = { connect: { id: nextApproverId } };
+              }
           }
       }
 
@@ -633,3 +759,73 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+
+export async function DELETE(
+  request: Request,
+) {
+  try {
+    const body = await request.json();
+    const { id, userId } = body;
+
+    const user = await prisma.user.findUnique({where: {id: userId}, include: {roles: true}});
+    if (!user) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
+
+    if (!requisition) {
+      return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
+    }
+
+    const canDelete = (requisition.requesterId === userId) || ((user.roles as any[]).some(r => r.name === 'Procurement_Officer' || r.name === 'Admin'));
+
+    if (!canDelete) {
+      return NextResponse.json({ error: 'You are not authorized to delete this requisition.' }, { status: 403 });
+    }
+    
+    if (requisition.status !== 'Draft' && requisition.status !== 'Rejected') {
+        return NextResponse.json({ error: `Cannot delete a requisition with status "${requisition.status}".` }, { status: 400 });
+    }
+    
+    await prisma.requisitionItem.deleteMany({ where: { requisitionId: id } });
+    await prisma.customQuestion.deleteMany({ where: { requisitionId: id } });
+    
+    const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id }});
+    if (oldCriteria) {
+        await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
+        await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
+        await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id }});
+    }
+
+    await prisma.purchaseRequisition.delete({ where: { id } });
+
+    await prisma.auditLog.create({
+        data: {
+            transactionId: requisition.transactionId,
+            user: { connect: { id: user.id } },
+            timestamp: new Date(),
+            action: 'DELETE_REQUISITION',
+            entity: 'Requisition',
+            entityId: id,
+            details: `Deleted requisition: "${requisition.title}".`,
+        }
+    });
+
+    return NextResponse.json({ message: 'Requisition deleted successfully.' });
+  } catch (error) {
+     console.error('Failed to delete requisition:', error);
+     if (error instanceof Error) {
+        const prismaError = error as any;
+        if(prismaError.code === 'P2025') {
+            return NextResponse.json({ error: 'Failed to delete related data. The requisition may have already been deleted.' }, { status: 404 });
+        }
+        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
+  }
+}
+
+
+    

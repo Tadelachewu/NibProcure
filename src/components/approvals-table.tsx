@@ -130,13 +130,8 @@ export function ApprovalsTable() {
   const submitAction = async () => {
     if (!selectedRequisition || !actionType || !user) return;
     
-    let newStatus = '';
-    if (actionType === 'approve') {
-        // This is the key change: On approval, it goes to the next step, not straight to PreApproved.
-        newStatus = 'Approved'; // The backend will interpret this and move it to the next step.
-    } else {
-        newStatus = 'Rejected';
-    }
+    // On departmental approval, the status becomes 'PreApproved'
+    const newStatus = actionType === 'approve' ? 'PreApproved' : 'Rejected';
 
     try {
       const response = await fetch(`/api/requisitions`, {
@@ -381,3 +376,5 @@ export function ApprovalsTable() {
     </>
   );
 }
+
+    

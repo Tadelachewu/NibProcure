@@ -89,16 +89,17 @@ export async function GET(request: Request) {
                     },
                 }
             },
-            minutes: {
+        minutes: {
             include: {
                 author: true,
                 attendees: true,
                 signatures: true,
             }
-            },
-            // include committee membership so we can decide actionability for per-item award flows
-            financialCommitteeMembers: { select: { id: true } },
-            technicalCommitteeMembers: { select: { id: true } },
+            }
+        ,
+        // include committee membership so we can decide actionability for per-item award flows
+        financialCommitteeMembers: { select: { id: true } },
+        technicalCommitteeMembers: { select: { id: true } },
       },
       orderBy: {
         createdAt: 'desc',
@@ -257,3 +258,5 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
+
+    
