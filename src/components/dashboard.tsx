@@ -26,14 +26,16 @@ import {
   Wallet,
   Edit,
   CheckCircle,
+  KeyRound,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
-import { Invoice, PurchaseOrder, PurchaseRequisition } from '@/lib/types';
+import { Invoice, PurchaseOrder, PurchaseRequisition, DirectorPin } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from './ui/table';
 import { Badge } from './ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { getActivePinsForUser } from '@/services/pin-generation-service';
 
 const StatCard = ({
   title,
@@ -103,6 +105,44 @@ const RecentRequisitionsTable = ({ requisitions }: { requisitions: PurchaseRequi
     )
 }
 
+function DirectorPinCard({ pins, isLoading }: { pins: DirectorPin[], isLoading: boolean }) {
+    if (isLoading) {
+        return <Card><CardContent className="p-4 flex justify-center items-center h-24"><Loader2 className="h-6 w-6 animate-spin" /></CardContent></Card>;
+    }
+    if (pins.length === 0) return null;
+
+    return (
+        <Card className="col-span-1 md:col-span-2 lg:col-span-4 border-primary/50">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><KeyRound /> Director PINs for Award Review</CardTitle>
+                <CardDescription>Use these one-time PINs when providing your final approval on an award recommendation.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Requisition ID</TableHead>
+                            <TableHead>Requisition Title</TableHead>
+                            <TableHead className="text-right">Your Unique PIN</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {pins.map(pin => (
+                            <TableRow key={pin.id}>
+                                <TableCell className="font-mono">{pin.requisition.id}</TableCell>
+                                <TableCell>{pin.requisition.title}</TableCell>
+                                <TableCell className="text-right">
+                                    <Badge variant="default" className="text-lg font-mono tracking-widest">{pin.pin}</Badge>
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </CardContent>
+        </Card>
+    )
+}
+
 function RequesterDashboard() {
     const { user, token } = useAuth();
     const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
@@ -160,6 +200,8 @@ function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: bool
     const { user, token } = useAuth();
     const [pendingCount, setPendingCount] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [pins, setPins] = useState<DirectorPin[]>([]);
+    const [pinsLoading, setPinsLoading] = useState(true);
     const router = useRouter();
 
     const pageTitle = forAwardReviews ? "Award Reviews" : "Departmental Approvals";
@@ -174,12 +216,21 @@ function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: bool
             .then(data => setPendingCount(Array.isArray(data) ? data.filter((req: any) => req.isActionable !== false).length : 0))
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [user, token, apiEndpoint]);
+
+        if (forAwardReviews) {
+            setPinsLoading(true);
+            getActivePinsForUser(user.id)
+                .then(setPins)
+                .catch(console.error)
+                .finally(() => setPinsLoading(false));
+        }
+
+    }, [user, token, apiEndpoint, forAwardReviews]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
     return (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
              <StatCard
                 title={`Pending ${pageTitle}`}
                 value={pendingCount.toString()}
@@ -189,6 +240,7 @@ function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: bool
                 cta="Review Now"
                 variant={pendingCount > 0 ? "default" : "default"}
             />
+            {forAwardReviews && <DirectorPinCard pins={pins} isLoading={pinsLoading} />}
         </div>
     )
 }
@@ -421,6 +473,8 @@ export function Dashboard() {
       case 'Director_Supply_Chain_and_Property_Management':
       case 'VP_Resources_and_Facilities':
       case 'President':
+      case 'Finance_Director':
+      case 'Facility_Director':
         return <ApproverDashboard forAwardReviews={true} />;
       case 'Procurement_Officer': return <ProcurementOfficerDashboard />;
       case 'Admin': return <ProcurementOfficerDashboard />; // Admin gets the same overview

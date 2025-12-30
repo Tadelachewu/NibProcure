@@ -72,6 +72,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { CommitteeActions } from '@/components/committee-actions';
 import { EditableCriteria } from '@/components/editable-criteria';
 import { EditableQuestions } from '@/components/editable-questions';
+import { generateAndAssignPins } from '@/services/pin-generation-service';
 
 
 const PAGE_SIZE = 6;
@@ -2792,6 +2793,22 @@ export default function QuotationDetailsPage() {
   useEffect(() => {
     if (!requisition || !user || !token || deadlineCheckPerformed) return;
 
+    // Check if the deadline has passed just now
+    if (requisition.status === 'Accepting_Quotes' && isDeadlinePassed) {
+        const pinGeneratedFlag = `pin_generated_${requisition.id}`;
+        if (!localStorage.getItem(pinGeneratedFlag)) {
+            console.log("Quotation deadline reached. Generating PINs for directors...");
+            generateAndAssignPins(requisition.id)
+                .then(() => {
+                    localStorage.setItem(pinGeneratedFlag, 'true');
+                    console.log("PINs generated and flag set.");
+                })
+                .catch(err => {
+                    console.error("Failed to generate PINs on deadline:", err);
+                });
+        }
+    }
+
     const checkAndDecline = async () => {
         let needsRefetch = false;
         
@@ -2834,7 +2851,7 @@ export default function QuotationDetailsPage() {
     };
 
     checkAndDecline();
-  }, [requisition, quotations, user, token, toast, fetchRequisitionAndQuotes, deadlineCheckPerformed]);
+  }, [requisition, quotations, user, token, toast, fetchRequisitionAndQuotes, deadlineCheckPerformed, isDeadlinePassed]);
 
 
   const handleFinalizeScores = async (
@@ -3406,4 +3423,5 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     
 
     
+
 
