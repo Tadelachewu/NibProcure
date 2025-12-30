@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail, RequisitionItem, QuoteItem } from '@/lib/types';
+import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail, RequisitionItem, QuoteItem, PurchaseOrder } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import {
   Card,
@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert, List, AlertCircle } from 'lucide-react';
+import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Award, Timer, ShoppingCart, Loader2, ShieldAlert, List, AlertCircle, FileText } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -82,6 +82,7 @@ export default function VendorDashboardPage() {
     const [error, setError] = useState<string | null>(null);
     const [openCurrentPage, setOpenCurrentPage] = useState(1);
     const [activeCurrentPage, setActiveCurrentPage] = useState(1);
+    const [allPOs, setAllPOs] = useState<PurchaseOrder[]>([]);
 
     const fetchAllData = useCallback(async () => {
         if (!token || !user?.vendorId) {
@@ -92,30 +93,28 @@ export default function VendorDashboardPage() {
         setLoading(true);
         setError(null);
         try {
-            const vendorRes = await fetch(`/api/vendors`);
+            const [vendorRes, reqRes, poRes] = await Promise.all([
+                fetch(`/api/vendors`),
+                fetch('/api/requisitions?forVendor=true', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/purchase-orders', { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+
             if(!vendorRes.ok) throw new Error('Could not fetch vendor details.');
             const allVendors: Vendor[] = await vendorRes.json();
             const currentVendor = allVendors.find(v => v.id === user.vendorId);
             setVendor(currentVendor || null);
-
-            if (currentVendor?.kycStatus !== 'Verified') {
-                setAllRequisitions([]);
-                setLoading(false);
-                return;
-            }
-
-            const response = await fetch('/api/requisitions?forVendor=true', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) {
-                if (response.status === 403) {
-                     throw new Error('You do not have permission to view these resources.');
-                }
+            
+            if (!reqRes.ok) {
+                if (reqRes.status === 403) throw new Error('You do not have permission to view these resources.');
                 throw new Error('Failed to fetch requisitions.');
             }
-            const data = await response.json();
-            const requisitionsData: PurchaseRequisition[] = data.requisitions || [];
+            const reqData = await reqRes.json();
+            const requisitionsData: PurchaseRequisition[] = reqData.requisitions || [];
             
+            if(!poRes.ok) throw new Error('Could not fetch purchase orders.');
+            const poData: PurchaseOrder[] = await poRes.json();
+            setAllPOs(poData);
+
             let needsRefetch = false;
             for (const req of requisitionsData) {
                 if (req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline))) {
@@ -177,7 +176,7 @@ export default function VendorDashboardPage() {
         const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
         const isPerItemAward = (req.rfqSettings as any)?.awardStrategy === 'item';
         
-        const posForVendor = req.purchaseOrders?.filter(po => po.vendor.id === user.vendorId) || [];
+        const posForVendor = allPOs.filter(po => po.requisitionId === req.id && po.vendor.id === user.vendorId) || [];
         const isAnyPaid = posForVendor.some(po => po.invoices?.some(inv => inv.status === 'Paid'));
 
         if (isAnyPaid) return { status: 'Paid' };
@@ -206,13 +205,11 @@ export default function VendorDashboardPage() {
                 return { status: wonAwards === totalAwardsPossible ? 'Awarded' : 'Partially Awarded' };
             }
             if (vendorItemDetails.some(d => d.status === 'Standby')) {
-                // If any item this vendor is on standby for is already won by someone else, it's not really an active standby.
                 const isStandbyRelevant = vendorItemDetails.some(detail => {
                     if (detail.status !== 'Standby') return false;
                     const item = req.items.find(i => i.id === detail.requisitionItemId);
                     if (!item) return false;
                     const allDetailsForItem = (item.perItemAwardDetails as PerItemAwardDetail[] || []);
-                    // It's a relevant standby if no one else has 'Accepted' for this item yet.
                     return !allDetailsForItem.some(d => d.status === 'Accepted');
                 });
 
@@ -224,19 +221,17 @@ export default function VendorDashboardPage() {
         }
         
         if (vendorQuote) {
+            if (req.status === 'Closed' || req.status === 'Fulfilled') {
+                return vendorQuote.status === 'Accepted' ? { status: 'Closed' } : { status: 'Not Awarded' };
+            }
             if (vendorQuote.status === 'Invoice_Submitted') return { status: 'Invoice Submitted' };
             if (vendorQuote.status === 'Accepted') return { status: 'Accepted' };
             if (vendorQuote.status === 'Declined') return { status: 'Declined', reason: vendorQuote.rejectionReason };
             if (vendorQuote.status === 'Awarded') return { status: 'Awarded' };
-            if (vendorQuote.status === 'Standby') {
-                if (req.status === 'Closed' || req.status === 'Fulfilled') return { status: 'Not Awarded' };
-                return { status: 'Standby' };
-            }
+            if (vendorQuote.status === 'Standby') return { status: 'Standby' };
             if (vendorQuote.status === 'Rejected') return { status: 'Not Awarded' };
 
-
             if (vendorQuote.status === 'Submitted') {
-                if (req.status === 'Closed' || req.status === 'Fulfilled') return { status: 'Not Awarded' };
                 if (req.quotations?.some(q => q.vendorId !== user.vendorId && ['Awarded', 'Accepted', 'Partially_Awarded'].includes(q.status))) return { status: 'Not Awarded' };
                 return { status: 'Submitted' };
             }
@@ -245,11 +240,9 @@ export default function VendorDashboardPage() {
         if (req.status === 'Accepting_Quotes') {
             return { status: 'Action Required' };
         }
-
-        if (req.status === 'Closed' || req.status === 'Fulfilled') return { status: 'Closed' };
         
         return { status: 'Processing' };
-    }, [user]);
+    }, [user, allPOs]);
 
 
     const { activeRequisitions, openForQuoting } = useMemo(() => {
@@ -404,8 +397,10 @@ export default function VendorDashboardPage() {
                                         {paginatedActiveData.map(req => {
                                             const { status, reason } = getRequisitionCardStatus(req);
                                             const isExpired = req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline)) && (status === 'Awarded' || status === 'Partially Awarded');
-                                            const isActionable = status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted' || status === 'Invoice Submitted';
-                                            
+                                            const isActionable = status === 'Awarded' || status === 'Partially Awarded' || status === 'Accepted' || status === 'Invoice Submitted' || status === 'Paid';
+                                            const vendorPO = allPOs.find(po => po.requisitionId === req.id && po.vendor.id === user?.vendorId);
+                                            const paymentEvidenceUrl = vendorPO?.invoices?.find(inv => inv.status === 'Paid')?.paymentEvidenceUrl;
+
                                             return (
                                                 <Card key={req.id} className={cn("relative flex flex-col", (status === 'Awarded' || status === 'Partially Awarded') && "border-primary ring-2 ring-primary/50 bg-primary/5", isExpired && "opacity-60")}>
                                                     <VendorStatusBadge status={status} reason={reason} />
@@ -422,6 +417,13 @@ export default function VendorDashboardPage() {
                                                                         Respond by: {format(new Date(req.awardResponseDeadline), 'PPpp')}
                                                                     </span>
                                                                 </div>
+                                                            )}
+                                                            {status === 'Paid' && paymentEvidenceUrl && (
+                                                                 <a href={paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
+                                                                    <Button variant="outline" size="sm" className="w-full">
+                                                                        <FileText className="mr-2 h-4 w-4" /> View Payment Evidence
+                                                                    </Button>
+                                                                </a>
                                                             )}
                                                         </div>
                                                     </CardContent>
