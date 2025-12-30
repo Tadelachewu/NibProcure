@@ -12,6 +12,7 @@ async function main() {
   // Clear existing data in a specific order to avoid foreign key constraints
   console.log('Clearing existing data...');
   await prisma.auditLog.deleteMany({});
+  await prisma.directorPin.deleteMany({});
   await prisma.score.deleteMany({});
   await prisma.itemScore.deleteMany({});
   await prisma.committeeScoreSet.deleteMany({});
@@ -36,6 +37,7 @@ async function main() {
   await prisma.evaluationCriteria.deleteMany({});
   await prisma.requisitionItem.deleteMany({});
   await prisma.purchaseRequisition.deleteMany({});
+  await prisma.supportTicket.deleteMany({});
   await prisma.kYC_Document.deleteMany({});
   await prisma.vendor.deleteMany({});
   await prisma.user.deleteMany({});
@@ -281,7 +283,7 @@ async function main() {
       });
 
     // Then create the vendor and link it to the user
-    const createdVendor = await prisma.vendor.upsert({
+    await prisma.vendor.upsert({
       where: { id: vendor.id },
       update: {
           name: vendor.name,
@@ -290,7 +292,7 @@ async function main() {
           phone: vendor.phone,
           address: vendor.address,
           kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
-          userId: createdUser.id,
+          user: { connect: { id: createdUser.id } },
       },
       create: {
           id: vendor.id,
@@ -300,14 +302,8 @@ async function main() {
           phone: vendor.phone,
           address: vendor.address,
           kycStatus: vendor.kycStatus.replace(/ /g, '_') as any,
-          userId: createdUser.id,
+          user: { connect: { id: createdUser.id } },
       },
-    });
-
-    // Now, update the user with the vendorId
-    await prisma.user.update({
-        where: { id: createdUser.id },
-        data: { vendorId: createdVendor.id }
     });
 
     if (kycDocuments) {
@@ -316,7 +312,7 @@ async function main() {
                 data: {
                     ...doc,
                     submittedAt: new Date(doc.submittedAt),
-                    vendorId: createdVendor.id,
+                    vendorId: vendor.id,
                 }
             });
         }
