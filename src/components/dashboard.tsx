@@ -205,7 +205,7 @@ function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: bool
     const router = useRouter();
 
     const pageTitle = forAwardReviews ? "Award Reviews" : "Departmental Approvals";
-    const apiEndpoint = forAwardReviews ? '/api/reviews' : `/api/requisitions?approverId=${user?.id}`;
+    const apiEndpoint = forAwardReviews ? '/api/reviews' : `/api/requisitions?status=Pending_Approval&approverId=${user?.id}`;
     const targetPage = forAwardReviews ? '/award-reviews' : '/approvals';
 
     useEffect(() => {
