@@ -137,9 +137,13 @@ export async function GET(request: Request) {
             'PreApproved', 'Accepting_Quotes', 'Ready_for_Opening', 'Scoring_In_Progress', 
             'Scoring_Complete', 'Award_Declined', 'Awarded', 'PostApproved',
             'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed',
-            'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review',
-            'Pending_Managerial_Approval', 'Pending_Director_Approval', 'Pending_VP_Approval', 'Pending_President_Approval'
-        ].filter(s => !s.startsWith('Pending_Approval')); // Ensure initial pending is excluded
+            'Pending_Committee_B_Review',
+            'Pending_Committee_A_Recommendation',
+            'Pending_Managerial_Approval',
+            'Pending_Director_Approval',
+            'Pending_VP_Approval',
+            'Pending_President_Approval'
+        ];
 
 
         const userRoles = userPayload?.roles.map(r => (r as any).name) || [];
@@ -160,10 +164,9 @@ export async function GET(request: Request) {
       }
       
       if (approverId && userPayload) {
-        const preAwardStatuses = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval'];
         whereClause.OR = [
-          { currentApproverId: userPayload.id, status: { in: preAwardStatuses } },
-          { approverId: userPayload.id, status: { notIn: ['Draft', 'Rejected'] } }
+          { currentApproverId: userPayload.id }, // Items pending my direct approval
+          { approverId: userPayload.id, status: { notIn: ['Draft', 'Rejected'] } } // Items I have already approved
         ];
       }
       
@@ -315,6 +318,7 @@ export async function PATCH(
     let auditDetails = `Updated requisition ${id}.`;
     let updatedRequisition;
     
+    // Logic for editing a draft or rejected requisition
     if ((requisition.status === 'Draft' || requisition.status === 'Rejected') && body.title) {
         const totalPrice = body.items.reduce((acc: number, item: any) => {
             const price = item.unitPrice || 0;
@@ -328,7 +332,8 @@ export async function PATCH(
             urgency: body.urgency,
             department: { connect: { name: body.department } },
             totalPrice: totalPrice,
-            approverComment: null, // Clear rejection comment on resubmission
+            approver: { disconnect: true },
+            approverComment: null, // *** FIX: Clear the rejection comment on resubmission ***
             items: {
                 deleteMany: {},
                 create: body.items.map((item: any) => ({
@@ -369,30 +374,33 @@ export async function PATCH(
         if (newStatus === 'Pending_Approval') {
             const department = await prisma.department.findUnique({ where: { id: requisition.departmentId! } });
             
-            if (department?.headId === user.id) { // Rule 2
+            if (department?.headId === user.id) { // Rule 2: Submitter is head
                  const director = await prisma.user.findFirst({ where: { roles: { some: { name: 'Director_Supply_Chain_and_Property_Management' } } } });
                  if (!director) throw new Error("Director of Supply Chain not found.");
                  dataToUpdate.status = 'Pending_Director_Approval';
                  dataToUpdate.currentApprover = { connect: { id: director.id } };
-                 auditAction = 'SUBMIT_AND_BYPASS_APPROVAL';
-                 auditDetails = `Requisition ${id} submitted by department head; routed directly to Director.`;
-            } else if (department?.headId) { // Rule 1
+                 auditAction = 'SUBMIT_AND_BYPASS_DEPT_HEAD';
+                 auditDetails = `Requisition submitted by dept head; routed directly to Director.`;
+            } else if (department?.headId) { // Rule 1: Standard user with head
                 dataToUpdate.status = 'Pending_Approval';
                 dataToUpdate.currentApprover = { connect: { id: department.headId } };
                 auditAction = 'SUBMIT_FOR_APPROVAL';
-                auditDetails = `Requisition ${id} was edited and submitted for approval.`;
-            } else { // Rule 3
+                auditDetails = `Requisition ${id} ("${body.title}") was edited and submitted for approval.`;
+            } else { // Rule 3: Standard user with NO head
                  const director = await prisma.user.findFirst({ where: { roles: { some: { name: 'Director_Supply_Chain_and_Property_Management' } } } });
                  if (!director) throw new Error("Director of Supply Chain not found to start approval chain.");
                  dataToUpdate.status = 'Pending_Director_Approval';
                  dataToUpdate.currentApprover = { connect: { id: director.id } };
-                 auditAction = 'SUBMIT_FOR_APPROVAL';
-                 auditDetails = `Requisition ${id} submitted (no dept head); routed to Director.`;
+                 auditAction = 'SUBMIT_NO_DEPT_HEAD';
+                 auditDetails = `Requisition submitted (no dept head); routed to Director.`;
             }
         } else {
              dataToUpdate.status = 'Draft';
+             auditAction = 'UPDATE_DRAFT';
+             auditDetails = `Requisition draft for "${body.title}" was saved.`;
         }
 
+    // Logic for departmental approval
     } else if (newStatus === 'Pending_Director_Approval' && requisition.status === 'Pending_Approval') {
         const director = await prisma.user.findFirst({ where: { roles: { some: { name: 'Director_Supply_Chain_and_Property_Management' } } } });
         if (!director) throw new Error("Director of Supply Chain not found.");
@@ -402,8 +410,9 @@ export async function PATCH(
         dataToUpdate.currentApprover = { connect: { id: director.id } };
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Departmental approval for requisition ${id} granted. Forwarded to Director.`;
-    }
-    else if (newStatus === 'Pending_Managerial_Approval' && requisition.status === 'Pending_Director_Approval') {
+    
+    // Logic for Director approval
+    } else if (newStatus === 'Pending_Managerial_Approval' && requisition.status === 'Pending_Director_Approval') {
         const manager = await prisma.user.findFirst({ where: { roles: { some: { name: 'Manager_Procurement_Division' } } } });
         if (!manager) throw new Error("Procurement Manager not found.");
         dataToUpdate.status = 'Pending_Managerial_Approval';
@@ -411,23 +420,26 @@ export async function PATCH(
         dataToUpdate.currentApprover = { connect: { id: manager.id } };
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Director approval for requisition ${id} granted. Forwarded to Manager.`;
-    }
-    else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Managerial_Approval') {
+    
+    // Logic for Manager approval
+    } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Managerial_Approval') {
         dataToUpdate.status = 'PreApproved';
         dataToUpdate.approverComment = comment;
         dataToUpdate.currentApprover = { disconnect: true };
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Managerial approval for requisition ${id} granted. Ready for RFQ.`;
-    }
-    else if (newStatus === 'Rejected' && (requisition.status.startsWith('Pending_'))) {
+    
+    // Logic for rejection at any pre-approval step
+    } else if (newStatus === 'Rejected' && (requisition.status.startsWith('Pending_'))) {
         dataToUpdate.status = 'Rejected';
         dataToUpdate.approver = { connect: { id: userId } };
         dataToUpdate.approverComment = comment;
         dataToUpdate.currentApprover = { disconnect: true };
         auditAction = 'REJECT_REQUISITION';
         auditDetails = `Requisition ${id} was rejected with comment: "${comment}".`;
-    }
-    else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') {
+
+    // Logic for post-award review steps
+    } else if (requisition.status.startsWith('Pending_') || requisition.status === 'Award_Declined' || requisition.status === 'Partially_Closed') {
         
         if (newStatus !== 'Approved' && newStatus !== 'Rejected') {
              return NextResponse.json({ error: 'Invalid action. Only approve or reject is allowed at this stage.' }, { status: 400 });
@@ -471,7 +483,13 @@ export async function PATCH(
           }
 
           const approvalMatrix = await prisma.approvalThreshold.findMany({
-            include: { steps: { include: { role: { select: { name: true } }, orderBy: { order: 'asc' } } }, orderBy: { min: 'asc' }
+            include: {
+              steps: {
+                include: { role: { select: { name: true } } },
+                orderBy: { order: 'asc' },
+              },
+            },
+            orderBy: { min: 'asc' },
           });
 
           const relevantTier = approvalMatrix.find((tier: any) =>
@@ -728,19 +746,19 @@ export async function POST(request: Request) {
         } : undefined,
       };
 
-      // If submitting, determine next step
+      // If submitting, determine next step based on the defined rules
       if (body.status === 'Pending_Approval') {
-          if (department.headId === actor.id) { // Rule 2
+          if (department.headId === actor.id) { // Rule 2: Submitter is head
               const director = await tx.user.findFirst({ where: { roles: { some: { name: 'Director_Supply_Chain_and_Property_Management' } } } });
               if (!director) throw new Error("Director of Supply Chain not found.");
               data.status = 'Pending_Director_Approval';
               data.currentApprover = { connect: { id: director.id } };
           } 
-          else if (department.headId) { // Rule 1
+          else if (department.headId) { // Rule 1: Standard user with head
               data.status = 'Pending_Approval';
               data.currentApprover = { connect: { id: department.headId } };
           } 
-          else { // Rule 3
+          else { // Rule 3: Standard user with NO head
               const director = await tx.user.findFirst({ where: { roles: { some: { name: 'Director_Supply_Chain_and_Property_Management' } } } });
               if (!director) throw new Error("Director of Supply Chain not found to start approval chain.");
               data.status = 'Pending_Director_Approval';
@@ -761,7 +779,7 @@ export async function POST(request: Request) {
 
       if (body.status === 'Pending_Approval') {
           if (data.status === 'Pending_Director_Approval') {
-            auditAction = 'SUBMIT_AND_BYPASS_APPROVAL';
+            auditAction = 'SUBMIT_AND_BYPASS_DEPT_HEAD';
             auditDetails = `Requisition "${finalRequisition.title}" submitted by department head or user with no head; sent directly to Director.`;
           } else {
             auditAction = 'SUBMIT_FOR_APPROVAL';
