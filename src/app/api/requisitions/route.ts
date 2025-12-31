@@ -127,10 +127,12 @@ export async function GET(request: Request) {
         whereClause = { ...whereClause, ...vendorWhere };
 
     } else if (forQuoting) {
-        // Corrected, hardcoded list of valid statuses for the quoting page.
+        // This is the definitive list of statuses for the Quotations page.
+        // It starts from 'PreApproved' and includes all subsequent lifecycle states.
         const rfqLifecycleStatuses: RequisitionStatus[] = [
             'PreApproved',
             'Accepting_Quotes',
+            'Ready_for_Opening',
             'Scoring_In_Progress',
             'Scoring_Complete',
             'Award_Declined',
@@ -140,18 +142,20 @@ export async function GET(request: Request) {
             'Fulfilled',
             'Closed',
             'Partially_Closed',
+            // All post-award "Pending" statuses are also relevant here
             'Pending_Committee_A_Recommendation',
             'Pending_Committee_B_Review',
-            'Pending_Director_Approval',
             'Pending_Managerial_Approval',
-            'Pending_President_Approval',
-            'Pending_VP_Approval'
+            'Pending_Director_Approval',
+            'Pending_VP_Approval',
+            'Pending_President_Approval'
         ];
 
         whereClause.status = { in: rfqLifecycleStatuses };
         
         const userRoles = userPayload?.roles.map(r => (r as any).name) || [];
 
+        // Committee members need to see items they are assigned to, regardless of other filters
         if (userRoles.includes('Committee_Member')) {
             whereClause.OR = [
                 ...(whereClause.OR || []),
@@ -160,10 +164,20 @@ export async function GET(request: Request) {
             ];
         }
     } else if (approverId) {
-        // Logic for the Approvals page
+        // This logic is for the Approvals page. It shows items pending the user's action
+        // OR items the user has already actioned but are still in pre-approval.
         whereClause.OR = [
             { currentApproverId: approverId },
-            { approverId: approverId, status: { in: ['PreApproved', 'Rejected'] } }
+            { 
+                approverId: approverId, 
+                status: { 
+                    in: [
+                        'Pending_Director_Approval', 
+                        'Pending_Managerial_Approval', 
+                        'PreApproved'
+                    ] 
+                } 
+            }
         ];
     } else {
       if (statusParam) {
@@ -334,6 +348,7 @@ export async function PATCH(
             totalPrice: totalPrice,
             status: status ? status.replace(/ /g, '_') : requisition.status,
             approver: { disconnect: true },
+            // Do not clear approver comment on resubmission
             approverComment: requisition.status === 'Rejected' ? requisition.approverComment : null,
             items: {
                 deleteMany: {},
@@ -342,15 +357,6 @@ export async function PATCH(
                     quantity: Number(item.quantity) || 0,
                     unitPrice: Number(item.unitPrice) || 0,
                     description: item.description || ''
-                })),
-            },
-            customQuestions: {
-                deleteMany: {},
-                create: body.customQuestions?.map((q: any) => ({
-                    questionText: q.questionText,
-                    questionType: q.questionType.replace(/-/g, '_'),
-                    isRequired: q.isRequired,
-                    options: q.options || [],
                 })),
             },
             customQuestions: {
@@ -799,5 +805,4 @@ export async function DELETE(
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
-
     
