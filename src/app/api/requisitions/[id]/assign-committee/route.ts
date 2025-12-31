@@ -28,10 +28,15 @@ export async function POST(
         rfqSettings 
     } = body;
 
-    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
+        const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
+
+        // Enforce director PIN verification gate: cannot assign committee while masked
+        if ((requisition.rfqSettings as any)?.masked === true) {
+                return NextResponse.json({ error: 'Vendor data is sealed. All three directors must verify their PINs before committee assignment.' }, { status: 403 });
+        }
     
     // Correct Authorization Logic
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });

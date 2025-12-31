@@ -80,7 +80,7 @@ export async function POST(
             allowedVendorIds: finalVendorIds,
             deadline: deadline ? new Date(deadline) : undefined,
             cpoAmount: cpoAmount,
-            rfqSettings: rfqSettings || {},
+            rfqSettings: { ...(rfqSettings || {}), masked: true },
         }
     });
 

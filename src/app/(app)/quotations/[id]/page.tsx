@@ -226,7 +226,8 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
 }
 
 const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete, isAssignedCommitteeMember }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean, isAssignedCommitteeMember: boolean }) => {
-    
+    const isMasked = requisition.rfqSettings?.masked === true;
+
     if (quotes.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed rounded-lg bg-muted/30">
@@ -315,7 +316,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
                                  {isAwarded && !isPerItemStrategy && getRankIcon(quote.rank)}
-                                 <span>{quote.vendorName}</span>
+                                 <span>{isMasked ? "Masked Vendor" : quote.vendorName}</span>
                                </div>
                                 <div className="flex items-center gap-1">
                                     <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
@@ -364,7 +365,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                     </a>
                                 </Button>
                             )}
-                             {(isDeadlinePassed || quote.cpoDocumentUrl) ? (
+                            {(!isMasked && (isDeadlinePassed || quote.cpoDocumentUrl)) ? (
                                 <>
                                     {hidePrices ? (
                                         <div className="text-center py-4">
@@ -402,7 +403,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                 <div className="text-center py-8">
                                     <TimerOff className="h-8 w-8 mx-auto text-muted-foreground" />
                                     <p className="font-semibold mt-2">Details Masked</p>
-                                    <p className="text-sm text-muted-foreground">Revealed after {format(new Date(requisition.deadline!), 'PPp')}</p>
+                                    <p className="text-sm text-muted-foreground">Requires director PIN verification to unseal vendor quotes.</p>
                                 </div>
                             )}
 
@@ -525,6 +526,81 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
         </Card>
     )
 }
+
+const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: PurchaseRequisition, onUnmasked: () => void }) => {
+    const { user, token, role } = useAuth();
+    const { toast } = useToast();
+    const [pins, setPins] = React.useState<{ role: string; status: string }[]>([]);
+    const [inputs, setInputs] = React.useState<Record<string,string>>({});
+    const isRfqSender = (user && ((user.roles as any[]).some(r => r.name === 'Procurement_Officer') || (user.roles as any[]).some(r => r.name === 'Admin')));
+
+    const DIRECTOR_ROLES = ['Procurement_Director','Finance_Director','Facility_Director'];
+
+    const generatePins = async () => {
+        if (!token) return;
+        try {
+            const res = await fetch(`/api/requisitions/${requisition.id}/generate-pins`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to generate pins');
+            toast({ title: 'Pins generated', description: 'Pins were generated and sent to directors.' });
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Failed to generate pins' });
+        }
+    };
+
+    const verifyPin = async (roleName: string) => {
+        if (!token) return;
+        const pin = inputs[roleName];
+        if (!pin) { toast({ variant: 'destructive', title: 'Missing PIN', description: 'Enter PIN to verify.' }); return; }
+        try {
+            const res = await fetch(`/api/requisitions/${requisition.id}/verify-pin`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ roleName, pin }) });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Invalid');
+            if (data.unmasked) {
+                toast({ title: 'All verified', description: 'Vendor cards are now unmasked.' });
+                onUnmasked();
+            } else {
+                toast({ title: 'Verified', description: `PIN accepted. ${data.remaining || 0} remaining.` });
+            }
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Verification failed' });
+        }
+    };
+
+    return (
+        <Card className="mt-6 border-yellow-200">
+            <CardHeader>
+                <CardTitle>Director Presence Verification</CardTitle>
+                <CardDescription>The vendor pricing will remain masked until all three directors enter their verification PINs.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-3">
+                    {isRfqSender && (
+                        <div className="flex items-center gap-2">
+                            <Button onClick={generatePins} variant="outline">Generate Pins</Button>
+                            <p className="text-sm text-muted-foreground">Generate one-time PINs and notify directors.</p>
+                        </div>
+                    )}
+                    <div className="grid md:grid-cols-3 gap-4">
+                        {DIRECTOR_ROLES.map(rn => (
+                            <div key={rn} className="border rounded p-3">
+                                <h4 className="font-semibold mb-2">{rn.replace(/_/g, ' ')}</h4>
+                                {user && ((user.roles as any[]).some((x:any) => x.name === rn) || (user.roles as any[]).some((x:any) => x.name === 'Admin')) ? (
+                                    <div className="flex gap-2">
+                                        <Input value={inputs[rn] || ''} onChange={(e) => setInputs(s => ({ ...s, [rn]: e.target.value }))} placeholder="Enter PIN" />
+                                        <Button onClick={() => verifyPin(rn)}>Verify</Button>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">Awaiting {rn.replace(/_/g, ' ')} to verify.</p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
 
 const committeeFormSchema = z.object({
   committeeName: z.string().min(2, "Committee name must be at least 2 characters long."),
@@ -2953,6 +3029,7 @@ export default function QuotationDetailsPage() {
   }
 
   const canManageCommittees = isAuthorized;
+    const isMasked = Boolean(requisition.rfqSettings?.masked);
   const isReadyForNotification = requisition?.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && !isAwarded && quotations.length > 0 && quotations.length < committeeQuorum;
@@ -3064,14 +3141,26 @@ export default function QuotationDetailsPage() {
                         <CardTitle className="flex items-center gap-2 text-lg"><Users /> Evaluation Committee (Scorers)</CardTitle>
                     </AccordionTrigger>
                     <AccordionContent>
-                        <EvaluationCommitteeManagement
-                            requisition={requisition}
-                            onCommitteeUpdated={fetchRequisitionAndQuotes}
-                            open={isCommitteeDialogOpen}
-                            onOpenChange={setCommitteeDialogOpen}
-                            isAuthorized={isAuthorized}
-                            isEditDisabled={isScoringDeadlinePassed || isAwarded}
-                        />
+                        {isMasked ? (
+                            <Card className="border-amber-500 bg-amber-50">
+                                <CardHeader>
+                                    <CardTitle>Director Verification Required</CardTitle>
+                                    <CardDescription>Vendor cards stay sealed and committee assignment is locked until all three directors enter their PINs.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <DirectorPinVerification requisition={requisition} onUnmasked={fetchRequisitionAndQuotes} />
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <EvaluationCommitteeManagement
+                                requisition={requisition}
+                                onCommitteeUpdated={fetchRequisitionAndQuotes}
+                                open={isCommitteeDialogOpen}
+                                onOpenChange={setCommitteeDialogOpen}
+                                isAuthorized={isAuthorized}
+                                isEditDisabled={isScoringDeadlinePassed || isAwarded}
+                            />
+                        )}
                     </AccordionContent>
                 </AccordionItem>
             </Accordion>

@@ -35,6 +35,7 @@ model User {
   technicalCommitteeFor                           PurchaseRequisition[] @relation("TechnicalCommitteeMembers")
   currentApproverFor                              PurchaseRequisition[] @relation("CurrentApprover")
   auditLogs                                       AuditLog[]
+  generatedPins                                  Pin[]                @relation("GeneratedPins")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -104,6 +105,7 @@ model PurchaseRequisition {
   parentId            String?
   children            PurchaseRequisition[] @relation("RestartedRequisition")
   standbyAssignments  StandbyAssignment[]
+  pins                Pin[]                @relation("RequisitionPins")
 }
 
 model RequisitionItem {
@@ -482,4 +484,19 @@ model ApprovalStep {
 model Setting {
     key     String @id
     value   Json
+}
+
+model Pin {
+  id              String   @id @default(cuid())
+  requisitionId   String
+  requisition     PurchaseRequisition @relation("RequisitionPins", fields: [requisitionId], references: [id], onDelete: Cascade)
+  roleName        String
+  pinHash         String
+  generatedById   String
+  generatedBy     User     @relation("GeneratedPins", fields: [generatedById], references: [id])
+  generatedAt     DateTime @default(now())
+  expiresAt       DateTime?
+  used            Boolean  @default(false)
+  usedById        String?
+  usedAt          DateTime?
 }
