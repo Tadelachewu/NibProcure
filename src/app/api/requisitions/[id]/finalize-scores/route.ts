@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { User, UserRole, PerItemAwardDetail, QuoteItem, Quotation, EvaluationCriteria } from '@/lib/types';
 import { getNextApprovalStep } from '@/services/award-service';
-import { getActorFromToken } from '@/lib/auth';
+import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 
 function calculateItemScoreForVendor(
     quote: Quotation & { items: QuoteItem[], scores: any[] },
@@ -65,22 +65,9 @@ export async function POST(
             return NextResponse.json({ error: "The official minute document is required to proceed." }, { status: 400 });
         }
         
-        const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-        let isAuthorized = false;
-        const userRoles = actor.roles as UserRole[];
-
-        if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-            const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-            if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
-                isAuthorized = true;
-            } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
-                isAuthorized = true;
-            }
-        }
-
-
+        const isAuthorized = await isActorAuthorizedForRequisition(actor, requisitionId as string);
         if (!isAuthorized) {
-            console.error(`[FINALIZE-SCORES] User ${actor.id} is not authorized.`);
+            console.error(`[FINALIZE-SCORES] User ${actor.id} is not authorized to finalize scores for requisition ${requisitionId}.`);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
         

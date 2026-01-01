@@ -7,10 +7,11 @@ import { Department, User, UserRole } from '@/lib/types';
 import { rolePermissions as defaultRolePermissions } from '@/lib/roles';
 import { decodeJwt } from '@/lib/auth';
 import { RequisitionCreatorSetting } from '@/components/settings/requisition-creator-settings';
+import { useToast } from '@/hooks/use-toast';
 
 
 export interface RfqSenderSetting {
-  type: 'all' | 'specific';
+  type: 'all' | 'specific' | 'assigned';
   userIds?: string[];
 }
 
@@ -118,6 +119,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Setting[]>([]);
   const [rfqQuorum, setRfqQuorum] = useState<number>(3);
   const [committeeQuorum, setCommitteeQuorum] = useState<number>(3);
+  const { toast } = useToast();
+
+  // Global handler: convert unhandled promise rejections (commonly permission errors)
+  // into user-facing toasts so the Next.js overlay isn't shown for expected authorization failures.
+  useEffect(() => {
+    const onUnhandledRejection = (ev: PromiseRejectionEvent) => {
+      const reason = (ev && (ev as any).reason) || (ev as any);
+      const message = reason && (reason.message || String(reason));
+      if (message && typeof message === 'string' && message.toLowerCase().includes('permission')) {
+        try {
+          toast({ variant: 'destructive', title: 'Permission Denied', description: message });
+          ev.preventDefault();
+        } catch (e) {
+          // swallow if toast cannot be shown
+        }
+      }
+    };
+    window.addEventListener('unhandledrejection', onUnhandledRejection as any);
+    return () => {
+      window.removeEventListener('unhandledrejection', onUnhandledRejection as any);
+    };
+  }, [toast]);
 
 
   const fetchAllUsers = useCallback(async () => {
@@ -221,11 +244,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         permissionsForRole.forEach(path => permissionsSet.add(path));
     });
     
-    // Dynamically add procurement officer permissions if user is a designated RFQ sender
-    if (rfqSenderSetting.type === 'specific' && rfqSenderSetting.userIds?.includes(user.id)) {
-        const procurementPermissions = rolePermissions['Procurement_Officer'] || [];
-        procurementPermissions.forEach(path => permissionsSet.add(path));
-    }
+    // Note: RFQ sender authorization is enforced per-requisition using the
+    // requisition.assignedRfqSenderIds. Do NOT grant procurement permissions
+    // globally here based solely on the rfqSenderSetting.specific list.
 
     return { ...rolePermissions, Combined: Array.from(permissionsSet) };
   }, [user, rolePermissions, loading, rfqSenderSetting]);
@@ -277,7 +298,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
   };
 
-  const updateSetting = async (key: string, value: any) => {
+  const updateSetting = async (key: string, value: any): Promise<boolean> => {
     if (!token) throw new Error("Authentication token not found.");
     try {
         const response = await fetch('/api/settings', {
@@ -289,17 +310,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             body: JSON.stringify({ key, value }),
         });
         if (response.status === 403) {
+            // Show permission toast immediately so the user gets consistent feedback
+            try {
+              toast({ variant: 'destructive', title: 'Permission Denied', description: 'You do not have permission to perform this action.' });
+            } catch (e) { /* ignore toast failures */ }
             throw new Error('You do not have permission to perform this action.');
         }
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to save setting');
+            const msg = errorData.error || 'Failed to save setting';
+            try { toast({ variant: 'destructive', title: 'Error', description: msg }); } catch (er) {}
+            return false;
         }
-        
+
         await fetchAllSettings();
+        return true;
     } catch(e) {
         console.error("Error in updateSetting:", e);
-        throw e;
+        const message = e && (e as any).message ? (e as any).message : String(e);
+        if (typeof message === 'string' && message.toLowerCase().includes('permission')) {
+          try { toast({ variant: 'destructive', title: 'Permission Denied', description: message }); } catch (er) { }
+        } else {
+          try { toast({ variant: 'destructive', title: 'Error', description: message }); } catch (er) { }
+        }
+        return false;
     }
   };
 

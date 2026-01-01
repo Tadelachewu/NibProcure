@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -225,8 +224,8 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete, isAssignedCommitteeMember }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean, isAssignedCommitteeMember: boolean }) => {
-    const isMasked = requisition.rfqSettings?.masked === true;
+const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete, isAssignedCommitteeMember, readyForCommitteeAssignment }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean, isAssignedCommitteeMember: boolean, readyForCommitteeAssignment: boolean }) => {
+    const isMasked = (requisition.rfqSettings?.masked === true) || (readyForCommitteeAssignment && requisition.rfqSettings?.masked !== false);
 
     if (quotes.length === 0) {
         return (
@@ -351,14 +350,14 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="flex-grow space-y-4">
-                            {quote.bidDocumentUrl && (
+                            {!isMasked && quote.bidDocumentUrl && (
                                 <Button asChild variant="outline" size="sm" className="w-full">
                                     <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer">
                                         <FileText className="mr-2 h-4 w-4"/> View Bid Document
                                     </a>
                                 </Button>
                             )}
-                             {quote.experienceDocumentUrl && (
+                             {!isMasked && quote.experienceDocumentUrl && (
                                 <Button asChild variant="outline" size="sm" className="w-full">
                                     <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer">
                                         <UserCog className="mr-2 h-4 w-4"/> View Experience Document
@@ -415,8 +414,8 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                              )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
-                            <Button className="w-full" variant="outline" onClick={() => onViewDetails(quote)}>
-                                <Eye className="mr-2 h-4 w-4" /> View Full Quote
+                            <Button className="w-full" variant="outline" onClick={() => onViewDetails(quote)} disabled={isMasked}>
+                                <Eye className="mr-2 h-4 w-4" /> {isMasked ? 'Sealed' : 'View Full Quote'}
                             </Button>
                              {isAssignedCommitteeMember && isDeadlinePassed && (
                                 <Button className="w-full" variant={hasUserScored ? "secondary" : "default"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
@@ -530,19 +529,56 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
 const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: PurchaseRequisition, onUnmasked: () => void }) => {
     const { user, token, role } = useAuth();
     const { toast } = useToast();
-    const [pins, setPins] = React.useState<{ role: string; status: string }[]>([]);
+    const [pins, setPins] = React.useState<any[]>([]);
+    const [unsealThreshold, setUnsealThreshold] = React.useState<number | undefined>((requisition.rfqSettings as any)?.unsealThreshold);
     const [inputs, setInputs] = React.useState<Record<string,string>>({});
-    const isRfqSender = (user && ((user.roles as any[]).some(r => r.name === 'Procurement_Officer') || (user.roles as any[]).some(r => r.name === 'Admin')));
+    const isRfqSender = (user && ((user.roles as any[]).some(r => (typeof r === 'string' ? r === 'Procurement_Officer' : r.name === 'Procurement_Officer')) || (user.roles as any[]).some(r => (typeof r === 'string' ? r === 'Admin' : r.name === 'Admin'))));
 
-    const DIRECTOR_ROLES = ['Procurement_Director','Finance_Director','Facility_Director'];
+    const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
 
-    const generatePins = async () => {
+    const fetchExistingPins = async () => {
         if (!token) return;
         try {
-            const res = await fetch(`/api/requisitions/${requisition.id}/generate-pins`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+            const res = await fetch(`/api/requisitions/${requisition.id}/pins`, { headers: { Authorization: `Bearer ${token}` } });
+            const data = await res.json();
+            if (!res.ok) return;
+            setPins(Array.isArray(data.pins) ? data.pins : data.pins || []);
+        } catch (e) {
+            // ignore
+        }
+    };
+
+    useEffect(() => { fetchExistingPins(); }, [requisition.id, token]);
+
+    const generatePins = async (opts: { includePins?: boolean } = {}) => {
+        if (!token) return;
+        try {
+            const q = opts.includePins ? '?includePins=1' : '';
+            const res = await fetch(`/api/requisitions/${requisition.id}/generate-pins${q}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to generate pins');
             toast({ title: 'Pins generated', description: 'Pins were generated and sent to directors.' });
+            // if server returned created pins with plaintext, merge into UI state for testing
+            if (data && Array.isArray(data.pins) && data.pins.length > 0) {
+                // Map server pins into same shape as fetchExistingPins expects
+                const mapped = data.pins.map((p:any) => ({
+                    id: `${p.requisitionId || requisition.id}-${p.roleName}-${p.recipientId}`,
+                    requisition: { id: requisition.id, title: requisition.title },
+                    roleName: p.roleName,
+                    generatedAt: p.expiresAt ? new Date(Date.now()).toISOString() : undefined,
+                    expiresAt: p.expiresAt,
+                    used: false,
+                    recipient: { id: p.recipientId },
+                    plainPin: p.plainPin
+                }));
+                // replace existing pins for this requisition with mapped entries
+                setPins(prev => {
+                    const others = (prev || []).filter((x:any) => x.requisition?.id !== requisition.id);
+                    return [...others, ...mapped];
+                });
+            } else {
+                await fetchExistingPins();
+            }
         } catch (e) {
             toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Failed to generate pins' });
         }
@@ -560,10 +596,29 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
                 toast({ title: 'All verified', description: 'Vendor cards are now unmasked.' });
                 onUnmasked();
             } else {
-                toast({ title: 'Verified', description: `PIN accepted. ${data.remaining || 0} remaining.` });
+                toast({ title: 'Verified', description: 'PIN accepted successfully.' });
             }
         } catch (e) {
             toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Verification failed' });
+        }
+    };
+
+    // Directors can request their own PIN (if they have the director role)
+    const [requesting, setRequesting] = React.useState(false);
+    const isDirectorUser = user && DIRECTOR_ROLES.some(rn => (user.roles as any[]).some((x:any) => (typeof x === 'string' ? x === rn : x.name === rn)));
+
+    const requestMyPin = async () => {
+        if (!token) return;
+        setRequesting(true);
+        try {
+            const res = await fetch(`/api/requisitions/${requisition.id}/request-pin`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to request pin');
+            toast({ title: 'PIN requested', description: `A one-time PIN was sent to your email. Expires at ${new Date(data.expiresAt).toLocaleString()}` });
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Failed to request pin' });
+        } finally {
+            setRequesting(false);
         }
     };
 
@@ -571,20 +626,50 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
         <Card className="mt-6 border-yellow-200">
             <CardHeader>
                 <CardTitle>Director Presence Verification</CardTitle>
-                <CardDescription>The vendor pricing will remain masked until all three directors enter their verification PINs.</CardDescription>
+                <CardDescription>
+                    The vendor pricing will remain masked until the configured number of directors verify.
+                    Current threshold: {unsealThreshold ?? (requisition.rfqSettings as any)?.unsealThreshold ?? DIRECTOR_ROLES.length}.
+                </CardDescription>
             </CardHeader>
             <CardContent>
                 <div className="space-y-3">
                     {isRfqSender && (
                         <div className="flex items-center gap-2">
-                            <Button onClick={generatePins} variant="outline">Generate Pins</Button>
-                            <p className="text-sm text-muted-foreground">Generate one-time PINs and notify directors.</p>
+                            <Button onClick={() => generatePins({ includePins: true })} variant={pins && pins.length > 0 ? 'destructive' : 'outline'}>
+                                {pins && pins.length > 0 ? 'Regenerate Pins (show)' : 'Generate Pins (show)'}
+                            </Button>
+                            <p className="text-sm text-muted-foreground">{pins && pins.length > 0 ? 'Regenerates and replaces previous PINs for this requisition.' : 'Generate one-time PINs and notify directors.'}</p>
                         </div>
                     )}
                     <div className="grid md:grid-cols-3 gap-4">
+                        <div className="border rounded p-3">
+                            <h4 className="font-semibold mb-2">Unseal Threshold</h4>
+                            <p className="text-sm text-muted-foreground mb-2">Number of director verifications required to unmask quotations.</p>
+                            <div className="flex items-center gap-2">
+                                <Input type="number" value={String(unsealThreshold ?? DIRECTOR_ROLES.length)} onChange={(e) => setUnsealThreshold(Number(e.target.value))} />
+                                <Button onClick={async () => {
+                                    if (!token) return;
+                                    try {
+                                        const res = await fetch(`/api/requisitions/${requisition.id}/set-unseal-threshold`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ threshold: Number(unsealThreshold || DIRECTOR_ROLES.length) }) });
+                                        const d = await res.json();
+                                        if (!res.ok) throw new Error(d.error || 'Failed to set threshold');
+                                        toast({ title: 'Threshold updated', description: `Unseal threshold set to ${d.threshold}` });
+                                    } catch (e:any) {
+                                        toast({ variant: 'destructive', title: 'Error', description: e?.message || 'Failed to set threshold' });
+                                    }
+                                }}>Save</Button>
+                            </div>
+                        </div>
                         {DIRECTOR_ROLES.map(rn => (
                             <div key={rn} className="border rounded p-3">
-                                <h4 className="font-semibold mb-2">{rn.replace(/_/g, ' ')}</h4>
+                                <h4 className="font-semibold mb-2 flex items-center gap-2">
+                                    {rn.replace(/_/g, ' ')}
+                                    {pins.some(pin => pin.roleName === rn && pin.used) ? (
+                                        <Badge variant="success">Verified</Badge>
+                                    ) : (
+                                        <Badge variant="secondary">Pending</Badge>
+                                    )}
+                                </h4>
                                 {user && ((user.roles as any[]).some((x:any) => x.name === rn) || (user.roles as any[]).some((x:any) => x.name === 'Admin')) ? (
                                     <div className="flex gap-2">
                                         <Input value={inputs[rn] || ''} onChange={(e) => setInputs(s => ({ ...s, [rn]: e.target.value }))} placeholder="Enter PIN" />
@@ -596,6 +681,12 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
                             </div>
                         ))}
                     </div>
+                    {isDirectorUser && (
+                        <div className="mt-4">
+                            <Button onClick={requestMyPin} disabled={requesting} variant="secondary">{requesting ? 'Requesting...' : 'Request My PIN'}</Button>
+                            <p className="text-sm text-muted-foreground mt-2">Directors can request their one-time PIN here. It will also be sent to your email.</p>
+                        </div>
+                    )}
                 </div>
             </CardContent>
         </Card>
@@ -1375,7 +1466,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                     </div>
                 </div>
             </CardContent>
-            <CardFooter className="flex flex-wrap items-center justify-between gap-2">
+            <CardFooter className="flex flex-wrap items-center justify-between gap-2 pt-4">
                 <div className="flex items-center gap-4">
                     <Button onClick={handleSendRFQ} disabled={isSubmitting || !deadline || !isAuthorized || isSent}>
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
@@ -1501,14 +1592,14 @@ const scoreFormSchema = z.object({
   itemScores: z.array(z.object({
       quoteItemId: z.string(),
       financialScores: z.array(z.object({
-          criterionId: z.string(),
-          score: z.coerce.number().min(0).max(100),
-          comment: z.string().min(1, "A comment is required for this criterion."),
+      criterionId: z.string(),
+      score: z.coerce.number().min(0).max(100),
+      comment: z.string().min(1, "A comment is required for this criterion."),
       })).optional(),
       technicalScores: z.array(z.object({
-          criterionId: z.string(),
-          score: z.coerce.number().min(0).max(100),
-          comment: z.string().min(1, "A comment is required for this criterion."),
+      criterionId: z.string(),
+      score: z.coerce.number().min(0).max(100),
+      comment: z.string().min(1, "A comment is required for this criterion."),
       })).optional(),
   }))
 });
@@ -1802,7 +1893,7 @@ const ScoringDialog = ({
                                          <FileText className="mr-2 h-4 w-4"/> View Bid Document
                                      </a>
                                  </Button>
-                             )}
+                            )}
                             {quote.experienceDocumentUrl && (
                                 <Button asChild variant="outline" size="sm" className="w-full">
                                     <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer">
@@ -1886,7 +1977,7 @@ const ScoringDialog = ({
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
                                 <Button type="button">
-                                    Submit Score
+                                    Submit Final Score
                                 </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
@@ -1996,7 +2087,7 @@ const ScoringProgressTracker = ({
                         <li key={member.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-md border">
                            <div className="flex items-center gap-3">
                                 <Avatar>
-                                    <AvatarImage src={`https://picsum.photos/seed/${member.id}/40/40`} data-ai-hint="profile picture" />
+                                    <AvatarImage src={`https://picsum.photos/seed/${member.id}/40/40`} />
                                     <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
                                 </Avatar>
                                 <div>
@@ -2220,7 +2311,9 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                             </div>
                                                                             <div className="text-right">
                                                                             <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
-                                                                            <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPpp')}</p>
+                                                                            <p className="text-xs text-muted-foreground mt-1">
+                                                                                Submitted {format(new Date(scoreSet.submittedAt), 'PPpp')}
+                                                                            </p>
                                                                             </div>
                                                                         </div>
                                                                         <div className="space-y-4">
@@ -2335,7 +2428,11 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
             onClose();
 
         } catch (error) {
-             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
+             toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
         } finally {
             setSubmitting(false);
         }
@@ -2355,14 +2452,19 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
                         <div className="flex gap-2">
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newDeadline && "text-muted-foreground")}>
+                                    <Button
+                                        variant={"outline"}
+                                        className={cn("w-full justify-start text-left font-normal", !newDeadline && "text-muted-foreground")}
+                                    >
                                         <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {newDeadline ? format(newDeadline, "PPP") : <span>Pick a date</span>}
+                                        {newDeadline ? format(newDeadline, "PPP") : <span>Pick a new date</span>}
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newDeadline} onSelect={setNewDeadline} initialFocus disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} /></PopoverContent>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar mode="single" selected={newDeadline} onSelect={setNewDeadline} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
+                                </PopoverContent>
                             </Popover>
-                             <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)} />
+                            <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
                         </div>
                     </div>
                 </div>
@@ -2616,19 +2718,24 @@ export default function QuotationDetailsPage() {
   const [deadlineCheckPerformed, setDeadlineCheckPerformed] = useState(false);
 
 
-  const isAuthorized = useMemo(() => {
-    if (!user || !role) return false;
-    const userRoles = user.roles as UserRole[];
-    if (userRoles.includes('Admin')) return true;
-    
-    if (rfqSenderSetting.type === 'specific') {
-      return rfqSenderSetting.userIds?.includes(user.id) ?? false;
-    }
-    if (rfqSenderSetting.type === 'all') {
-      return userRoles.includes('Procurement_Officer');
-    }
-    return false;
-}, [user, role, rfqSenderSetting]);
+    const isAuthorized = useMemo(() => {
+        if (!user || !role) return false;
+        const userRoles = user.roles as UserRole[];
+        if (userRoles.includes('Admin')) return true;
+
+        const assigned = requisition?.assignedRfqSenderIds || [];
+        if (assigned.length > 0) {
+            return assigned.includes(user.id);
+        }
+
+        if (rfqSenderSetting.type === 'specific') {
+            return rfqSenderSetting.userIds?.includes(user.id) ?? false;
+        }
+        if (rfqSenderSetting.type === 'all') {
+            return userRoles.includes('Procurement_Officer');
+        }
+        return false;
+}, [user, role, rfqSenderSetting, requisition]);
   
   const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
 
@@ -2720,80 +2827,23 @@ export default function QuotationDetailsPage() {
   
   const quotesForDisplay = (user && (user.roles as string[]).some(r => r.includes('Committee')) && committeeTab === 'pending') ? pendingQuotes : (user && (user.roles as string[]).some(r => r.includes('Committee')) && committeeTab === 'scored') ? scoredQuotes : quotations;
   const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
+    const itemStatuses = useMemo(() => {
+        if (!requisition || !requisition.items) return [] as any[];
+        return requisition.items.flatMap(item => {
+            const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+            return details.map(d => ({
+                id: d.quoteItemId || `${item.id}-${d.vendorId}-${d.rank}`,
+                vendorId: d.vendorId,
+                rank: d.rank,
+                proposedItemName: d.proposedItemName,
+                reqItemName: item.name,
+                status: d.status,
+                score: d.score,
+                quotationId: d.quotationId,
+            }));
+        });
+    }, [requisition]);
   
-  const itemStatuses = useMemo(() => {
-    if (!requisition || !requisition.items) return [];
-
-    const finalStatuses: any[] = [];
-    
-    // Group all champion bids by the original requisition item
-    const bidsByItem = requisition.items.reduce((acc, reqItem) => {
-        const itemBids: any[] = [];
-        quotations.forEach(quote => {
-            const proposalsForItem = quote.items.filter(qi => qi.requisitionItemId === reqItem.id);
-            if (proposalsForItem.length > 0) {
-                // Find the best proposal from this vendor for this item
-                const bestProposal = proposalsForItem.map(proposal => {
-                    let totalItemScore = 0;
-                    let scorerCount = 0;
-                    quote.scores?.forEach(scoreSet => {
-                        const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                        if(itemScore) {
-                            totalItemScore += itemScore.finalScore;
-                            scorerCount++;
-                        }
-                    });
-                    const score = scorerCount > 0 ? totalItemScore / scorerCount : 0;
-                    return { proposal, score };
-                }).sort((a,b) => b.score - a.score)[0]; // Get the best one
-
-                if (bestProposal) {
-                    itemBids.push({
-                        reqItemId: reqItem.id,
-                        reqItemName: reqItem.name,
-                        vendorId: quote.vendorId,
-                        vendorName: quote.vendorName,
-                        proposalId: bestProposal.proposal.id,
-                        proposedItemName: bestProposal.proposal.name,
-                        score: bestProposal.score,
-                    });
-                }
-            }
-        });
-        acc[reqItem.id] = itemBids;
-        return acc;
-    }, {} as Record<string, any[]>);
-
-    // Rank and assign statuses within each item group
-    Object.values(bidsByItem).forEach((bids: any[]) => {
-        bids.sort((a, b) => b.score - a.score); // Rank by score
-        
-        bids.forEach((bid, index) => {
-            const rank = index + 1;
-            const dbStatus = requisition.items
-                .find(i => i.id === bid.reqItemId)
-                ?.perItemAwardDetails?.find(d => d.quoteItemId === bid.proposalId)?.status;
-
-            finalStatuses.push({ 
-                ...bid, 
-                id: `${bid.vendorId}-${bid.reqItemId}-${bid.proposalId}`, 
-                rank, 
-                status: dbStatus || (rank === 1 ? 'Pending_Award' : rank <= 3 ? 'Standby' : 'Rejected')
-            });
-        });
-    });
-    
-    return finalStatuses;
-
-}, [requisition, quotations]);
-
-
-  const paginatedQuotes = useMemo(() => {
-    const startIndex = (currentQuotesPage - 1) * PAGE_SIZE;
-    return quotesForDisplay.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [quotesForDisplay, currentQuotesPage]);
-
-
   const fetchRequisitionAndQuotes = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -2935,7 +2985,7 @@ export default function QuotationDetailsPage() {
         }
         toast({ title: 'Success', description: 'Scores have been finalized and awards are being routed for final review.' });
         fetchRequisitionAndQuotes();
-    } catch(error) {
+    } catch (error) {
          toast({
             variant: 'destructive',
             title: 'Error',
@@ -3028,8 +3078,8 @@ export default function QuotationDetailsPage() {
      return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
 
-  const canManageCommittees = isAuthorized;
-    const isMasked = Boolean(requisition.rfqSettings?.masked);
+    const canManageCommittees = isAuthorized;
+        const isMasked = (requisition.rfqSettings?.masked === true) || (readyForCommitteeAssignment && requisition.rfqSettings?.masked !== false);
   const isReadyForNotification = requisition?.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && !isAwarded && quotations.length > 0 && quotations.length < committeeQuorum;
@@ -3173,6 +3223,18 @@ export default function QuotationDetailsPage() {
                         <CardTitle className="flex items-center gap-2 text-lg"><FileBadge/> Quotation Overview</CardTitle>
                     </AccordionTrigger>
                     <AccordionContent>
+                        {readyForCommitteeAssignment && isMasked && (
+                            <Card className="mb-4 border-amber-200">
+                                <CardHeader>
+                                    <CardTitle>Director Verification</CardTitle>
+                                    <CardDescription>Generate one-time PINs and verify directors to unseal vendor quotes.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <DirectorPinVerification requisition={requisition} onUnmasked={fetchRequisitionAndQuotes} />
+                                </CardContent>
+                            </Card>
+                        )}
+
                         <Card className="border-0 shadow-none">
                             <CardHeader>
                                 <CardDescription>{requisition.title}</CardDescription>
@@ -3205,10 +3267,10 @@ export default function QuotationDetailsPage() {
                                             <TabsTrigger value="scored">Scored by You ({scoredQuotes.length})</TabsTrigger>
                                         </TabsList>}
                                         <TabsContent value="pending">
-                                            <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember} />
+                                            <QuoteComparison quotes={quotesForDisplay} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember} readyForCommitteeAssignment={readyForCommitteeAssignment} />
                                         </TabsContent>
                                         <TabsContent value="scored">
-                                            <QuoteComparison quotes={paginatedQuotes} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember}/>
+                                            <QuoteComparison quotes={quotesForDisplay} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember} readyForCommitteeAssignment={readyForCommitteeAssignment} />
                                         </TabsContent>
                                     </Tabs>
                                 )}
@@ -3438,7 +3500,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
         setIsSubmitting(true);
         try {
-            const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
+            const response = await fetch(`/api/requisitions/${id}/reopen-rfq`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ userId: user.id, newDeadline: finalNewDeadline }),
@@ -3492,7 +3554,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         </Card>
     );
 };
-    
 
-    
+
+
 

@@ -74,10 +74,11 @@ export function EditableQuestions({ requisition, onUpdate }: { requisition: Purc
   const form = useForm<QuestionsFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-        customQuestions: requisition.customQuestions?.map(q => ({
-            ...q,
-            options: q.options?.map(opt => ({ value: opt })) || []
-        })) || []
+    customQuestions: requisition.customQuestions?.map(q => ({
+      ...q,
+      requisitionItemId: q.requisitionItemId || 'general',
+      options: q.options?.map(opt => ({ value: opt })) || []
+    })) || []
     },
   });
 
@@ -140,6 +141,29 @@ export function EditableQuestions({ requisition, onUpdate }: { requisition: Purc
                                     <FormField control={form.control} name={`customQuestions.${index}.questionType`} render={({ field }) => (
                                         <FormItem><FormLabel>Question Type</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a type" /></SelectTrigger></FormControl><SelectContent><SelectItem value="text">Open-ended Text</SelectItem><SelectItem value="boolean">True/False</SelectItem><SelectItem value="multiple_choice">Multiple Choice</SelectItem><SelectItem value="file">File Upload</SelectItem></SelectContent></Select><FormMessage /></FormItem>
                                     )} />
+                                    <FormField
+                                      control={form.control}
+                                      name={`customQuestions.${index}.requisitionItemId`}
+                                      render={({ field }) => (
+                                        <FormItem>
+                                        <FormLabel>Link to Item (Optional)</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value || 'general'}>
+                                          <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Select an item" />
+                                          </SelectTrigger>
+                                          </FormControl>
+                                          <SelectContent>
+                                            <SelectItem value="general">General (Not item-specific)</SelectItem>
+                                            {requisition.items.map((item, idx) => (
+                                              <SelectItem key={item.id} value={item.id}>{`Item ${idx+1}: ${item.name || 'Untitled Item'}`}</SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                        </FormItem>
+                                      )}
+                                    />
                                     <FormField control={form.control} name={`customQuestions.${index}.isRequired`} render={({ field }) => (
                                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm col-span-2"><div className="space-y-0.5"><FormLabel>Required</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
                                     )} />

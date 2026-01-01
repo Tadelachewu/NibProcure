@@ -380,9 +380,14 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                                     <summary className="font-semibold cursor-pointer flex justify-between items-center">
                                                         <span>Proposals for "{itemBid.requisitionItemName}" &rarr; Champion Bid: "{itemBid.championBid.itemName}"</span>
                                                         <DialogTrigger asChild>
-                                                            <Button variant="link" size="sm" onClick={(e) => {e.stopPropagation(); setSelectedCalculation(itemBid.championBid);}}>
+                                                            <span
+                                                                className="text-sm text-primary cursor-pointer"
+                                                                onClick={(e) => { e.stopPropagation(); setSelectedCalculation(itemBid.championBid); }}
+                                                                role="button"
+                                                                tabIndex={0}
+                                                            >
                                                                 ({itemBid.championBid.finalItemScore.toFixed(2)} pts)
-                                                            </Button>
+                                                            </span>
                                                         </DialogTrigger>
                                                     </summary>
                                                     <div className="mt-4 space-y-4">

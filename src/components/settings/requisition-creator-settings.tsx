@@ -41,11 +41,12 @@ export function RequisitionCreatorSettings() {
                 variant: 'success',
             });
         } catch (error) {
-             toast({
-                variant: 'destructive',
-                title: 'Error',
-                description: 'Failed to save settings.',
-            });
+                 const isPermissionError = error instanceof Error && error.message.includes('permission');
+                 toast({
+                    variant: 'destructive',
+                    title: isPermissionError ? 'Permission Denied' : 'Error',
+                    description: error instanceof Error ? error.message : 'Failed to save settings.',
+                });
         } finally {
             setIsSaving(false);
         }

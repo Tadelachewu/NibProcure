@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { promoteStandbyVendor } from '@/services/award-service';
 import { UserRole } from '@/lib/types';
-import { getActorFromToken } from '@/lib/auth';
+import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -18,21 +18,9 @@ export async function POST(
 
   const requisitionId = params.id;
   try {
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    let isAuthorized = false;
-    const userRoles = actor.roles as UserRole[];
-
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-        if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
-            isAuthorized = true;
-        } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
-            isAuthorized = true;
-        }
-    }
-
+    const isAuthorized = await isActorAuthorizedForRequisition(actor, requisitionId as string);
     if (!isAuthorized) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const result = await prisma.$transaction(async (tx) => {

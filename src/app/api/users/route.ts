@@ -31,8 +31,11 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Admin')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const actorRolesRaw = (actor && (actor as any).roles) || [];
+    const actorRoles = Array.isArray(actorRolesRaw) ? actorRolesRaw.map((r: any) => typeof r === 'string' ? r : (r?.name || String(r))) : [];
+    console.log('[POST /api/users] actor:', actor?.id, 'roles:', actorRoles);
+    if (!actor || !actorRoles.includes('Admin')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const body = await request.json();

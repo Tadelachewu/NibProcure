@@ -228,7 +228,28 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                 brandDetails: item.brandDetails || '',
                 imageUrl: item.imageUrl || '',
             })),
-            answers: quote.answers || requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })),
+            answers: (function buildAnswers() {
+                // Order answers: item-specific questions per item, then general questions
+                const answers: { questionId: string; answer: string }[] = [];
+                const qById = new Map((requisition.customQuestions || []).map(q => [q.id, q] as [string, any]));
+
+                // item-specific, in original items order
+                requisition.items.forEach(item => {
+                    (requisition.customQuestions || []).filter(q => q.requisitionItemId === item.id).forEach(q => {
+                        // if editing a quote, prefer existing answer
+                        const existing = quote?.answers?.find(a => a.questionId === q.id);
+                        answers.push({ questionId: q.id, answer: existing ? existing.answer : '' });
+                    });
+                });
+
+                // then general questions (requisitionItemId null/undefined/'general')
+                (requisition.customQuestions || []).filter(q => !q.requisitionItemId).forEach(q => {
+                    const existing = quote?.answers?.find(a => a.questionId === q.id);
+                    answers.push({ questionId: q.id, answer: existing ? existing.answer : '' });
+                });
+
+                return quote?.answers?.length ? answers : (answers.length ? answers : undefined);
+            })(),
             cpoDocumentUrl: quote.cpoDocumentUrl || '',
             experienceDocumentUrl: quote.experienceDocumentUrl || '',
             bidDocumentUrl: quote.bidDocumentUrl || '',
@@ -323,11 +344,13 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
         if (!user || !requisition) return;
         
         let hasError = false;
-        if (requisition.customQuestions) {
-            for (let i = 0; i < requisition.customQuestions.length; i++) {
-                const question = requisition.customQuestions[i];
-                if (question.isRequired && (!values.answers || !values.answers[i] || !values.answers[i].answer)) {
-                    form.setError(`answers.${i}.answer`, { type: 'manual', message: 'A response is required for this question.'});
+        if (requisition.customQuestions && values.answers) {
+            // answers array is ordered (item-specific first, then general)
+            for (let ai = 0; ai < values.answers.length; ai++) {
+                const ans = values.answers[ai];
+                const question = (requisition.customQuestions || []).find(q => q.id === ans.questionId);
+                if (question && question.isRequired && (!ans.answer || ans.answer === '')) {
+                    form.setError(`answers.${ai}.answer`, { type: 'manual', message: 'A response is required for this question.' });
                     hasError = true;
                 }
             }
@@ -505,8 +528,8 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                         </AccordionTrigger>
                                         <AccordionContent className="pt-2">
                                             <div className="space-y-4 pl-6 border-l-2 ml-3">
-                                                {itemsForThisReqItem.map((field) => {
-                                                    const overallIndex = fields.findIndex(f => f.id === field.id);
+                                                                    {itemsForThisReqItem.map((field) => {
+                                                                        const overallIndex = fields.findIndex(f => f.id === field.id);
                                                     const isAlternative = field.name !== originalItem.name;
                                                     return (
                                                         <Card key={field.id} className="p-4 relative bg-background">
@@ -546,6 +569,40 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                                     <FormItem><FormLabel>Delivery Time (Days)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                                                                 )}/>
                                                             </div>
+                                                               {/* Render item-specific questions inside the item block */}
+                                                               {(requisition.customQuestions || []).filter(q => q.requisitionItemId === originalItem.id).map((question) => {
+                                                                   const answerIndex = form.getValues('answers')?.findIndex((a: any) => a.questionId === question.id);
+                                                                   if (answerIndex === -1 || answerIndex === undefined) return null;
+                                                                   return (
+                                                                       <div key={question.id} className="mt-4">
+                                                                           <FormField control={form.control} name={`answers.${answerIndex}.answer`} render={({ field }) => (
+                                                                               <FormItem>
+                                                                                   <FormLabel>{question.questionText}{question.isRequired && <span className="text-destructive"> *</span>}</FormLabel>
+                                                                                   {question.questionType === 'text' && <FormControl><Textarea placeholder="Your answer..." {...field} /></FormControl>}
+                                                                                   {question.questionType === 'boolean' && (
+                                                                                       <FormControl>
+                                                                                           <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4 pt-2">
+                                                                                               <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="true" id={`${question.id}-true`} /></FormControl><FormLabel htmlFor={`${question.id}-true`} className="font-normal">True</FormLabel></FormItem>
+                                                                                               <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="false" id={`${question.id}-false`} /></FormControl><FormLabel htmlFor={`${question.id}-false`} className="font-normal">False</FormLabel></FormItem>
+                                                                                           </RadioGroup>
+                                                                                       </FormControl>
+                                                                                   )}
+                                                                                   {question.questionType === 'multiple_choice' && (
+                                                                                       <FormControl>
+                                                                                           <Select onValueChange={field.onChange} defaultValue={field.value}><SelectTrigger><SelectValue placeholder="Select an option" /></SelectTrigger><SelectContent>{question.options?.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
+                                                                                       </FormControl>
+                                                                                   )}
+                                                                                   {question.questionType === 'file' && (
+                                                                                       <FormControl>
+                                                                                           <Input type="file" onChange={async (e) => { if (e.target.files?.[0]) { const path = await handleFileUpload(e.target.files[0]); if (path) field.onChange(path); } }} />
+                                                                                       </FormControl>
+                                                                                   )}
+                                                                                   <FormMessage />
+                                                                               </FormItem>
+                                                                           )} />
+                                                                       </div>
+                                                                   );
+                                                               })}
                                                         </Card>
                                                     )
                                                 })}
@@ -557,75 +614,41 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                         </Accordion>
 
 
-                         {requisition.customQuestions && requisition.customQuestions.length > 0 && (
+                        { (requisition.customQuestions || []).filter(q => !q.requisitionItemId).length > 0 && (
                             <>
                                 <Separator />
                                 <h3 className="text-lg font-medium">Additional Questions</h3>
                                 <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                                {requisition.customQuestions.map((question, index) => (
-                                    <Card key={question.id} className="p-4">
-                                        <FormField
-                                            control={form.control}
-                                            name={`answers.${index}.answer`}
-                                            render={({ field }) => (
+                                {/* render only general questions (no requisitionItemId) in same order as answers array after item-specific ones */}
+                                { (requisition.customQuestions || []).filter(q => !q.requisitionItemId).map((question) => {
+                                    const answerIndex = form.getValues('answers')?.findIndex((a: any) => a.questionId === question.id);
+                                    if (answerIndex === -1 || answerIndex === undefined) return null;
+                                    return (
+                                        <Card key={question.id} className="p-4">
+                                            <FormField control={form.control} name={`answers.${answerIndex}.answer`} render={({ field }) => (
                                                 <FormItem>
-                                                    <FormLabel>
-                                                        {question.questionText}
-                                                        {question.isRequired && <span className="text-destructive"> *</span>}
-                                                    </FormLabel>
-                                                        {question.questionType === 'text' && (
-                                                          <FormControl>
-                                                            <Textarea placeholder="Your answer..." {...field} />
-                                                          </FormControl>
-                                                        )}
-                                                        {question.questionType === 'boolean' && (
-                                                          <FormControl>
+                                                    <FormLabel>{question.questionText}{question.isRequired && <span className="text-destructive"> *</span>}</FormLabel>
+                                                    {question.questionType === 'text' && <FormControl><Textarea placeholder="Your answer..." {...field} /></FormControl>}
+                                                    {question.questionType === 'boolean' && (
+                                                        <FormControl>
                                                             <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4 pt-2">
-                                                              <FormItem className="flex items-center space-x-2">
-                                                                <FormControl>
-                                                                  <RadioGroupItem value="true" id={`${question.id}-true`} />
-                                                                </FormControl>
-                                                                <FormLabel htmlFor={`${question.id}-true`} className="font-normal">True</FormLabel>
-                                                              </FormItem>
-                                                              <FormItem className="flex items-center space-x-2">
-                                                                <FormControl>
-                                                                  <RadioGroupItem value="false" id={`${question.id}-false`} />
-                                                                </FormControl>
-                                                                <FormLabel htmlFor={`${question.id}-false`} className="font-normal">False</FormLabel>
-                                                              </FormItem>
+                                                                <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="true" id={`${question.id}-true`} /></FormControl><FormLabel htmlFor={`${question.id}-true`} className="font-normal">True</FormLabel></FormItem>
+                                                                <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="false" id={`${question.id}-false`} /></FormControl><FormLabel htmlFor={`${question.id}-false`} className="font-normal">False</FormLabel></FormItem>
                                                             </RadioGroup>
-                                                          </FormControl>
-                                                        )}
-                                                        {question.questionType === 'multiple_choice' && (
-                                                           <FormControl>
-                                                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                                                    <SelectTrigger>
-                                                                        <SelectValue placeholder="Select an option" />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {question.options?.map(option => (
-                                                                            <SelectItem key={option} value={option}>{option}</SelectItem>
-                                                                        ))}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            </FormControl>
-                                                        )}
-                                                        {question.questionType === 'file' && (
-                                                            <FormControl>
-                                                                <Input type="file" onChange={async (e) => {
-                                                                    if (e.target.files?.[0]) {
-                                                                        const path = await handleFileUpload(e.target.files[0]);
-                                                                        if (path) field.onChange(path);
-                                                                    }
-                                                                }} />
-                                                            </FormControl>
-                                                        )}
+                                                        </FormControl>
+                                                    )}
+                                                    {question.questionType === 'multiple_choice' && (
+                                                        <FormControl>
+                                                            <Select onValueChange={field.onChange} defaultValue={field.value}><SelectTrigger><SelectValue placeholder="Select an option" /></SelectTrigger><SelectContent>{question.options?.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
+                                                        </FormControl>
+                                                    )}
+                                                    {question.questionType === 'file' && <FormControl><Input type="file" onChange={async (e) => { if (e.target.files?.[0]) { const path = await handleFileUpload(e.target.files[0]); if (path) field.onChange(path); } }} /></FormControl>}
                                                     <FormMessage />
                                                 </FormItem>
-                                            )}
-                                        />
-                                    </Card>
-                                ))}
+                                            )} />
+                                        </Card>
+                                    );
+                                })}
                                 </div>
                             </>
                         )}
@@ -1220,37 +1243,7 @@ export default function VendorRequisitionPage() {
                             </div>
                         </div>
 
-                        {requisition.evaluationCriteria && (
-                            <>
-                            <Separator/>
-                             <Accordion type="single" collapsible className="w-full">
-                                <AccordionItem value="evaluation-criteria">
-                                    <AccordionTrigger>
-                                        <h4 className="font-medium text-sm flex items-center gap-2"><Percent /> How Your Quote Will Be Judged</h4>
-                                    </AccordionTrigger>
-                                    <AccordionContent className="pt-2">
-                                        <div className="p-4 border rounded-lg bg-muted/50 space-y-4">
-                                            <div className="flex justify-around text-center">
-                                                <div>
-                                                    <p className="text-2xl font-bold text-primary">{requisition.evaluationCriteria.financialWeight}%</p>
-                                                    <p className="text-xs font-medium text-muted-foreground">Financial</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-2xl font-bold text-primary">{requisition.evaluationCriteria.technicalWeight}%</p>
-                                                    <p className="text-xs font-medium text-muted-foreground">Technical</p>
-                                                </div>
-                                            </div>
-                                            <Separator />
-                                            <div className="grid md:grid-cols-2 gap-4">
-                                                <CriteriaTable title="Financial" weight={requisition.evaluationCriteria.financialWeight} criteria={requisition.evaluationCriteria.financialCriteria} />
-                                                <CriteriaTable title="Technical" weight={requisition.evaluationCriteria.technicalWeight} criteria={requisition.evaluationCriteria.technicalCriteria} />
-                                            </div>
-                                        </div>
-                                    </AccordionContent>
-                                </AccordionItem>
-                            </Accordion>
-                            </>
-                        )}
+                        {/* Evaluation criteria hidden for vendors */}
                         
                     </CardContent>
                 </Card>

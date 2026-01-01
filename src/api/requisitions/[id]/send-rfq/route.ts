@@ -17,7 +17,7 @@ export async function POST(
         return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const { vendorIds, deadline, cpoAmount, rfqSettings } = body;
 
@@ -30,14 +30,39 @@ export async function POST(
     let isAuthorized = false;
     const userRoles = actor.roles as UserRole[];
 
-    if (userRoles.includes('Admin')) {
-        isAuthorized = true;
-    } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-        if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
+    // Prefer per-requisition assigned list when present
+    const assignedForReq = requisition.assignedRfqSenderIds || [];
+    console.log(`[SEND_RFQ] requisition ${id} assignedRfqSenderIds=${JSON.stringify(assignedForReq)}`);
+    if (assignedForReq.length > 0) {
+        if (assignedForReq.includes(actor.id) || userRoles.includes('Admin')) {
             isAuthorized = true;
-        } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
+        }
+    } else {
+        // Fallback to system-wide setting
+        // Normalize setting value (handle stringified JSON)
+        let settingValue: any = undefined;
+        try {
+            if (rfqSenderSetting) {
+                settingValue = rfqSenderSetting.value;
+                if (typeof settingValue === 'string') {
+                    try { settingValue = JSON.parse(settingValue); } catch (e) { /* keep as string */ }
+                }
+            }
+        } catch (e) {
+            console.error('Failed to parse rfqSenderSetting value:', e);
+        }
+
+        console.log(`[SEND_RFQ] Actor ${actor.id} roles=${JSON.stringify(userRoles)} setting=${JSON.stringify(settingValue)}`);
+
+        if (userRoles.includes('Admin')) {
             isAuthorized = true;
+        } else if (settingValue && typeof settingValue === 'object' && 'type' in settingValue) {
+            const setting = settingValue as { type: string, userIds?: string[] };
+            if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
+                isAuthorized = true;
+            } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
+                isAuthorized = true;
+            }
         }
     }
 

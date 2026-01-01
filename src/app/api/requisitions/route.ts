@@ -398,11 +398,45 @@ export async function PATCH(
         auditAction = 'APPROVE_REQUISITION';
         auditDetails = `Director approval for requisition ${id} granted by ${user.name}. Sent to Manager.`;
     } else if (newStatus === 'PreApproved' && requisition.status === 'Pending_Managerial_Approval') {
-        dataToUpdate.status = 'PreApproved';
-        dataToUpdate.currentApprover = { disconnect: true };
-        dataToUpdate.approverComment = comment;
-        auditAction = 'APPROVE_REQUISITION';
-        auditDetails = `Managerial approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;
+      dataToUpdate.status = 'PreApproved';
+      dataToUpdate.currentApprover = { disconnect: true };
+      dataToUpdate.approverComment = comment;
+      auditAction = 'APPROVE_REQUISITION';
+      auditDetails = `Managerial approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;
+
+      // If the system-wide RFQ sender setting requires assignment, accept assigned IDs from the request body
+      try {
+        const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+        let settingValue: any = rfqSenderSetting?.value;
+        if (typeof settingValue === 'string') {
+          try { settingValue = JSON.parse(settingValue); } catch (e) { /* keep as string */ }
+        }
+        console.log(`[PATCH_REQUISITION] rfqSenderSetting=${JSON.stringify(settingValue)}, body.assignedRfqSenderIds=${JSON.stringify(body.assignedRfqSenderIds)}`);
+         if (settingValue && typeof settingValue === 'object') {
+           if (settingValue.type === 'assigned') {
+             if (body.assignedRfqSenderIds && Array.isArray(body.assignedRfqSenderIds)) {
+               dataToUpdate.assignedRfqSenderIds = Array.from(new Set(body.assignedRfqSenderIds.map((id: any) => String(id))));
+               auditDetails += ` Assigned RFQ senders: ${dataToUpdate.assignedRfqSenderIds.join(', ')}.`;
+             } else {
+               dataToUpdate.assignedRfqSenderIds = [];
+               auditDetails += ` Assigned RFQ senders cleared.`;
+             }
+           } else if (settingValue.type === 'specific') {
+             const ids = Array.isArray(settingValue.userIds) ? settingValue.userIds.map((id: any) => String(id)) : [];
+             dataToUpdate.assignedRfqSenderIds = Array.from(new Set(ids));
+             auditDetails += ` Assigned RFQ senders set from system "specific" setting: ${dataToUpdate.assignedRfqSenderIds.join(', ')}.`;
+           } else if (settingValue.type === 'all') {
+             // Fetch all users who are Procurement_Officer
+             const procurementUsers = await prisma.user.findMany({ where: { roles: { some: { name: 'Procurement_Officer' } } }, select: { id: true } });
+             const ids = procurementUsers.map(u => u.id);
+             dataToUpdate.assignedRfqSenderIds = Array.from(new Set(ids));
+             auditDetails += ` Assigned RFQ senders set to all procurement officers (${dataToUpdate.assignedRfqSenderIds.length}).`;
+           }
+        }
+      } catch (e) {
+        console.error('Failed to process rfqSenderSetting during approval:', e);
+      }
+
     } else if (newStatus === 'Rejected') {
         if (requisition.status === 'Pending_Managerial_Approval') {
             const director = await prisma.user.findFirst({ where: { roles: { some: { name: 'Director_Supply_Chain_and_Property_Management' } } } });

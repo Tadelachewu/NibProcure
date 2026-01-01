@@ -55,13 +55,15 @@ export function ApprovalsTable() {
   const [requisitions, setRequisitions] = useState<PurchaseRequisition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, token } = useAuth();
+  const { user, token, rfqSenderSetting, allUsers } = useAuth();
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
   const [comment, setComment] = useState('');
   const [isActionDialogOpen, setActionDialogOpen] = useState(false);
+  const [assignedIds, setAssignedIds] = useState<string[]>([]);
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
 
@@ -87,8 +89,9 @@ export function ApprovalsTable() {
     if (!user || !token) return;
     try {
       setLoading(true);
-      const statusesToFetch = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval'];
-      const apiUrl = `/api/requisitions?status=${statusesToFetch.join(',')}`;
+      // Include PreApproved so approvers can see what they've approved
+      const statusesToFetch = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval', 'PreApproved'];
+      const apiUrl = `/api/requisitions?status=${statusesToFetch.join(',')}&page=${currentPage}&limit=${PAGE_SIZE}`;
       
       const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) {
@@ -96,12 +99,13 @@ export function ApprovalsTable() {
       }
       const data = await response.json();
       setRequisitions(data.requisitions || []);
+      setTotalCount(data.totalCount || 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
     } finally {
       setLoading(false);
     }
-  }, [user, token]);
+  }, [user, token, currentPage]);
 
   useEffect(() => {
     if (user) {
@@ -119,6 +123,12 @@ export function ApprovalsTable() {
   const handleAction = (req: PurchaseRequisition, type: 'approve' | 'reject') => {
     setSelectedRequisition(req);
     setActionType(type);
+    // Prepopulate assigned IDs when opening approve dialog
+    if (type === 'approve' && req.assignedRfqSenderIds) {
+      setAssignedIds(req.assignedRfqSenderIds || []);
+    } else {
+      setAssignedIds([]);
+    }
     setActionDialogOpen(true);
   }
 
@@ -127,6 +137,19 @@ export function ApprovalsTable() {
     setDetailsDialogOpen(true);
   }
   
+  const detectAssignedMode = () => {
+    try {
+      if (!rfqSenderSetting) return false;
+      if (typeof rfqSenderSetting === 'string') {
+        const parsed = JSON.parse(rfqSenderSetting);
+        return parsed.type === 'assigned';
+      }
+      return (rfqSenderSetting as any).type === 'assigned';
+    } catch (e) {
+      return false;
+    }
+  }
+
   const submitAction = async () => {
     if (!selectedRequisition || !actionType || !user) return;
     
@@ -145,15 +168,21 @@ export function ApprovalsTable() {
     }
 
     try {
+      const payload: any = {
+        id: selectedRequisition.id,
+        status: newStatus,
+        userId: user.id,
+        comment,
+      };
+      // Include assigned RFQ sender IDs when transitioning to PreApproved and global setting requires assignment
+      if (newStatus === 'PreApproved' && detectAssignedMode()) {
+        payload.assignedRfqSenderIds = assignedIds;
+      }
+
       const response = await fetch(`/api/requisitions`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ 
-            id: selectedRequisition.id, 
-            status: newStatus,
-            userId: user.id, 
-            comment,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error(`Failed to ${actionType} requisition`);
       toast({
@@ -177,11 +206,8 @@ export function ApprovalsTable() {
     }
   }
 
-  const totalPages = Math.ceil(requisitions.length / PAGE_SIZE);
-  const paginatedRequisitions = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return requisitions.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [requisitions, currentPage]);
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const paginatedRequisitions = requisitions; // server already paginates
 
   const getUrgencyVariant = (urgency: Urgency) => {
     switch (urgency) {
@@ -225,13 +251,15 @@ export function ApprovalsTable() {
                 <TableHead>Req. ID</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Requester</TableHead>
+                <TableHead>Approver</TableHead>
                 <TableHead>Urgency</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Assigned Senders</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paginatedRequisitions.length > 0 ? (
+                {paginatedRequisitions.length > 0 ? (
                 paginatedRequisitions.map((req, index) => {
                   const isCurrentUserApprover = req.currentApproverId === user?.id;
                   const lastCommentLog = req.auditTrail?.find(log => log.details.includes(req.approverComment || ''));
@@ -242,10 +270,11 @@ export function ApprovalsTable() {
                         <TableCell className="font-medium text-primary">{req.id}</TableCell>
                         <TableCell>{req.title}</TableCell>
                         <TableCell>{req.requesterName}</TableCell>
+                        <TableCell>{(req as any).approver?.name ?? '-'}</TableCell>
                         <TableCell>
                           <Badge variant={getUrgencyVariant(req.urgency)}>{req.urgency}</Badge>
                         </TableCell>
-                        <TableCell>
+                            <TableCell>
                           <div className="flex items-center gap-2">
                               <Badge variant={getStatusVariant(req.status)}>{req.status.replace(/_/g, ' ')}</Badge>
                               {req.approverComment && (
@@ -265,6 +294,28 @@ export function ApprovalsTable() {
                           </div>
                         </TableCell>
                         <TableCell>
+                          {req.assignedRfqSenderIds && req.assignedRfqSenderIds.length > 0 ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <span className="text-sm text-foreground cursor-help">
+                                    {req.assignedRfqSenderIds.map(id => allUsers.find(u => u.id === id)?.name || id).slice(0,2).join(', ')}{req.assignedRfqSenderIds.length > 2 ? `, +${req.assignedRfqSenderIds.length - 2}` : ''}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <div className="max-w-xs">
+                                    {req.assignedRfqSenderIds.map(id => (
+                                      <div key={id}>{allUsers.find(u => u.id === id)?.name || id}</div>
+                                    ))}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
                         <div className="flex gap-2">
                             <Button variant="outline" size="sm" onClick={() => handleShowDetails(req)}>
                                 <Eye className="mr-2 h-4 w-4" /> Details
@@ -282,7 +333,7 @@ export function ApprovalsTable() {
                 })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-48 text-center">
+                  <TableCell colSpan={9} className="h-48 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <Inbox className="h-16 w-16 text-muted-foreground/50" />
                       <div className="space-y-1">
@@ -296,17 +347,16 @@ export function ApprovalsTable() {
             </TableBody>
           </Table>
         </div>
-        {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-                <div className="text-sm text-muted-foreground">
-                    Showing {Math.min(1 + (currentPage - 1) * PAGE_SIZE, requisitions.length)} to {Math.min(currentPage * PAGE_SIZE, requisitions.length)} of {requisitions.length} requisitions.
-                </div>
+        <div className="flex items-center justify-between mt-4">
+          <div className="text-sm text-muted-foreground">
+            Showing {Math.min(1 + (currentPage - 1) * PAGE_SIZE, totalCount)} to {Math.min(currentPage * PAGE_SIZE, totalCount)} of {totalCount} requisitions.
+          </div>
                 <div className="flex items-center gap-2">
                     <Button
                     variant="outline"
                     size="icon"
                     onClick={() => setCurrentPage(1)}
-                    disabled={currentPage === 1}
+            disabled={currentPage === 1}
                     >
                     <ChevronsLeft className="h-4 w-4" />
                     </Button>
@@ -314,7 +364,7 @@ export function ApprovalsTable() {
                     variant="outline"
                     size="icon"
                     onClick={() => setCurrentPage(p => p - 1)}
-                    disabled={currentPage === 1}
+            disabled={currentPage === 1}
                     >
                     <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -324,21 +374,21 @@ export function ApprovalsTable() {
                     <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => setCurrentPage(p => p + 1)}
-                    disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+            disabled={currentPage === totalPages}
                     >
                     <ChevronRight className="h-4 w-4" />
                     </Button>
                     <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
                     >
                     <ChevronsRight className="h-4 w-4" />
                     </Button>
                 </div>
-            </div>
+        </div>
         )}
       </CardContent>
        <Dialog open={isActionDialogOpen} onOpenChange={setActionDialogOpen}>
@@ -361,6 +411,23 @@ export function ApprovalsTable() {
                 placeholder="Type your justification here..."
               />
             </div>
+            {/* If manager is approving to PreApproved and system requires assignment, allow selection */}
+            {actionType === 'approve' && selectedRequisition?.status === 'Pending_Managerial_Approval' && rfqSenderSetting?.type === 'assigned' && (
+              <div className="grid gap-2">
+                <Label>Assign RFQ Senders</Label>
+                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto border rounded p-2">
+                  {allUsers.filter(u => (u.roles as any[]).some(r => ['Procurement_Officer','Admin'].includes((r as any).name))).map(u => (
+                    <label key={u.id} className="inline-flex items-center gap-2">
+                      <input type="checkbox" checked={assignedIds.includes(u.id)} onChange={() => {
+                        setAssignedIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id]);
+                      }} />
+                      <span>{u.name} ({u.email})</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-sm text-muted-foreground">Selected users will be allowed to send RFQs for this requisition.</p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setActionDialogOpen(false)}>Cancel</Button>

@@ -19,26 +19,19 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized: User not found' }, { status: 403 });
     }
     
-    // --- Authorization Check ---
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    let isAuthorized = false;
-    const userRoles = actor.roles as UserRole[];
-
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-        if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
-            isAuthorized = true;
-        } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
-            isAuthorized = true;
-        }
-    }
-
-    if (!isAuthorized) {
-        return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
-    }
-
     const body = await request.json();
     const { originalRequisitionId, itemIds, vendorIds, newDeadline } = body;
+
+    // --- Authorization Check (use per-requisition rule) ---
+    if (!originalRequisitionId) {
+      return NextResponse.json({ error: 'Missing originalRequisitionId for authorization.' }, { status: 400 });
+    }
+
+    const { isActorAuthorizedForRequisition } = await import('@/lib/auth');
+    const isAuthorized = await isActorAuthorizedForRequisition(actor, originalRequisitionId);
+    if (!isAuthorized) {
+      return NextResponse.json({ error: 'Unauthorized to perform this action.' }, { status: 403 });
+    }
 
     if (!originalRequisitionId || !itemIds || itemIds.length === 0 || !vendorIds || vendorIds.length === 0 || !newDeadline) {
       return NextResponse.json({ error: 'Missing required parameters: originalRequisitionId, itemIds, vendorIds, and newDeadline.' }, { status: 400 });

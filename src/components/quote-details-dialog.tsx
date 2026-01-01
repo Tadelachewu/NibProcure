@@ -28,6 +28,8 @@ interface QuoteDetailsDialogProps {
 export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: QuoteDetailsDialogProps) {
     if (!quote || !requisition) return null;
 
+    const isMasked = Boolean((requisition as any).rfqSettings?.masked);
+
     const findQuestionText = (questionId: string) => {
         return requisition.customQuestions?.find(q => q.id === questionId)?.questionText || "Unknown Question";
     }
@@ -42,6 +44,12 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                     </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="flex-1 -mx-6 px-6">
+                    {isMasked ? (
+                        <div className="flex flex-col items-center justify-center h-64">
+                            <p className="font-semibold">This quotation is currently sealed.</p>
+                            <p className="text-sm text-muted-foreground">Vendor details are masked until director presence is verified.</p>
+                        </div>
+                    ) : (
                     <div className="space-y-6 py-4">
                         <div className="space-y-1">
                             <h3 className="font-semibold">General Information</h3>
@@ -121,6 +129,7 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                             </>
                         )}
                     </div>
+                    )}
                 </ScrollArea>
                 <DialogFooter>
                     <Button onClick={onClose} variant="outline">Close</Button>

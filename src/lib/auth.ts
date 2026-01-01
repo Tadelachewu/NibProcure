@@ -76,19 +76,63 @@ export async function getActorFromToken(request: Request): Promise<User> {
         throw new Error('Unauthorized');
     }
 
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    const effectiveRoles = new Set(user.roles.map(r => r.name as UserRole));
-
-    if (rfqSenderSetting) {
-        const setting = rfqSenderSetting.value as RfqSenderSetting;
-        if (setting.type === 'specific' && setting.userIds?.includes(user.id)) {
-            effectiveRoles.add('Procurement_Officer');
-        }
-    }
-
+    // Do not grant global procurement permissions here based on the rfqSenderSetting.
+    // Authorization for RFQ sender actions should be decided per-requisition using
+    // the requisition.assignedRfqSenderIds field. Keep the user's roles as-is.
     return {
       ...user,
       department: user.department?.name,
-      roles: Array.from(effectiveRoles),
+      roles: user.roles.map(r => (typeof r === 'string' ? r : r.name)),
     } as User;
+}
+
+/**
+ * Returns true if the provided actor/user has the Admin role.
+ * Accepts either normalized actor objects (roles: string[]) or
+ * Prisma-loaded user objects (roles: { name: string }[]).
+ */
+export function isAdmin(actor: any): boolean {
+  if (!actor) return false;
+  const roles = actor.roles || [];
+  if (Array.isArray(roles) && roles.length > 0) {
+    // roles may be strings or objects { name }
+    const roleNames = roles.map((r: any) => (typeof r === 'string' ? r : r?.name)).filter(Boolean);
+    return roleNames.includes('Admin');
+  }
+  return false;
+}
+
+/**
+ * Determines whether the given actor is authorized to perform RFQ-related actions
+ * on the specified requisition. The check prefers the requisition-level
+ * `assignedRfqSenderIds` when present; otherwise it falls back to the global
+ * `rfqSenderSetting`.
+ */
+export async function isActorAuthorizedForRequisition(actor: User, requisitionId: string): Promise<boolean> {
+  const userRoles = actor.roles as string[];
+
+  const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
+  if (!requisition) return false;
+
+  const assignedForReq = requisition.assignedRfqSenderIds || [];
+  if (assignedForReq.length > 0) {
+    return assignedForReq.includes(actor.id);
+  }
+
+  const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+  let settingValue: any = undefined;
+  if (rfqSenderSetting) {
+    settingValue = rfqSenderSetting.value;
+    if (typeof settingValue === 'string') {
+      try { settingValue = JSON.parse(settingValue); } catch (e) { /* keep as string */ }
+    }
+  }
+
+  if (settingValue && typeof settingValue === 'object' && 'type' in settingValue) {
+    const setting = settingValue as { type: string, userIds?: string[] };
+    if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) return true;
+    if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) return true;
+  }
+
+  return false;
 }

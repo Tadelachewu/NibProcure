@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getActorFromToken } from '@/lib/auth';
+import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 import { UserRole } from '@/lib/types';
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
@@ -13,19 +13,12 @@ export async function PATCH(request: Request, { params }: { params: { id: string
             return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
         }
 
-        const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-        let isAuthorized = false;
         const userRoles = actor.roles as UserRole[];
-
+        let isAuthorized = false;
         if (userRoles.includes('Admin')) {
             isAuthorized = true;
-        } else if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-            const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-            if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
-                isAuthorized = true;
-            } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
-                isAuthorized = true;
-            }
+        } else {
+            isAuthorized = await isActorAuthorizedForRequisition(actor, params.id);
         }
 
         if (!isAuthorized) {
@@ -58,6 +51,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
                         questionType: q.questionType.replace(/-/g, '_'),
                         isRequired: q.isRequired,
                         options: q.options || [],
+                        requisitionItemId: q.requisitionItemId && q.requisitionItemId !== 'general' ? q.requisitionItemId : null,
                     }))
                 });
             }

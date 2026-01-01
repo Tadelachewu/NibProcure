@@ -10,6 +10,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
   ArrowRight,
@@ -28,6 +30,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { useToast } from '@/hooks/use-toast';
 import { Invoice, PurchaseOrder, PurchaseRequisition } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from './ui/table';
 import { Badge } from './ui/badge';
@@ -410,6 +413,70 @@ function CommitteeDashboard() {
 export function Dashboard() {
   const { role, user } = useAuth();
 
+    const DIRECTOR_ROLES = ['Director_Supply_Chain_and_Property_Management','Finance_Director','Facility_Director'];
+
+    const DirectorPinsModal = () => {
+        const [open, setOpen] = useState(false);
+        const [page, setPage] = useState(1);
+        const [pageSize] = useState(50);
+        const [loading, setLoading] = useState(false);
+        const [pins, setPins] = useState<any[]>([]);
+        const [total, setTotal] = useState(0);
+        const [error, setError] = useState<string|undefined>();
+        const { token } = useAuth();
+
+        const { toast } = useToast();
+
+        const fetchPins = async (p = 1) => {
+            setLoading(true); setError(undefined);
+            try {
+                const res = await fetch(`/api/requisitions/pins?page=${p}&pageSize=${pageSize}`, {
+                    headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to load pins');
+                setPins(data.pins || []);
+                setTotal(data.total || (data.pins || []).length);
+                setPage(data.page || p);
+            } catch (e:any) {
+                setError(e.message || 'Failed to load pins');
+            } finally { setLoading(false); }
+        }
+
+        const resendToMe = async (requisitionId: string) => {
+            if (!token) { toast({ variant: 'destructive', title: 'Unauthorized', description: 'You must be signed in.' }); return; }
+            try {
+                const res = await fetch(`/api/requisitions/${requisitionId}/request-pin`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to resend PIN');
+                toast({ title: 'PIN sent', description: 'A one-time PIN was sent to your email.' });
+                await fetchPins(page);
+            } catch (e:any) {
+                toast({ variant: 'destructive', title: 'Error', description: e?.message || 'Failed to resend PIN' });
+            }
+        }
+
+        useEffect(() => {
+            if (open) fetchPins(1);
+        }, [open]);
+
+        const grouped = useMemo(() => {
+            const map: Record<string, { requisition: any, pins: any[] }> = {};
+            pins.forEach(p => {
+                const id = p.requisition?.id || 'unknown';
+                if (!map[id]) map[id] = { requisition: p.requisition, pins: [] };
+                map[id].pins.push(p);
+            });
+            return Object.values(map).sort((a, b) => (a.requisition?.title || '').localeCompare(b.requisition?.title || ''));
+        }, [pins]);
+
+        return (
+            <a href="/requisitions/pins">
+                <Button variant="outline">View Pins</Button>
+            </a>
+        );
+    };
+
   const renderDashboard = () => {
     switch (role) {
       case 'Requester': return <RequesterDashboard />;
@@ -433,15 +500,22 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex justify-between items-start">
-        <div>
-            <h1 className="text-3xl font-bold">Welcome back, {user?.name}!</h1>
-            <p className="text-muted-foreground">
-              Here's a summary of procurement activities for your role as a{' '}
-              <strong>{role?.replace(/_/g, ' ')}</strong>.
-            </p>
-        </div>
-      </div>
+            <div className="flex justify-between items-start">
+                <div>
+                        <h1 className="text-3xl font-bold">Welcome back, {user?.name}!</h1>
+                        <p className="text-muted-foreground">
+                            Here's a summary of procurement activities for your role as a{' '}
+                            <strong>{role?.replace(/_/g, ' ')}</strong>.
+                        </p>
+                </div>
+                <div>
+                    {DIRECTOR_ROLES.includes(role || '') && (
+                        <div className="flex gap-2">
+                            <DirectorPinsModal />
+                        </div>
+                    )}
+                </div>
+            </div>
       {renderDashboard()}
     </div>
   );

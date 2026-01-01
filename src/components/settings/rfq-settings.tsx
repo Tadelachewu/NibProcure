@@ -76,7 +76,7 @@ export function RfqSettings() {
             <CardContent className="space-y-6">
                 <RadioGroup 
                     value={setting.type} 
-                    onValueChange={(value: 'all' | 'specific') => setSetting({ type: value, userIds: value === 'all' ? [] : setting.userIds })}
+                    onValueChange={(value: 'all' | 'specific' | 'assigned') => setSetting({ type: value, userIds: value === 'all' ? [] : setting.userIds })}
                     className="space-y-2"
                 >
                     <div className="flex items-center space-x-2">
@@ -93,6 +93,14 @@ export function RfqSettings() {
                     </div>
                      <p className="pl-6 text-sm text-muted-foreground">
                         Only designated users can send RFQs.
+                    </p>
+
+                    <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="assigned" id="rfq-assigned" />
+                        <Label htmlFor="rfq-assigned">Assigned by Procurement Team</Label>
+                    </div>
+                    <p className="pl-6 text-sm text-muted-foreground">
+                        The procurement manager will assign who sends RFQs on a per-requisition basis.
                     </p>
                 </RadioGroup>
 

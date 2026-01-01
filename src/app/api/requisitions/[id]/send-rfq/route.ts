@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
-import { getActorFromToken } from '@/lib/auth';
+import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -17,7 +17,7 @@ export async function POST(
         return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const { vendorIds, deadline, cpoAmount, rfqSettings } = body;
 
@@ -26,22 +26,9 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
     
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    let isAuthorized = false;
-    const userRoles = actor.roles as UserRole[];
-
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-        if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
-            isAuthorized = true;
-        } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
-            isAuthorized = true;
-        }
-    }
-
-
+    const isAuthorized = await isActorAuthorizedForRequisition(actor, id);
     if (!isAuthorized) {
-        return NextResponse.json({ error: 'Unauthorized: You do not have permission to send RFQs based on the current system settings.' }, { status: 403 });
+      return NextResponse.json({ error: 'Unauthorized: You do not have permission to send RFQs for this requisition.' }, { status: 403 });
     }
 
     const rfqQuorumSetting = await prisma.setting.findUnique({ where: { key: 'rfqQuorum' } });

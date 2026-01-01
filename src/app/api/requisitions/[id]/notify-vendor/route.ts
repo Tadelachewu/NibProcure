@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { PerItemAwardDetail, PerItemAwardStatus, User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format, differenceInMinutes } from 'date-fns';
-import { getActorFromToken } from '@/lib/auth';
+import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -24,21 +24,9 @@ export async function POST(
         const { awardResponseDeadline } = body;
         console.log(`[NOTIFY-VENDOR] Action by User ID: ${actor.id}, Award Response Deadline: ${awardResponseDeadline}`);
         
-        const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-        let isAuthorized = false;
-        const userRoles = actor.roles as UserRole[];
-
-        if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-            const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-            if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
-                isAuthorized = true;
-            } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
-                isAuthorized = true;
-            }
-        }
-
+        const isAuthorized = await isActorAuthorizedForRequisition(actor, requisitionId as string);
         if (!isAuthorized) {
-            console.error(`[NOTIFY-VENDOR] User ${actor.id} is not authorized to notify vendors.`);
+            console.error(`[NOTIFY-VENDOR] User ${actor.id} is not authorized to notify vendors for requisition ${requisitionId}.`);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 

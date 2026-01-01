@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import { getActorFromToken } from '@/lib/auth';
 import { sendEmail } from '@/services/email-service';
 
-const DIRECTOR_ROLES = ['Procurement_Director', 'Finance_Director', 'Facility_Director'];
+const DIRECTOR_ROLES = ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management'];
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   try {
@@ -25,6 +25,19 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const { id } = params;
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
     if (!requisition) return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
+
+    // Prevent personnel who have already verified from regenerating pins
+    const alreadyVerified = await prisma.pin.findFirst({
+      where: {
+        requisitionId: id,
+        used: true,
+        usedById: actor.id,
+      },
+    });
+
+    if (alreadyVerified) {
+      return NextResponse.json({ error: 'You have already verified this requisition and cannot regenerate pins' }, { status: 403 });
+    }
 
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
 

@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { User, UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { format } from 'date-fns';
-import { getActorFromToken } from '@/lib/auth';
+import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -22,22 +22,10 @@ export async function POST(
     const body = await request.json();
     const { newDeadline } = body;
 
-    // Correct Authorization Logic
-    const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
-    let isAuthorized = false;
-    const userRoles = actor.roles as UserRole[];
-
-    if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && 'type' in rfqSenderSetting.value) {
-        const setting = rfqSenderSetting.value as { type: string, userIds?: string[] };
-        if (setting.type === 'all' && userRoles.includes('Procurement_Officer')) {
-            isAuthorized = true;
-        } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
-            isAuthorized = true;
-        }
-    }
-
+    // Authorization: prefer per-requisition assignedRfqSenderIds
+    const isAuthorized = await isActorAuthorizedForRequisition(actor, requisitionId as string);
     if (!isAuthorized) {
-        return NextResponse.json({ error: 'Unauthorized to manage this RFQ based on system settings.' }, { status: 403 });
+      return NextResponse.json({ error: 'Unauthorized to manage this RFQ for this requisition.' }, { status: 403 });
     }
 
     if (!newDeadline) {

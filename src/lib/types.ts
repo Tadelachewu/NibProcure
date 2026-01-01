@@ -200,6 +200,7 @@ export type PurchaseRequisition = {
       experienceDocumentRequired?: boolean;
       [key: string]: any;
   };
+  assignedRfqSenderIds?: string[];
   minutes?: Minute[];
   auditTrail?: AuditLog[];
 };

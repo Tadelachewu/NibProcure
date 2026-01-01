@@ -2266,17 +2266,24 @@ export default function QuotationDetailsPage() {
     });
   }, [requisition, quotations, allUsers]);
 
-  const isAuthorized = useMemo(() => {
-    if (!user || !role) return false;
-    if (role === 'Admin') return true;
-    if (rfqSenderSetting.type === 'all') {
-      return role === 'Procurement_Officer';
-    }
-    if (rfqSenderSetting.type === 'specific') {
-      return user.id === rfqSenderSetting.userId;
-    }
-    return false;
-  }, [user, role, rfqSenderSetting]);
+    const isAuthorized = useMemo(() => {
+        if (!user || !role) return false;
+        if (role === 'Admin') return true;
+
+        const assigned = requisition?.assignedRfqSenderIds || [];
+        if (assigned.length > 0) {
+            return assigned.includes(user.id);
+        }
+
+        // Fallback to global setting when requisition has no assigned senders
+        if (rfqSenderSetting.type === 'all') {
+            return role === 'Procurement_Officer';
+        }
+        if (rfqSenderSetting.type === 'specific') {
+            return rfqSenderSetting.userIds?.includes(user.id) ?? false;
+        }
+        return false;
+    }, [user, role, rfqSenderSetting, requisition]);
 
     const fetchRequisitionAndQuotes = async () => {
         if (!id) return;
@@ -2547,7 +2554,7 @@ export default function QuotationDetailsPage() {
             <WorkflowStepper step={currentStep} />
         </Card>
         
-        {requisition.evaluationCriteria && (
+        {requisition.evaluationCriteria && !((user && (user.roles as string[]).some(r => r === 'Vendor')) || false) && (
             <Card>
                  <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div>
@@ -2678,7 +2685,7 @@ export default function QuotationDetailsPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 w-full sm:w-auto">
-                            {isAwarded && isScoringComplete && (role === 'Procurement_Officer' || role === 'Admin') && (
+                            {isAwarded && isScoringComplete && isAuthorized && (
                                 <Button variant="secondary" onClick={() => setReportOpen(true)}>
                                     <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
                                 </Button>
@@ -2738,7 +2745,7 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-         {((role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') &&
+         {(((isAuthorized) || role === 'Committee') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
             requisition.status !== 'PreApproved' &&
             requisition.status !== 'Scoring_Complete' && requisition.status !== 'Award_Declined'
@@ -2753,7 +2760,7 @@ export default function QuotationDetailsPage() {
             />
         )}
         
-        {(role === 'Procurement_Officer' || role === 'Admin') && (
+          {isAuthorized && (
              <div className="mt-6">
                  <AwardStandbyButton
                     requisition={requisition}
@@ -2772,7 +2779,7 @@ export default function QuotationDetailsPage() {
              </div>
         )}
 
-        {isReadyForNotification && (role === 'Procurement_Officer' || role === 'Admin') && (
+        {isReadyForNotification && isAuthorized && (
             <Card className="mt-6 border-amber-500">
                  <CardHeader>
                     <CardTitle>Action Required: Notify Vendor</CardTitle>

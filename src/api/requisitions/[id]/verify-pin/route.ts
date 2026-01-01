@@ -30,6 +30,20 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const matches = await bcrypt.compare(pin, pinRecord.pinHash);
     if (!matches) return NextResponse.json({ error: 'Invalid pin' }, { status: 401 });
 
+    // Check if the actor has already verified this requisition
+    const alreadyVerified = await prisma.pin.findFirst({
+      where: {
+        requisitionId: id,
+        roleName,
+        used: true,
+        usedById: actor.id,
+      },
+    });
+
+    if (alreadyVerified) {
+      return NextResponse.json({ error: 'You have already verified this requisition' }, { status: 403 });
+    }
+
     await prisma.pin.update({ where: { id: pinRecord.id }, data: { used: true, usedById: actor.id, usedAt: new Date() } });
 
     await prisma.auditLog.create({
@@ -44,17 +58,18 @@ export async function POST(request: Request, { params }: { params: { id: string 
       }
     });
 
-    // Check if all director roles have been used
-    const remaining = await prisma.pin.count({ where: { requisitionId: id, roleName: { in: ['Procurement_Director', 'Finance_Director', 'Facility_Director'] }, used: false, expiresAt: { gt: new Date() } } });
+    // Check if configured threshold met (default to director roles count)
+    const DIRECTOR_ROLES = ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management'];
+    const threshold = Number((requisition.rfqSettings || {}).unsealThreshold || DIRECTOR_ROLES.length);
+    const verifiedCount = await prisma.pin.count({ where: { requisitionId: id, roleName: { in: DIRECTOR_ROLES }, used: true } });
 
-    if (remaining === 0) {
+    if (verifiedCount >= threshold) {
       // Unmask the requisition
       await prisma.purchaseRequisition.update({ where: { id }, data: { rfqSettings: { ...(requisition.rfqSettings || {}), masked: false } } });
       await prisma.auditLog.create({ data: { transactionId: requisition.transactionId, user: { connect: { id: actor.id } }, timestamp: new Date(), action: 'UNMASK_RFQ', entity: 'Requisition', entityId: id, details: 'All directors verified; vendor cards unmasked.' } });
       return NextResponse.json({ ok: true, unmasked: true });
     }
-
-    return NextResponse.json({ ok: true, unmasked: false, remaining });
+    return NextResponse.json({ ok: true, unmasked: false });
   } catch (error) {
     console.error('Failed to verify pin:', error);
     return NextResponse.json({ error: 'Failed to verify pin' }, { status: 500 });

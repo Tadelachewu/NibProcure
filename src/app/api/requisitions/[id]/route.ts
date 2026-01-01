@@ -11,7 +11,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const requisition = await prisma.purchaseRequisition.findUnique({
       where: { id },
       include: {

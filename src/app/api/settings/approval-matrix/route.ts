@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { ApprovalThreshold } from '@/lib/types';
-import { getActorFromToken } from '@/lib/auth';
+import { getActorFromToken, isAdmin } from '@/lib/auth';
 
 export async function GET() {
   try {
@@ -43,8 +43,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Admin')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (!isAdmin(actor)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
     const newThresholds: ApprovalThreshold[] = await request.json();

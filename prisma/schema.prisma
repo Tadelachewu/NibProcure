@@ -36,6 +36,7 @@ model User {
   currentApproverFor                              PurchaseRequisition[] @relation("CurrentApprover")
   auditLogs                                       AuditLog[]
   generatedPins                                  Pin[]                @relation("GeneratedPins")
+  receivedPins                                   Pin[]                @relation("PinRecipient")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -84,6 +85,7 @@ model PurchaseRequisition {
   awardedQuoteItemIds String[]
   cpoAmount           Float?
   rfqSettings         Json?
+  assignedRfqSenderIds String[] @default([])
   committeeName       String?
   committeePurpose    String?
   createdAt           DateTime  @default(now())
@@ -492,6 +494,8 @@ model Pin {
   requisition     PurchaseRequisition @relation("RequisitionPins", fields: [requisitionId], references: [id], onDelete: Cascade)
   roleName        String
   pinHash         String
+  recipientId     String?
+  recipient       User?    @relation("PinRecipient", fields: [recipientId], references: [id])
   generatedById   String
   generatedBy     User     @relation("GeneratedPins", fields: [generatedById], references: [id])
   generatedAt     DateTime @default(now())
