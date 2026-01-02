@@ -65,7 +65,29 @@ export async function POST(
             allowedVendorIds: finalVendorIds,
             deadline: deadline ? new Date(deadline) : undefined,
             cpoAmount: cpoAmount,
-            rfqSettings: rfqSettings || {},
+                        rfqSettings: (() => {
+                            let current: any = requisition.rfqSettings || {};
+                            if (typeof current === 'string') {
+                                try { current = JSON.parse(current); } catch { current = {}; }
+                            }
+
+                            let incoming: any = rfqSettings;
+                            if (typeof incoming === 'string') {
+                                try { incoming = JSON.parse(incoming); } catch { incoming = undefined; }
+                            }
+
+                            let merged = { ...(typeof current === 'object' ? current : {}) };
+                            if (incoming && typeof incoming === 'object') {
+                                merged = { ...merged, ...incoming };
+                            }
+
+                            // Once director verification is completed, do not allow re-sealing.
+                            if (merged.directorPresenceVerified === true || merged.masked === false) {
+                                merged = { ...merged, masked: false, directorPresenceVerified: true };
+                            }
+
+                            return merged;
+                        })(),
         }
     });
 

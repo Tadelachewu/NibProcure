@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
-import { getActorFromToken } from '@/lib/auth';
+import { getActorFromToken, isAdmin } from '@/lib/auth';
 
 export async function GET() {
   try {
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     const actorRolesRaw = (actor && (actor as any).roles) || [];
     const actorRoles = Array.isArray(actorRolesRaw) ? actorRolesRaw.map((r: any) => typeof r === 'string' ? r : (r?.name || String(r))) : [];
     console.log('[POST /api/users] actor:', actor?.id, 'roles:', actorRoles);
-    if (!actor || !actorRoles.includes('Admin')) {
+    if (!isAdmin(actor)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -79,6 +79,9 @@ export async function POST(request: Request) {
     return NextResponse.json(newUser, { status: 201 });
   } catch (error) {
     console.error("Failed to create user:", error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }
@@ -89,7 +92,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
    try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Admin')) {
+  if (!isAdmin(actor)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
@@ -138,6 +141,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json(updatedUser);
   } catch (error) {
      console.error('Failed to update user:', error);
+      if (error instanceof Error && error.message === 'Unauthorized') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
      if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }
@@ -148,7 +154,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
    try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Admin')) {
+  if (!isAdmin(actor)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -184,6 +190,9 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ message: 'User deleted successfully' });
   } catch (error) {
+      if (error instanceof Error && error.message === 'Unauthorized') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
      if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }

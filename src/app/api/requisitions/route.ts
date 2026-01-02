@@ -331,16 +331,22 @@ export async function PATCH(
                     description: item.description || ''
                 })),
             },
-            customQuestions: {
-                deleteMany: {},
-                create: body.customQuestions?.map((q: any) => ({
-                    questionText: q.questionText,
-                    questionType: q.questionType.replace(/-/g, '_'),
-                    isRequired: q.isRequired,
-                    options: q.options || [],
-                })),
-            },
         };
+
+        // Only overwrite custom questions if the client sends them.
+        // This prevents accidental loss of requester-entered questions.
+        if (Array.isArray(body.customQuestions)) {
+          dataToUpdate.customQuestions = {
+            deleteMany: {},
+            create: body.customQuestions.map((q: any) => ({
+              questionText: q.questionText,
+              questionType: (q.questionType || 'text').replace(/-/g, '_'),
+              isRequired: !!q.isRequired,
+              options: q.options || [],
+              requisitionItemId: q.requisitionItemId && q.requisitionItemId !== 'general' ? String(q.requisitionItemId) : null,
+            })),
+          };
+        }
         if (body.evaluationCriteria) {
              const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
              if (oldCriteria) {
@@ -414,13 +420,15 @@ export async function PATCH(
         console.log(`[PATCH_REQUISITION] rfqSenderSetting=${JSON.stringify(settingValue)}, body.assignedRfqSenderIds=${JSON.stringify(body.assignedRfqSenderIds)}`);
          if (settingValue && typeof settingValue === 'object') {
            if (settingValue.type === 'assigned') {
-             if (body.assignedRfqSenderIds && Array.isArray(body.assignedRfqSenderIds)) {
+               if (!Array.isArray(body.assignedRfqSenderIds) || body.assignedRfqSenderIds.length === 0) {
+                 return NextResponse.json(
+                   { error: 'Assign RFQ Senders is required (select at least one) when RFQ sender setting is "Assigned by Procurement Team".' },
+                   { status: 400 }
+                 );
+               }
+
                dataToUpdate.assignedRfqSenderIds = Array.from(new Set(body.assignedRfqSenderIds.map((id: any) => String(id))));
                auditDetails += ` Assigned RFQ senders: ${dataToUpdate.assignedRfqSenderIds.join(', ')}.`;
-             } else {
-               dataToUpdate.assignedRfqSenderIds = [];
-               auditDetails += ` Assigned RFQ senders cleared.`;
-             }
            } else if (settingValue.type === 'specific') {
              const ids = Array.isArray(settingValue.userIds) ? settingValue.userIds.map((id: any) => String(id)) : [];
              dataToUpdate.assignedRfqSenderIds = Array.from(new Set(ids));
@@ -455,6 +463,83 @@ export async function PATCH(
         dataToUpdate.approverComment = comment;
         auditAction = 'REJECT_REQUISITION';
         auditDetails = `Requisition ${id} was rejected by ${user.name} with comment: "${comment}".`;
+    }
+    // Allow authorized RFQ senders (or procurement officers/admins) to update
+    // evaluation criteria and custom questions once the requisition is at or
+    // beyond PreApproved (i.e., during RFQ lifecycle). This permits the RFQ
+    // sender to tweak criteria or vendor questions before or during quoting.
+    else if (
+      ['PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress'].includes(requisition.status) &&
+      (body.evaluationCriteria || Array.isArray(body.customQuestions))
+    ) {
+      // Determine if the requester is an authorized RFQ sender for this requisition
+      let isAuthorizedRfqSender = false;
+      try {
+        const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
+        let settingValue: any = rfqSenderSetting?.value;
+        if (typeof settingValue === 'string') {
+          try { settingValue = JSON.parse(settingValue); } catch (e) { /* ignore */ }
+        }
+
+        const assigned = requisition.assignedRfqSenderIds || [];
+        if (assigned.length > 0) {
+          isAuthorizedRfqSender = assigned.includes(user.id);
+        } else if (settingValue && typeof settingValue === 'object') {
+          if (settingValue.type === 'all') {
+            isAuthorizedRfqSender = (user.roles as any[]).some(r => r.name === 'Procurement_Officer');
+          } else if (settingValue.type === 'specific') {
+            isAuthorizedRfqSender = Array.isArray(settingValue.userIds) && settingValue.userIds.map(String).includes(user.id);
+          } else if (settingValue.type === 'assigned') {
+            // assigned but no assignedRfqSenderIds on requisition; deny
+            isAuthorizedRfqSender = false;
+          }
+        }
+
+        // Admins and Procurement_Officer role are always authorized
+        if ((user.roles as any[]).some(r => r.name === 'Admin' || r.name === 'Procurement_Officer')) {
+          isAuthorizedRfqSender = true;
+        }
+      } catch (e) {
+        console.error('Failed to evaluate rfqSenderSetting for edit authorization', e);
+      }
+
+      if (!isAuthorizedRfqSender) {
+        return NextResponse.json({ error: 'You are not authorized to modify RFQ criteria or questions for this requisition.' }, { status: 403 });
+      }
+
+      // Proceed to update evaluationCriteria and/or customQuestions
+      if (body.evaluationCriteria) {
+        const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
+        if (oldCriteria) {
+          await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+          await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+          await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id } });
+        }
+
+        dataToUpdate.evaluationCriteria = {
+          create: {
+            financialWeight: body.evaluationCriteria.financialWeight,
+            technicalWeight: body.evaluationCriteria.technicalWeight,
+            financialCriteria: { create: body.evaluationCriteria.financialCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) })) },
+            technicalCriteria: { create: body.evaluationCriteria.technicalCriteria.map((c:any) => ({ name: c.name, weight: Number(c.weight) })) }
+          }
+        };
+        auditDetails += ' Evaluation criteria updated by RFQ sender.';
+      }
+
+      if (Array.isArray(body.customQuestions)) {
+        dataToUpdate.customQuestions = {
+          deleteMany: {},
+          create: body.customQuestions.map((q: any) => ({
+            questionText: q.questionText,
+            questionType: (q.questionType || 'text').replace(/-/g, '_'),
+            isRequired: !!q.isRequired,
+            options: q.options || [],
+            requisitionItemId: q.requisitionItemId && q.requisitionItemId !== 'general' ? String(q.requisitionItemId) : null,
+          }))
+        };
+        auditDetails += ' Custom questions updated by RFQ sender.';
+      }
     }
     else if (requisition.status.startsWith('Pending_') && requisition.status !== 'Pending_Approval') {
         
@@ -670,6 +755,7 @@ export async function POST(request: Request) {
             questionType: q.questionType.replace(/-/g, '_'),
             isRequired: q.isRequired,
             options: q.options || [],
+            requisitionItemId: q.requisitionItemId && q.requisitionItemId !== 'general' ? String(q.requisitionItemId) : null,
           }))
         },
         evaluationCriteria: body.evaluationCriteria ? {

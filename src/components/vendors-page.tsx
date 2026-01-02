@@ -54,19 +54,19 @@ const PAGE_SIZE = 10;
 
 const KycStatusBadge = ({ status, reason }: { status: KycStatus, reason?: string }) => {
   const badgeContent = {
-    'Verified': { icon: <ShieldCheck className="mr-2 h-3 w-3" />, text: 'Verified', variant: 'default' as const },
+    'Verified': { icon: <ShieldCheck className="mr-2 h-3 w-3" />, text: 'Verified', variant: 'default' as const, className: 'bg-green-600 text-white hover:bg-green-600' },
     'Pending': { icon: <ShieldQuestion className="mr-2 h-3 w-3" />, text: 'Pending', variant: 'secondary' as const },
     'Rejected': { icon: <ShieldAlert className="mr-2 h-3 w-3" />, text: 'Rejected', variant: 'destructive' as const },
   };
 
-  const { icon, text, variant } = badgeContent[status];
+  const { icon, text, variant, className } = badgeContent[status] as any;
 
   if (status === 'Rejected' && reason) {
     return (
         <TooltipProvider>
             <Tooltip>
                 <TooltipTrigger>
-                    <Badge variant={variant}>{icon} {text}</Badge>
+            <Badge variant={variant} className={className}>{icon} {text}</Badge>
                 </TooltipTrigger>
                 <TooltipContent>
                     <p>Reason: {reason}</p>
@@ -76,7 +76,7 @@ const KycStatusBadge = ({ status, reason }: { status: KycStatus, reason?: string
     )
   }
 
-  return <Badge variant={variant}>{icon} {text}</Badge>;
+    return <Badge variant={variant} className={className}>{icon} {text}</Badge>;
 }
 
 export function VendorsPage() {

@@ -167,6 +167,16 @@ export function ApprovalsTable() {
       return;
     }
 
+    // If the system requires per-requisition RFQ sender assignment, enforce at least 1 selection
+    if (newStatus === 'PreApproved' && detectAssignedMode() && assignedIds.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing RFQ Sender',
+        description: 'Please select at least one RFQ sender before approving.',
+      });
+      return;
+    }
+
     try {
       const payload: any = {
         id: selectedRequisition.id,
@@ -434,6 +444,12 @@ export function ApprovalsTable() {
             <Button 
                 onClick={submitAction} 
                 variant={actionType === 'approve' ? 'default' : 'destructive'}
+                disabled={
+                  actionType === 'approve' &&
+                  selectedRequisition?.status === 'Pending_Managerial_Approval' &&
+                  detectAssignedMode() &&
+                  assignedIds.length === 0
+                }
             >
                 Submit {actionType === 'approve' ? 'Approval' : 'Rejection'}
             </Button>

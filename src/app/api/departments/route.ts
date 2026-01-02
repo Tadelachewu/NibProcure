@@ -3,7 +3,12 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getActorFromToken } from '@/lib/auth';
+import { getActorFromToken, isAdmin } from '@/lib/auth';
+
+function canManageDepartments(actor: any): boolean {
+  // Settings are admin-only.
+  return isAdmin(actor);
+}
 
 export async function GET() {
     try {
@@ -26,7 +31,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Admin')) {
+    if (!actor || !canManageDepartments(actor)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -64,6 +69,9 @@ export async function POST(request: Request) {
     return NextResponse.json(newDepartment, { status: 201 });
   } catch (error) {
     console.error("Error creating department:", error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }
@@ -74,7 +82,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
    try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Admin')) {
+  if (!actor || !canManageDepartments(actor)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -135,6 +143,9 @@ export async function PATCH(request: Request) {
     return NextResponse.json(updatedDepartment);
   } catch (error) {
      console.error("Error updating department:", error);
+      if (error instanceof Error && error.message === 'Unauthorized') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
      if (error instanceof Error) {
         // Handle potential unique constraint errors on the 'headId' field
         if ((error as any).code === 'P2002' && (error as any).meta?.target?.includes('headId')) {
@@ -149,7 +160,7 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
    try {
     const actor = await getActorFromToken(request);
-    if (!actor || !(actor.roles as string[]).includes('Admin')) {
+  if (!actor || !canManageDepartments(actor)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
@@ -176,6 +187,9 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ message: 'Department deleted successfully' });
   } catch (error) {
      console.error("Error deleting department:", error);
+      if (error instanceof Error && error.message === 'Unauthorized') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
      if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }

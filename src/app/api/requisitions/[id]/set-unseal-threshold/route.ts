@@ -23,16 +23,33 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
     if (!requisition) return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
 
-    const current = requisition.rfqSettings || {};
+    let current: any = requisition.rfqSettings || {};
+    if (typeof current === 'string') {
+      try { current = JSON.parse(current); } catch { current = {}; }
+    }
     const updated = { ...(typeof current === 'object' ? current : {}), unsealThreshold: threshold };
 
     await prisma.purchaseRequisition.update({ where: { id }, data: { rfqSettings: updated as any } });
 
     // If current verified count already meets threshold, unmask immediately
     const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
-    const verifiedCount = await prisma.pin.count({ where: { requisitionId: id, roleName: { in: DIRECTOR_ROLES }, used: true } });
+    const verifiedPins = await prisma.pin.findMany({
+      where: { requisitionId: id, roleName: { in: DIRECTOR_ROLES }, used: true, usedById: { not: null } },
+      select: { usedById: true },
+    });
+    const verifiedCount = new Set(verifiedPins.map(p => p.usedById).filter(Boolean)).size;
     if (verifiedCount >= threshold) {
-      await prisma.purchaseRequisition.update({ where: { id }, data: { rfqSettings: { ...(updated as any), masked: false } } });
+      await prisma.purchaseRequisition.update({
+        where: { id },
+        data: {
+          rfqSettings: {
+            ...(updated as any),
+            masked: false,
+            directorPresenceVerified: true,
+            directorPresenceVerifiedAt: new Date().toISOString(),
+          },
+        },
+      });
     }
 
     return NextResponse.json({ ok: true, threshold, verifiedCount });

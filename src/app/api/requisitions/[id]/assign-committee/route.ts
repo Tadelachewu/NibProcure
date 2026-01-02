@@ -33,10 +33,22 @@ export async function POST(
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-        // Enforce director PIN verification gate: cannot assign committee while masked
-        if ((requisition.rfqSettings as any)?.masked === true) {
-                return NextResponse.json({ error: 'Vendor data is sealed. All three directors must verify their PINs before committee assignment.' }, { status: 403 });
+        // Normalize rfqSettings and enforce director verification gate.
+        let currentSettings: any = requisition.rfqSettings || {};
+        if (typeof currentSettings === 'string') {
+            try { currentSettings = JSON.parse(currentSettings); } catch { currentSettings = {}; }
         }
+
+        const directorPresenceVerified = currentSettings?.directorPresenceVerified === true || currentSettings?.masked === false;
+        const sealedByDefault = currentSettings?.masked !== false;
+
+        // Enforce director PIN verification gate: cannot assign committee while sealed.
+        // Default behavior is sealed unless explicitly unmasked.
+        if (sealedByDefault && !directorPresenceVerified) {
+            return NextResponse.json({ error: 'Vendor data is sealed. Required directors must verify their PINs before committee assignment.' }, { status: 403 });
+        }
+
+        // Note: gate above replaces the older masked===true-only behavior.
     
     // Authorization: Committees can assign themselves; procurement actions use per-requisition rules
     const userRoles = actor.roles as UserRole[];
@@ -54,13 +66,28 @@ export async function POST(
     // Start a transaction to ensure atomicity
     const transactionResult = await prisma.$transaction(async (tx) => {
 
+        let incomingSettings: any = rfqSettings;
+        if (typeof incomingSettings === 'string') {
+            try { incomingSettings = JSON.parse(incomingSettings); } catch { incomingSettings = undefined; }
+        }
+
+        // Preserve existing rfqSettings unless the client explicitly changes them.
+        // Also keep director verification permanently unmasked once verified.
+        let nextSettings: any = { ...(typeof currentSettings === 'object' ? currentSettings : {}) };
+        if (incomingSettings && typeof incomingSettings === 'object') {
+            nextSettings = { ...nextSettings, ...incomingSettings };
+        }
+        if (directorPresenceVerified) {
+            nextSettings = { ...nextSettings, masked: false, directorPresenceVerified: true };
+        }
+
         const updatedRequisition = await tx.purchaseRequisition.update({
         where: { id },
         data: {
             committeeName,
             committeePurpose,
             scoringDeadline: scoringDeadline ? new Date(scoringDeadline) : undefined,
-            rfqSettings: rfqSettings || {},
+            rfqSettings: nextSettings,
             financialCommitteeMembers: {
             set: financialCommitteeMemberIds.map((id: string) => ({ id }))
             },

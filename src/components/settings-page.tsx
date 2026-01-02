@@ -27,14 +27,18 @@ import { RequisitionCreatorSettings } from './settings/requisition-creator-setti
 export function SettingsPage() {
   return (
     <Tabs defaultValue="general" className="space-y-4">
-      <TabsList>
-        <TabsTrigger value="general">General</TabsTrigger>
-        <TabsTrigger value="committees">Committees</TabsTrigger>
-        <TabsTrigger value="permissions">Role Permissions</TabsTrigger>
-        <TabsTrigger value="roles">Role Management</TabsTrigger>
-        <TabsTrigger value="users">User Management</TabsTrigger>
-        <TabsTrigger value="departments">Departments</TabsTrigger>
-      </TabsList>
+      <div className="sticky top-0 z-40 -mx-4 border-b bg-background md:-mx-6 lg:-mx-8">
+        <div className="px-4 md:px-6 lg:px-8">
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger className="w-full" value="general">General</TabsTrigger>
+            <TabsTrigger className="w-full" value="committees">Committees</TabsTrigger>
+            <TabsTrigger className="w-full" value="permissions">Role Permissions</TabsTrigger>
+            <TabsTrigger className="w-full" value="roles">Role Management</TabsTrigger>
+            <TabsTrigger className="w-full" value="users">User Management</TabsTrigger>
+            <TabsTrigger className="w-full" value="departments">Departments</TabsTrigger>
+          </TabsList>
+        </div>
+      </div>
       <TabsContent value="general">
         <Accordion type="single" collapsible className="w-full space-y-4" defaultValue="item-1">
             <AccordionItem value="item-1">

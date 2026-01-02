@@ -89,6 +89,7 @@ export async function POST(
                         questionType: q.questionType,
                         isRequired: q.isRequired,
                         options: q.options || [],
+                        requisitionItemId: q.requisitionItemId,
                     }))
                 },
                 evaluationCriteria: originalRequisition.evaluationCriteria ? {

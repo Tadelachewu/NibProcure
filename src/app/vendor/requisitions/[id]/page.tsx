@@ -512,6 +512,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                         <Accordion type="single" collapsible defaultValue="item-0" className="space-y-4">
                             {originalItems.map((originalItem, itemIndex) => {
                                 const itemsForThisReqItem = fields.filter(f => f.requisitionItemId === originalItem.id);
+                                const itemSpecificQuestions = (requisition.customQuestions || []).filter(q => q.requisitionItemId === originalItem.id);
                                 return (
                                     <AccordionItem key={originalItem.id} value={`item-${itemIndex}`} className="border-none">
                                         <AccordionTrigger className="p-4 border rounded-lg bg-muted/20 hover:bg-muted/50 flex justify-between w-full">
@@ -569,43 +570,54 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                                     <FormItem><FormLabel>Delivery Time (Days)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
                                                                 )}/>
                                                             </div>
-                                                               {/* Render item-specific questions inside the item block */}
-                                                               {(requisition.customQuestions || []).filter(q => q.requisitionItemId === originalItem.id).map((question) => {
-                                                                   const answerIndex = form.getValues('answers')?.findIndex((a: any) => a.questionId === question.id);
-                                                                   if (answerIndex === -1 || answerIndex === undefined) return null;
-                                                                   return (
-                                                                       <div key={question.id} className="mt-4">
-                                                                           <FormField control={form.control} name={`answers.${answerIndex}.answer`} render={({ field }) => (
-                                                                               <FormItem>
-                                                                                   <FormLabel>{question.questionText}{question.isRequired && <span className="text-destructive"> *</span>}</FormLabel>
-                                                                                   {question.questionType === 'text' && <FormControl><Textarea placeholder="Your answer..." {...field} /></FormControl>}
-                                                                                   {question.questionType === 'boolean' && (
-                                                                                       <FormControl>
-                                                                                           <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4 pt-2">
-                                                                                               <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="true" id={`${question.id}-true`} /></FormControl><FormLabel htmlFor={`${question.id}-true`} className="font-normal">True</FormLabel></FormItem>
-                                                                                               <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="false" id={`${question.id}-false`} /></FormControl><FormLabel htmlFor={`${question.id}-false`} className="font-normal">False</FormLabel></FormItem>
-                                                                                           </RadioGroup>
-                                                                                       </FormControl>
-                                                                                   )}
-                                                                                   {question.questionType === 'multiple_choice' && (
-                                                                                       <FormControl>
-                                                                                           <Select onValueChange={field.onChange} defaultValue={field.value}><SelectTrigger><SelectValue placeholder="Select an option" /></SelectTrigger><SelectContent>{question.options?.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
-                                                                                       </FormControl>
-                                                                                   )}
-                                                                                   {question.questionType === 'file' && (
-                                                                                       <FormControl>
-                                                                                           <Input type="file" onChange={async (e) => { if (e.target.files?.[0]) { const path = await handleFileUpload(e.target.files[0]); if (path) field.onChange(path); } }} />
-                                                                                       </FormControl>
-                                                                                   )}
-                                                                                   <FormMessage />
-                                                                               </FormItem>
-                                                                           )} />
-                                                                       </div>
-                                                                   );
-                                                               })}
                                                         </Card>
                                                     )
                                                 })}
+
+                                                {itemSpecificQuestions.length > 0 && (
+                                                    <div className="pt-2">
+                                                        <Separator className="my-2" />
+                                                        <h5 className="text-sm font-medium">Questions for: {originalItem.name}</h5>
+                                                        <div className="space-y-4 mt-3">
+                                                            {itemSpecificQuestions.map((question) => {
+                                                                const answerIndex = form.getValues('answers')?.findIndex((a: any) => a.questionId === question.id);
+                                                                if (answerIndex === -1 || answerIndex === undefined) return null;
+                                                                return (
+                                                                    <Card key={question.id} className="p-4 bg-background">
+                                                                        <FormField control={form.control} name={`answers.${answerIndex}.answer`} render={({ field }) => (
+                                                                            <FormItem>
+                                                                                <div className="flex items-center justify-between gap-2">
+                                                                                    <FormLabel className="m-0">{question.questionText}{question.isRequired && <span className="text-destructive"> *</span>}</FormLabel>
+                                                                                    <span className="text-xs text-muted-foreground">Requested item: {originalItem.name}</span>
+                                                                                </div>
+                                                                                {question.questionType === 'text' && <FormControl><Textarea placeholder="Your answer..." {...field} /></FormControl>}
+                                                                                {question.questionType === 'boolean' && (
+                                                                                    <FormControl>
+                                                                                        <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4 pt-2">
+                                                                                            <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="true" id={`${question.id}-true`} /></FormControl><FormLabel htmlFor={`${question.id}-true`} className="font-normal">True</FormLabel></FormItem>
+                                                                                            <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="false" id={`${question.id}-false`} /></FormControl><FormLabel htmlFor={`${question.id}-false`} className="font-normal">False</FormLabel></FormItem>
+                                                                                        </RadioGroup>
+                                                                                    </FormControl>
+                                                                                )}
+                                                                                {question.questionType === 'multiple_choice' && (
+                                                                                    <FormControl>
+                                                                                        <Select onValueChange={field.onChange} defaultValue={field.value}><SelectTrigger><SelectValue placeholder="Select an option" /></SelectTrigger><SelectContent>{question.options?.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
+                                                                                    </FormControl>
+                                                                                )}
+                                                                                {question.questionType === 'file' && (
+                                                                                    <FormControl>
+                                                                                        <Input type="file" onChange={async (e) => { if (e.target.files?.[0]) { const path = await handleFileUpload(e.target.files[0]); if (path) field.onChange(path); } }} />
+                                                                                    </FormControl>
+                                                                                )}
+                                                                                <FormMessage />
+                                                                            </FormItem>
+                                                                        )} />
+                                                                    </Card>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </AccordionContent>
                                     </AccordionItem>
@@ -617,39 +629,53 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                         { (requisition.customQuestions || []).filter(q => !q.requisitionItemId).length > 0 && (
                             <>
                                 <Separator />
-                                <h3 className="text-lg font-medium">Additional Questions</h3>
-                                <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                                {/* render only general questions (no requisitionItemId) in same order as answers array after item-specific ones */}
-                                { (requisition.customQuestions || []).filter(q => !q.requisitionItemId).map((question) => {
-                                    const answerIndex = form.getValues('answers')?.findIndex((a: any) => a.questionId === question.id);
-                                    if (answerIndex === -1 || answerIndex === undefined) return null;
-                                    return (
-                                        <Card key={question.id} className="p-4">
-                                            <FormField control={form.control} name={`answers.${answerIndex}.answer`} render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel>{question.questionText}{question.isRequired && <span className="text-destructive"> *</span>}</FormLabel>
-                                                    {question.questionType === 'text' && <FormControl><Textarea placeholder="Your answer..." {...field} /></FormControl>}
-                                                    {question.questionType === 'boolean' && (
-                                                        <FormControl>
-                                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4 pt-2">
-                                                                <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="true" id={`${question.id}-true`} /></FormControl><FormLabel htmlFor={`${question.id}-true`} className="font-normal">True</FormLabel></FormItem>
-                                                                <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="false" id={`${question.id}-false`} /></FormControl><FormLabel htmlFor={`${question.id}-false`} className="font-normal">False</FormLabel></FormItem>
-                                                            </RadioGroup>
-                                                        </FormControl>
-                                                    )}
-                                                    {question.questionType === 'multiple_choice' && (
-                                                        <FormControl>
-                                                            <Select onValueChange={field.onChange} defaultValue={field.value}><SelectTrigger><SelectValue placeholder="Select an option" /></SelectTrigger><SelectContent>{question.options?.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
-                                                        </FormControl>
-                                                    )}
-                                                    {question.questionType === 'file' && <FormControl><Input type="file" onChange={async (e) => { if (e.target.files?.[0]) { const path = await handleFileUpload(e.target.files[0]); if (path) field.onChange(path); } }} /></FormControl>}
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )} />
-                                        </Card>
-                                    );
-                                })}
-                                </div>
+                                <Accordion type="single" collapsible className="w-full">
+                                    <AccordionItem value="additional-questions" className="border rounded-lg bg-muted/20">
+                                        <AccordionTrigger className="px-4 py-3">
+                                            <h3 className="text-lg font-medium">Additional Questions</h3>
+                                        </AccordionTrigger>
+                                        <AccordionContent className="p-4 border-t bg-background">
+                                            <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                                                {(requisition.customQuestions || []).filter(q => !q.requisitionItemId).map((question) => {
+                                                    const answerIndex = form.getValues('answers')?.findIndex((a: any) => a.questionId === question.id);
+                                                    if (answerIndex === -1 || answerIndex === undefined) return null;
+                                                    return (
+                                                        <Card key={question.id} className="p-4">
+                                                            <FormField control={form.control} name={`answers.${answerIndex}.answer`} render={({ field }) => (
+                                                                <FormItem>
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <FormLabel className="m-0">{question.questionText}{question.isRequired && <span className="text-destructive"> *</span>}</FormLabel>
+                                                                        <span className="text-xs text-muted-foreground">General</span>
+                                                                    </div>
+                                                                    {question.questionType === 'text' && <FormControl><Textarea placeholder="Your answer..." {...field} /></FormControl>}
+                                                                    {question.questionType === 'boolean' && (
+                                                                        <FormControl>
+                                                                            <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4 pt-2">
+                                                                                <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="true" id={`${question.id}-true`} /></FormControl><FormLabel htmlFor={`${question.id}-true`} className="font-normal">True</FormLabel></FormItem>
+                                                                                <FormItem className="flex items-center space-x-2"><FormControl><RadioGroupItem value="false" id={`${question.id}-false`} /></FormControl><FormLabel htmlFor={`${question.id}-false`} className="font-normal">False</FormLabel></FormItem>
+                                                                            </RadioGroup>
+                                                                        </FormControl>
+                                                                    )}
+                                                                    {question.questionType === 'multiple_choice' && (
+                                                                        <FormControl>
+                                                                            <Select onValueChange={field.onChange} defaultValue={field.value}><SelectTrigger><SelectValue placeholder="Select an option" /></SelectTrigger><SelectContent>{question.options?.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent></Select>
+                                                                        </FormControl>
+                                                                    )}
+                                                                    {question.questionType === 'file' && (
+                                                                        <FormControl>
+                                                                            <Input type="file" onChange={async (e) => { if (e.target.files?.[0]) { const path = await handleFileUpload(e.target.files[0]); if (path) field.onChange(path); } }} />
+                                                                        </FormControl>
+                                                                    )}
+                                                                    <FormMessage />
+                                                                </FormItem>
+                                                            )} />
+                                                        </Card>
+                                                    );
+                                                })}
+                                            </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
                             </>
                         )}
                         

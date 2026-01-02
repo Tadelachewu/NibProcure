@@ -49,11 +49,14 @@ export type Department = {
 export type RequisitionStatus =
   | 'Draft'
   | 'Pending_Approval'
+  | 'Approved'
   | 'Rejected'
   | 'PreApproved' // Department head approved, ready for RFQ
+  | 'Pending_Procurement_Approval' // Procurement approval after departmental approval
   | 'Accepting_Quotes' // RFQ sent, vendors can submit quotes
   | 'Scoring_In_Progress' // Deadline passed, committee is scoring
   | 'Scoring_Complete' // All scores are in, ready to finalize award
+  | 'Pending_Review' // Final award review
   | 'Awarded' // Award has been sent to vendor(s) and is pending response
   | 'Award_Declined' // The winning vendor has declined the award
   | 'PostApproved' // All hierarchical reviews complete, ready for vendor notification
@@ -82,6 +85,7 @@ export type PerItemAwardDetail = {
   unitPrice: number;
   status: PerItemAwardStatus;
   score: number;
+  rejectionReason?: string;
 }
 
 export type RequisitionItem = {

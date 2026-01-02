@@ -23,6 +23,8 @@ const questionSchema = z.object({
   questionText: z.string().min(5, 'Question must be at least 5 characters.'),
   questionType: z.enum(['text', 'boolean', 'multiple_choice', 'file']),
   isRequired: z.boolean(),
+  // 'general' is a UI sentinel; API normalizes it to null.
+  requisitionItemId: z.string().optional(),
   options: z.array(z.object({ value: z.string().min(1, "Option cannot be empty.") })).optional(),
 });
 
@@ -185,7 +187,15 @@ export function EditableQuestions({ requisition, onUpdate }: { requisition: Purc
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => appendQuestion({ questionText: '', questionType: 'text', isRequired: true, options: [] })}
+                            onClick={() =>
+                              appendQuestion({
+                                questionText: '',
+                                questionType: 'text',
+                                isRequired: true,
+                                requisitionItemId: 'general',
+                                options: [],
+                              })
+                            }
                             >
                             <PlusCircle className="mr-2 h-4 w-4" />
                             Add Question

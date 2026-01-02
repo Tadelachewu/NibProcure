@@ -240,7 +240,12 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
         title: "Validation Error",
         description: "Please check the form for errors before submitting.",
       });
-      console.error(validationResult.error.flatten().fieldErrors);
+      try {
+        const fieldErrors = validationResult.error?.flatten?.()?.fieldErrors ?? {};
+        console.error(fieldErrors);
+      } catch (e) {
+        console.error('Validation error (unable to flatten):', validationResult.error ?? e);
+      }
       setLoading(false);
       // Manually trigger form validation to show errors
       await form.trigger();

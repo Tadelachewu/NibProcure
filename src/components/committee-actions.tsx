@@ -20,6 +20,7 @@ export function CommitteeActions({
     onFinalScoresSubmitted: () => void,
 }) {
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submittedOverride, setSubmittedOverride] = useState(false);
     const { toast } = useToast();
     const { token } = useAuth();
     
@@ -31,6 +32,7 @@ export function CommitteeActions({
 
     const assignment = useMemo(() => user.committeeAssignments?.find(a => a.requisitionId === requisition.id), [user.committeeAssignments, requisition.id]);
     const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
+    const scoresFinalized = scoresAlreadyFinalized || submittedOverride;
 
     if (!isCommitteeUser) {
         return null;
@@ -41,6 +43,7 @@ export function CommitteeActions({
 
     const handleSubmitScores = async () => {
         if (!token) return;
+        if (scoresFinalized) return;
         setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/submit-scores`, {
@@ -49,11 +52,20 @@ export function CommitteeActions({
                 body: JSON.stringify({ userId: user.id })
             });
 
+            if (response.status === 409) {
+                // Already submitted (idempotency)
+                setSubmittedOverride(true);
+                toast({ title: 'Scores Submitted', description: 'Your final scores were already submitted.'});
+                onFinalScoresSubmitted();
+                return;
+            }
+
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to submit scores');
             }
             toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
+            setSubmittedOverride(true);
             onFinalScoresSubmitted();
         } catch (error) {
              toast({
@@ -62,15 +74,11 @@ export function CommitteeActions({
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            // Keep isSubmitting true on success to disable button until re-render
-            const shouldKeepDisabled = await (await fetch(`/api/requisitions/${requisition.id}/submit-scores`, { method: 'HEAD' })).ok;
-            if(!shouldKeepDisabled) {
-              setIsSubmitting(false);
-            }
+            setIsSubmitting(false);
         }
     };
 
-    if (scoresAlreadyFinalized) {
+    if (scoresFinalized) {
         return (
             <Card>
                 <CardHeader>
@@ -99,7 +107,7 @@ export function CommitteeActions({
             <CardFooter>
                 <AlertDialog>
                     <AlertDialogTrigger asChild>
-                        <Button disabled={!allQuotesScored || isSubmitting}>
+                        <Button disabled={!allQuotesScored || isSubmitting || scoresFinalized}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Submit Final Scores
                         </Button>
@@ -113,7 +121,7 @@ export function CommitteeActions({
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
+                            <AlertDialogAction onClick={handleSubmitScores} disabled={isSubmitting || !allQuotesScored}>Confirm and Submit</AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>

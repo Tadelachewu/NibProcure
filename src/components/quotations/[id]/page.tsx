@@ -241,7 +241,9 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
         }
     }
     
-    const isTechnicalOnlyScorer = user.role === 'Committee_Member' && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
+    const roleNames = (user.roles || []).map((r: any) => (typeof r === 'string' ? r : r?.name)).filter(Boolean);
+    const isCommitteeMember = roleNames.includes('Committee_Member');
+    const isTechnicalOnlyScorer = isCommitteeMember && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
     const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
 
 
@@ -250,14 +252,26 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             {quotes.sort((a, b) => (a.rank || 4) - (b.rank || 4)).map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
                 return (
-                    <Card key={quote.id} className={cn("flex flex-col", (quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded') && 'border-primary ring-2 ring-primary')}>
+                    <Card
+                        key={quote.id}
+                        className={cn(
+                            "flex flex-col",
+                            quote.status === 'Awarded' && 'border-green-600 ring-2 ring-green-600',
+                            (quote.status === 'Accepted' || quote.status === 'Partially_Awarded') && 'border-primary ring-2 ring-primary'
+                        )}
+                    >
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
                                  {isDeadlinePassed && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
-                               <Badge variant={getStatusVariant(quote.status)}>{quote.status.replace(/_/g, ' ')}</Badge>
+                               <Badge
+                                    variant={getStatusVariant(quote.status)}
+                                    className={cn(quote.status === 'Awarded' && 'bg-green-600 text-white hover:bg-green-600')}
+                                >
+                                    {quote.status.replace(/_/g, ' ')}
+                                </Badge>
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
@@ -329,7 +343,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                              )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
-                            {user.role === 'Committee_Member' && (
+                            {isCommitteeMember && (
                                 <Button className="w-full" variant={hasUserScored ? "secondary" : "outline"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
                                     {hasUserScored ? 'View Your Score' : 'Score this Quote'}
@@ -926,7 +940,7 @@ const RFQActionDialog = ({
     )
 }
 
-const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { requisition: PurchaseRequisition; vendors: Vendor[]; onRfqSent: () => void; isAuthorized: boolean; }) => {
+const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthorized }: { requisition: PurchaseRequisition; vendors: Vendor[]; quotations: Quotation[]; onRfqSent: () => void; isAuthorized: boolean; }) => {
     const [distributionType, setDistributionType] = useState('all');
     const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
     const [vendorSearch, setVendorSearch] = useState("");
@@ -1213,6 +1227,41 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                             </CardContent>
                         </Card>
                     )}
+
+                    {/* Invited vendors & submission status for authorized RFQ senders */}
+                    {isAuthorized && requisition.allowedVendorIds && requisition.allowedVendorIds.length > 0 && (
+                        <div className="mt-4">
+                            <h4 className="font-medium mb-2">Invited Vendors</h4>
+                            <div className="border rounded-md">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Vendor</TableHead>
+                                            <TableHead>Status</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {requisition.allowedVendorIds.map(id => {
+                                            const vendor = vendors.find(v => v.id === id);
+                                            const submitted = quotations.some(q => q.vendorId === id);
+                                            return (
+                                                <TableRow key={id}>
+                                                    <TableCell>{vendor ? vendor.name : id}</TableCell>
+                                                    <TableCell>
+                                                        {submitted ? (
+                                                            <Badge className="bg-green-600 text-white hover:bg-green-600">Submitted</Badge>
+                                                        ) : (
+                                                            <Badge variant="secondary">Not Submitted</Badge>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            )
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
+                    )}
                 </CardContent>
                 <CardFooter className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-4">
@@ -1239,10 +1288,14 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
 
 const ManageRFQ = ({
     requisition,
+    vendors,
+    quotations,
     onSuccess,
     isAuthorized
 }: {
     requisition: PurchaseRequisition,
+    vendors: Vendor[],
+    quotations: Quotation[],
     onSuccess: () => void,
     isAuthorized: boolean,
 }) => {
@@ -1258,6 +1311,41 @@ const ManageRFQ = ({
                     <CardTitle>Manage Active RFQ</CardTitle>
                     <CardDescription>Update the deadline or cancel the RFQ for this requisition.</CardDescription>
                 </CardHeader>
+                <CardContent>
+                    {isAuthorized && requisition.allowedVendorIds && requisition.allowedVendorIds.length > 0 && (
+                        <div className="mb-4">
+                            <h4 className="font-medium mb-2">Invited Vendors</h4>
+                            <div className="border rounded-md">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Vendor</TableHead>
+                                            <TableHead>Status</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {requisition.allowedVendorIds.map(id => {
+                                            const vendor = vendors.find(v => v.id === id);
+                                            const submitted = quotations.some(q => q.vendorId === id);
+                                            return (
+                                                <TableRow key={id}>
+                                                    <TableCell>{vendor ? vendor.name : id}</TableCell>
+                                                    <TableCell>
+                                                        {submitted ? (
+                                                            <Badge className="bg-green-600 text-white hover:bg-green-600">Submitted</Badge>
+                                                        ) : (
+                                                            <Badge variant="secondary">Not Submitted</Badge>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            )
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
                 <CardFooter className="flex gap-2">
                     <Button variant="outline" onClick={() => setActionDialog({isOpen: true, type: 'update'})}><Settings2 className="mr-2"/> Update RFQ</Button>
                     <Button variant="destructive" onClick={() => setActionDialog({isOpen: true, type: 'cancel'})}><Ban className="mr-2"/> Cancel RFQ</Button>
@@ -1643,7 +1731,7 @@ const ScoringProgressTracker = ({
 
     const scoringStatus = useMemo(() => {
         return assignedCommitteeMembers.map(member => {
-            const assignment = member.committeeAssignments?.find(a => a.requisitionId === requisition.id);
+            const assignment = (requisition as any).committeeAssignments?.find((a: any) => a.userId === member.id);
             const hasSubmittedFinalScores = !!assignment?.scoresSubmitted;
             
             let submissionDate: Date | null = null;
@@ -1672,7 +1760,7 @@ const ScoringProgressTracker = ({
              if (b.submittedAt) return 1;
              return 0;
         });
-    }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id]);
+    }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id, (requisition as any).committeeAssignments]);
     
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
 
@@ -2043,13 +2131,16 @@ const CommitteeActions = ({
     requisition,
     quotations,
     onFinalScoresSubmitted,
+    token,
 }: {
     user: User,
     requisition: PurchaseRequisition,
     quotations: Quotation[],
     onFinalScoresSubmitted: () => void,
+    token: string | null,
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submittedOverride, setSubmittedOverride] = useState(false);
     const { toast } = useToast();
     
     const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
@@ -2061,21 +2152,37 @@ const CommitteeActions = ({
     }, [user.committeeAssignments, requisition.id]);
     
     const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
+    const roleNames = (user.roles || []).map((r: any) => (typeof r === 'string' ? r : r?.name)).filter(Boolean);
+    const isCommitteeMember = roleNames.includes('Committee_Member') || roleNames.some((r: string) => r.includes('Committee'));
+    const scoresFinalized = scoresAlreadyFinalized || submittedOverride;
 
     const handleSubmitScores = async () => {
+        if (!token) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Authentication token not found.' });
+            return;
+        }
+        if (scoresFinalized) return;
         setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/submit-scores`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ userId: user.id })
             });
+
+            if (response.status === 409) {
+                setSubmittedOverride(true);
+                toast({ title: 'Scores Submitted', description: 'Your final scores were already submitted.'});
+                onFinalScoresSubmitted();
+                return;
+            }
 
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to submit scores');
             }
             toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
+            setSubmittedOverride(true);
             onFinalScoresSubmitted();
         } catch (error) {
              toast({
@@ -2088,11 +2195,11 @@ const CommitteeActions = ({
         }
     };
 
-    if (user.role !== 'Committee_Member') {
+    if (!isCommitteeMember) {
         return null;
     }
 
-    if (scoresAlreadyFinalized) {
+    if (scoresFinalized) {
         return (
             <Card>
                 <CardHeader>
@@ -2121,7 +2228,7 @@ const CommitteeActions = ({
             <CardFooter>
                 <AlertDialog>
                     <AlertDialogTrigger asChild>
-                        <Button disabled={!allQuotesScored || isSubmitting}>
+                        <Button disabled={!allQuotesScored || isSubmitting || scoresFinalized}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Submit Final Scores
                         </Button>
@@ -2135,7 +2242,9 @@ const CommitteeActions = ({
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
+                            <AlertDialogAction onClick={handleSubmitScores} disabled={isSubmitting || scoresFinalized || !allQuotesScored}>
+                                Confirm and Submit
+                            </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
@@ -2216,7 +2325,7 @@ export default function QuotationDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const { toast } = useToast();
-  const { user, allUsers, role, rfqSenderSetting, committeeQuorum } = useAuth();
+    const { user, token, allUsers, role, rfqSenderSetting, committeeQuorum } = useAuth();
   const id = params.id as string;
   
   const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
@@ -2261,8 +2370,7 @@ export default function QuotationDetailsPage() {
 
     // Check if every assigned member has finalized their scores.
     return allMemberIds.every(memberId => {
-        const member = allUsers.find(u => u.id === memberId);
-        return member?.committeeAssignments?.some(a => a.requisitionId === requisition.id && a.scoresSubmitted) || false;
+                return (requisition as any).committeeAssignments?.some((a: any) => a.userId === memberId && a.scoresSubmitted) || false;
     });
   }, [requisition, quotations, allUsers]);
 
@@ -2593,11 +2701,12 @@ export default function QuotationDetailsPage() {
             <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
         )}
 
-        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Committee' || role === 'Admin') && (
+        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && isAuthorized && (
             <div className="grid md:grid-cols-2 gap-6 items-start">
                 <RFQDistribution 
                     requisition={requisition} 
                     vendors={vendors} 
+                    quotations={quotations}
                     onRfqSent={fetchRequisitionAndQuotes}
                     isAuthorized={isAuthorized}
                 />
@@ -2616,6 +2725,8 @@ export default function QuotationDetailsPage() {
         
         <ManageRFQ 
             requisition={requisition}
+            vendors={vendors}
+            quotations={quotations}
             onSuccess={fetchRequisitionAndQuotes}
             isAuthorized={isAuthorized}
         />
@@ -2736,12 +2847,13 @@ export default function QuotationDetailsPage() {
             </>
         )}
         
-        {(currentStep === 'committee' || currentStep === 'award') && user.role === 'Committee_Member' && (
+        {(currentStep === 'committee' || currentStep === 'award') && role === 'Committee_Member' && (
              <CommitteeActions 
                 user={user}
                 requisition={requisition}
                 quotations={quotations}
                 onFinalScoresSubmitted={fetchRequisitionAndQuotes}
+            token={token}
              />
         )}
         

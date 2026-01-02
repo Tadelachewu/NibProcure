@@ -42,7 +42,7 @@ export function CommitteeSettings() {
     const [localConfig, setLocalConfig] = useState<CommitteeConfig>(committeeConfig);
     const [isAddCommitteeOpen, setAddCommitteeOpen] = useState(false);
     const [newCommitteeName, setNewCommitteeName] = useState('');
-    const { user: actor } = useAuth();
+    const { user: actor, token } = useAuth();
     const storageKey = 'committee-settings-form';
 
     useEffect(() => {
@@ -210,7 +210,7 @@ export function CommitteeSettings() {
             toast({variant: 'destructive', title: 'Error', description: 'Committee name is required.'});
             return;
         }
-        if (!actor) return;
+        if (!actor || !token) return;
         const committeeKey = newCommitteeName.toUpperCase();
         if(committeeConfig[committeeKey]) {
              toast({variant: 'destructive', title: 'Error', description: `Committee ${committeeKey} already exists.`});
@@ -221,7 +221,7 @@ export function CommitteeSettings() {
         try {
             const response = await fetch('/api/roles', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ name: `Committee ${committeeKey} Member`, description: `Member of the ${committeeKey} review committee.`, actorUserId: actor.id })
             });
 

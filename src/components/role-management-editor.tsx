@@ -52,7 +52,7 @@ export function RoleManagementEditor() {
   const [roleName, setRoleName] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
   const { toast } = useToast();
-  const { user, fetchAllSettings } = useAuth();
+    const { user, token, fetchAllSettings } = useAuth();
   
   const storageKey = useMemo(() => `role-form-${roleToEdit?.id || 'new'}`, [roleToEdit]);
 
@@ -101,7 +101,7 @@ export function RoleManagementEditor() {
         toast({ variant: 'destructive', title: 'Error', description: 'Role name cannot be empty.' });
         return;
     }
-    if (!user) return;
+    if (!user || !token) return;
     
     setIsLoading(true);
 
@@ -118,7 +118,7 @@ export function RoleManagementEditor() {
     try {
         const response = await fetch(url, {
             method,
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify(body),
         });
         if (!response.ok) {
@@ -126,8 +126,9 @@ export function RoleManagementEditor() {
             throw new Error(errorData.error || `Failed to ${isEditing ? 'update' : 'create'} role.`);
         }
         toast({
-            title: `Role ${isEditing ? 'Updated' : 'Added'}`,
+            title: isEditing ? 'Role Updated' : 'Role Added',
             description: `The role "${roleName}" has been successfully ${isEditing ? 'updated' : 'added'}.`,
+            variant: 'success',
         });
         
         localStorage.removeItem(storageKey);
@@ -143,12 +144,12 @@ export function RoleManagementEditor() {
 
 
   const handleDeleteRole = async (roleId: string) => {
-    if (!user) return;
+        if (!user || !token) return;
     setIsLoading(true);
     try {
          const response = await fetch(`/api/roles`, {
             method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
             body: JSON.stringify({ id: roleId, actorUserId: user.id }),
         });
          if (!response.ok) {
@@ -157,7 +158,8 @@ export function RoleManagementEditor() {
         }
         toast({
             title: 'Role Deleted',
-            description: `The role has been deleted.`,
+            description: 'The role has been deleted.',
+            variant: 'success',
         });
         await fetchRoles(); // Re-fetch the list of roles
         await fetchAllSettings(); // Re-fetch settings to update permissions context

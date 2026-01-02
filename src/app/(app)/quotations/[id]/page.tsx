@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, ChevronDown, ChevronsRight, ChevronLeft, FileBadge, MessageSquare } from 'lucide-react';
+import { Loader2, PlusCircle, Award, XCircle, FileSignature, FileText, Bot, Lightbulb, ArrowLeft, Star, Undo, Check, Send, Search, BadgeHelp, BadgeCheck, BadgeX, Crown, Medal, Trophy, RefreshCw, TimerOff, ClipboardList, TrendingUp, Scale, Edit2, Users, GanttChart, Eye, CheckCircle, CalendarIcon, Timer, Landmark, Settings2, Ban, Printer, FileBarChart2, UserCog, History, AlertCircle, FileUp, TrophyIcon, Calculator, ChevronDown, ChevronsRight, ChevronsLeft, ChevronLeft, ChevronRight, FileBadge, MessageSquare, AlertTriangle } from 'lucide-react';
 import { useForm, useFieldArray, FormProvider, useFormContext, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -63,12 +63,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
-import { ExtendDeadlineDialog } from '@/components/extend-deadline-dialog';
-import { OverdueReportDialog } from '@/components/overdue-report-dialog';
 import { RestartRfqDialog } from '@/components/restart-rfq-dialog';
 import { QuoteDetailsDialog } from '@/components/quote-details-dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { CommitteeActions } from '@/components/committee-actions';
 import { EditableCriteria } from '@/components/editable-criteria';
 import { EditableQuestions } from '@/components/editable-questions';
 
@@ -267,7 +264,6 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
             case 'Rejected': 
             case 'Not Awarded':
             case 'Declined': 
-            case 'Failed_to_Award':
             case 'Failed': 
                 return 'destructive';
             case 'Invoice_Submitted': return 'outline';
@@ -285,7 +281,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
 
     const userRoles = user.roles as UserRole[];
     const isTechnicalOnlyScorer = userRoles.includes('Committee_Member') && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
-    const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
+                const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -310,7 +306,14 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
 
 
                 return (
-                    <Card key={quote.id} className={cn("flex flex-col", (mainStatus === 'Awarded' || mainStatus === 'Partially_Awarded' || mainStatus === 'Accepted') && !isPerItemStrategy && 'border-primary ring-2 ring-primary')}>
+                    <Card
+                        key={quote.id}
+                        className={cn(
+                            "flex flex-col",
+                            mainStatus === 'Awarded' && !isPerItemStrategy && 'border-green-600 ring-2 ring-green-600',
+                            (mainStatus === 'Partially_Awarded' || mainStatus === 'Accepted') && !isPerItemStrategy && 'border-primary ring-2 ring-primary'
+                        )}
+                    >
                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
                                <div className="flex items-center gap-2">
@@ -318,7 +321,12 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                  <span>{isMasked ? "Masked Vendor" : quote.vendorName}</span>
                                </div>
                                 <div className="flex items-center gap-1">
-                                    <Badge variant={getStatusVariant(mainStatus as any)}>{mainStatus.replace(/_/g, ' ')}</Badge>
+                                    <Badge
+                                        variant={getStatusVariant(mainStatus as any)}
+                                        className={cn(mainStatus === 'Awarded' && 'bg-green-600 text-white hover:bg-green-600')}
+                                    >
+                                        {mainStatus.replace(/_/g, ' ')}
+                                    </Badge>
                                     {hasDeclineReason && (
                                         <TooltipProvider>
                                             <Tooltip>
@@ -418,7 +426,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                 <Eye className="mr-2 h-4 w-4" /> {isMasked ? 'Sealed' : 'View Full Quote'}
                             </Button>
                              {isAssignedCommitteeMember && isDeadlinePassed && (
-                                <Button className="w-full" variant={hasUserScored ? "secondary" : "default"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
+                                    <Button className="w-full" variant={hasUserScored ? "secondary" : "default"} onClick={() => onScore(quote, !!hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
                                     {hasUserScored ? 'View Your Score' : 'Score this Quote'}
                                 </Button>
@@ -536,6 +544,10 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
 
     const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
 
+    const isPresenceVerified = Boolean((requisition.rfqSettings as any)?.directorPresenceVerified) || (requisition.rfqSettings as any)?.masked === false;
+    const presenceVerifiedAt = (requisition.rfqSettings as any)?.directorPresenceVerifiedAt as string | undefined;
+    const effectiveThreshold = unsealThreshold ?? (requisition.rfqSettings as any)?.unsealThreshold ?? DIRECTOR_ROLES.length;
+
     const fetchExistingPins = async () => {
         if (!token) return;
         try {
@@ -550,35 +562,29 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
 
     useEffect(() => { fetchExistingPins(); }, [requisition.id, token]);
 
-    const generatePins = async (opts: { includePins?: boolean } = {}) => {
+    useEffect(() => {
+        // keep threshold input in sync if requisition refreshed
+        setUnsealThreshold((requisition.rfqSettings as any)?.unsealThreshold);
+    }, [requisition]);
+
+    const generatePins = async () => {
+        if (isPresenceVerified) {
+            toast({ title: 'Already verified', description: 'Director presence is already verified for this requisition.' });
+            return;
+        }
         if (!token) return;
         try {
-            const q = opts.includePins ? '?includePins=1' : '';
-            const res = await fetch(`/api/requisitions/${requisition.id}/generate-pins${q}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+            const res = await fetch(`/api/requisitions/${requisition.id}/generate-pins`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Failed to generate pins');
-            toast({ title: 'Pins generated', description: 'Pins were generated and sent to directors.' });
-            // if server returned created pins with plaintext, merge into UI state for testing
-            if (data && Array.isArray(data.pins) && data.pins.length > 0) {
-                // Map server pins into same shape as fetchExistingPins expects
-                const mapped = data.pins.map((p:any) => ({
-                    id: `${p.requisitionId || requisition.id}-${p.roleName}-${p.recipientId}`,
-                    requisition: { id: requisition.id, title: requisition.title },
-                    roleName: p.roleName,
-                    generatedAt: p.expiresAt ? new Date(Date.now()).toISOString() : undefined,
-                    expiresAt: p.expiresAt,
-                    used: false,
-                    recipient: { id: p.recipientId },
-                    plainPin: p.plainPin
-                }));
-                // replace existing pins for this requisition with mapped entries
-                setPins(prev => {
-                    const others = (prev || []).filter((x:any) => x.requisition?.id !== requisition.id);
-                    return [...others, ...mapped];
-                });
-            } else {
-                await fetchExistingPins();
-            }
+            const skipped = Array.isArray(data.skippedVerifiedRecipientIds) ? data.skippedVerifiedRecipientIds.length : 0;
+            toast({
+                title: 'Pins generated',
+                description: skipped > 0
+                    ? `Pins were generated and sent to remaining directors. Skipped ${skipped} already-verified personnel.`
+                    : 'Pins were generated and sent to remaining directors.',
+            });
+            await fetchExistingPins();
         } catch (e) {
             toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Failed to generate pins' });
         }
@@ -598,45 +604,64 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
             } else {
                 toast({ title: 'Verified', description: 'PIN accepted successfully.' });
             }
+            await fetchExistingPins();
         } catch (e) {
             toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Verification failed' });
         }
     };
 
-    // Directors can request their own PIN (if they have the director role)
-    const [requesting, setRequesting] = React.useState(false);
+    // Directors obtain PINs via email or the dedicated Pins page.
     const isDirectorUser = user && DIRECTOR_ROLES.some(rn => (user.roles as any[]).some((x:any) => (typeof x === 'string' ? x === rn : x.name === rn)));
 
-    const requestMyPin = async () => {
-        if (!token) return;
-        setRequesting(true);
-        try {
-            const res = await fetch(`/api/requisitions/${requisition.id}/request-pin`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Failed to request pin');
-            toast({ title: 'PIN requested', description: `A one-time PIN was sent to your email. Expires at ${new Date(data.expiresAt).toLocaleString()}` });
-        } catch (e) {
-            toast({ variant: 'destructive', title: 'Error', description: e instanceof Error ? e.message : 'Failed to request pin' });
-        } finally {
-            setRequesting(false);
-        }
-    };
+    const verifiedDistinctCount = React.useMemo(() => {
+        const usedByIds = new Set((pins || []).filter((p:any) => p.used && p.usedById).map((p:any) => p.usedById));
+        return usedByIds.size;
+    }, [pins]);
+
+    const directorRecipients = React.useMemo(() => {
+        const byKey = new Map<string, { recipient: any; roleName: string }>();
+        (pins || []).forEach((p:any) => {
+            if (!DIRECTOR_ROLES.includes(p.roleName)) return;
+            if (!p.recipient?.id) return;
+            const key = `${p.roleName}:${p.recipient.id}`;
+            if (!byKey.has(key)) {
+                byKey.set(key, { recipient: p.recipient, roleName: p.roleName });
+            }
+        });
+        return Array.from(byKey.values());
+    }, [pins]);
 
     return (
         <Card className="mt-6 border-yellow-200">
             <CardHeader>
-                <CardTitle>Director Presence Verification</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                    Director Presence Verification
+                    {isPresenceVerified ? (
+                        <Badge className="bg-green-600 text-white hover:bg-green-600">Verified</Badge>
+                    ) : (
+                        <Badge variant="secondary">Pending</Badge>
+                    )}
+                </CardTitle>
                 <CardDescription>
-                    The vendor pricing will remain masked until the configured number of directors verify.
-                    Current threshold: {unsealThreshold ?? (requisition.rfqSettings as any)?.unsealThreshold ?? DIRECTOR_ROLES.length}.
+                    {isPresenceVerified ? (
+                        <>
+                            Director presence is verified and vendor pricing is unmasked.
+                            {presenceVerifiedAt ? ` Verified at: ${new Date(presenceVerifiedAt).toLocaleString()}.` : ''}
+                        </>
+                    ) : (
+                        <>
+                            The vendor pricing will remain masked until the configured number of directors verify.
+                            Current threshold: {effectiveThreshold}. Verified: {verifiedDistinctCount}/{effectiveThreshold}.
+                        </>
+                    )}
                 </CardDescription>
             </CardHeader>
             <CardContent>
                 <div className="space-y-3">
-                    {isRfqSender && (
+                    {isRfqSender && !isPresenceVerified && (
                         <div className="flex items-center gap-2">
-                            <Button onClick={() => generatePins({ includePins: true })} variant={pins && pins.length > 0 ? 'destructive' : 'outline'}>
-                                {pins && pins.length > 0 ? 'Regenerate Pins (show)' : 'Generate Pins (show)'}
+                            <Button onClick={generatePins} variant={pins && pins.length > 0 ? 'destructive' : 'outline'}>
+                                {pins && pins.length > 0 ? 'Regenerate Pins' : 'Generate Pins'}
                             </Button>
                             <p className="text-sm text-muted-foreground">{pins && pins.length > 0 ? 'Regenerates and replaces previous PINs for this requisition.' : 'Generate one-time PINs and notify directors.'}</p>
                         </div>
@@ -646,45 +671,84 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
                             <h4 className="font-semibold mb-2">Unseal Threshold</h4>
                             <p className="text-sm text-muted-foreground mb-2">Number of director verifications required to unmask quotations.</p>
                             <div className="flex items-center gap-2">
-                                <Input type="number" value={String(unsealThreshold ?? DIRECTOR_ROLES.length)} onChange={(e) => setUnsealThreshold(Number(e.target.value))} />
+                                <Input
+                                    type="number"
+                                    value={String(effectiveThreshold)}
+                                    disabled={!isRfqSender || isPresenceVerified}
+                                    onChange={(e) => setUnsealThreshold(Number(e.target.value))}
+                                />
                                 <Button onClick={async () => {
                                     if (!token) return;
+                                    if (isPresenceVerified) return;
                                     try {
-                                        const res = await fetch(`/api/requisitions/${requisition.id}/set-unseal-threshold`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ threshold: Number(unsealThreshold || DIRECTOR_ROLES.length) }) });
+                                        const res = await fetch(`/api/requisitions/${requisition.id}/set-unseal-threshold`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ threshold: Number(effectiveThreshold) }) });
                                         const d = await res.json();
                                         if (!res.ok) throw new Error(d.error || 'Failed to set threshold');
                                         toast({ title: 'Threshold updated', description: `Unseal threshold set to ${d.threshold}` });
                                     } catch (e:any) {
                                         toast({ variant: 'destructive', title: 'Error', description: e?.message || 'Failed to set threshold' });
                                     }
-                                }}>Save</Button>
+                                }} disabled={!isRfqSender || isPresenceVerified}>Save</Button>
                             </div>
                         </div>
-                        {DIRECTOR_ROLES.map(rn => (
-                            <div key={rn} className="border rounded p-3">
-                                <h4 className="font-semibold mb-2 flex items-center gap-2">
-                                    {rn.replace(/_/g, ' ')}
-                                    {pins.some(pin => pin.roleName === rn && pin.used) ? (
-                                        <Badge variant="success">Verified</Badge>
+                        {(directorRecipients.length > 0 ? directorRecipients : DIRECTOR_ROLES.map(rn => ({ roleName: rn, recipient: undefined } as any))).map((entry: any) => {
+                            const rn = entry.roleName as string;
+                            const recipient = entry.recipient as any | undefined;
+                            const recipientId = recipient?.id as string | undefined;
+                            const personVerified = recipientId
+                                ? (pins || []).some((p:any) => p.roleName === rn && p.used && p.usedById && p.usedById === recipientId)
+                                : false;
+                            const canVerify = Boolean(user && (user.id === recipientId));
+
+                            return (
+                                <div key={`${rn}:${recipientId || 'none'}`} className="border rounded p-3">
+                                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                                        {rn.replace(/_/g, ' ')}
+                                        {recipient ? (
+                                            <span className="text-xs text-muted-foreground">— {recipient.name || recipient.email}</span>
+                                        ) : null}
+                                        {personVerified ? (
+                                            <Badge className="bg-green-600 text-white hover:bg-green-600">Verified</Badge>
+                                        ) : (
+                                            <Badge variant="secondary">Pending</Badge>
+                                        )}
+                                    </h4>
+
+                                    {recipient ? (
+                                        canVerify ? (
+                                            <div className="flex gap-2">
+                                                <Input value={inputs[rn] || ''} onChange={(e) => setInputs(s => ({ ...s, [rn]: e.target.value }))} placeholder="Enter PIN" />
+                                                <Button onClick={() => verifyPin(rn)}>Verify</Button>
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-muted-foreground">Awaiting {recipient.name || recipient.email} to verify.</p>
+                                        )
                                     ) : (
-                                        <Badge variant="secondary">Pending</Badge>
+                                        <p className="text-sm text-muted-foreground">No PIN has been issued yet for this role.</p>
                                     )}
-                                </h4>
-                                {user && ((user.roles as any[]).some((x:any) => x.name === rn) || (user.roles as any[]).some((x:any) => x.name === 'Admin')) ? (
-                                    <div className="flex gap-2">
-                                        <Input value={inputs[rn] || ''} onChange={(e) => setInputs(s => ({ ...s, [rn]: e.target.value }))} placeholder="Enter PIN" />
-                                        <Button onClick={() => verifyPin(rn)}>Verify</Button>
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground">Awaiting {rn.replace(/_/g, ' ')} to verify.</p>
-                                )}
-                            </div>
-                        ))}
+
+                                    {isRfqSender && (
+                                        <div className="mt-3 space-y-1">
+                                            {(pins || []).filter((p:any) => p.roleName === rn && (!recipientId || p.recipient?.id === recipientId)).slice(0, 5).map((p:any) => (
+                                                <div key={p.id} className="flex items-center justify-between text-xs text-muted-foreground">
+                                                    <span>{p.recipient?.name || p.recipient?.email || p.recipient?.id || 'Recipient'}</span>
+                                                    <span>{p.used && p.usedById ? `Verified${p.usedBy?.name ? ` by ${p.usedBy.name}` : ''}` : 'Pending'}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
-                    {isDirectorUser && (
+                    {isDirectorUser && !isPresenceVerified && (
                         <div className="mt-4">
-                            <Button onClick={requestMyPin} disabled={requesting} variant="secondary">{requesting ? 'Requesting...' : 'Request My PIN'}</Button>
-                            <p className="text-sm text-muted-foreground mt-2">Directors can request their one-time PIN here. It will also be sent to your email.</p>
+                            <p className="text-sm text-muted-foreground">
+                                To view or resend your PIN, use the Pins page.
+                            </p>
+                            <Button asChild variant="secondary" className="mt-2">
+                                <Link href="/requisitions/pins">Go to Pins</Link>
+                            </Button>
                         </div>
                     )}
                 </div>
@@ -2332,7 +2396,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                                                     {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
                                                                                                         <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
                                                                                                             <div className="flex justify-between items-center font-medium">
-                                                                                                                <p>{getCriterionName(s.financialCriterionId, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                                                                <p>{getCriterionName(s.financialCriterionId ?? null, requisition.evaluationCriteria?.financialCriteria)}</p>
                                                                                                                 <p className="font-bold">{s.score}/100</p>
                                                                                                             </div>
                                                                                                             {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
@@ -2346,7 +2410,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                                                     {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
                                                                                                         <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
                                                                                                             <div className="flex justify-between items-center font-medium">
-                                                                                                                <p>{getCriterionName(s.technicalCriterionId, requisition.evaluationCriteria?.technicalCriteria)}</p>
+                                                                                                                <p>{getCriterionName(s.technicalCriterionId ?? null, requisition.evaluationCriteria?.technicalCriteria)}</p>
                                                                                                                 <p className="font-bold">{s.score}/100</p>
                                                                                                             </div>
                                                                                                             {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
@@ -2517,6 +2581,7 @@ const CommitteeActions = ({
     onFinalScoresSubmitted: () => void,
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submittedOverride, setSubmittedOverride] = useState(false);
     const { toast } = useToast();
     const { token } = useAuth();
     
@@ -2528,6 +2593,7 @@ const CommitteeActions = ({
 
     const assignment = useMemo(() => user.committeeAssignments?.find(a => a.requisitionId === requisition.id), [user.committeeAssignments, requisition.id]);
     const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
+    const scoresFinalized = scoresAlreadyFinalized || submittedOverride;
 
     if (!isCommitteeUser) {
         return null;
@@ -2538,6 +2604,7 @@ const CommitteeActions = ({
 
     const handleSubmitScores = async () => {
         if (!token) return;
+        if (scoresFinalized) return;
         setIsSubmitting(true);
         try {
             const response = await fetch(`/api/requisitions/${requisition.id}/submit-scores`, {
@@ -2546,11 +2613,19 @@ const CommitteeActions = ({
                 body: JSON.stringify({ userId: user.id })
             });
 
+            if (response.status === 409) {
+                setSubmittedOverride(true);
+                toast({ title: 'Scores Submitted', description: 'Your final scores were already submitted.'});
+                onFinalScoresSubmitted();
+                return;
+            }
+
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to submit scores');
             }
             toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
+            setSubmittedOverride(true);
             onFinalScoresSubmitted();
         } catch (error) {
              toast({
@@ -2559,15 +2634,11 @@ const CommitteeActions = ({
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
             });
         } finally {
-            // Keep isSubmitting true on success to disable button until re-render
-            const shouldKeepDisabled = await (await fetch(`/api/requisitions/${requisition.id}/submit-scores`, { method: 'HEAD' })).ok;
-            if(!shouldKeepDisabled) {
-              setIsSubmitting(false);
-            }
+            setIsSubmitting(false);
         }
     };
 
-    if (scoresAlreadyFinalized) {
+    if (scoresFinalized) {
         return (
             <Card>
                 <CardHeader>
@@ -2596,7 +2667,7 @@ const CommitteeActions = ({
             <CardFooter>
                 <AlertDialog>
                     <AlertDialogTrigger asChild>
-                        <Button disabled={!allQuotesScored || isSubmitting}>
+                        <Button disabled={!allQuotesScored || isSubmitting || scoresFinalized}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Submit Final Scores
                         </Button>
@@ -2610,7 +2681,7 @@ const CommitteeActions = ({
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleSubmitScores}>Confirm and Submit</AlertDialogAction>
+                            <AlertDialogAction onClick={handleSubmitScores} disabled={isSubmitting || !allQuotesScored}>Confirm and Submit</AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
@@ -3074,6 +3145,25 @@ export default function QuotationDetailsPage() {
 
   const isProcurementActionAllowed = isAuthorized && (requisition?.status === 'PreApproved' || requisition?.status === 'Accepting_Quotes');
 
+    const invitedVendorsForStatus = useMemo(() => {
+        if (!requisition) return [] as Vendor[];
+
+        const verifiedVendors = Array.isArray(vendors)
+            ? vendors.filter((v) => v.kycStatus === 'Verified')
+            : ([] as Vendor[]);
+
+        const invitedIds = Array.isArray(requisition.allowedVendorIds)
+            ? requisition.allowedVendorIds
+            : ([] as string[]);
+
+        if (invitedIds.length === 0) {
+            return verifiedVendors;
+        }
+
+        const invitedIdSet = new Set(invitedIds);
+        return verifiedVendors.filter((v) => invitedIdSet.has(v.id));
+    }, [requisition, vendors]);
+
   if (loading || !user || !requisition) {
      return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -3178,6 +3268,53 @@ export default function QuotationDetailsPage() {
             </div>
         )}
 
+        {isAuthorized && requisition.deadline && (
+            <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="invited-vendors">
+                    <AccordionTrigger>
+                        <CardTitle className="text-lg">Invited Vendors</CardTitle>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                        <CardDescription className="mb-4">
+                            Track which invited vendors have submitted a quotation.
+                        </CardDescription>
+                        {invitedVendorsForStatus.length === 0 ? (
+                            <div className="text-sm text-muted-foreground">No invited vendors found.</div>
+                        ) : (
+                            <div className="rounded-md border">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Vendor</TableHead>
+                                            <TableHead>Status</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {invitedVendorsForStatus.map((vendor) => {
+                                            const hasSubmitted = quotations.some((q) => q.vendorId === vendor.id);
+                                            return (
+                                                <TableRow key={vendor.id}>
+                                                    <TableCell className="font-medium">{vendor.name}</TableCell>
+                                                    <TableCell>
+                                                        <Badge
+                                                            variant={hasSubmitted ? 'default' : 'secondary'}
+                                                            className={hasSubmitted ? 'bg-green-600 text-white hover:bg-green-600' : undefined}
+                                                        >
+                                                            {hasSubmitted ? 'Submitted' : 'Not Submitted'}
+                                                        </Badge>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
+        )}
+
         <ManageRFQ
             requisition={requisition}
             onSuccess={fetchRequisitionAndQuotes}
@@ -3237,7 +3374,7 @@ export default function QuotationDetailsPage() {
 
                         <Card className="border-0 shadow-none">
                             <CardHeader>
-                                <CardDescription>{requisition.title}</CardDescription>
+                                <CardDescription className="text-base font-semibold text-foreground">{requisition.title}</CardDescription>
                                 <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
                                     {requisition.deadline && (
                                         <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
@@ -3500,7 +3637,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
 
         setIsSubmitting(true);
         try {
-            const response = await fetch(`/api/requisitions/${id}/reopen-rfq`, {
+            const response = await fetch(`/api/requisitions/${requisition.id}/reopen-rfq`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ userId: user.id, newDeadline: finalNewDeadline }),

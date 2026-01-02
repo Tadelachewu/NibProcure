@@ -1,4 +1,3 @@
-
 'use client';
 
 import { PurchaseRequisition, PurchaseOrder, PerItemAwardDetail, User, EvaluationCriterion } from '@/lib/types';
@@ -16,7 +15,7 @@ import { Badge } from './ui/badge';
 import { format, isPast } from 'date-fns';
 import { ScrollArea } from './ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { CheckCircle, Circle, Clock, FileText, Send, UserCheck, Users, Trophy, Calendar, UserCog, LandLandmark, Percent, MessageSquare } from 'lucide-react';
+import { CheckCircle, Circle, Clock, FileText, Send, UserCheck, Users, Trophy, Calendar, UserCog, Landmark, Percent, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 
@@ -60,23 +59,98 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
   const { allUsers } = useAuth();
   if (!requisition) return null;
 
-  const getTimelineStatus = (step: number) => {
-    const stepOrder = ['Draft', 'Pending_Approval', 'PreApproved', 'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 'Pending_Review', 'PostApproved', 'Awarded', 'PO_Created', 'Fulfilled', 'Closed'];
-    
-    let normalizedStatus = requisition.status.replace(/ /g, '_');
-    if (normalizedStatus.startsWith('Pending_') && normalizedStatus !== 'Pending_Approval') {
-        normalizedStatus = 'Pending_Review';
-    }
-    if (normalizedStatus === 'Award_Declined') {
-        normalizedStatus = 'Pending_Review';
-    }
+    const getTimelineStatusByKey = (key: string) => {
+                // Canonical timeline keys for stable ordering & correct stage mapping.
+                // NOTE: Not every key must be rendered as a visible TimelineStep.
+                const stepOrder = [
+                        'Draft',
+                        'Submitted',
+                        'Departmental_Approval',
+                        'Procurement_Approval',
+                        'PreApproved',
+                        'Accepting_Quotes',
+                        'Scoring_In_Progress',
+                        'Scoring_Complete',
+                        'Pending_Review',
+                        'PostApproved',
+                        'Awarded',
+                        'PO_Created',
+                        'Fulfilled',
+                        'Closed'
+                ];
 
-    const currentStatusIndex = stepOrder.findIndex(s => normalizedStatus.startsWith(s));
-    
-    if (currentStatusIndex > step) return 'complete';
-    if (currentStatusIndex === step) return 'active';
-    return 'pending';
-  }
+        const raw = (requisition.status || '').replace(/ /g, '_');
+
+        const normalizeForTimeline = (status: string) => {
+            // Departmental approval: from "submit" until dept head acts.
+            const departmentalApprovalPending = new Set([
+                'Pending_Approval',
+            ]);
+
+            // Procurement approval: after dept head approval (director/manager/etc).
+            const procurementApprovalPending = new Set([
+                'Pending_Director_Approval',
+                'Pending_Managerial_Approval',
+                'Pending_VP_Approval',
+                'Pending_President_Approval',
+                'Pending_Procurement_Approval',
+            ]);
+
+            // Final award review pending states (after scoring)
+            const awardReviewPending = new Set([
+                'Pending_Committee_A_Recommendation',
+                'Pending_Committee_B_Review',
+                'Pending_Review',
+            ]);
+
+            if (!status) return 'Draft';
+            if (status === 'Draft') return 'Draft';
+            // Rejected means it was in an approval stage and needs rework; keep it on the
+            // approval timeline rather than jumping back to RFQ.
+            if (status === 'Rejected') return 'Departmental_Approval';
+            if (status === 'Approved') return 'PreApproved';
+
+            if (departmentalApprovalPending.has(status)) return 'Departmental_Approval';
+            if (procurementApprovalPending.has(status)) return 'Procurement_Approval';
+
+            if (status === 'PreApproved') return 'PreApproved';
+
+            if (status === 'Accepting_Quotes') return 'Accepting_Quotes';
+            if (status === 'Scoring_In_Progress') return 'Scoring_In_Progress';
+            if (status === 'Scoring_Complete') return 'Scoring_Complete';
+
+            if (awardReviewPending.has(status)) return 'Pending_Review';
+            if (status.startsWith('Pending_')) return 'Pending_Review';
+
+            if (status === 'PostApproved') return 'PostApproved';
+            if (status === 'Awarded' || status === 'Award_Declined') return 'Awarded';
+
+            if (status === 'PO_Created' || status === 'Partially_Closed') return 'PO_Created';
+            if (status === 'Fulfilled') return 'Fulfilled';
+            if (status === 'Closed') return 'Closed';
+
+            // Fallback: if it's a known step key, keep it; otherwise treat as pending review
+            if (stepOrder.includes(status)) return status;
+
+            // Any other recognized lifecycle status implies the requisition is past Draft.
+            return 'Submitted';
+        };
+
+        const mapped = normalizeForTimeline(raw);
+
+        const currentIndex = stepOrder.findIndex(s => s === mapped);
+        const targetIndex = stepOrder.findIndex(s => s === key);
+
+        if (targetIndex === -1) return 'pending';
+        if (currentIndex === -1) {
+            // If the current status doesn't map to a known timeline key, mark only earlier
+            // steps as pending and none as completed.
+            return 'pending';
+        }
+        if (currentIndex > targetIndex) return 'complete';
+        if (currentIndex === targetIndex) return 'active';
+        return 'pending';
+    }
 
   const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
   const isAwarded = requisition.status && (['Awarded', 'Award_Declined', 'PO_Created', 'Fulfilled', 'Closed', 'PostApproved'].includes(requisition.status) || requisition.status.startsWith('Pending_'));
@@ -308,13 +382,15 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                     </div>
                     <div className="space-y-4">
                          <h4 className="font-medium text-sm">Lifecycle Status</h4>
-                         <TimelineStep title="Requisition Submitted" status={getTimelineStatus(0)} />
-                         <TimelineStep title="Departmental Approval" status={getTimelineStatus(2)} />
-                         <TimelineStep title="RFQ & Bidding" status={getTimelineStatus(3)} />
-                         <TimelineStep title="Committee Scoring" status={getTimelineStatus(4)} />
-                         <TimelineStep title="Final Award Review" status={getTimelineStatus(6)} />
-                         <TimelineStep title="Vendor Awarded" status={getTimelineStatus(8)} />
-                         <TimelineStep title="Fulfilled & Closed" status={getTimelineStatus(10)} isLast/>
+                         <TimelineStep title="Draft" status={getTimelineStatusByKey('Draft')} />
+                        <TimelineStep title="Submitted for Approval" status={getTimelineStatusByKey('Submitted')} />
+                        <TimelineStep title="Departmental Approval" status={getTimelineStatusByKey('Departmental_Approval')} />
+                        <TimelineStep title="Procurement Approval" status={getTimelineStatusByKey('Procurement_Approval')} />
+                         <TimelineStep title="RFQ & Bidding" status={getTimelineStatusByKey('Accepting_Quotes')} />
+                         <TimelineStep title="Committee Scoring" status={getTimelineStatusByKey('Scoring_In_Progress')} />
+                         <TimelineStep title="Final Award Review" status={getTimelineStatusByKey('Pending_Review')} />
+                         <TimelineStep title="Vendor Awarded" status={getTimelineStatusByKey('Awarded')} />
+                         <TimelineStep title="Fulfilled & Closed" status={getTimelineStatusByKey('Closed')} isLast/>
                     </div>
                 </div>
             </ScrollArea>

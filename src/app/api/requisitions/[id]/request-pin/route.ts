@@ -28,7 +28,19 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const hash = bcrypt.hashSync(pin, 10);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    const created = await prisma.pin.create({ data: { requisitionId: id, roleName: (actor.roles as any[])[0] || 'Director', pinHash: hash, recipientId: actor.id, generatedById: actor.id, expiresAt } });
+    const actorRoleNames = (actor.roles || []).map((r: any) => (typeof r === 'string' ? r : r?.name)).filter(Boolean);
+    const actorDirectorRole = DIRECTOR_ROLES.find((rn) => actorRoleNames.includes(rn)) || 'Director';
+
+    const created = await prisma.pin.create({
+      data: {
+        requisitionId: id,
+        roleName: actorDirectorRole,
+        pinHash: hash,
+        recipientId: actor.id,
+        generatedById: actor.id,
+        expiresAt,
+      }
+    });
 
     // send email with PIN when possible
     if (actor.email) {

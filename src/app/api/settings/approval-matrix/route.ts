@@ -95,7 +95,7 @@ export async function POST(request: Request) {
 
   } catch (error) {
      if (error instanceof Error && error.message === 'Unauthorized') {
-         return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
      }
     console.error("Failed to update approval matrix:", error);
      if (error instanceof Error) {

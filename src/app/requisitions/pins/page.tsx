@@ -22,6 +22,34 @@ export default function RequisitionPinsPage() {
   const [verifyingMap, setVerifyingMap] = useState<Record<string, boolean>>({});
   const [plainPinMap, setPlainPinMap] = useState<Record<string, { pin: string, expiresAt?: string }>>({});
 
+  const PLAIN_PIN_STORAGE_KEY = "nibprocure.plainPins.v1";
+
+  const loadPlainPins = () => {
+    try {
+      const raw = localStorage.getItem(PLAIN_PIN_STORAGE_KEY);
+      if (!raw) return {} as Record<string, { pin: string, expiresAt?: string }>;
+      const parsed = JSON.parse(raw) as Record<string, { pin: string; expiresAt?: string }>;
+      const now = Date.now();
+      const cleaned: Record<string, { pin: string; expiresAt?: string }> = {};
+      for (const [id, v] of Object.entries(parsed || {})) {
+        if (!v?.pin) continue;
+        if (v.expiresAt && !Number.isNaN(Date.parse(v.expiresAt)) && Date.parse(v.expiresAt) <= now) continue;
+        cleaned[id] = v;
+      }
+      return cleaned;
+    } catch {
+      return {};
+    }
+  };
+
+  const savePlainPins = (next: Record<string, { pin: string, expiresAt?: string }>) => {
+    try {
+      localStorage.setItem(PLAIN_PIN_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
+
   const fetchPins = async (p = 1) => {
     setLoading(true);
     setError(undefined);
@@ -51,8 +79,12 @@ export default function RequisitionPinsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to resend PIN");
       if (data.plainPin && data.id) {
-        // only keep the latest returned pin in the client map
-        setPlainPinMap({ [data.id]: { pin: data.plainPin, expiresAt: data.expiresAt } });
+        // Keep the latest returned pin in the client map (persisted across refresh)
+        setPlainPinMap(prev => {
+          const next = { ...prev, [data.id]: { pin: data.plainPin, expiresAt: data.expiresAt } };
+          savePlainPins(next);
+          return next;
+        });
         toast({ title: 'PIN available', description: 'Hover the PIN label on the card to reveal it.' });
       } else {
         toast({ title: "PIN sent", description: "A one-time PIN was sent to your email." });
@@ -65,6 +97,8 @@ export default function RequisitionPinsPage() {
 
   useEffect(() => {
     if (!token) return;
+    // Load persisted plaintext pins (dev/testing) so tooltips survive refresh.
+    setPlainPinMap(loadPlainPins());
     fetchPins(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -123,15 +157,23 @@ export default function RequisitionPinsPage() {
                       {p.recipient && (
                         <div className="text-xs text-muted-foreground">Recipient: {p.recipient.name || p.recipient.email}</div>
                       )}
-                      {(p.plainPin || plainPinMap[p.id]) && (
+                      {p.recipient && p.recipient.id === user?.id && (
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div className="text-sm font-mono text-primary cursor-help">PIN: ••••••</div>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <div className="font-mono">{plainPinMap[p.id]?.pin || p.plainPin}</div>
-                              {plainPinMap[p.id]?.expiresAt && <div className="text-xs text-muted-foreground">Expires: {new Date(plainPinMap[p.id].expiresAt).toLocaleString()}</div>}
+                              {plainPinMap[p.id]?.pin ? (
+                                <>
+                                  <div className="font-mono">{plainPinMap[p.id]?.pin}</div>
+                                  {plainPinMap[p.id]?.expiresAt ? (
+                                    <div className="text-xs text-muted-foreground">Expires: {new Date(plainPinMap[p.id]?.expiresAt as string).toLocaleString()}</div>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <div className="text-xs text-muted-foreground">PIN was sent to your email. Click “Resend to me” to view it here.</div>
+                              )}
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -141,7 +183,7 @@ export default function RequisitionPinsPage() {
                       <div className="text-xs text-muted-foreground">Expires: {p.expiresAt ? new Date(p.expiresAt).toLocaleString() : '—'}</div>
                       {p.recipient && p.recipient.id === user?.id && (
                         <div className="flex items-center gap-2">
-                          <Input placeholder="Enter PIN" size={"sm"} value={pinInputs[p.id] || ''} onChange={(e) => setPinInputs(prev => ({ ...prev, [p.id]: e.target.value }))} />
+                          <Input placeholder="Enter PIN" value={pinInputs[p.id] || ''} onChange={(e) => setPinInputs(prev => ({ ...prev, [p.id]: e.target.value }))} />
                           <Button size="sm" variant="outline" onClick={() => resendToMe(g.requisition.id)}>Resend to me</Button>
                           <Button size="sm" onClick={async () => {
                             const pinValue = pinInputs[p.id] || '';

@@ -1,8 +1,7 @@
 
-'use server';
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(
   request: Request,
@@ -10,28 +9,63 @@ export async function POST(
 ) {
   const requisitionId = params.id;
   try {
-    const body = await request.json();
-    const { userId } = body;
-
-    const user = await prisma.user.findUnique({ where: { id: userId }, include: { roles: true } });
-    if (!user) {
-        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    // Authenticate via JWT (do not trust userId from request body)
+    let actor;
+    try {
+      actor = await getActorFromToken(request);
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!user.roles.some(r => r.name === 'Committee_Member')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    const actorRoleNames = (actor.roles || []).map((r: any) => (typeof r === 'string' ? r : r?.name)).filter(Boolean);
+    const isCommitteeActor = actorRoleNames.includes('Committee_Member') || actorRoleNames.some((r: string) => r.includes('Committee'));
+    if (!isCommitteeActor) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    }
+
+    const existing = await prisma.committeeAssignment.findUnique({
+      where: {
+        userId_requisitionId: {
+          userId: actor.id,
+          requisitionId,
+        },
+      },
+      select: { scoresSubmitted: true },
+    });
+
+    if (existing?.scoresSubmitted) {
+      return NextResponse.json({ error: 'Scores already submitted.' }, { status: 409 });
+    }
+
+    // Ensure the actor is actually assigned to this requisition's committee
+    const reqForAssignment = await prisma.purchaseRequisition.findUnique({
+      where: { id: requisitionId },
+      select: { financialCommitteeMemberIds: true, technicalCommitteeMemberIds: true },
+    });
+
+    if (!reqForAssignment) {
+      return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
+    }
+
+    const assignedIds = new Set([
+      ...(reqForAssignment.financialCommitteeMemberIds || []),
+      ...(reqForAssignment.technicalCommitteeMemberIds || []),
+    ]);
+
+    if (!assignedIds.has(actor.id)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     
     await prisma.committeeAssignment.upsert({
       where: {
         userId_requisitionId: {
-          userId: userId,
+          userId: actor.id,
           requisitionId: requisitionId,
         }
       },
       update: { scoresSubmitted: true },
       create: {
-        userId: userId,
+        userId: actor.id,
         requisitionId: requisitionId,
         scoresSubmitted: true,
       },
@@ -65,7 +99,7 @@ export async function POST(
         data: {
             transactionId: requisitionId,
             timestamp: new Date(),
-            user: { connect: { id: user.id } },
+        user: { connect: { id: actor.id } },
             action: 'SUBMIT_SCORES',
             entity: 'Requisition',
             entityId: requisitionId,
