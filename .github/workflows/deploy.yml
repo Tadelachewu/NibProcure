@@ -28,12 +28,21 @@ jobs:
 
     - name: Prisma Migrations & Seed
       run: |
-        echo "Applying Prisma migrations..."
-        npx prisma migrate deploy
-        echo "Generating Prisma client..."
+        $ErrorActionPreference = "Stop"
+
+        if (Test-Path "prisma/migrations") {
+          Write-Host "Deleting existing Prisma migrations folder..."
+          Remove-Item -Recurse -Force "prisma/migrations"
+        }
+
+        Write-Host "Running Prisma migrations via npm script..."
+        npm run db:migrate
+
+        Write-Host "Generating Prisma client..."
         npx prisma generate
-        echo "Seeding database..."
-        npm run db:seed:force
+
+        Write-Host "Seeding database..."
+        npm run db:seed
       shell: pwsh
 
     - name: Build Next.js app
