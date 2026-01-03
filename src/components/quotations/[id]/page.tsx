@@ -251,6 +251,8 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {quotes.sort((a, b) => (a.rank || 4) - (b.rank || 4)).map(quote => {
                 const hasUserScored = quote.scores?.some(s => s.scorerId === user.id);
+                const submissionLabel = quote.submissionMethod === 'Manual' ? 'Manual' : 'Electronic';
+                const submissionVariant = quote.submissionMethod === 'Manual' ? 'secondary' : 'outline';
                 return (
                     <Card
                         key={quote.id}
@@ -266,12 +268,15 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                  {isDeadlinePassed && getRankIcon(quote.rank)}
                                  <span>{quote.vendorName}</span>
                                </div>
-                               <Badge
-                                    variant={getStatusVariant(quote.status)}
-                                    className={cn(quote.status === 'Awarded' && 'bg-green-600 text-white hover:bg-green-600')}
-                                >
-                                    {quote.status.replace(/_/g, ' ')}
-                                </Badge>
+                               <div className="flex items-center gap-1">
+                                    <Badge variant={submissionVariant as any}>{submissionLabel}</Badge>
+                                    <Badge
+                                        variant={getStatusVariant(quote.status)}
+                                        className={cn(quote.status === 'Awarded' && 'bg-green-600 text-white hover:bg-green-600')}
+                                    >
+                                        {quote.status.replace(/_/g, ' ')}
+                                    </Badge>
+                               </div>
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
@@ -2556,13 +2561,19 @@ export default function QuotationDetailsPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to notify vendor.");
+                const errorData = await response.json().catch(() => ({} as any));
+                throw new Error(errorData.error || "Failed to notify vendor.");
       }
 
+            const data = await response.json().catch(() => ({} as any));
+            const serverMessage = (data as any)?.message as string | undefined;
+            const isComingSoon = typeof serverMessage === 'string' && serverMessage.toLowerCase().includes('coming soon');
+
       toast({
-        title: "Vendor Notified",
-        description: "The winning vendor has been notified and the award is pending their response."
+                title: isComingSoon ? 'Notification coming soon' : 'Vendor Notified',
+                description: isComingSoon
+                    ? 'Manual quotation award will proceed without vendor portal response.'
+                    : (serverMessage || 'The winning vendor has been notified and the award is pending their response.')
       });
       fetchRequisitionAndQuotes();
     } catch (error) {

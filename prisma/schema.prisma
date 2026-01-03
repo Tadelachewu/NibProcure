@@ -8,6 +8,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum QuotationSubmissionMethod {
+  Portal
+  Manual
+}
+
 model User {
   id                                              String               @id @default(cuid())
   name                                            String
@@ -49,7 +54,6 @@ model Role {
   users       User[]   @relation("UserRoles")
   steps       ApprovalStep[]
 }
-
 model Department {
   id          String                @id @default(cuid())
   name        String                @unique
@@ -200,6 +204,7 @@ model Quotation {
   vendorId                String
   vendor                  Vendor       @relation(fields: [vendorId], references: [id])
   vendorName              String
+  submissionMethod        String       @default("Portal")
   totalPrice              Float
   deliveryDate            DateTime
   status                  String

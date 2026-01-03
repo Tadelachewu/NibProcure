@@ -12,9 +12,14 @@ export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-    const actor = await getActorFromToken(request);
+    let actor;
+    try {
+        actor = await getActorFromToken(request);
+    } catch {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const requisitionId = params.id;
@@ -48,6 +53,7 @@ export async function POST(
         const transactionResult = await prisma.$transaction(async (tx) => {
             const rfqSettings = requisition.rfqSettings as any;
             let finalUpdatedRequisition;
+            let responseMessage = 'Vendor(s) notified successfully.';
 
             if (rfqSettings?.awardStrategy === 'item') {
                 console.log('[NOTIFY-VENDOR] Handling per-item award strategy.');
@@ -80,46 +86,127 @@ export async function POST(
                 }
                 console.log(`[NOTIFY-VENDOR] Found ${winningVendorIds.size} winning vendors to notify.`);
 
-                const allWinningVendors = await tx.vendor.findMany({ 
-                    where: { id: { in: Array.from(winningVendorIds) } }
-                });
-                const vendorMap = new Map(allWinningVendors.map(v => [v.id, v]));
-                
+                const winningVendorIdList = Array.from(winningVendorIds);
+                const quotesForVendors = await tx.quotation.findMany({
+                    where: { requisitionId: requisitionId, vendorId: { in: winningVendorIdList } },
+                    select: { vendorId: true, submissionMethod: true }
+                } as any);
+                const submissionByVendorId = new Map<string, string>((quotesForVendors || []).map((q: any) => [q.vendorId, q.submissionMethod]));
+
+                // Rebuild updates with correct Awarded vs Accepted based on submission method
+                itemsToUpdate.length = 0;
+                for (const item of requisition.items) {
+                    const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
+                    let hasUpdate = false;
+                    const updatedDetails = perItemDetails.map(detail => {
+                        if (detail.status === 'Pending_Award') {
+                            hasUpdate = true;
+                            const method = submissionByVendorId.get(detail.vendorId);
+                            const nextStatus: PerItemAwardStatus = method === 'Manual' ? 'Accepted' : 'Awarded';
+                            return { ...detail, status: nextStatus };
+                        }
+                        return detail;
+                    });
+                    if (hasUpdate) {
+                        itemsToUpdate.push({ id: item.id, details: updatedDetails });
+                    }
+                }
+
+                // Update requisition items
                 for (const itemUpdate of itemsToUpdate) {
                     await tx.requisitionItem.update({
                         where: { id: itemUpdate.id },
                         data: { perItemAwardDetails: itemUpdate.details as any }
                     });
                 }
-                console.log(`[NOTIFY-VENDOR] Updated ${itemsToUpdate.length} requisition items with 'Awarded' status.`);
+                console.log(`[NOTIFY-VENDOR] Updated ${itemsToUpdate.length} requisition items with award statuses.`);
 
+                const anyPortalWinners = winningVendorIdList.some(id => submissionByVendorId.get(id) !== 'Manual');
                 finalUpdatedRequisition = await tx.purchaseRequisition.update({
-                where: { id: requisitionId },
-                data: {
-                    status: 'Awarded',
-                    awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
-                }
+                    where: { id: requisitionId },
+                    data: {
+                        status: anyPortalWinners ? 'Awarded' : 'PO_Created',
+                        awardResponseDeadline: anyPortalWinners
+                            ? (awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline)
+                            : null,
+                    }
                 });
 
-                for (const vendorId of winningVendorIds) {
-                    const vendorInfo = vendorMap.get(vendorId);
-                    if (vendorInfo) {
-                        console.log(`[NOTIFY-VENDOR] Sending email to ${vendorInfo.name} (${vendorInfo.email})`);
-                        const emailHtml = `
-                            <h1>Congratulations, ${vendorInfo.name}!</h1>
-                            <p>You have been awarded a contract for items in requisition <strong>${requisition.title}</strong>.</p>
-                            <p>Please log in to the vendor portal to review the award details and respond.</p>
-                            ${finalUpdatedRequisition.awardResponseDeadline ? `<p><strong>This award must be accepted by ${format(new Date(finalUpdatedRequisition.awardResponseDeadline), 'PPpp')}.</strong></p>` : ''}
-                            <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
-                            <p>Thank you,</p>
-                            <p>Nib InternationalBank Procurement</p>
-                        `;
+                if (!anyPortalWinners) {
+                    // Auto-create POs for manual winners (no vendor portal acceptance needed)
+                    const manualVendorIds = winningVendorIdList.filter(id => submissionByVendorId.get(id) === 'Manual');
+                    for (const vendorId of manualVendorIds) {
+                        const awardedQuoteItemIdsForVendor = new Set<string>();
+                        for (const itemUpdate of itemsToUpdate) {
+                            for (const detail of itemUpdate.details as any[]) {
+                                if (detail.vendorId === vendorId && (detail.status === 'Accepted' || detail.status === 'Awarded')) {
+                                    if (detail.quoteItemId) awardedQuoteItemIdsForVendor.add(String(detail.quoteItemId));
+                                }
+                            }
+                        }
 
-                        await sendEmail({
-                            to: vendorInfo.email,
-                            subject: `Contract Awarded: ${requisition.title}`,
-                            html: emailHtml
+                        const quoteItems = await tx.quoteItem.findMany({
+                            where: { id: { in: Array.from(awardedQuoteItemIdsForVendor) } },
+                            select: {
+                                requisitionItemId: true,
+                                name: true,
+                                quantity: true,
+                                unitPrice: true,
+                            }
                         });
+
+                        if (quoteItems.length === 0) continue;
+                        const totalAmount = quoteItems.reduce((acc, it) => acc + it.unitPrice * it.quantity, 0);
+
+                        await tx.purchaseOrder.create({
+                            data: {
+                                transactionId: requisition.transactionId,
+                                requisition: { connect: { id: requisitionId } },
+                                requisitionTitle: requisition.title,
+                                vendor: { connect: { id: vendorId } },
+                                items: {
+                                    create: quoteItems.map((it) => ({
+                                        requisitionItemId: it.requisitionItemId,
+                                        name: it.name,
+                                        quantity: it.quantity,
+                                        unitPrice: it.unitPrice,
+                                        totalPrice: it.quantity * it.unitPrice,
+                                        receivedQuantity: 0,
+                                    })),
+                                },
+                                totalAmount,
+                                status: 'Issued',
+                            }
+                        });
+                    }
+
+                    responseMessage = 'Notification coming soon.';
+                } else {
+                    // Email only portal winners
+                    const portalWinnerIds = winningVendorIdList.filter(id => submissionByVendorId.get(id) !== 'Manual');
+                    const allWinningVendors = await tx.vendor.findMany({ where: { id: { in: portalWinnerIds } } });
+                    const vendorMap = new Map(allWinningVendors.map(v => [v.id, v]));
+
+                    for (const vendorId of portalWinnerIds) {
+                        const vendorInfo = vendorMap.get(vendorId);
+                        if (vendorInfo) {
+                            console.log(`[NOTIFY-VENDOR] Sending email to ${vendorInfo.name} (${vendorInfo.email})`);
+                            const emailHtml = `
+                                <h1>Congratulations, ${vendorInfo.name}!</h1>
+                                <p>You have been awarded a contract for items in requisition <strong>${requisition.title}</strong>.</p>
+                                <p>Please log in to the vendor portal to review the award details and respond.</p>
+                                ${finalUpdatedRequisition.awardResponseDeadline ? `<p><strong>This award must be accepted by ${format(new Date(finalUpdatedRequisition.awardResponseDeadline), 'PPpp')}.</strong></p>` : ''}
+                                <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
+                                <p>Thank you,</p>
+                                <p>Nib InternationalBank Procurement</p>
+                            `;
+
+                            await sendEmail({
+                                to: vendorInfo.email,
+                                subject: `Contract Awarded: ${requisition.title}`,
+                                html: emailHtml
+                            });
+                        }
                     }
                 }
             
@@ -131,44 +218,93 @@ export async function POST(
                         status: 'Pending_Award'
                     },
                     include: {
-                        vendor: true
+                        vendor: true,
+                        items: true,
                     }
-                });
+                } as any);
 
                 if (!winningQuote) {
                     throw new Error("No winning quote in 'Pending Award' status found to notify. The requisition might be in an inconsistent state.");
                 }
                 console.log(`[NOTIFY-VENDOR] Found winning vendor: ${winningQuote.vendor.name}`);
-                
-                finalUpdatedRequisition = await tx.purchaseRequisition.update({
-                    where: { id: requisitionId },
-                    data: {
-                        status: 'Awarded',
-                        awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
-                    }
-                });
-                
-                await tx.quotation.update({
-                    where: { id: winningQuote.id },
-                    data: { status: 'Awarded' }
-                });
-                
-                console.log(`[NOTIFY-VENDOR] Sending email to ${winningQuote.vendor.name} (${winningQuote.vendor.email})`);
-                const emailHtml = `
-                    <h1>Congratulations, ${winningQuote.vendor.name}!</h1>
-                    <p>You have been awarded the contract for requisition <strong>${requisition.title}</strong>.</p>
-                    <p>Please log in to the vendor portal to review the award and respond.</p>
-                    ${finalUpdatedRequisition.awardResponseDeadline ? `<p><strong>This award must be accepted by ${format(new Date(finalUpdatedRequisition.awardResponseDeadline), 'PPpp')}.</strong></p>` : ''}
-                    <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
-                    <p>Thank you,</p>
-                    <p>Nib InternationalBank Procurement</p>
-                `;
 
-                await sendEmail({
-                    to: winningQuote.vendor.email,
-                    subject: `Contract Awarded: ${requisition.title}`,
-                    html: emailHtml
-                });
+                const submissionMethod = (winningQuote as any).submissionMethod;
+                const isManual = submissionMethod === 'Manual';
+
+                if (isManual) {
+                    // Manual quotation: no vendor portal/email; auto-accept and create PO immediately.
+                    await tx.quotation.update({
+                        where: { id: winningQuote.id },
+                        data: { status: 'Accepted' }
+                    });
+
+                    const awardedQuoteItems = (winningQuote.items || []).filter((item: any) =>
+                        (requisition.awardedQuoteItemIds || []).includes(item.id)
+                    );
+                    const itemsForPO = awardedQuoteItems.length > 0 ? awardedQuoteItems : (winningQuote.items || []);
+                    const totalAmount = itemsForPO.reduce((acc: number, item: any) => acc + (item.unitPrice * item.quantity), 0);
+
+                    await tx.purchaseOrder.create({
+                        data: {
+                            transactionId: requisition.transactionId,
+                            requisition: { connect: { id: requisitionId } },
+                            requisitionTitle: requisition.title,
+                            vendor: { connect: { id: winningQuote.vendorId } },
+                            items: {
+                                create: itemsForPO.map((item: any) => ({
+                                    requisitionItemId: item.requisitionItemId,
+                                    name: item.name,
+                                    quantity: item.quantity,
+                                    unitPrice: item.unitPrice,
+                                    totalPrice: item.quantity * item.unitPrice,
+                                    receivedQuantity: 0,
+                                }))
+                            },
+                            totalAmount,
+                            status: 'Issued',
+                        }
+                    });
+
+                    finalUpdatedRequisition = await tx.purchaseRequisition.update({
+                        where: { id: requisitionId },
+                        data: {
+                            status: 'PO_Created',
+                            awardResponseDeadline: null,
+                        }
+                    });
+
+                    responseMessage = 'Notification coming soon.';
+                } else {
+                    finalUpdatedRequisition = await tx.purchaseRequisition.update({
+                        where: { id: requisitionId },
+                        data: {
+                            status: 'Awarded',
+                            awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
+                        }
+                    });
+
+                    await tx.quotation.update({
+                        where: { id: winningQuote.id },
+                        data: { status: 'Awarded' }
+                    });
+
+                    console.log(`[NOTIFY-VENDOR] Sending email to ${winningQuote.vendor.name} (${winningQuote.vendor.email})`);
+                    const emailHtml = `
+                        <h1>Congratulations, ${winningQuote.vendor.name}!</h1>
+                        <p>You have been awarded the contract for requisition <strong>${requisition.title}</strong>.</p>
+                        <p>Please log in to the vendor portal to review the award and respond.</p>
+                        ${finalUpdatedRequisition.awardResponseDeadline ? `<p><strong>This award must be accepted by ${format(new Date(finalUpdatedRequisition.awardResponseDeadline), 'PPpp')}.</strong></p>` : ''}
+                        <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:9002'}/vendor/dashboard">Go to Vendor Portal</a>
+                        <p>Thank you,</p>
+                        <p>Nib InternationalBank Procurement</p>
+                    `;
+
+                    await sendEmail({
+                        to: winningQuote.vendor.email,
+                        subject: `Contract Awarded: ${requisition.title}`,
+                        html: emailHtml
+                    });
+                }
             }
             
             await tx.auditLog.create({
@@ -184,11 +320,11 @@ export async function POST(
             });
             console.log('[NOTIFY-VENDOR] Audit log created.');
 
-            return finalUpdatedRequisition;
+            return { requisition: finalUpdatedRequisition, message: responseMessage };
         });
 
         console.log('[NOTIFY-VENDOR] Transaction complete.');
-        return NextResponse.json({ message: 'Vendor(s) notified successfully.', requisition: transactionResult });
+        return NextResponse.json({ message: transactionResult.message, requisition: transactionResult.requisition });
 
   } catch (error) {
     console.error("[NOTIFY-VENDOR] Failed to notify vendor:", error);

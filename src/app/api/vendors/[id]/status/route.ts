@@ -11,9 +11,16 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const actor = await getActorFromToken(request);
-     if (!actor || !(actor.roles as string[]).includes('Admin')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    let actor;
+    try {
+      actor = await getActorFromToken(request);
+    } catch {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!(actor.roles as string[]).includes('Admin')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const vendorId = params.id;
@@ -66,9 +73,6 @@ export async function PATCH(
     return NextResponse.json(updatedVendor);
   } catch (error) {
     console.error('Failed to update vendor status:', error);
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
     if (error instanceof Error) {
         return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }

@@ -6,7 +6,12 @@ import { getActorFromToken } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
-    const actor = await getActorFromToken(request);
+    let actor: any = null;
+    try {
+      actor = await getActorFromToken(request);
+    } catch (e) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const url = new URL(request.url);
@@ -34,6 +39,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ total, page, pageSize, pins });
   } catch (error) {
     console.error('Failed to fetch director pins:', error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json({ error: 'Failed to fetch pins' }, { status: 500 });
   }
 }

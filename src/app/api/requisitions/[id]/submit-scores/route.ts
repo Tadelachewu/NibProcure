@@ -40,19 +40,21 @@ export async function POST(
     // Ensure the actor is actually assigned to this requisition's committee
     const reqForAssignment = await prisma.purchaseRequisition.findUnique({
       where: { id: requisitionId },
-      select: { financialCommitteeMemberIds: true, technicalCommitteeMemberIds: true },
+      select: {
+        financialCommitteeMembers: { where: { id: actor.id }, select: { id: true } },
+        technicalCommitteeMembers: { where: { id: actor.id }, select: { id: true } },
+      },
     });
 
     if (!reqForAssignment) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
-    const assignedIds = new Set([
-      ...(reqForAssignment.financialCommitteeMemberIds || []),
-      ...(reqForAssignment.technicalCommitteeMemberIds || []),
-    ]);
+    const isAssigned =
+      (reqForAssignment.financialCommitteeMembers?.length || 0) > 0 ||
+      (reqForAssignment.technicalCommitteeMembers?.length || 0) > 0;
 
-    if (!assignedIds.has(actor.id)) {
+    if (!isAssigned) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     

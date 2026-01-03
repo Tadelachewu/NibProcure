@@ -602,7 +602,13 @@ export function InvoicesPage() {
             const errorData = await response.json();
             throw new Error(errorData.error || 'Failed to process payment.');
         }
-        toast({ title: "Payment Processed", description: `Invoice ${invoiceId} has been paid.`});
+
+        const result = await response.json().catch(() => ({} as any));
+        const message = (result as any)?.message as string | undefined;
+        toast({
+            title: message?.toLowerCase().includes('coming soon') ? 'Notification coming soon' : 'Payment Processed',
+            description: message || `Invoice ${invoiceId} has been paid.`,
+        });
         fetchAllData();
     } catch (error) {
         toast({

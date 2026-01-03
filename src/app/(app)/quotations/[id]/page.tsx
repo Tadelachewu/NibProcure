@@ -83,6 +83,33 @@ const quoteFormSchema = z.object({
   })),
 });
 
+const manualQuoteFormSchema = z.object({
+    vendorId: z.string().min(1, 'Vendor is required.'),
+    notes: z.string().optional(),
+    items: z.array(
+        z.object({
+            requisitionItemId: z.string(),
+            name: z.string().min(1, 'Item name cannot be empty.'),
+            quantity: z.number(),
+            unitPrice: z.coerce.number().min(0.01, 'Price is required.'),
+            leadTimeDays: z.coerce.number().min(0, 'Delivery time is required.'),
+            brandDetails: z.string().optional(),
+            imageUrl: z.string().optional(),
+        })
+    ),
+    answers: z
+        .array(
+            z.object({
+                questionId: z.string(),
+                answer: z.string().optional(),
+            })
+        )
+        .optional(),
+    cpoDocumentUrl: z.string().optional(),
+    experienceDocumentUrl: z.string().optional(),
+    bidDocumentUrl: z.string().optional(),
+});
+
 const contractFormSchema = z.object({
     fileName: z.string().min(3, "File name is required."),
     notes: z.string().min(10, "Negotiation notes are required.")
@@ -221,6 +248,392 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
+function ManualVendorQuotationDialog({
+    requisition,
+    vendors,
+    existingQuotations,
+    isOpen,
+    onOpenChange,
+    onSubmitted,
+}: {
+    requisition: PurchaseRequisition;
+    vendors: Vendor[];
+    existingQuotations: Quotation[];
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSubmitted: () => void;
+}) {
+    const { token } = useAuth();
+    const { toast } = useToast();
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const invitedVerifiedVendors = useMemo(() => {
+        return (vendors || []).filter(v => v.kycStatus === 'Verified');
+    }, [vendors, requisition.allowedVendorIds]);
+
+    const submittedVendorIds = useMemo(() => new Set((existingQuotations || []).map(q => q.vendorId)), [existingQuotations]);
+    const selectableVendors = useMemo(
+        () => invitedVerifiedVendors.filter(v => !submittedVendorIds.has(v.id)),
+        [invitedVerifiedVendors, submittedVendorIds]
+    );
+
+    const form = useForm<z.infer<typeof manualQuoteFormSchema>>({
+        resolver: zodResolver(manualQuoteFormSchema),
+        defaultValues: {
+            vendorId: '',
+            notes: '',
+            items: requisition.items.map(item => ({
+                requisitionItemId: item.id,
+                name: item.name,
+                quantity: item.quantity,
+                unitPrice: 0,
+                leadTimeDays: 0,
+                brandDetails: '',
+                imageUrl: '',
+            })),
+            answers: requisition.customQuestions?.map(q => ({ questionId: q.id, answer: '' })) || [],
+            cpoDocumentUrl: '',
+            experienceDocumentUrl: '',
+            bidDocumentUrl: '',
+        },
+    });
+
+    const { fields: itemFields } = useFieldArray({ control: form.control, name: 'items' });
+    const { fields: answerFields } = useFieldArray({ control: form.control, name: 'answers' });
+
+    const handleFileUpload = async (file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('directory', 'quotes');
+        try {
+            const response = await fetch('/api/upload', { method: 'POST', body: formData });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'File upload failed');
+            return result.path as string;
+        } catch (e) {
+            toast({
+                variant: 'destructive',
+                title: 'Upload Failed',
+                description: e instanceof Error ? e.message : 'Could not upload file.',
+            });
+            return null;
+        }
+    };
+
+    const findQuestionText = (questionId: string) => {
+        return requisition.customQuestions?.find(q => q.id === questionId)?.questionText || 'Unknown Question';
+    };
+
+    const onSubmit = async (values: z.infer<typeof manualQuoteFormSchema>) => {
+        if (!token) {
+            toast({ variant: 'destructive', title: 'Unauthorized', description: 'Missing session token.' });
+            return;
+        }
+
+        let hasError = false;
+        if (requisition.customQuestions && values.answers) {
+            values.answers.forEach((ans, ai) => {
+                const question = requisition.customQuestions?.find(q => q.id === ans.questionId);
+                if (question?.isRequired && (!ans.answer || ans.answer.trim() === '')) {
+                    form.setError(`answers.${ai}.answer`, { type: 'manual', message: 'A response is required for this question.' });
+                    hasError = true;
+                }
+            });
+        }
+        if (hasError) {
+            toast({ variant: 'destructive', title: 'Missing Information', description: 'Please answer all required questions.' });
+            return;
+        }
+
+        if (requisition.cpoAmount && requisition.cpoAmount > 0 && !values.cpoDocumentUrl) {
+            form.setError('cpoDocumentUrl', { type: 'manual', message: 'CPO Document is required.' });
+            return;
+        }
+
+        if ((requisition.rfqSettings as any)?.experienceDocumentRequired && !values.experienceDocumentUrl) {
+            form.setError('experienceDocumentUrl', { type: 'manual', message: 'Experience Document is required.' });
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const response = await fetch('/api/quotations/manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({
+                    requisitionId: requisition.id,
+                    vendorId: values.vendorId,
+                    items: values.items,
+                    notes: values.notes,
+                    answers: values.answers,
+                    cpoDocumentUrl: values.cpoDocumentUrl,
+                    experienceDocumentUrl: values.experienceDocumentUrl,
+                    bidDocumentUrl: values.bidDocumentUrl,
+                }),
+            });
+
+            const result = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(result.error || 'Failed to upload manual quotation.');
+
+            toast({ title: 'Success!', description: 'Manual vendor quotation uploaded.' });
+            onOpenChange(false);
+            onSubmitted();
+        } catch (e) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: e instanceof Error ? e.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-3xl h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Add Vendor Quotation (Manual Upload)</DialogTitle>
+                    <DialogDescription>
+                        Upload a quotation collected manually (for vendors not using the portal).
+                    </DialogDescription>
+                </DialogHeader>
+
+                <Form {...form}>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col min-h-0">
+                        <ScrollArea className="flex-1 -mx-6 px-6">
+                            <div className="space-y-6 py-4">
+                                <FormField
+                                    control={form.control}
+                                    name="vendorId"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Vendor</FormLabel>
+                                            <Select
+                                                value={field.value || ''}
+                                                onValueChange={(value) => {
+                                                    field.onChange(value);
+                                                }}
+                                                disabled={selectableVendors.length === 0}
+                                            >
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder={selectableVendors.length ? 'Select vendor' : 'No eligible vendors available'} />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    {selectableVendors.map(v => (
+                                                        <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {selectableVendors.length === 0 ? (
+                                                <p className="text-xs text-muted-foreground">No eligible verified vendors available.</p>
+                                            ) : null}
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <FormField
+                                    control={form.control}
+                                    name="notes"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Overall Notes</FormLabel>
+                                            <FormControl><Textarea placeholder="Any overall notes for this quote..." {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                <div className="space-y-3">
+                                    <h3 className="font-semibold">Quoted Items</h3>
+                                    <div className="space-y-4">
+                                        {itemFields.map((it, index) => (
+                                            <Card key={it.id} className="p-4">
+                                                <p className="font-semibold mb-3">{form.getValues(`items.${index}.name`) || 'Item'} (Qty: {form.getValues(`items.${index}.quantity`)})</p>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`items.${index}.unitPrice`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Unit Price (ETB)</FormLabel>
+                                                                <FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} /></FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`items.${index}.leadTimeDays`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Delivery Time (Days)</FormLabel>
+                                                                <FormControl><Input type="number" {...field} /></FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`items.${index}.brandDetails`}
+                                                        render={({ field }) => (
+                                                            <FormItem className="col-span-2">
+                                                                <FormLabel>Brand / Model</FormLabel>
+                                                                <FormControl><Input {...field} /></FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`items.${index}.imageUrl`}
+                                                        render={({ field }) => (
+                                                            <FormItem className="col-span-2">
+                                                                <FormLabel>Item Image (Optional)</FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        type="file"
+                                                                        accept="image/*"
+                                                                        onChange={async (e) => {
+                                                                            const file = e.target.files?.[0];
+                                                                            if (!file) return;
+                                                                            const path = await handleFileUpload(file);
+                                                                            if (path) form.setValue(`items.${index}.imageUrl`, path, { shouldDirty: true });
+                                                                        }}
+                                                                    />
+                                                                </FormControl>
+                                                                {field.value ? <p className="text-xs text-muted-foreground break-all">{field.value}</p> : null}
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {requisition.customQuestions && requisition.customQuestions.length > 0 && (
+                                    <div className="space-y-3">
+                                        <h3 className="font-semibold">Vendor Answers</h3>
+                                        <div className="space-y-4">
+                                            {answerFields.map((ans, index) => (
+                                                <Card key={ans.id} className="p-4">
+                                                    <p className="font-medium text-sm mb-2">{findQuestionText(form.getValues(`answers.${index}.questionId`) as any)}</p>
+                                                    <FormField
+                                                        control={form.control}
+                                                        name={`answers.${index}.answer`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormControl><Textarea {...field} placeholder="Enter answer..." /></FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="space-y-3">
+                                    <h3 className="font-semibold">Attached Documents</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="bidDocumentUrl"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Official Bid Document (Optional)</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            type="file"
+                                                            accept=".pdf"
+                                                            onChange={async (e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (!file) return;
+                                                                const path = await handleFileUpload(file);
+                                                                if (path) form.setValue('bidDocumentUrl', path, { shouldDirty: true });
+                                                            }}
+                                                        />
+                                                    </FormControl>
+                                                    {field.value ? <p className="text-xs text-muted-foreground break-all">{field.value}</p> : null}
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        <FormField
+                                            control={form.control}
+                                            name="cpoDocumentUrl"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>CPO Document {requisition.cpoAmount && requisition.cpoAmount > 0 ? '(Required)' : '(Optional)'}</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            type="file"
+                                                            accept=".pdf"
+                                                            onChange={async (e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (!file) return;
+                                                                const path = await handleFileUpload(file);
+                                                                if (path) form.setValue('cpoDocumentUrl', path, { shouldDirty: true });
+                                                            }}
+                                                        />
+                                                    </FormControl>
+                                                    {field.value ? <p className="text-xs text-muted-foreground break-all">{field.value}</p> : null}
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        <FormField
+                                            control={form.control}
+                                            name="experienceDocumentUrl"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Experience Document {(requisition.rfqSettings as any)?.experienceDocumentRequired ? '(Required)' : '(Optional)'}</FormLabel>
+                                                    <FormControl>
+                                                        <Input
+                                                            type="file"
+                                                            accept=".pdf"
+                                                            onChange={async (e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (!file) return;
+                                                                const path = await handleFileUpload(file);
+                                                                if (path) form.setValue('experienceDocumentUrl', path, { shouldDirty: true });
+                                                            }}
+                                                        />
+                                                    </FormControl>
+                                                    {field.value ? <p className="text-xs text-muted-foreground break-all">{field.value}</p> : null}
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </ScrollArea>
+
+                        <DialogFooter>
+                            <DialogClose asChild>
+                                <Button type="button" variant="ghost" disabled={isSubmitting}>Cancel</Button>
+                            </DialogClose>
+                            <Button type="submit" disabled={isSubmitting || selectableVendors.length === 0}>
+                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Upload Quotation
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete, isAssignedCommitteeMember, readyForCommitteeAssignment }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean, isAssignedCommitteeMember: boolean, readyForCommitteeAssignment: boolean }) => {
     const isMasked = (requisition.rfqSettings?.masked === true) || (readyForCommitteeAssignment && requisition.rfqSettings?.masked !== false);
 
@@ -291,6 +704,9 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                 const thisVendorItemStatuses = itemStatuses.filter(s => s.vendorId === quote.vendorId);
                 const mainStatus = getOverallStatusForVendor(quote);
 
+                const submissionLabel = quote.submissionMethod === 'Manual' ? 'Manual' : 'Electronic';
+                const submissionVariant = quote.submissionMethod === 'Manual' ? 'secondary' : 'outline';
+
                 const shouldShowItems = isPerItemStrategy && isAwarded && thisVendorItemStatuses.length > 0;
                 
                 const declinedItemAwards = isPerItemStrategy
@@ -321,6 +737,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                  <span>{isMasked ? "Masked Vendor" : quote.vendorName}</span>
                                </div>
                                 <div className="flex items-center gap-1">
+                                        <Badge variant={submissionVariant as any}>{submissionLabel}</Badge>
                                     <Badge
                                         variant={getStatusVariant(mainStatus as any)}
                                         className={cn(mainStatus === 'Awarded' && 'bg-green-600 text-white hover:bg-green-600')}
@@ -2787,6 +3204,7 @@ export default function QuotationDetailsPage() {
   const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
   const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
   const [deadlineCheckPerformed, setDeadlineCheckPerformed] = useState(false);
+    const [isManualQuoteOpen, setIsManualQuoteOpen] = useState(false);
 
 
     const isAuthorized = useMemo(() => {
@@ -3106,13 +3524,19 @@ export default function QuotationDetailsPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to notify vendor.");
+                const errorData = await response.json().catch(() => ({} as any));
+                throw new Error(errorData.error || "Failed to notify vendor.");
       }
 
+            const data = await response.json().catch(() => ({} as any));
+            const serverMessage = (data as any)?.message as string | undefined;
+            const isComingSoon = typeof serverMessage === 'string' && serverMessage.toLowerCase().includes('coming soon');
+
       toast({
-        title: "Vendor Notified",
-        description: "The winning vendor has been notified and the award is pending their response."
+                title: isComingSoon ? 'Notification coming soon' : 'Vendor Notified',
+                description: isComingSoon
+                    ? 'Manual quotation award will proceed without vendor portal response.'
+                    : (serverMessage || 'The winning vendor has been notified and the award is pending their response.')
       });
       fetchRequisitionAndQuotes();
     } catch (error) {
@@ -3170,6 +3594,7 @@ export default function QuotationDetailsPage() {
 
     const canManageCommittees = isAuthorized;
         const isMasked = (requisition.rfqSettings?.masked === true) || (readyForCommitteeAssignment && requisition.rfqSettings?.masked !== false);
+  const canAddManualQuotation = isAuthorized && !isMasked && requisition.status === 'Accepting_Quotes';
   const isReadyForNotification = requisition?.status === 'PostApproved';
   const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
   const quorumNotMetAndDeadlinePassed = isDeadlinePassed && !isAwarded && quotations.length > 0 && quotations.length < committeeQuorum;
@@ -3391,6 +3816,14 @@ export default function QuotationDetailsPage() {
                                         </div>
                                     )}
                                 </div>
+                                {canAddManualQuotation && (
+                                    <div className="mt-4 flex items-center justify-end">
+                                        <Button onClick={() => setIsManualQuoteOpen(true)}>
+                                            <FileUp className="mr-2 h-4 w-4" />
+                                            Add Vendor Quotation
+                                        </Button>
+                                    </div>
+                                )}
                             </CardHeader>
                             <CardContent>
                                 {loading ? (
@@ -3447,6 +3880,15 @@ export default function QuotationDetailsPage() {
                                 </CardFooter>
                             )}
                         </Card>
+
+                        <ManualVendorQuotationDialog
+                            requisition={requisition}
+                            vendors={vendors}
+                            existingQuotations={quotations}
+                            isOpen={isManualQuoteOpen}
+                            onOpenChange={setIsManualQuoteOpen}
+                            onSubmitted={fetchRequisitionAndQuotes}
+                        />
                     </AccordionContent>
                 </AccordionItem>
             </Accordion>

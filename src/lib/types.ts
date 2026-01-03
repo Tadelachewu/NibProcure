@@ -30,7 +30,7 @@ export type User = {
   email: string;
   password?: string; // Should not be sent to client
   roles: UserRole[] | { name: UserRole }[]; // Can be an array of strings or objects
-  vendorId?: string;
+  vendorId?: string | null;
   departmentId?: string;
   department?: string;
   committeeAssignments?: CommitteeAssignment[];
@@ -304,7 +304,7 @@ export type Quotation = {
     id: string;
     transactionId: string;
     requisitionId: string;
-    vendorId: string;
+    vendorId: string; // Changed from optional to required
     vendorName: string;
     items: QuoteItem[];
     totalPrice: number;
@@ -318,6 +318,7 @@ export type Quotation = {
     finalAverageScore?: number;
     answers?: QuoteAnswer[];
     scores?: CommitteeScoreSet[];
+    submissionMethod?: 'Portal' | 'Manual';
     cpoDocumentUrl?: string;
     experienceDocumentUrl?: string;
     bidDocumentUrl?: string;

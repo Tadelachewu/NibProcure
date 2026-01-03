@@ -11,8 +11,12 @@ export async function GET(request: Request) {
     const pageSize = parseInt(searchParams.get('pageSize') || '50', 10);
     const skip = (page - 1) * pageSize;
 
-    const actor = await getActorFromToken(request);
-    // If no actor, return unauthorized
+    let actor: any = null;
+    try {
+      actor = await getActorFromToken(request);
+    } catch (e) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Admins can see all pins; others only see pins issued to them
@@ -55,6 +59,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ pins, total, page });
   } catch (error) {
     console.error('Failed to fetch pins:', error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return NextResponse.json({ error: 'Failed to fetch pins' }, { status: 500 });
   }
 }

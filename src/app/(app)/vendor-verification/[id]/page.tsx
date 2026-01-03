@@ -27,7 +27,7 @@ export default function VendorVerificationDetailsPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [action, setAction] = useState<'verify' | 'reject' | null>(null);
     const [rejectionReason, setRejectionReason] = useState('');
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const { toast } = useToast();
     const router = useRouter();
     const params = useParams();
@@ -59,7 +59,10 @@ export default function VendorVerificationDetailsPage() {
     }, [fetchVendor]);
     
     const handleSubmit = async () => {
-        if (!vendor || !action || !user) return;
+        if (!vendor || !action || !user || !token) {
+            toast({ variant: 'destructive', title: 'Unauthorized', description: 'Please log in again.' });
+            return;
+        }
 
         if (action === 'reject' && !rejectionReason) {
             toast({ variant: 'destructive', title: 'Reason Required', description: 'Please provide a reason for rejection.' });
@@ -70,7 +73,7 @@ export default function VendorVerificationDetailsPage() {
         try {
             const response = await fetch(`/api/vendors/${vendor.id}/status`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
                     status: action === 'verify' ? 'Verified' : 'Rejected',
                     userId: user.id,
