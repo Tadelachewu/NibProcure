@@ -81,6 +81,40 @@ The application will be available at `http://localhost:9002`.
 
 ---
 
+## Docker
+
+### Run with Docker Compose (recommended)
+
+This starts PostgreSQL + the Next.js app, runs Prisma migrations automatically on container start, and persists DB + uploaded files.
+
+```bash
+docker compose up --build
+```
+
+- App: `http://localhost:9002`
+- Postgres: `localhost:5432`
+
+### Run the app container only
+
+Build:
+
+```bash
+docker build -t nibprocure .
+```
+
+Run (you must provide `DATABASE_URL` and `JWT_SECRET`):
+
+```bash
+docker run --rm -p 9002:9002 \
+    -e PORT=9002 \
+    -e JWT_SECRET="YOUR_SUPER_SECRET_KEY" \
+    -e DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public" \
+    -v nibprocure_uploads:/app/public/uploads \
+    nibprocure
+```
+
+---
+
 ## The Procurement Workflow Explained
 
 This scenario illustrates the end-to-end journey of a procurement request, involving multiple user roles and system processes.

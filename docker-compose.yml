@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nibprocure
+      POSTGRES_PASSWORD: nibprocure
+      POSTGRES_DB: nibprocure
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  web:
+    build: .
+    depends_on:
+      - db
+    environment:
+      NODE_ENV: production
+      # Change JWT_SECRET in real deployments
+      JWT_SECRET: "change-me-in-prod"
+      DATABASE_URL: "postgresql://nibprocure:nibprocure@db:5432/nibprocure?schema=public"
+      PORT: 9002
+    ports:
+      - "9002:9002"
+    # Persist uploaded files across restarts
+    volumes:
+      - uploads:/app/public/uploads
+
+volumes:
+  pgdata:
+  uploads:
