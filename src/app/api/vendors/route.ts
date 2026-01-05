@@ -1,8 +1,9 @@
 
-'use server';
+"use server";
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import bcrypt from 'bcryptjs';
 
 export async function GET() {
   try {
@@ -19,11 +20,31 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  try {
+    try {
     const body = await request.json();
     const { name, contactPerson, email, phone, address } = body;
-    
-    const tempUserId = `TEMP-USER-${Date.now()}`;
+
+    // Ensure there's a User record to satisfy the Vendor.user relation
+    let user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      // Create a lightweight user for the vendor
+      const rawPassword = Math.random().toString(36).slice(2, 12);
+      const hashedPassword = await bcrypt.hash(rawPassword, 10);
+
+      const vendorRole = await prisma.role.findUnique({ where: { name: 'Vendor' } });
+      if (!vendorRole) {
+        return NextResponse.json({ error: 'Vendor role not found. Please seed the database.' }, { status: 500 });
+      }
+
+      user = await prisma.user.create({
+        data: {
+          name: name,
+          email: email,
+          password: hashedPassword,
+          roles: { connect: { id: vendorRole.id } }
+        }
+      });
+    }
 
     const newVendor = await prisma.vendor.create({
         data: {
@@ -32,7 +53,7 @@ export async function POST(request: Request) {
           email,
           phone,
           address,
-          userId: tempUserId,
+          user: { connect: { id: user.id } },
           kycStatus: 'Pending',
           kycDocuments: {
               create: [
@@ -42,6 +63,9 @@ export async function POST(request: Request) {
           }
         }
     });
+
+    // link back vendorId on user
+    await prisma.user.update({ where: { id: user.id }, data: { vendorId: newVendor.id } });
 
     await prisma.auditLog.create({
         data: {
