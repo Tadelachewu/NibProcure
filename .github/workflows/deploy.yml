@@ -13,6 +13,7 @@ jobs:
       SERVER: ${{ secrets.IIS_SERVER }}
       USER: ${{ secrets.IIS_USER }}
       PASSWORD: ${{ secrets.IIS_PASSWORD }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
     steps:
     - name: Checkout repository
@@ -27,16 +28,13 @@ jobs:
       run: npm install
 
     - name: Prisma Migrations & Seed
+      env:
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
       run: |
         $ErrorActionPreference = "Stop"
 
-        if (Test-Path "prisma/migrations") {
-          Write-Host "Deleting existing Prisma migrations folder..."
-          Remove-Item -Recurse -Force "prisma/migrations"
-        }
-
-        Write-Host "Running Prisma migrations via npm script..."
-        npm run db:migrate
+        Write-Host "Running Prisma migrations (deploy)"
+        npx prisma migrate deploy
 
         Write-Host "Generating Prisma client..."
         npx prisma generate
