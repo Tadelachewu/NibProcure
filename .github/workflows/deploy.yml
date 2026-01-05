@@ -78,22 +78,23 @@ jobs:
         }
 
         $sourcePath = "${{ github.workspace }}"
-        $destinationPath = "C:\inetpub\wwwroot\YourAppName"
-        $appPool = "YourAppPoolName"
-        $siteName = "YourSiteName"
+        $destinationPath = "C:\inetpub\wwwroot\NIBProcur"
+        $appPool = "NIBProcurment"
+        $siteName = "NIBProcurment"
 
         Invoke-Command -ComputerName $env:SERVER -Credential $cred -ScriptBlock $scriptBlock -ArgumentList $sourcePath, $destinationPath, $appPool, $siteName
 
-    - name: Post-deployment status
-      if: always()
+    - name: Notify deployment success
+      if: ${{ success() }}
       shell: pwsh
       run: |
-        if (${{ job.status }} -eq 'success') { 
-          Write-Host "Deployment succeeded ✅"
-          Send-MailMessage -To "tade2024bdu@gmail.com" -From "ci-cd@company.com" -Subject "Deployment Success" -Body "Next.js app deployed successfully." -SmtpServer "smtp.yourserver.com"
-        } 
-        else { 
-          Write-Host "Deployment failed ❌"; 
-          Send-MailMessage -To "tade2024bdu@gmail.com" -From "ci-cd@company.com" -Subject "Deployment Failed" -Body "Next.js app deployment failed!" -SmtpServer "smtp.yourserver.com"
-          exit 1 
-        }
+        Write-Host "Deployment succeeded ✅"
+        Send-MailMessage -To "tade2024bdu@gmail.com" -From "ci-cd@company.com" -Subject "Deployment Success" -Body "Next.js app deployed successfully." -SmtpServer "smtp.yourserver.com"
+
+    - name: Notify deployment failure
+      if: ${{ failure() }}
+      shell: pwsh
+      run: |
+        Write-Host "Deployment failed ❌"
+        Send-MailMessage -To "tade2024bdu@gmail.com" -From "ci-cd@company.com" -Subject "Deployment Failed" -Body "Next.js app deployment failed!" -SmtpServer "smtp.yourserver.com"
+        exit 1
