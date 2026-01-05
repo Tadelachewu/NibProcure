@@ -84,17 +84,30 @@ jobs:
 
         Invoke-Command -ComputerName $env:SERVER -Credential $cred -ScriptBlock $scriptBlock -ArgumentList $sourcePath, $destinationPath, $appPool, $siteName
 
-    - name: Notify deployment success
+    - name: Notify deployment success (email)
       if: ${{ success() }}
-      shell: pwsh
-      run: |
-        Write-Host "Deployment succeeded ✅"
-        Send-MailMessage -To "tade2024bdu@gmail.com" -From "ci-cd@company.com" -Subject "Deployment Success" -Body "Next.js app deployed successfully." -SmtpServer "smtp.yourserver.com"
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: ${{ secrets.SMTP_SERVER }}
+        server_port: ${{ secrets.SMTP_PORT }}
+        username: ${{ secrets.SMTP_USERNAME }}
+        password: ${{ secrets.SMTP_PASSWORD }}
+        subject: "Deployment Success"
+        body: "Next.js app deployed successfully."
+        to: ${{ secrets.NOTIFY_TO }}
+        from: ${{ secrets.NOTIFY_FROM }}
+        secure: true
 
-    - name: Notify deployment failure
+    - name: Notify deployment failure (email)
       if: ${{ failure() }}
-      shell: pwsh
-      run: |
-        Write-Host "Deployment failed ❌"
-        Send-MailMessage -To "tade2024bdu@gmail.com" -From "ci-cd@company.com" -Subject "Deployment Failed" -Body "Next.js app deployment failed!" -SmtpServer "smtp.yourserver.com"
-        exit 1
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: ${{ secrets.SMTP_SERVER }}
+        server_port: ${{ secrets.SMTP_PORT }}
+        username: ${{ secrets.SMTP_USERNAME }}
+        password: ${{ secrets.SMTP_PASSWORD }}
+        subject: "Deployment Failed"
+        body: "Next.js app deployment failed! Check workflow logs for details."
+        to: ${{ secrets.NOTIFY_TO }}
+        from: ${{ secrets.NOTIFY_FROM }}
+        secure: true
