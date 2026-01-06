@@ -1,4 +1,4 @@
-name: Deploy Next.js to IIS via Artifact Copy
+name: Deploy Next.js to IIS via Artifact Copy (Windows Runner)
 
 on:
   push:
@@ -51,14 +51,19 @@ jobs:
             Compress-Archive -Path "$workspace/.next","$workspace/public","$workspace/prisma","$workspace/package.json" -DestinationPath "$workspace/deploy.zip" -Force
           }
 
-      - name: Upload artifact to IIS server via SFTP
-        uses: appleboy/scp-action@v0.1.6
-        with:
-          host: ${{ secrets.IIS_SERVER }}
-          username: ${{ secrets.IIS_USER }}
-          password: ${{ secrets.IIS_PASSWORD }}
-          source: "$GITHUB_WORKSPACE/deploy.zip"
-          target: "C:/Deployments/NIBProcur"
+      - name: Upload artifact to IIS server via SCP (WinSCP / pscp)
+        shell: pwsh
+        run: |
+          $user = "${{ secrets.IIS_USER }}"
+          $pass = "${{ secrets.IIS_PASSWORD }}"
+          $server = "${{ secrets.IIS_SERVER }}"
+          $localFile = "$env:GITHUB_WORKSPACE/deploy.zip"
+          $remotePath = "C:/Deployments/NIBProcur/deploy.zip"
+
+          # Make sure pscp.exe is available on the runner
+          # You can install PuTTY tools or include it in your PATH
+          Write-Host "Uploading $localFile to $server:$remotePath..."
+          & "C:\Program Files\PuTTY\pscp.exe" -pw $pass $localFile "$user@$server:$remotePath"
 
       - name: Deploy on IIS Server
         shell: pwsh
