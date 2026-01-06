@@ -41,14 +41,14 @@ jobs:
         shell: pwsh
         run: |
           $workspace = $env:GITHUB_WORKSPACE
-          $standalonePath = Join-Path $workspace ".next\standalone"
+          $standalonePath = Join-Path $workspace ".next/standalone"
 
           if (Test-Path $standalonePath) {
             Write-Host "Standalone build found, packaging standalone..."
-            Compress-Archive -Path "$standalonePath","$workspace\public","$workspace\prisma","$workspace\package.json" -DestinationPath "$workspace\deploy.zip" -Force
+            Compress-Archive -Path "$standalonePath","$workspace/public","$workspace/prisma","$workspace/package.json" -DestinationPath "$workspace/deploy.zip" -Force
           } else {
             Write-Host "Standalone build not found, packaging full .next..."
-            Compress-Archive -Path "$workspace\.next","$workspace\public","$workspace\prisma","$workspace\package.json" -DestinationPath "$workspace\deploy.zip" -Force
+            Compress-Archive -Path "$workspace/.next","$workspace/public","$workspace/prisma","$workspace/package.json" -DestinationPath "$workspace/deploy.zip" -Force
           }
 
       - name: Upload artifact to IIS server via SFTP
@@ -57,20 +57,20 @@ jobs:
           host: ${{ secrets.IIS_SERVER }}
           username: ${{ secrets.IIS_USER }}
           password: ${{ secrets.IIS_PASSWORD }}
-          source: "$GITHUB_WORKSPACE\deploy.zip"
-          target: "C:\\Deployments\\NIBProcur"
+          source: "$GITHUB_WORKSPACE/deploy.zip"
+          target: "C:/Deployments/NIBProcur"
 
       - name: Deploy on IIS Server
         shell: pwsh
         run: |
-          $deployPath = "C:\inetpub\wwwroot\NIBProcur"
+          $deployPath = "C:/inetpub/wwwroot/NIBProcur"
           $appPool = "NIBProcurment"
           $siteName = "NIBProcurment"
           $databaseUrl = "${{ secrets.DATABASE_URL }}"
           $runSeed = "${{ secrets.RUN_DB_SEED }}"
 
-          # Run deploy.ps1 as a single command without backticks
-          & "C:\Deployments\NIBProcur\deploy.ps1" `
+          # Run deploy.ps1 as a single command
+          & "C:/Deployments/NIBProcur/deploy.ps1" `
             -DeployPath $deployPath `
             -AppPool $appPool `
             -SiteName $siteName `
