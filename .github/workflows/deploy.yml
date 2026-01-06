@@ -30,13 +30,6 @@ jobs:
       - name: Build Next.js app
         run: npm run build
 
-      - name: Debug build output
-        shell: pwsh
-        run: |
-          $buildPath = Join-Path $env:GITHUB_WORKSPACE ".next"
-          Write-Host "Listing contents of $buildPath"
-          Get-ChildItem -Path $buildPath -Recurse
-
       - name: Package deployment artifact
         shell: pwsh
         run: |
@@ -51,34 +44,64 @@ jobs:
             Compress-Archive -Path "$workspace/.next","$workspace/public","$workspace/prisma","$workspace/package.json" -DestinationPath "$workspace/deploy.zip" -Force
           }
 
-      - name: Upload artifact to IIS server via SCP (WinSCP / pscp)
+      - name: Copy artifact to IIS server via PowerShell Remoting
         shell: pwsh
         run: |
-          $user = "${{ secrets.IIS_USER }}"
-          $pass = "${{ secrets.IIS_PASSWORD }}"
-          $server = "${{ secrets.IIS_SERVER }}"
-          $localFile = "$env:GITHUB_WORKSPACE/deploy.zip"
-          $remotePath = "C:/Deployments/NIBProcur/deploy.zip"
+          $ErrorActionPreference = "Stop"
 
-          Write-Host "Uploading $localFile to ${server}:${remotePath}..."
-          & "C:\Program Files\PuTTY\pscp.exe" -pw $pass $localFile "$user@${server}:${remotePath}"
+          $secPassword = ConvertTo-SecureString $env:PASSWORD -AsPlainText -Force
+          $cred = New-Object System.Management.Automation.PSCredential ($env:USER, $secPassword)
+
+          $localFile = "$env:GITHUB_WORKSPACE/deploy.zip"
+          $remotePath = "C:\Deployments\NIBProcur\deploy.zip"
+
+          Write-Host "Copying $localFile to $env:SERVER:$remotePath ..."
+          Copy-Item -Path $localFile -Destination $remotePath -ToSession (New-PSSession -ComputerName $env:SERVER -Credential $cred)
 
       - name: Deploy on IIS Server
         shell: pwsh
         run: |
-          $deployPath = "C:/inetpub/wwwroot/NIBProcur"
+          $ErrorActionPreference = "Stop"
+
+          $secPassword = ConvertTo-SecureString $env:PASSWORD -AsPlainText -Force
+          $cred = New-Object System.Management.Automation.PSCredential ($env:USER, $secPassword)
+
+          $deployPath = "C:\inetpub\wwwroot\NIBProcur"
           $appPool = "NIBProcurment"
           $siteName = "NIBProcurment"
           $databaseUrl = "${{ secrets.DATABASE_URL }}"
           $runSeed = "${{ secrets.RUN_DB_SEED }}"
 
-          # Run deploy.ps1 as a single command
-          & "C:/Deployments/NIBProcur/deploy.ps1" `
-            -DeployPath $deployPath `
-            -AppPool $appPool `
-            -SiteName $siteName `
-            -DatabaseUrl $databaseUrl `
-            -RunSeed $runSeed
+          $scriptBlock = {
+            param($deployPath, $appPool, $siteName, $databaseUrl, $runSeed)
+
+            Write-Host "Stopping IIS App Pool and Website..."
+            try { Stop-WebAppPool -Name $appPool -ErrorAction Stop } catch {}
+            try { Stop-Website -Name $siteName -ErrorAction Stop } catch {}
+
+            Write-Host "Extracting deploy.zip..."
+            Expand-Archive -Path "$deployPath\deploy.zip" -DestinationPath $deployPath -Force
+
+            Write-Host "Running Node modules install..."
+            Push-Location $deployPath
+            npm ci
+            Pop-Location
+
+            Write-Host "Running Prisma migrations..."
+            $env:DATABASE_URL = $databaseUrl
+            npx prisma migrate deploy
+
+            if ($runSeed -eq "true") {
+              Write-Host "Seeding database..."
+              npm run db:seed
+            }
+
+            Write-Host "Starting IIS App Pool and Website..."
+            Start-WebAppPool -Name $appPool
+            Start-Website -Name $siteName
+          }
+
+          Invoke-Command -ComputerName $env:SERVER -Credential $cred -ScriptBlock $scriptBlock -ArgumentList $deployPath, $appPool, $siteName, $databaseUrl, $runSeed
 
       - name: Notify deployment success (email)
         if: ${{ success() }}
