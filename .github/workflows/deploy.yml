@@ -60,10 +60,8 @@ jobs:
           $localFile = "$env:GITHUB_WORKSPACE/deploy.zip"
           $remotePath = "C:/Deployments/NIBProcur/deploy.zip"
 
-          # Make sure pscp.exe is available on the runner
-          # You can install PuTTY tools or include it in your PATH
-          Write-Host "Uploading $localFile to $server:$remotePath..."
-          & "C:\Program Files\PuTTY\pscp.exe" -pw $pass $localFile "$user@$server:$remotePath"
+          Write-Host "Uploading $localFile to ${server}:${remotePath}..."
+          & "C:\Program Files\PuTTY\pscp.exe" -pw $pass $localFile "$user@${server}:${remotePath}"
 
       - name: Deploy on IIS Server
         shell: pwsh
