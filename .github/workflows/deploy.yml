@@ -27,12 +27,23 @@ jobs:
     - name: Install dependencies
       run: npm ci
 
-    - name: Build Next.js app (standalone)
+    - name: Build Next.js app
       run: npm run build
 
+    - name: Debug build output
+      run: dir .next /s
+
     - name: Package deployment artifact
+      shell: pwsh
       run: |
-        Compress-Archive -Path ".next\standalone","public","prisma","package.json" -DestinationPath "deploy.zip" -Force
+        $standalonePath = ".next\standalone"
+        if (Test-Path $standalonePath) {
+          Write-Host "Standalone build found, packaging standalone..."
+          Compress-Archive -Path ".next\standalone","public","prisma","package.json" -DestinationPath "deploy.zip" -Force
+        } else {
+          Write-Host "Standalone build not found, packaging full .next..."
+          Compress-Archive -Path ".next","public","prisma","package.json" -DestinationPath "deploy.zip" -Force
+        }
 
     - name: Upload artifact to IIS server via SFTP
       uses: appleboy/scp-action@v0.1.6
