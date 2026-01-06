@@ -14,6 +14,7 @@ jobs:
       USER: ${{ secrets.IIS_USER }}
       PASSWORD: ${{ secrets.IIS_PASSWORD }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      RUN_DB_SEED: ${{ secrets.RUN_DB_SEED }}
 
     steps:
     - name: Checkout repository
@@ -27,21 +28,8 @@ jobs:
     - name: Install dependencies
       run: npm install
 
-    - name: Prisma Migrations & Seed
-      env:
-        DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      run: |
-        $ErrorActionPreference = "Stop"
-
-        Write-Host "Running Prisma migrations (deploy)"
-        npx prisma migrate deploy
-
-        Write-Host "Generating Prisma client..."
-        npx prisma generate
-
-        Write-Host "Seeding database..."
-        npm run db:seed
-      shell: pwsh
+    # NOTE: Prisma migrate/seed is run on the IIS server (inside network)
+    # because GitHub-hosted runners usually cannot reach private DB hosts.
 
     - name: Build Next.js app
       run: npm run build
@@ -55,7 +43,7 @@ jobs:
         $cred = New-Object System.Management.Automation.PSCredential ($env:USER, $secPassword)
 
         $scriptBlock = {
-            param($sourcePath, $destinationPath, $appPool, $siteName)
+          param($sourcePath, $destinationPath, $appPool, $siteName, $databaseUrl, $runSeed)
 
             Write-Host "Stopping IIS App Pool and Website..."
             try { Stop-WebAppPool -Name $appPool -ErrorAction Stop; Write-Host "App Pool '$appPool' stopped." } catch { Write-Host "Could not stop App Pool '$appPool'. It may not exist or is already stopped." }
@@ -65,10 +53,28 @@ jobs:
             robocopy $sourcePath "$destinationPath\.next" /E /MIR
             robocopy $sourcePath\public "$destinationPath\public" /E /MIR
             robocopy $sourcePath\node_modules "$destinationPath\node_modules" /E /MIR
+            robocopy $sourcePath\prisma "$destinationPath\prisma" /E /MIR
             Copy-Item "$sourcePath\package.json" "$destinationPath\package.json" -Force
 
             if ($LASTEXITCODE -ge 8) { throw "File copy failed with exit code $LASTEXITCODE" }
             Write-Host "Files copied successfully."
+
+            if ([string]::IsNullOrWhiteSpace($databaseUrl)) {
+              throw "DATABASE_URL is empty. Set the DATABASE_URL secret in GitHub."
+            }
+
+            Write-Host "Running Prisma migrations on IIS server (migrate deploy)..."
+            Push-Location $destinationPath
+            $env:DATABASE_URL = $databaseUrl
+            npx prisma migrate deploy
+
+            if ($runSeed -eq 'true') {
+              Write-Host "RUN_DB_SEED=true, seeding database..."
+              npm run db:seed
+            } else {
+              Write-Host "RUN_DB_SEED not 'true' (current: '$runSeed'); skipping seed."
+            }
+            Pop-Location
 
             Write-Host "Starting IIS App Pool and Website..."
             try { Start-WebAppPool -Name $appPool -ErrorAction Stop; Write-Host "App Pool '$appPool' started." } catch { throw "Failed to start App Pool '$appPool'." }
@@ -80,7 +86,7 @@ jobs:
         $appPool = "NIBProcurment"
         $siteName = "NIBProcurment"
 
-        Invoke-Command -ComputerName $env:SERVER -Credential $cred -ScriptBlock $scriptBlock -ArgumentList $sourcePath, $destinationPath, $appPool, $siteName
+        Invoke-Command -ComputerName $env:SERVER -Credential $cred -ScriptBlock $scriptBlock -ArgumentList $sourcePath, $destinationPath, $appPool, $siteName, $env:DATABASE_URL, $env:RUN_DB_SEED
 
     - name: Notify deployment success (email)
       if: ${{ success() }}
