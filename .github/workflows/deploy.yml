@@ -1,4 +1,5 @@
-name: Deploy Next.js to IIS via Artifact Copy (Windows Runner)
+
+name: Deploy Next.js to IIS Remotely
 
 on:
   push:
@@ -16,117 +17,101 @@ jobs:
       RUN_DB_SEED: ${{ secrets.RUN_DB_SEED }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
 
-      - name: Install dependencies
-        run: npm ci
+    - name: Install dependencies
+      run: npm install
 
-      - name: Build Next.js app
-        run: npm run build
+    # NOTE: Prisma migrate/seed is run on the IIS server (inside network)
+    # because GitHub-hosted runners usually cannot reach private DB hosts.
 
-      - name: Package deployment artifact
-        shell: pwsh
-        run: |
-          $workspace = $env:GITHUB_WORKSPACE
-          $standalonePath = Join-Path $workspace ".next/standalone"
+    - name: Build Next.js app
+      run: npm run build
 
-          if (Test-Path $standalonePath) {
-            Write-Host "Standalone build found, packaging standalone..."
-            Compress-Archive -Path "$standalonePath","$workspace/public","$workspace/prisma","$workspace/package.json" -DestinationPath "$workspace/deploy.zip" -Force
-          } else {
-            Write-Host "Standalone build not found, packaging full .next..."
-            Compress-Archive -Path "$workspace/.next","$workspace/public","$workspace/prisma","$workspace/package.json" -DestinationPath "$workspace/deploy.zip" -Force
-          }
+    - name: Deploy to IIS via PowerShell Remoting
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = "Stop"
 
-      - name: Copy artifact to IIS server via PowerShell Remoting
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
+        $secPassword = ConvertTo-SecureString $env:PASSWORD -AsPlainText -Force
+        $cred = New-Object System.Management.Automation.PSCredential ($env:USER, $secPassword)
 
-          $secPassword = ConvertTo-SecureString $env:PASSWORD -AsPlainText -Force
-          $cred = New-Object System.Management.Automation.PSCredential ($env:USER, $secPassword)
-
-          $localFile = "$env:GITHUB_WORKSPACE/deploy.zip"
-          $remotePath = "C:\Deployments\NIBProcur\deploy.zip"
-
-          Write-Host "Copying $localFile to $env:SERVER:$remotePath ..."
-          Copy-Item -Path $localFile -Destination $remotePath -ToSession (New-PSSession -ComputerName $env:SERVER -Credential $cred)
-
-      - name: Deploy on IIS Server
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $secPassword = ConvertTo-SecureString $env:PASSWORD -AsPlainText -Force
-          $cred = New-Object System.Management.Automation.PSCredential ($env:USER, $secPassword)
-
-          $deployPath = "C:\inetpub\wwwroot\NIBProcur"
-          $appPool = "NIBProcurment"
-          $siteName = "NIBProcurment"
-          $databaseUrl = "${{ secrets.DATABASE_URL }}"
-          $runSeed = "${{ secrets.RUN_DB_SEED }}"
-
-          $scriptBlock = {
-            param($deployPath, $appPool, $siteName, $databaseUrl, $runSeed)
+        $scriptBlock = {
+          param($sourcePath, $destinationPath, $appPool, $siteName, $databaseUrl, $runSeed)
 
             Write-Host "Stopping IIS App Pool and Website..."
-            try { Stop-WebAppPool -Name $appPool -ErrorAction Stop } catch {}
-            try { Stop-Website -Name $siteName -ErrorAction Stop } catch {}
+            try { Stop-WebAppPool -Name $appPool -ErrorAction Stop; Write-Host "App Pool '$appPool' stopped." } catch { Write-Host "Could not stop App Pool '$appPool'. It may not exist or is already stopped." }
+            try { Stop-Website -Name $siteName -ErrorAction Stop; Write-Host "Website '$siteName' stopped." } catch { Write-Host "Could not stop Website '$siteName'. It may not exist or is already stopped." }
 
-            Write-Host "Extracting deploy.zip..."
-            Expand-Archive -Path "$deployPath\deploy.zip" -DestinationPath $deployPath -Force
+            Write-Host "Copying files to IIS at '$destinationPath'..."
+            robocopy $sourcePath "$destinationPath\.next" /E /MIR
+            robocopy $sourcePath\public "$destinationPath\public" /E /MIR
+            robocopy $sourcePath\node_modules "$destinationPath\node_modules" /E /MIR
+            robocopy $sourcePath\prisma "$destinationPath\prisma" /E /MIR
+            Copy-Item "$sourcePath\package.json" "$destinationPath\package.json" -Force
 
-            Write-Host "Running Node modules install..."
-            Push-Location $deployPath
-            npm ci
-            Pop-Location
+            if ($LASTEXITCODE -ge 8) { throw "File copy failed with exit code $LASTEXITCODE" }
+            Write-Host "Files copied successfully."
 
-            Write-Host "Running Prisma migrations..."
+            if ([string]::IsNullOrWhiteSpace($databaseUrl)) {
+              throw "DATABASE_URL is empty. Set the DATABASE_URL secret in GitHub."
+            }
+
+            Write-Host "Running Prisma migrations on IIS server (migrate deploy)..."
+            Push-Location $destinationPath
             $env:DATABASE_URL = $databaseUrl
             npx prisma migrate deploy
 
-            if ($runSeed -eq "true") {
-              Write-Host "Seeding database..."
+            if ($runSeed -eq 'true') {
+              Write-Host "RUN_DB_SEED=true, seeding database..."
               npm run db:seed
+            } else {
+              Write-Host "RUN_DB_SEED not 'true' (current: '$runSeed'); skipping seed."
             }
+            Pop-Location
 
             Write-Host "Starting IIS App Pool and Website..."
-            Start-WebAppPool -Name $appPool
-            Start-Website -Name $siteName
-          }
+            try { Start-WebAppPool -Name $appPool -ErrorAction Stop; Write-Host "App Pool '$appPool' started." } catch { throw "Failed to start App Pool '$appPool'." }
+            try { Start-Website -Name $siteName -ErrorAction Stop; Write-Host "Website '$siteName' started." } catch { throw "Failed to start Website '$siteName'." }
+        }
 
-          Invoke-Command -ComputerName $env:SERVER -Credential $cred -ScriptBlock $scriptBlock -ArgumentList $deployPath, $appPool, $siteName, $databaseUrl, $runSeed
+        $sourcePath = "${{ github.workspace }}"
+        $destinationPath = "C:\inetpub\wwwroot\NIBProcur"
+        $appPool = "NIBProcurment"
+        $siteName = "NIBProcurment"
 
-      - name: Notify deployment success (email)
-        if: ${{ success() }}
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "Deployment Success"
-          body: "Next.js app deployed successfully."
-          to: ${{ secrets.NOTIFY_TO }}
-          from: ${{ secrets.NOTIFY_FROM }}
-          secure: true
+        Invoke-Command -ComputerName $env:SERVER -Credential $cred -ScriptBlock $scriptBlock -ArgumentList $sourcePath, $destinationPath, $appPool, $siteName, $env:DATABASE_URL, $env:RUN_DB_SEED
 
-      - name: Notify deployment failure (email)
-        if: ${{ failure() }}
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "Deployment Failed"
-          body: "Next.js app deployment failed! Check workflow logs for details."
-          to: ${{ secrets.NOTIFY_TO }}
-          from: ${{ secrets.NOTIFY_FROM }}
-          secure: true
+    - name: Notify deployment success (email)
+      if: ${{ success() }}
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: ${{ secrets.SMTP_SERVER }}
+        server_port: ${{ secrets.SMTP_PORT }}
+        username: ${{ secrets.SMTP_USERNAME }}
+        password: ${{ secrets.SMTP_PASSWORD }}
+        subject: "Deployment Success"
+        body: "Next.js app deployed successfully."
+        to: ${{ secrets.NOTIFY_TO }}
+        from: ${{ secrets.NOTIFY_FROM }}
+        secure: true
+
+    - name: Notify deployment failure (email)
+      if: ${{ failure() }}
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: ${{ secrets.SMTP_SERVER }}
+        server_port: ${{ secrets.SMTP_PORT }}
+        username: ${{ secrets.SMTP_USERNAME }}
+        password: ${{ secrets.SMTP_PASSWORD }}
+        subject: "Deployment Failed"
+        body: "Next.js app deployment failed! Check workflow logs for details."
+        to: ${{ secrets.NOTIFY_TO }}
+        from: ${{ secrets.NOTIFY_FROM }}
+        secure: true
