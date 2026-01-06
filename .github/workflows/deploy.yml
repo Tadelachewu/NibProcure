@@ -63,12 +63,18 @@ jobs:
     - name: Deploy on IIS Server
       shell: pwsh
       run: |
+        $deployPath = "C:\inetpub\wwwroot\NIBProcur"
+        $appPool = "NIBProcurment"
+        $siteName = "NIBProcurment"
+        $databaseUrl = "${{ secrets.DATABASE_URL }}"
+        $runSeed = "${{ secrets.RUN_DB_SEED }}"
+
         pwsh -File "C:\Deployments\NIBProcur\deploy.ps1" `
-          -DeployPath "C:\inetpub\wwwroot\NIBProcur" `
-          -AppPool "NIBProcurment" `
-          -SiteName "NIBProcurment" `
-          -DatabaseUrl "${{ secrets.DATABASE_URL }}" `
-          -RunSeed:${{ secrets.RUN_DB_SEED }}
+          -DeployPath $deployPath `
+          -AppPool $appPool `
+          -SiteName $siteName `
+          -DatabaseUrl $databaseUrl `
+          -RunSeed $runSeed
 
     - name: Notify deployment success (email)
       if: ${{ success() }}
