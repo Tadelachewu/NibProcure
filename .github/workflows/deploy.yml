@@ -1,5 +1,4 @@
-
-name: Deploy Next.js to IIS Remotely
+name: Deploy Next.js to IIS via Artifact Copy
 
 on:
   push:
@@ -26,67 +25,33 @@ jobs:
         node-version: '20'
 
     - name: Install dependencies
-      run: npm install
+      run: npm ci
 
-    # NOTE: Prisma migrate/seed is run on the IIS server (inside network)
-    # because GitHub-hosted runners usually cannot reach private DB hosts.
-
-    - name: Build Next.js app
+    - name: Build Next.js app (standalone)
       run: npm run build
 
-    - name: Deploy to IIS via PowerShell Remoting
-      shell: pwsh
+    - name: Package deployment artifact
       run: |
-        $ErrorActionPreference = "Stop"
+        Compress-Archive -Path ".next\standalone","public","prisma","package.json" -DestinationPath "deploy.zip" -Force
 
-        $secPassword = ConvertTo-SecureString $env:PASSWORD -AsPlainText -Force
-        $cred = New-Object System.Management.Automation.PSCredential ($env:USER, $secPassword)
+    - name: Upload artifact to IIS server via SFTP
+      uses: appleboy/scp-action@v0.1.6
+      with:
+        host: ${{ secrets.IIS_SERVER }}
+        username: ${{ secrets.IIS_USER }}
+        password: ${{ secrets.IIS_PASSWORD }}
+        source: "deploy.zip"
+        target: "C:\\Deployments\\NIBProcur"
 
-        $scriptBlock = {
-          param($sourcePath, $destinationPath, $appPool, $siteName, $databaseUrl, $runSeed)
-
-            Write-Host "Stopping IIS App Pool and Website..."
-            try { Stop-WebAppPool -Name $appPool -ErrorAction Stop; Write-Host "App Pool '$appPool' stopped." } catch { Write-Host "Could not stop App Pool '$appPool'. It may not exist or is already stopped." }
-            try { Stop-Website -Name $siteName -ErrorAction Stop; Write-Host "Website '$siteName' stopped." } catch { Write-Host "Could not stop Website '$siteName'. It may not exist or is already stopped." }
-
-            Write-Host "Copying files to IIS at '$destinationPath'..."
-            robocopy $sourcePath "$destinationPath\.next" /E /MIR
-            robocopy $sourcePath\public "$destinationPath\public" /E /MIR
-            robocopy $sourcePath\node_modules "$destinationPath\node_modules" /E /MIR
-            robocopy $sourcePath\prisma "$destinationPath\prisma" /E /MIR
-            Copy-Item "$sourcePath\package.json" "$destinationPath\package.json" -Force
-
-            if ($LASTEXITCODE -ge 8) { throw "File copy failed with exit code $LASTEXITCODE" }
-            Write-Host "Files copied successfully."
-
-            if ([string]::IsNullOrWhiteSpace($databaseUrl)) {
-              throw "DATABASE_URL is empty. Set the DATABASE_URL secret in GitHub."
-            }
-
-            Write-Host "Running Prisma migrations on IIS server (migrate deploy)..."
-            Push-Location $destinationPath
-            $env:DATABASE_URL = $databaseUrl
-            npx prisma migrate deploy
-
-            if ($runSeed -eq 'true') {
-              Write-Host "RUN_DB_SEED=true, seeding database..."
-              npm run db:seed
-            } else {
-              Write-Host "RUN_DB_SEED not 'true' (current: '$runSeed'); skipping seed."
-            }
-            Pop-Location
-
-            Write-Host "Starting IIS App Pool and Website..."
-            try { Start-WebAppPool -Name $appPool -ErrorAction Stop; Write-Host "App Pool '$appPool' started." } catch { throw "Failed to start App Pool '$appPool'." }
-            try { Start-Website -Name $siteName -ErrorAction Stop; Write-Host "Website '$siteName' started." } catch { throw "Failed to start Website '$siteName'." }
-        }
-
-        $sourcePath = "${{ github.workspace }}"
-        $destinationPath = "C:\inetpub\wwwroot\NIBProcur"
-        $appPool = "NIBProcurment"
-        $siteName = "NIBProcurment"
-
-        Invoke-Command -ComputerName $env:SERVER -Credential $cred -ScriptBlock $scriptBlock -ArgumentList $sourcePath, $destinationPath, $appPool, $siteName, $env:DATABASE_URL, $env:RUN_DB_SEED
+    - name: Deploy on IIS Server
+      run: |
+        pwsh -File "C:\Deployments\NIBProcur\deploy.ps1" `
+          -DeployPath "C:\inetpub\wwwroot\NIBProcur" `
+          -AppPool "NIBProcurment" `
+          -SiteName "NIBProcurment" `
+          -DatabaseUrl "${{ secrets.DATABASE_URL }}" `
+          -RunSeed:${{ secrets.RUN_DB_SEED }}
+      shell: pwsh
 
     - name: Notify deployment success (email)
       if: ${{ success() }}
