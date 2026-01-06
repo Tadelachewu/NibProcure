@@ -31,18 +31,24 @@ jobs:
       run: npm run build
 
     - name: Debug build output
-      run: dir .next /s
+      shell: pwsh
+      run: |
+        $buildPath = Join-Path $env:GITHUB_WORKSPACE ".next"
+        Write-Host "Listing contents of $buildPath"
+        Get-ChildItem -Path $buildPath -Recurse
 
     - name: Package deployment artifact
       shell: pwsh
       run: |
-        $standalonePath = ".next\standalone"
+        $workspace = $env:GITHUB_WORKSPACE
+        $standalonePath = Join-Path $workspace ".next\standalone"
+
         if (Test-Path $standalonePath) {
           Write-Host "Standalone build found, packaging standalone..."
-          Compress-Archive -Path ".next\standalone","public","prisma","package.json" -DestinationPath "deploy.zip" -Force
+          Compress-Archive -Path "$standalonePath","$workspace\public","$workspace\prisma","$workspace\package.json" -DestinationPath "$workspace\deploy.zip" -Force
         } else {
           Write-Host "Standalone build not found, packaging full .next..."
-          Compress-Archive -Path ".next","public","prisma","package.json" -DestinationPath "deploy.zip" -Force
+          Compress-Archive -Path "$workspace\.next","$workspace\public","$workspace\prisma","$workspace\package.json" -DestinationPath "$workspace\deploy.zip" -Force
         }
 
     - name: Upload artifact to IIS server via SFTP
@@ -51,10 +57,11 @@ jobs:
         host: ${{ secrets.IIS_SERVER }}
         username: ${{ secrets.IIS_USER }}
         password: ${{ secrets.IIS_PASSWORD }}
-        source: "deploy.zip"
+        source: "$GITHUB_WORKSPACE\deploy.zip"
         target: "C:\\Deployments\\NIBProcur"
 
     - name: Deploy on IIS Server
+      shell: pwsh
       run: |
         pwsh -File "C:\Deployments\NIBProcur\deploy.ps1" `
           -DeployPath "C:\inetpub\wwwroot\NIBProcur" `
@@ -62,7 +69,6 @@ jobs:
           -SiteName "NIBProcurment" `
           -DatabaseUrl "${{ secrets.DATABASE_URL }}" `
           -RunSeed:${{ secrets.RUN_DB_SEED }}
-      shell: pwsh
 
     - name: Notify deployment success (email)
       if: ${{ success() }}
