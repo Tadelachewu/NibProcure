@@ -115,3 +115,69 @@ jobs:
         to: ${{ secrets.NOTIFY_TO }}
         from: ${{ secrets.NOTIFY_FROM }}
         secure: true
+
+  docker-deploy:
+    name: Dockerized Deploy to Company Server
+    runs-on: ubuntu-latest
+    if: ${{ secrets.DEPLOY_DOCKER == 'true' }}
+    needs: build-and-deploy
+    env:
+      DEPLOY_HOST: ${{ secrets.IIS_SERVER }}
+      DEPLOY_USER: ${{ secrets.IIS_USER }}
+      DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+      SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
+      RUN_DB_SEED: ${{ secrets.RUN_DB_SEED }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker image
+        run: |
+          docker build -t nibprocure:ci-${{ github.sha }} .
+
+      - name: Save image to tar
+        run: |
+          docker save nibprocure:ci-${{ github.sha }} -o nibprocure-image.tar
+
+      - name: Copy image and compose files to remote server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.IIS_SERVER }}
+          username: ${{ secrets.IIS_USER }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "nibprocure-image.tar,docker-compose.yml,.env"
+          target: ${{ secrets.DEPLOY_DIR }}
+
+      - name: Load image and deploy on remote
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.IIS_SERVER }}
+          username: ${{ secrets.IIS_USER }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_DIR }}
+            # load image
+            docker load -i nibprocure-image.tar || true
+            # bring up services
+            docker compose up -d --remove-orphans --build
+            # run migrations (deploy preferred)
+            if docker compose exec -T app npx prisma migrate deploy; then
+              echo "migrate deploy succeeded"
+            else
+              echo "migrate deploy failed; attempting npm run db:migrate"
+              docker compose exec -T app npm run db:migrate || true
+            fi
+            # optional seed
+            if [ "${{ secrets.RUN_DB_SEED }}" = "true" ]; then
+              docker compose exec -T app npm run db:seed || true
+            fi

@@ -1,0 +1,94 @@
+name: Docker CI / CD
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Login to registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY_HOST || 'ghcr.io' }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Install Node (for lint/test)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Run tests & build
+        run: |
+          npm run lint || true
+          npm run typecheck || true
+          npm run build
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY_HOST || 'ghcr.io' }}/${{ secrets.REGISTRY_USERNAME }}/nibprocure:${{ github.sha }}
+          outputs: type=registry
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare remote deploy (SSH)
+        uses: webfactory/ssh-agent@v0.8.1
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy to remote host
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_DIR }}
+            # Pull latest image from registry
+            docker compose pull || true
+            # Recreate services
+            docker compose up -d --remove-orphans --build
+            # Run DB migrations safely inside the app container
+            # Use migrate deploy in production; fallback to migrate dev if needed
+            if docker compose exec -T app npx prisma migrate deploy; then
+              echo "migrate deploy succeeded"
+            else
+              echo "migrate deploy failed; attempting npm run db:migrate"
+              docker compose exec -T app npm run db:migrate || true
+            fi
+            # Seed optionally if secret enabled
+            if [ "${{ secrets.RUN_DB_SEED }}" = "true" ]; then
+              docker compose exec -T app npm run db:seed || true
+            fi

@@ -1,57 +1,42 @@
-# ---- deps ----
-FROM node:20-alpine AS deps
+FROM node:20-alpine
+
 WORKDIR /app
 
 # Prisma on alpine needs openssl + libc compatibility
 RUN apk add --no-cache libc6-compat openssl
 
-COPY package.json package-lock.json* ./
-RUN npm ci
+# Copy package files and Prisma schema before installing so `prisma generate` (postinstall) works
+COPY package*.json ./
+COPY prisma ./prisma
 
-# ---- builder ----
-FROM node:20-alpine AS builder
-WORKDIR /app
+# Install dependencies (use ci for reproducible installs)
+RUN npm ci --legacy-peer-deps
 
-RUN apk add --no-cache libc6-compat openssl
-
-COPY --from=deps /app/node_modules ./node_modules
+# Copy the rest of the app and build
 COPY . .
-
-# Generate prisma client and build Next.js
-RUN npm run postinstall
 RUN npm run build
 
-# ---- runner ----
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
+# Ensure `start.sh` exists and has the expected content (some build contexts may produce an empty file)
+RUN if [ ! -s ./start.sh ]; then \
+	echo '#!/bin/sh' > ./start.sh && \
+	echo 'set -e' >> ./start.sh && \
+	echo '' >> ./start.sh && \
+	echo 'echo "Waiting for database..."' >> ./start.sh && \
+	echo 'sleep 5' >> ./start.sh && \
+	echo '' >> ./start.sh && \
+	echo 'echo "Running migrations..."' >> ./start.sh && \
+	echo 'npm run db:migrate' >> ./start.sh && \
+	echo '' >> ./start.sh && \
+	echo 'echo "Running seed..."' >> ./start.sh && \
+	echo 'npm run db:seed' >> ./start.sh && \
+	echo '' >> ./start.sh && \
+	echo 'echo "Starting application..."' >> ./start.sh && \
+	echo 'npm start' >> ./start.sh && \
+	chmod +x ./start.sh; \
+fi
 
-RUN apk add --no-cache libc6-compat openssl
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs; adduser -S nextjs -u 1001
-
-# Copy package manifests for runtime tooling (npx prisma)
-COPY --from=builder /app/package.json /app/package-lock.json* ./
-
-# Copy built app
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/next.config.js ./next.config.js
-
-# Prisma runtime needs schema + migrations
-COPY --from=builder /app/prisma ./prisma
-
-# Install only production deps
-RUN npm ci --omit=dev
-
-# Entrypoint runs prisma migrate deploy then starts Next
-COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-USER nextjs
-EXPOSE 9002
+RUN chmod +x ./start.sh || true
 ENV PORT=9002
+EXPOSE 9002
 
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["npm", "run", "start"]
+CMD ["sh", "./start.sh"]
