@@ -91,8 +91,6 @@ This starts PostgreSQL + the Next.js app, runs Prisma migrations automatically o
 docker compose up --build
 ```
 
-- App: `http://localhost:9002`
-- Postgres: `localhost:5432`
 
 ### Run the app container only
 
@@ -114,6 +112,56 @@ docker run --rm -p 9002:9002 \
 ```
 
 ---
+
+### Containerized Run (commands)
+
+- **Ensure env:** create or update the repository [`.env`](.env) with `DATABASE_URL` and `JWT_SECRET`.
+
+- **Start with Docker Compose (recommended)** — builds image, runs Postgres + app, runs migrations on start, and keeps containers detached:
+
+```bash
+# stop any running stack, rebuild and start in background
+docker compose down --volumes --remove-orphans
+docker compose up -d --build
+
+# follow the app logs
+docker compose logs -f app
+
+# stop and remove containers
+docker compose down
+```
+
+- **Run the app image directly** (quick test; supply `DATABASE_URL` and `JWT_SECRET`):
+
+```bash
+docker build -t nibprocure-app .
+docker run --rm -p 9002:9002 \
+    -e DATABASE_URL="postgresql://nibprocure:nibprocure@db:5432/nibprocure?schema=public" \
+    -e JWT_SECRET="YOUR_SUPER_SECRET_KEY" \
+    nibprocure-app
+```
+
+- **Run migrations / seed manually** (optional / for debugging):
+
+```bash
+# using compose (exec runs inside the `app` container)
+docker compose exec app sh -c "npm run db:migrate && npm run db:seed"
+
+# or inside a running container created with `docker run`:
+docker exec -it <container-name> sh -c "npm run db:migrate && npm run db:seed"
+```
+
+- **Ports & host access**: the app listens on container port `9002`. The host port is defined in `docker-compose.yml` (host:container). When using `docker run -p` you can map any host port (for example `-p 9003:9002`).
+
+- **Troubleshooting**:
+    - If `http://localhost:9002` is not reachable, confirm the container port is published:
+        ```bash
+        docker ps --filter name=nibprocure --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+        ```
+    - Check app logs: `docker compose logs -f app`.
+    - Ensure `JWT_SECRET` is present in the container env (via `.env` or compose `environment`).
+    - If Docker Desktop (WSL2) appears to block host binding, try restarting Docker Desktop or use an alternate host port.
+
 
 ## The Procurement Workflow Explained
 
