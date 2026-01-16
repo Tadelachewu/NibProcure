@@ -411,7 +411,7 @@ function CommitteeDashboard() {
 }
 
 export function Dashboard() {
-  const { role, user } = useAuth();
+    const { role, user, departments } = useAuth();
 
     const DIRECTOR_ROLES = ['Director_Supply_Chain_and_Property_Management','Finance_Director','Facility_Director'];
 
@@ -509,7 +509,11 @@ export function Dashboard() {
                         </p>
                 </div>
                 <div>
-                    {DIRECTOR_ROLES.includes(role || '') && (
+                                        {(
+                                            DIRECTOR_ROLES.includes(role || '') ||
+                                            // any user assigned as a department head
+                                            (!!user && Array.isArray(departments) && departments.some(d => d.headId === user.id))
+                                        ) && (
                         <div className="flex gap-2">
                             <DirectorPinsModal />
                         </div>

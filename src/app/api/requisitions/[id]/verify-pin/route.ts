@@ -40,12 +40,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const match = bcrypt.compareSync(pin, pinRecord.pinHash);
     if (!match) return NextResponse.json({ error: 'Invalid PIN' }, { status: 400 });
 
-    // determine configured threshold and current verified count
+    // determine configured threshold and current verified count for directors
     const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
+    const DEPT_HEAD_ROLE = 'Department_Head';
 
     const threshold = Number(currentSettings?.unsealThreshold ?? DIRECTOR_ROLES.length);
 
-    // Count unique verified personnel, not number of used pins.
+    // Count unique verified director personnel, not number of used pins.
     const verifiedPins = await prisma.pin.findMany({
       where: {
         requisitionId: id,
@@ -59,23 +60,37 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const verifiedDistinctCount = verifiedUserIds.size;
     const actorAlreadyVerified = !!actor?.id && verifiedUserIds.has(actor.id);
 
+    // Department head (requester) verification status: check rfqSettings or used pins for DEPT_HEAD_ROLE
+    const deptHeadVerifiedInSettings = currentSettings?.departmentHeadVerified === true;
+    const deptHeadVerifiedPins = await prisma.pin.findFirst({ where: { requisitionId: id, roleName: DEPT_HEAD_ROLE, used: true } });
+    const departmentHeadVerified = deptHeadVerifiedInSettings || !!deptHeadVerifiedPins;
+    const actorIsDeptHead = actor.id === requisition.requesterId;
+
     // If this is a preview (confirmOnly), do not mark the PIN used; just indicate outcome
     if (confirmOnly) {
       const wouldBeVerified = actorAlreadyVerified ? verifiedDistinctCount : (verifiedDistinctCount + 1);
-      const wouldUnmask = alreadyVerified ? true : wouldBeVerified >= threshold;
+      const deptVerifiedAfter = departmentHeadVerified || actorIsDeptHead;
+      const wouldUnmask = alreadyVerified ? true : (wouldBeVerified >= threshold && deptVerifiedAfter);
       const remainingAfter = alreadyVerified ? 0 : Math.max(0, threshold - wouldBeVerified);
-      return NextResponse.json({ wouldUnmask, remaining: remainingAfter, threshold, verifiedCount: verifiedDistinctCount, actorAlreadyVerified, alreadyVerified });
+      return NextResponse.json({ wouldUnmask, remaining: remainingAfter, threshold, verifiedCount: verifiedDistinctCount, actorAlreadyVerified, alreadyVerified, departmentHeadVerified: deptVerifiedAfter });
     }
 
     // If actor already verified before, don't consume more pins.
     if (actorAlreadyVerified) {
       const remaining = alreadyVerified ? 0 : Math.max(0, threshold - verifiedDistinctCount);
-      const unmaskedNow = alreadyVerified ? true : verifiedDistinctCount >= threshold;
-      return NextResponse.json({ unmasked: unmaskedNow, remaining, threshold, verifiedCount: verifiedDistinctCount, actorAlreadyVerified: true, alreadyVerified });
+      const deptVerifiedAfter = departmentHeadVerified || actorIsDeptHead;
+      const unmaskedNow = alreadyVerified ? true : (verifiedDistinctCount >= threshold && deptVerifiedAfter);
+      return NextResponse.json({ unmasked: unmaskedNow, remaining, threshold, verifiedCount: verifiedDistinctCount, actorAlreadyVerified: true, alreadyVerified, departmentHeadVerified: deptVerifiedAfter });
     }
 
     // Mark used (this is the per-person audit trail)
     await prisma.pin.update({ where: { id: pinRecord.id }, data: { used: true, usedById: actor.id, usedAt: new Date() } });
+
+    // If the used PIN is from the department head role, record that in rfqSettings.
+    if (pinRecord.roleName === DEPT_HEAD_ROLE) {
+      const updated = { ...(typeof currentSettings === 'object' ? currentSettings : {}), departmentHeadVerified: true, departmentHeadVerifiedAt: new Date().toISOString() };
+      await prisma.purchaseRequisition.update({ where: { id }, data: { rfqSettings: updated as any } });
+    }
 
     // If requisition is already unmasked, we still record verification but don't touch rfqSettings.
     if (alreadyVerified) {
@@ -84,19 +99,24 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     let unmasked = false;
     const afterVerifiedCount = verifiedDistinctCount + 1;
-    if (afterVerifiedCount >= threshold) {
+
+    // Department head verified after this operation?
+    const deptVerifiedAfter = departmentHeadVerified || pinRecord.roleName === DEPT_HEAD_ROLE || actorIsDeptHead;
+
+    if (afterVerifiedCount >= threshold && deptVerifiedAfter) {
       const updated = {
         ...(typeof currentSettings === 'object' ? currentSettings : {}),
         masked: false,
         directorPresenceVerified: true,
         directorPresenceVerifiedAt: new Date().toISOString(),
+        departmentHeadVerified: deptVerifiedAfter,
       };
       await prisma.purchaseRequisition.update({ where: { id }, data: { rfqSettings: updated as any } });
       unmasked = true;
     }
 
     const remaining = Math.max(0, threshold - afterVerifiedCount);
-    return NextResponse.json({ unmasked, remaining, threshold, verifiedCount: afterVerifiedCount, actorAlreadyVerified: false, alreadyVerified: false });
+    return NextResponse.json({ unmasked, remaining, threshold, verifiedCount: afterVerifiedCount, actorAlreadyVerified: false, alreadyVerified: false, departmentHeadVerified: deptVerifiedAfter });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

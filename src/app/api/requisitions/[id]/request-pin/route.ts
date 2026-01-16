@@ -17,11 +17,27 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const actor = await getActorFromToken(request);
     const { id } = params;
 
-    // Ensure actor has a director role
+    // Allow directors to request their director PINs, and allow the requisition's requester (department head)
     const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
     const hasDirector = (actor.roles || []).some((r: any) => DIRECTOR_ROLES.includes(typeof r === 'string' ? r : r.name));
-    if (!hasDirector && !(actor.roles || []).includes('Admin')) {
-      return NextResponse.json({ error: 'Only directors can request their PIN' }, { status: 403 });
+
+    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
+    if (!requisition) return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
+
+    const isRequesterOfRequisition = actor.id === requisition.requesterId;
+
+    // determine if actor is the department head for the requester's department
+    let isDeptHead = false;
+    if (requisition.requesterId) {
+      const requesterUser = await prisma.user.findUnique({ where: { id: requisition.requesterId } });
+      if (requesterUser?.departmentId) {
+        const dept = await prisma.department.findUnique({ where: { id: requesterUser.departmentId } });
+        if (dept?.headId && dept.headId === actor.id) isDeptHead = true;
+      }
+    }
+
+    if (!hasDirector && !isRequesterOfRequisition && !isDeptHead && !(actor.roles || []).includes('Admin')) {
+      return NextResponse.json({ error: 'Only directors, the requisition requester, or the department head can request a PIN' }, { status: 403 });
     }
 
     const pin = generateNumericPin();
@@ -29,7 +45,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     const actorRoleNames = (actor.roles || []).map((r: any) => (typeof r === 'string' ? r : r?.name)).filter(Boolean);
-    const actorDirectorRole = DIRECTOR_ROLES.find((rn) => actorRoleNames.includes(rn)) || 'Director';
+    let actorDirectorRole = DIRECTOR_ROLES.find((rn) => actorRoleNames.includes(rn)) || 'Director';
+    if (isDeptHead) {
+      actorDirectorRole = 'Department_Head';
+    } else if (isRequesterOfRequisition && !hasDirector) {
+      actorDirectorRole = 'Requester';
+    }
 
     const created = await prisma.pin.create({
       data: {

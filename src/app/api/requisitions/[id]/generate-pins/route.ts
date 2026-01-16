@@ -89,6 +89,33 @@ export async function POST(request: Request, { params }: { params: { id: string 
       }
     }
 
+    // Additionally, include the department head for the requester's department if present
+    try {
+      const requester = await prisma.user.findUnique({ where: { id: requisition.requesterId } });
+      if (requester?.departmentId) {
+        const dept = await prisma.department.findUnique({ where: { id: requester.departmentId } });
+        const headId = dept?.headId;
+        if (headId && !verifiedUserIds.has(headId) && !skippedVerifiedRecipientIds.has(headId)) {
+          const headUser = await prisma.user.findUnique({ where: { id: headId } });
+          if (headUser) {
+            const pin = generateNumericPin();
+            const hash = bcrypt.hashSync(pin, 10);
+            const created = await prisma.pin.create({ data: { requisitionId: id, roleName: 'Department_Head', pinHash: hash, recipientId: headUser.id, generatedById: actor.id, expiresAt } });
+            if (headUser.email) {
+              sendEmail({
+                to: headUser.email,
+                subject: `Verification PIN for requisition ${id}`,
+                html: `<p>Your verification PIN for requisition <strong>${id}</strong> is <strong>${pin}</strong>. It expires at ${expiresAt.toLocaleString()}.</p>`
+              }).catch(e => console.error('Failed to send PIN email', e));
+            }
+            createdPins.push({ id: created.id, roleName: 'Department_Head', recipientId: headUser.id, expiresAt });
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to include department head in pin generation', e);
+    }
+
     return NextResponse.json({ success: true, pins: createdPins, skippedVerifiedRecipientIds: Array.from(skippedVerifiedRecipientIds) });
   } catch (error) {
     // getActorFromToken throws Error('Unauthorized') when token is missing/invalid.

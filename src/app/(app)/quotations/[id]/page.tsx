@@ -842,8 +842,8 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             <Button className="w-full" variant="outline" onClick={() => onViewDetails(quote)} disabled={isMasked}>
                                 <Eye className="mr-2 h-4 w-4" /> {isMasked ? 'Sealed' : 'View Full Quote'}
                             </Button>
-                             {isAssignedCommitteeMember && isDeadlinePassed && (
-                                    <Button className="w-full" variant={hasUserScored ? "secondary" : "default"} onClick={() => onScore(quote, !!hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
+                                    {isAssignedCommitteeMember && isDeadlinePassed && (
+                                    <Button className="w-full" variant={hasUserScored ? "secondary" : "default"} onClick={(e) => { e.stopPropagation(); onScore(quote, !!hidePrices); }} disabled={isScoringDeadlinePassed && !hasUserScored}>
                                     {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
                                     {hasUserScored ? 'View Your Score' : 'Score this Quote'}
                                 </Button>
@@ -960,6 +960,7 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
     const isRfqSender = (user && ((user.roles as any[]).some(r => (typeof r === 'string' ? r === 'Procurement_Officer' : r.name === 'Procurement_Officer')) || (user.roles as any[]).some(r => (typeof r === 'string' ? r === 'Admin' : r.name === 'Admin'))));
 
     const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
+    const DEPT_HEAD_ROLE = 'Department_Head';
 
     const isPresenceVerified = Boolean((requisition.rfqSettings as any)?.directorPresenceVerified) || (requisition.rfqSettings as any)?.masked === false;
     const presenceVerifiedAt = (requisition.rfqSettings as any)?.directorPresenceVerifiedAt as string | undefined;
@@ -1038,7 +1039,7 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
     const directorRecipients = React.useMemo(() => {
         const byKey = new Map<string, { recipient: any; roleName: string }>();
         (pins || []).forEach((p:any) => {
-            if (!DIRECTOR_ROLES.includes(p.roleName)) return;
+            if (![...DIRECTOR_ROLES, DEPT_HEAD_ROLE].includes(p.roleName)) return;
             if (!p.recipient?.id) return;
             const key = `${p.roleName}:${p.recipient.id}`;
             if (!byKey.has(key)) {
@@ -1108,7 +1109,7 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
                                 }} disabled={!isRfqSender || isPresenceVerified}>Save</Button>
                             </div>
                         </div>
-                        {(directorRecipients.length > 0 ? directorRecipients : DIRECTOR_ROLES.map(rn => ({ roleName: rn, recipient: undefined } as any))).map((entry: any) => {
+                        {(directorRecipients.length > 0 ? directorRecipients : [...DIRECTOR_ROLES, DEPT_HEAD_ROLE].map(rn => ({ roleName: rn, recipient: undefined } as any))).map((entry: any) => {
                             const rn = entry.roleName as string;
                             const recipient = entry.recipient as any | undefined;
                             const recipientId = recipient?.id as string | undefined;
@@ -1120,7 +1121,7 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
                             return (
                                 <div key={`${rn}:${recipientId || 'none'}`} className="border rounded p-3">
                                     <h4 className="font-semibold mb-2 flex items-center gap-2">
-                                        {rn.replace(/_/g, ' ')}
+                                        {rn === DEPT_HEAD_ROLE ? 'Department Head' : rn.replace(/_/g, ' ')}
                                         {recipient ? (
                                             <span className="text-xs text-muted-foreground">— {recipient.name || recipient.email}</span>
                                         ) : null}
@@ -2261,6 +2262,9 @@ const ScoringDialog = ({
     isScoringDeadlinePassed: boolean;
     hidePrices: boolean;
 }) => {
+    try {
+        console.log('ScoringDialog render check - quote:', quote?.id, 'requisition:', requisition?.id, 'user:', user?.id);
+    } catch (e) {}
     const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
     const { token } = useAuth();
@@ -3551,9 +3555,14 @@ export default function QuotationDetailsPage() {
   }
 
   const handleScoreButtonClick = (quote: Quotation, hidePrices: boolean) => {
-    setSelectedQuoteForScoring(quote);
-    setHidePricesForScoring(hidePrices);
-    setScoringFormOpen(true);
+        try {
+            console.log('handleScoreButtonClick invoked for quote', quote?.id, 'hidePrices=', hidePrices);
+        } catch (e) {
+            // ignore when console not available in some environments
+        }
+        setSelectedQuoteForScoring(quote);
+        setHidePricesForScoring(hidePrices);
+        setScoringFormOpen(true);
   }
   
   const handleViewDetailsClick = (quote: Quotation) => {
@@ -3857,6 +3866,9 @@ export default function QuotationDetailsPage() {
                             )}
 
                             <Dialog open={isScoringFormOpen} onOpenChange={setScoringFormOpen}>
+                                {(() => {
+                                    try { console.log('Rendering Dialog - isScoringFormOpen=', isScoringFormOpen, 'selectedQuoteForScoring=', selectedQuoteForScoring?.id); } catch (e) {}
+                                })()}
                                 {selectedQuoteForScoring && requisition && user && (
                                     <ScoringDialog
                                         quote={selectedQuoteForScoring}
