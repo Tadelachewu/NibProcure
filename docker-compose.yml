@@ -5,7 +5,7 @@ services:
     build: .
     container_name: nib_procurement_app
     ports:
-      - "9004:9002"
+      - "9003:9002"
     env_file:
       - .env
     environment:
