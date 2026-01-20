@@ -311,29 +311,19 @@ export async function handleAwardRejection(
 }
 
 function calculateChampionBidsForVendor(requisition: any, vendorQuote: any): QuoteItem[] {
-    if (!requisition.evaluationCriteria || !vendorQuote) {
+    if (!vendorQuote) {
         return [];
     }
+    // Choose the vendor's lowest-priced proposal per requisition item
     return requisition.items.map((reqItem: any) => {
         const proposalsForItem = vendorQuote.items.filter((item: any) => item.requisitionItemId === reqItem.id);
         if (proposalsForItem.length === 0) return null;
-
         let championBid: QuoteItem | null = null;
-        let bestScore = -1;
-
+        let lowestPrice = Number.POSITIVE_INFINITY;
         proposalsForItem.forEach((proposal: any) => {
-            let totalItemScore = 0;
-            let scoreCount = 0;
-            vendorQuote.scores?.forEach((scoreSet: any) => {
-                const itemScore = scoreSet.itemScores.find((is: any) => is.quoteItemId === proposal.id);
-                if (itemScore) {
-                    totalItemScore += itemScore.finalScore;
-                    scoreCount++;
-                }
-            });
-            const avgScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-            if (avgScore > bestScore) {
-                bestScore = avgScore;
+            const price = proposal.unitPrice || Number.POSITIVE_INFINITY;
+            if (price < lowestPrice) {
+                lowestPrice = price;
                 championBid = proposal;
             }
         });

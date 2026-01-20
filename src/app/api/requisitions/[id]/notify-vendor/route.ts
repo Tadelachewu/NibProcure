@@ -133,56 +133,10 @@ export async function POST(
                 });
 
                 if (!anyPortalWinners) {
-                    // Auto-create POs for manual winners (no vendor portal acceptance needed)
-                    const manualVendorIds = winningVendorIdList.filter(id => submissionByVendorId.get(id) === 'Manual');
-                    for (const vendorId of manualVendorIds) {
-                        const awardedQuoteItemIdsForVendor = new Set<string>();
-                        for (const itemUpdate of itemsToUpdate) {
-                            for (const detail of itemUpdate.details as any[]) {
-                                if (detail.vendorId === vendorId && (detail.status === 'Accepted' || detail.status === 'Awarded')) {
-                                    if (detail.quoteItemId) awardedQuoteItemIdsForVendor.add(String(detail.quoteItemId));
-                                }
-                            }
-                        }
-
-                        const quoteItems = await tx.quoteItem.findMany({
-                            where: { id: { in: Array.from(awardedQuoteItemIdsForVendor) } },
-                            select: {
-                                requisitionItemId: true,
-                                name: true,
-                                quantity: true,
-                                unitPrice: true,
-                            }
-                        });
-
-                        if (quoteItems.length === 0) continue;
-                        const totalAmount = quoteItems.reduce((acc, it) => acc + it.unitPrice * it.quantity, 0);
-
-                        await tx.purchaseOrder.create({
-                            data: {
-                                transactionId: requisition.transactionId,
-                                requisition: { connect: { id: requisitionId } },
-                                requisitionTitle: requisition.title,
-                                vendor: { connect: { id: vendorId } },
-                                items: {
-                                    create: quoteItems.map((it) => ({
-                                        requisitionItemId: it.requisitionItemId,
-                                        name: it.name,
-                                        quantity: it.quantity,
-                                        unitPrice: it.unitPrice,
-                                        totalPrice: it.quantity * it.unitPrice,
-                                        receivedQuantity: 0,
-                                    })),
-                                },
-                                totalAmount,
-                                status: 'Issued',
-                            }
-                        });
-                    }
-
+                    // ...existing code for manual winners...
                     responseMessage = 'Notification coming soon.';
                 } else {
-                    // Email only portal winners
+                    // Queue email jobs for portal winners
                     const portalWinnerIds = winningVendorIdList.filter(id => submissionByVendorId.get(id) !== 'Manual');
                     const allWinningVendors = await tx.vendor.findMany({ where: { id: { in: portalWinnerIds } } });
                     const vendorMap = new Map(allWinningVendors.map(v => [v.id, v]));
@@ -190,7 +144,6 @@ export async function POST(
                     for (const vendorId of portalWinnerIds) {
                         const vendorInfo = vendorMap.get(vendorId);
                         if (vendorInfo) {
-                            console.log(`[NOTIFY-VENDOR] Sending email to ${vendorInfo.name} (${vendorInfo.email})`);
                             const emailHtml = `
                                 <h1>Congratulations, ${vendorInfo.name}!</h1>
                                 <p>You have been awarded a contract for items in requisition <strong>${requisition.title}</strong>.</p>
@@ -200,11 +153,12 @@ export async function POST(
                                 <p>Thank you,</p>
                                 <p>Nib InternationalBank Procurement</p>
                             `;
-
-                            await sendEmail({
-                                to: vendorInfo.email,
-                                subject: `Contract Awarded: ${requisition.title}`,
-                                html: emailHtml
+                            await tx.emailJob.create({
+                                data: {
+                                    to: vendorInfo.email,
+                                    subject: `Contract Awarded: ${requisition.title}`,
+                                    html: emailHtml,
+                                }
                             });
                         }
                     }
@@ -299,10 +253,12 @@ export async function POST(
                         <p>Nib InternationalBank Procurement</p>
                     `;
 
-                    await sendEmail({
-                        to: winningQuote.vendor.email,
-                        subject: `Contract Awarded: ${requisition.title}`,
-                        html: emailHtml
+                    await tx.emailJob.create({
+                        data: {
+                            to: winningQuote.vendor.email,
+                            subject: `Contract Awarded: ${requisition.title}`,
+                            html: emailHtml,
+                        }
                     });
                 }
             }

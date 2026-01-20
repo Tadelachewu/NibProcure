@@ -72,12 +72,12 @@ export const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onS
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Extend Scoring Deadline</DialogTitle>
-                    <DialogDescription>Set a new scoring deadline for all committee members of this requisition.</DialogDescription>
+                    <DialogTitle>Extend Compliance Deadline</DialogTitle>
+                    <DialogDescription>Set a new compliance deadline for all committee members of this requisition.</DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
                     <div className="space-y-2">
-                        <Label>New Scoring Deadline</Label>
+                        <Label>New Compliance Deadline</Label>
                         <div className="flex gap-2">
                             <Popover>
                                 <PopoverTrigger asChild>

@@ -25,6 +25,12 @@ export async function PATCH(request: Request, { params }: { params: { id: string
                 isAuthorized = true;
             } else if (setting.type === 'specific' && setting.userIds?.includes(actor.id)) {
                 isAuthorized = true;
+            } else if (setting.type === 'assigned') {
+                // Check if user is assigned for this requisition
+                const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: params.id } });
+                if (requisition && Array.isArray(requisition.assignedRfqSenderIds) && requisition.assignedRfqSenderIds.includes(actor.id)) {
+                    isAuthorized = true;
+                }
             }
         }
 
@@ -45,10 +51,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
             return NextResponse.json({ error: 'Evaluation criteria can only be edited before the RFQ is sent.' }, { status: 400 });
         }
         
-        // Validation
-        if (financialWeight + technicalWeight !== 100) return NextResponse.json({ error: 'Overall weights must sum to 100.' }, { status: 400 });
-        if (financialCriteria.reduce((acc: number, c: any) => acc + c.weight, 0) !== 100) return NextResponse.json({ error: 'Financial criteria weights must sum to 100.' }, { status: 400 });
-        if (technicalCriteria.reduce((acc: number, c: any) => acc + c.weight, 0) !== 100) return NextResponse.json({ error: 'Technical criteria weights must sum to 100.' }, { status: 400 });
+        // Note: weight-based validations were removed to support a compliance-only flow
+        // (criteria weights and financial/technical splits are kept for compatibility
+        // but are no longer strictly validated on the server).
 
 
         const transactionResult = await prisma.$transaction(async (tx) => {

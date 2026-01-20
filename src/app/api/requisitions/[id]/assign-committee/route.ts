@@ -89,10 +89,10 @@ export async function POST(
             scoringDeadline: scoringDeadline ? new Date(scoringDeadline) : undefined,
             rfqSettings: nextSettings,
             financialCommitteeMembers: {
-            set: financialCommitteeMemberIds.map((id: string) => ({ id }))
+            set: (financialCommitteeMemberIds || []).map((id: string) => ({ id }))
             },
             technicalCommitteeMembers: {
-            set: technicalCommitteeMemberIds.map((id: string) => ({ id }))
+            set: (technicalCommitteeMemberIds || []).map((id: string) => ({ id }))
             }
         }
         });
@@ -125,6 +125,18 @@ export async function POST(
                     scoresSubmitted: false,
                 })),
             });
+            // Ensure each newly assigned user has the Committee_Member role
+            for (const memberId of membersToAdd) {
+                try {
+                    await tx.user.update({
+                        where: { id: memberId },
+                        data: { roles: { connect: { name: 'Committee_Member' } } }
+                    });
+                } catch (e) {
+                    // best-effort: ignore role connection errors
+                    console.warn('Failed to attach Committee_Member role to user', memberId, e);
+                }
+            }
         }
         
         // Unchanged members' status is preserved automatically by not touching them.

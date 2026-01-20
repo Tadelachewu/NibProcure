@@ -32,6 +32,12 @@ export async function GET(request: Request) {
             },
           },
         },
+        complianceSets: {
+          include: {
+            scorer: true,
+            itemCompliances: true,
+          },
+        },
       },
     });
     return NextResponse.json(reqQuotations);

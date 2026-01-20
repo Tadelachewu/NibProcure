@@ -38,7 +38,7 @@ export function CommitteeActions({
         return null;
     }
     
-    const userScoredQuotesCount = requisition.quotations?.filter(q => q.scores?.some(s => s.scorerId === user.id)).length || 0;
+    const userScoredQuotesCount = requisition.quotations?.filter(q => (q.scores?.some(s => s.scorerId === user.id) || (q as any).complianceSets?.some((c: any) => c.scorerId === user.id))).length || 0;
     const allQuotesScored = (requisition.quotations?.length || 0) > 0 && userScoredQuotesCount === requisition.quotations?.length;
 
     const handleSubmitScores = async () => {
@@ -55,16 +55,16 @@ export function CommitteeActions({
             if (response.status === 409) {
                 // Already submitted (idempotency)
                 setSubmittedOverride(true);
-                toast({ title: 'Scores Submitted', description: 'Your final scores were already submitted.'});
+                toast({ title: 'Compliance Submitted', description: 'Your final compliance checks were already submitted.'});
                 onFinalScoresSubmitted();
                 return;
             }
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to submit scores');
+                throw new Error(errorData.error || 'Failed to submit compliance checks');
             }
-            toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
+            toast({ title: 'Compliance Submitted', description: 'Your final compliance checks have been recorded.'});
             setSubmittedOverride(true);
             onFinalScoresSubmitted();
         } catch (error) {
@@ -83,12 +83,12 @@ export function CommitteeActions({
             <Card>
                 <CardHeader>
                     <CardTitle>Committee Actions</CardTitle>
-                    <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
+                    <CardDescription>Finalize your compliance checks for this requisition.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Button variant="outline" disabled>
                         <CheckCircle className="mr-2 h-4 w-4" />
-                        Scores Submitted
+                        Compliance Submitted
                     </Button>
                 </CardContent>
             </Card>
@@ -101,22 +101,22 @@ export function CommitteeActions({
                 <CardTitle>Committee Actions</CardTitle>
                 <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
             </CardHeader>
-            <CardContent>
-                <p className="text-sm text-muted-foreground">You have scored {userScoredQuotesCount} of {requisition.quotations?.length || 0} quotes.</p>
+                <CardContent>
+                <p className="text-sm text-muted-foreground">You have completed compliance checks for {userScoredQuotesCount} of {requisition.quotations?.length || 0} quotes.</p>
             </CardContent>
             <CardFooter>
                 <AlertDialog>
                     <AlertDialogTrigger asChild>
                         <Button disabled={!allQuotesScored || isSubmitting || scoresFinalized}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Submit Final Scores
+                            Submit Final Compliance Checks
                         </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>Are you sure you want to submit?</AlertDialogTitle>
                             <AlertDialogDescription>
-                                This will finalize your scores for this requisition. You will not be able to make further changes.
+                                This will finalize your compliance checks for this requisition. You will not be able to make further changes.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

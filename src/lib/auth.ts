@@ -114,11 +114,13 @@ export async function isActorAuthorizedForRequisition(actor: User, requisitionId
   const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
   if (!requisition) return false;
 
+  // RFQ sender assigned for this requisition
   const assignedForReq = requisition.assignedRfqSenderIds || [];
-  if (assignedForReq.length > 0) {
-    return assignedForReq.includes(actor.id);
+  if (assignedForReq.length > 0 && assignedForReq.includes(actor.id)) {
+    return true;
   }
 
+  // Global RFQ sender setting
   const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
   let settingValue: any = undefined;
   if (rfqSenderSetting) {

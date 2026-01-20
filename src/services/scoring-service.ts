@@ -19,21 +19,16 @@ export function tallyAndAwardScores(requisitionId: string, awardResponseDeadline
         return { success: true, message: "No quotes to score.", winner: 'N/A' };
     }
 
+    // Determine ranking based on lowest total price (least-price wins)
     relevantQuotes.forEach(quote => {
-        if (!quote.scores || quote.scores.length === 0) {
-            quote.finalAverageScore = 0;
-            return;
-        }
-
-        const totalScorers = quote.scores.length;
-        const aggregateScore = quote.scores.reduce((sum, scoreSet) => sum + scoreSet.finalScore, 0);
-        quote.finalAverageScore = aggregateScore / totalScorers;
+        // Ensure totalPrice is present; leave score fields unchanged for auditability
+        if (typeof quote.totalPrice !== 'number') quote.totalPrice = Number.POSITIVE_INFINITY as any;
     });
 
-    // Sort quotes by final average score, descending
-    relevantQuotes.sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
+    // Sort quotes by totalPrice ascending (lowest price first)
+    relevantQuotes.sort((a, b) => (a.totalPrice || 0) - (b.totalPrice || 0));
 
-    // Award, Standby, Reject
+    // Award, Standby, Reject based on price ranking
     relevantQuotes.forEach((quote, index) => {
         if (index === 0) {
             quote.status = 'Awarded';

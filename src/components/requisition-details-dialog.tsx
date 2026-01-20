@@ -55,9 +55,34 @@ const DetailItem = ({ label, children }: { label: string, children: React.ReactN
 );
 
 
+
 export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: RequisitionDetailsDialogProps) {
-  const { allUsers } = useAuth();
-  if (!requisition) return null;
+    const { allUsers } = useAuth();
+    if (!requisition) return null;
+
+    // --- Department Head Pin Status Logic ---
+    // Assume requisition.pins is available (if not, this should be fetched or added to the API response)
+    // Fallback: show nothing if pins are not present
+    let deptHeadPinStatus: 'pending' | 'verified' | 'expired' | 'not_generated' = 'not_generated';
+    let deptHeadName = '';
+    let pinExpiresAt: Date | undefined;
+    if ((requisition as any).pins && Array.isArray((requisition as any).pins)) {
+        // Find the department head pin (roleName includes 'Director' or 'Head')
+        const deptHeadPin = (requisition as any).pins.find((p: any) =>
+            p.roleName && (p.roleName.toLowerCase().includes('head') || p.roleName.toLowerCase().includes('director'))
+        );
+        if (deptHeadPin) {
+            deptHeadName = deptHeadPin.recipient?.name || deptHeadPin.roleName;
+            pinExpiresAt = deptHeadPin.expiresAt ? new Date(deptHeadPin.expiresAt) : undefined;
+            if (deptHeadPin.used) {
+                deptHeadPinStatus = 'verified';
+            } else if (pinExpiresAt && pinExpiresAt < new Date()) {
+                deptHeadPinStatus = 'expired';
+            } else {
+                deptHeadPinStatus = 'pending';
+            }
+        }
+    }
 
     const getTimelineStatusByKey = (key: string) => {
                 // Canonical timeline keys for stable ordering & correct stage mapping.
@@ -233,6 +258,24 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
             <ScrollArea className="max-h-[70vh] pr-4">
                 <div className="grid grid-cols-1 md:grid-cols-[1fr_250px] gap-6 py-4">
                     <div className="space-y-4">
+                                                        {/* Department Head Pin Status Section */}
+                                                        <div>
+                                                            <h4 className="font-medium text-sm mb-1 flex items-center gap-2">
+                                                                <UserCheck className="h-4 w-4" /> Department Head Pin Status
+                                                            </h4>
+                                                            {deptHeadPinStatus === 'not_generated' ? (
+                                                                <Badge variant="outline">Not Generated</Badge>
+                                                            ) : deptHeadPinStatus === 'pending' ? (
+                                                                <Badge variant="secondary">Pending Verification{deptHeadName ? ` (${deptHeadName})` : ''}</Badge>
+                                                            ) : deptHeadPinStatus === 'verified' ? (
+                                                                <Badge variant="success">Verified{deptHeadName ? ` (${deptHeadName})` : ''}</Badge>
+                                                            ) : deptHeadPinStatus === 'expired' ? (
+                                                                <Badge variant="destructive">Expired{deptHeadName ? ` (${deptHeadName})` : ''}</Badge>
+                                                            ) : null}
+                                                            {pinExpiresAt && deptHeadPinStatus === 'pending' && (
+                                                                <span className="ml-2 text-xs text-muted-foreground">(Expires {format(pinExpiresAt, 'PPp')})</span>
+                                                            )}
+                                                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             <DetailItem label="Requester">{requisition.requesterName}</DetailItem>
                             <DetailItem label="Department">{requisition.department}</DetailItem>
@@ -380,6 +423,60 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                         )}
 
                     </div>
+                    {/* Vendor Submissions Section */}
+                    {requisition.quotations && requisition.quotations.length > 0 && (
+                        <>
+                            <Separator />
+                            <div>
+                                <h4 className="font-medium mb-2 flex items-center gap-2"><Users /> Vendor Submissions</h4>
+                                <div className="border rounded-md">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Vendor</TableHead>
+                                                <TableHead>Quote Value</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead>Documents</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {requisition.quotations.map(q => (
+                                                <TableRow key={q.id}>
+                                                    <TableCell>{q.vendorName}</TableCell>
+                                                    <TableCell>{q.totalPrice ? `${q.totalPrice.toLocaleString()} ETB` : 'N/A'}</TableCell>
+                                                    <TableCell><Badge variant={q.status === 'Awarded' ? 'success' : q.status === 'Declined' ? 'destructive' : 'secondary'}>{q.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                    <TableCell>
+                                                        {q.documents && q.documents.length > 0 ? (
+                                                            <div className="flex flex-col gap-1">
+                                                                {q.documents.map((doc: any) => (
+                                                                    <a key={doc.id} href={doc.url} target="_blank" rel="noopener" className="text-xs underline text-primary">{doc.name}</a>
+                                                                ))}
+                                                            </div>
+                                                        ) : 'None'}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* Requester Attachments Section */}
+                    {requisition.attachments && requisition.attachments.length > 0 && (
+                        <>
+                            <Separator />
+                            <div>
+                                <h4 className="font-medium mb-2 flex items-center gap-2"><FileText /> Requester Attachments</h4>
+                                <div className="flex flex-col gap-2">
+                                    {requisition.attachments.map((att: any) => (
+                                        <a key={att.id} href={att.url} target="_blank" rel="noopener" className="text-xs underline text-primary">{att.name}</a>
+                                    ))}
+                                </div>
+                            </div>
+                        </>
+                    )}
                     <div className="space-y-4">
                          <h4 className="font-medium text-sm">Lifecycle Status</h4>
                          <TimelineStep title="Draft" status={getTimelineStatusByKey('Draft')} />

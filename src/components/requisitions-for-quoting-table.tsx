@@ -194,9 +194,13 @@ export function RequisitionsForQuotingTable() {
                       {getStatusBadge(req)}
                     </TableCell>
                     <TableCell className="text-right">
-                       <Button variant="outline" size="sm">
-                          {role === 'Committee_Member' ? 'View & Score' : 'Manage'} <ArrowRight className="ml-2 h-4 w-4" />
-                       </Button>
+                        {role === 'Committee_Member' ? (
+                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/compliance/${req.id}`); }}>
+                            Open Compliance <ArrowRight className="ml-2 h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <Button variant="outline" size="sm">Manage <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                        )}
                     </TableCell>
                   </TableRow>
                 ))

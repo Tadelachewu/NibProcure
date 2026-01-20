@@ -7,6 +7,19 @@ import { User, UserRole, PerItemAwardDetail, QuoteItem, Quotation, EvaluationCri
 import { getNextApprovalStep } from '@/services/award-service';
 import { getActorFromToken } from '@/lib/auth';
 
+const DEFAULT_EVALUATION_CRITERIA: EvaluationCriteria = {
+    financialWeight: 0,
+    technicalWeight: 100,
+    financialCriteria: [],
+    technicalCriteria: [
+        {
+            id: 'adherence-to-specification',
+            name: 'Adherence to specification',
+            weight: 100,
+        }
+    ]
+};
+
 function calculateItemScoreForVendor(
     quote: Quotation & { items: QuoteItem[], scores: any[] },
     reqItem: { id: string },
@@ -21,25 +34,30 @@ function calculateItemScoreForVendor(
     let championBid: QuoteItem | null = null;
     let championScore = -1;
 
-    for (const proposal of proposalsForItem) {
-        let totalItemScore = 0;
-        let scoreCount = 0;
-        
-        quote.scores?.forEach(scoreSet => {
-            const itemScore = scoreSet.itemScores.find((is: any) => is.quoteItemId === proposal.id);
-            if (itemScore) {
-                totalItemScore += itemScore.finalScore;
-                scoreCount++;
-            }
-        });
+        for (const proposal of proposalsForItem) {
+            // If any compliance set marks this quote item as non-comply, exclude this proposal
+            const itemCompliances = (quote as any).complianceSets?.flatMap((cs: any) => cs.itemCompliances || []) || [];
+            const anyNonCompliant = itemCompliances.some((ic: any) => ic.quoteItemId === proposal.id && ic.comply === false);
+            if (anyNonCompliant) continue;
 
-        const averageScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-        
-        if (averageScore > championScore) {
-            championScore = averageScore;
-            championBid = proposal;
+            let totalItemScore = 0;
+            let scoreCount = 0;
+            
+            quote.scores?.forEach(scoreSet => {
+                const itemScore = scoreSet.itemScores.find((is: any) => is.quoteItemId === proposal.id);
+                if (itemScore) {
+                    totalItemScore += itemScore.finalScore;
+                    scoreCount++;
+                }
+            });
+
+            const averageScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+            
+            if (averageScore > championScore) {
+                championScore = averageScore;
+                championBid = proposal;
+            }
         }
-    }
 
     return { championBid, championScore };
 }
@@ -94,11 +112,14 @@ export async function POST(
                 include: { 
                     items: true, 
                     evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } },
-                    quotations: { include: { scores: { include: { itemScores: true } }, items: true } }
+                    quotations: { include: { scores: { include: { itemScores: true } }, items: true, complianceSets: { include: { itemCompliances: true } } } }
                 } 
             });
-            if (!requisition || !requisition.evaluationCriteria) {
-                throw new Error("Requisition or its evaluation criteria not found.");
+            if (!requisition) {
+                throw new Error("Requisition not found.");
+            }
+            if (!requisition.evaluationCriteria) {
+                console.warn(`[FINALIZE-SCORES] Requisition ${requisitionId} has no evaluationCriteria configured. Proceeding without criteria.`);
             }
 
             const allQuotes = requisition.quotations;
@@ -108,14 +129,15 @@ export async function POST(
             }
             
             // --- SERVER-SIDE VALUE CALCULATION ---
+            const evaluationCriteria = requisition.evaluationCriteria || DEFAULT_EVALUATION_CRITERIA;
             let totalAwardValue = 0;
             if (awardStrategy === 'all') {
                 const winningVendorId = Object.keys(awards)[0];
                 const winnerQuote = allQuotes.find(q => q.vendorId === winningVendorId);
 
-                if (winnerQuote && requisition.evaluationCriteria) {
+                if (winnerQuote) {
                     totalAwardValue = requisition.items.reduce((sum, reqItem) => {
-                        const { championBid } = calculateItemScoreForVendor(winnerQuote, reqItem, requisition.evaluationCriteria!);
+                        const { championBid } = calculateItemScoreForVendor(winnerQuote, reqItem, evaluationCriteria);
                         if (championBid) {
                             return sum + (championBid.unitPrice * championBid.quantity);
                         }

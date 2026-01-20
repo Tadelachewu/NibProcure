@@ -12,36 +12,26 @@ function calculateItemScoreForVendor(
     reqItem: { id: string },
     evaluationCriteria: EvaluationCriteria
 ): { championBid: QuoteItem | null, championScore: number } {
-    
-    const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
+    // Choose the lowest-priced compliant proposal for this requisition item from the given quote
+    // NOTE: nonCompliantSet is injected via closure in award logic below
+    const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id && (!globalThis.nonCompliantSet || !globalThis.nonCompliantSet.has(item.id)));
     if (proposalsForItem.length === 0) {
         return { championBid: null, championScore: 0 };
     }
 
     let championBid: QuoteItem | null = null;
-    let championScore = -1;
+    let lowestPrice = Number.POSITIVE_INFINITY;
 
     for (const proposal of proposalsForItem) {
-        let totalItemScore = 0;
-        let scoreCount = 0;
-        
-        quote.scores?.forEach(scoreSet => {
-            const itemScore = scoreSet.itemScores.find((is: any) => is.quoteItemId === proposal.id);
-            if (itemScore) {
-                totalItemScore += itemScore.finalScore;
-                scoreCount++;
-            }
-        });
-
-        const averageScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-        
-        if (averageScore > championScore) {
-            championScore = averageScore;
+        const price = proposal.unitPrice || Number.POSITIVE_INFINITY;
+        if (price < lowestPrice) {
+            lowestPrice = price;
             championBid = proposal;
         }
     }
 
-    return { championBid, championScore };
+    // championScore is no longer meaningful for price-based selection; set to 0 for compatibility
+    return { championBid, championScore: 0 };
 }
 
 
@@ -91,6 +81,74 @@ export async function POST(
             if (allQuotes.length === 0) {
                 throw new Error("No quotes found to process for this requisition.");
             }
+
+            // Determine whether this requisition requires compliance checks. Default to true for compatibility.
+            const needsCompliance = (requisition.rfqSettings as any)?.needsCompliance ?? true;
+
+            // Determine quote items that have been marked non-compliant by committee checks (only if required).
+            const nonCompliantSet = new Set<string>();
+            let itemsWithCompliantBids: string[] = [];
+            let itemsWithoutCompliantBids: string[] = [];
+            if (needsCompliance) {
+                const allQuoteItemIds = allQuotes.flatMap(q => (q.items || []).map((i: any) => i.id));
+                if (allQuoteItemIds.length > 0) {
+                    const badCompliances = await tx.itemCompliance.findMany({ where: { quoteItemId: { in: allQuoteItemIds }, comply: false } });
+                    for (const bs of badCompliances) {
+                        if (bs.quoteItemId) nonCompliantSet.add(bs.quoteItemId);
+                    }
+                }
+
+                for (const reqItem of requisition.items) {
+                    const hasCompliant = allQuotes.some(q => (q.items || []).some((it: any) => it.requisitionItemId === reqItem.id && !nonCompliantSet.has(it.id)));
+                    if (hasCompliant) {
+                        itemsWithCompliantBids.push(reqItem.id);
+                    } else {
+                        itemsWithoutCompliantBids.push(reqItem.id);
+                    }
+                }
+
+                // If all items have no compliant bids, reset requisition to RFQ status and exit
+                if (itemsWithCompliantBids.length === 0 && itemsWithoutCompliantBids.length > 0) {
+                    const updatedReq = await tx.purchaseRequisition.update({
+                        where: { id: requisitionId },
+                        data: { status: 'PreApproved' }
+                    });
+                    for (const itemId of itemsWithoutCompliantBids) {
+                        await tx.requisitionItem.update({ where: { id: itemId }, data: { perItemAwardDetails: [] } });
+                    }
+                    return { reset: true, message: 'All items have no compliant bids. Requisition reset to PreApproved for re-bidding.', requisition: updatedReq };
+                }
+
+                // For items with no compliant bids, reset them for re-bidding
+                if (itemsWithoutCompliantBids.length > 0) {
+                    // Gather data for new requisition
+                    const itemsToRebid = requisition.items.filter(item => itemsWithoutCompliantBids.includes(item.id));
+                    // Create new requisition with same data but only the items to re-bid
+                    const newReq = await tx.purchaseRequisition.create({
+                        data: {
+                            title: requisition.title + ' (Rebid)',
+                            description: requisition.description,
+                            departmentId: requisition.departmentId,
+                            createdById: actor.id,
+                            status: 'PreApproved',
+                            rfqSettings: requisition.rfqSettings,
+                            items: {
+                                create: itemsToRebid.map(item => ({
+                                    name: item.name,
+                                    quantity: item.quantity,
+                                    unit: item.unit,
+                                    description: item.description,
+                                    // Add other fields as needed
+                                }))
+                            },
+                            // Copy other relevant fields as needed
+                        }
+                    });
+                    for (const itemId of itemsWithoutCompliantBids) {
+                        await tx.requisitionItem.update({ where: { id: itemId }, data: { perItemAwardDetails: [] } });
+                    }
+                }
+            }
             
             // --- SERVER-SIDE VALUE CALCULATION ---
             let totalAwardValue = 0;
@@ -127,48 +185,86 @@ export async function POST(
 
             if (awardStrategy === 'all') {
                 console.log('[FINALIZE-SCORES] Calculating for "Award All to Single Vendor" strategy.');
-                const winningVendorId = Object.keys(awards)[0];
-                const winningQuote = allQuotes.find(q => q.vendorId === winningVendorId);
-                
-                if (!winningQuote) throw new Error("Winning vendor's quote not found.");
+                const requestedWinnerVendorId = Object.keys(awards)[0];
 
-                const otherQuotes = allQuotes.filter(q => q.vendorId !== winningVendorId);
-                
-                await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
-                
-                const sortedOthers = otherQuotes.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
-                
-                for (let i = 0; i < sortedOthers.length; i++) {
-                    const quote = sortedOthers[i];
-                    const rank = i < 2 ? (i + 2) as 2 | 3 : null;
-                    await tx.quotation.update({
-                        where: { id: quote.id },
-                        data: {
-                            status: i < 2 ? 'Standby' : 'Rejected',
-                            rank: rank
-                        }
-                    });
-                }
-                const championBids = requisition.items.map(reqItem => {
-                   const { championBid } = calculateItemScoreForVendor(winningQuote, reqItem, requisition.evaluationCriteria!);
-                   return championBid;
-                }).filter(Boolean) as QuoteItem[];
-
-                const itemIdsToAward = championBids.map(i => i.id);
-                await tx.purchaseRequisition.update({
-                    where: { id: requisitionId },
-                    data: { awardedQuoteItemIds: itemIdsToAward }
+                // Determine which quotes have compliant champion bids for every requisition item
+                const compliantQuotes = allQuotes.filter(q => {
+                    // Only select champion bids that are compliant
+                    const championBids = requisition.items.map(reqItem => {
+                        // Inject nonCompliantSet into global scope for filtering
+                        globalThis.nonCompliantSet = nonCompliantSet;
+                        return calculateItemScoreForVendor(q, reqItem, requisition.evaluationCriteria!).championBid;
+                    }).filter(Boolean) as QuoteItem[];
+                    if (championBids.length !== requisition.items.length) return false;
+                    return championBids.every(cb => cb && !nonCompliantSet.has(cb.id));
                 });
+
+                if (compliantQuotes.length === 0) {
+                    throw new Error('No vendor is compliant for all champion bids. Cannot award all to a single vendor.');
+                }
+
+                // Choose winner: prefer requested winner if compliant, otherwise lowest totalPrice among compliant vendors
+                let winningQuote = compliantQuotes.find(q => q.vendorId === requestedWinnerVendorId) || compliantQuotes.sort((a,b) => (a.totalPrice || 0) - (b.totalPrice || 0))[0];
+
+                // Mark winning quote
+                await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
+
+                // Other compliant quotes become standby/rejected by price; non-compliant quotes are rejected
+                const compliantOthers = compliantQuotes.filter(q => q.id !== winningQuote.id).sort((a,b) => (a.totalPrice || 0) - (b.totalPrice || 0));
+                for (let i = 0; i < compliantOthers.length; i++) {
+                    const quote = compliantOthers[i];
+                    const rank = i < 2 ? (i + 2) as 2 | 3 : null;
+                    await tx.quotation.update({ where: { id: quote.id }, data: { status: i < 2 ? 'Standby' : 'Rejected', rank } });
+                }
+
+                // Explicitly reject any quote that isn't fully compliant
+                const nonCompliantQuotes = allQuotes.filter(q => !compliantQuotes.some(cq => cq.id === q.id));
+                for (const nq of nonCompliantQuotes) {
+                    await tx.quotation.update({ where: { id: nq.id }, data: { status: 'Rejected', rank: null } });
+                }
+
+                // Award champion bids from the winning quote (winningQuote is fully compliant)
+                // Only award compliant champion bids
+                const championBids = requisition.items.map(reqItem => {
+                    globalThis.nonCompliantSet = nonCompliantSet;
+                    return calculateItemScoreForVendor(winningQuote, reqItem, requisition.evaluationCriteria!).championBid;
+                }).filter(Boolean) as QuoteItem[];
+                const itemIdsToAward = championBids.map(i => i.id);
+
+                await tx.purchaseRequisition.update({ where: { id: requisitionId }, data: { awardedQuoteItemIds: itemIdsToAward } });
 
             } else if (awardStrategy === 'item') {
                 console.log('[FINALIZE-SCORES] Calculating for "Best Offer (Per Item)" strategy.');
-                
-                const allItemsWithAwards = requisition.items.map(item => {
-                    const bids = awards[item.id]?.rankedBids;
-                    if (!bids || bids.length === 0) {
-                        return { ...item, perItemAwardDetails: [] };
+
+                // Server-driven per-item least-price selection (champion bids)
+                let computedTotal = 0;
+
+                for (const reqItem of requisition.items) {
+                    // Gather all quote items for this requisition item across all quotations
+                    const allBidsForItem: Array<any> = [];
+                    for (const q of allQuotes) {
+                        // Only include compliant bids
+                        const bids = (q.items || []).filter((it: any) => it.requisitionItemId === reqItem.id && !nonCompliantSet.has(it.id));
+                        for (const b of bids) {
+                            allBidsForItem.push({
+                                quoteItemId: b.id,
+                                unitPrice: b.unitPrice,
+                                quantity: b.quantity,
+                                vendorId: q.vendorId,
+                                vendorName: q.vendorName,
+                                quotationId: q.id,
+                                proposedItemName: b.name,
+                                score: 0,
+                            });
+                        }
                     }
-                    const perItemAwardDetails = bids.slice(0, 3).map((bid: any, index: number) => ({
+
+                    // Sort by lowest unitPrice (least-price wins)
+                    allBidsForItem.sort((a, b) => (a.unitPrice || 0) - (b.unitPrice || 0));
+
+                    const topBids = allBidsForItem.slice(0, 3);
+
+                    const perItemAwardDetails = topBids.map((bid: any, index: number) => ({
                         rank: index + 1,
                         vendorId: bid.vendorId,
                         vendorName: bid.vendorName,
@@ -179,15 +275,21 @@ export async function POST(
                         score: bid.score,
                         status: (index === 0) ? 'Pending_Award' : 'Standby'
                     }));
-                    return { ...item, perItemAwardDetails };
-                });
 
-                for (const item of allItemsWithAwards) {
+                    // Persist per-item award details for this requisition item
                     await tx.requisitionItem.update({
-                        where: { id: item.id },
-                        data: { perItemAwardDetails: (item.perItemAwardDetails as any) || [] }
+                        where: { id: reqItem.id },
+                        data: { perItemAwardDetails: perItemAwardDetails as any }
                     });
+
+                    // Add the top bid's value to total award value (if exists)
+                    if (topBids.length > 0) {
+                        const top = topBids[0];
+                        computedTotal += (top.unitPrice || 0) * (reqItem.quantity || 0);
+                    }
                 }
+
+                totalAwardValue = computedTotal;
             }
 
             console.log('[FINALIZE-SCORES] Getting next approval step...');

@@ -3,32 +3,10 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { EvaluationCriterion, ItemScore, User } from '@/lib/types';
+import { User } from '@/lib/types';
 
-function calculateFinalItemScore(itemScore: any, criteria: any): { finalScore: number, allScores: any[] } {
-    let totalScore = 0;
-    
-    // Combine financial and technical scores into one array for easier processing
-    const allScores = [
-        ...(itemScore.financialScores || []).map((s: any) => ({...s, type: 'FINANCIAL'})),
-        ...(itemScore.technicalScores || []).map((s: any) => ({...s, type: 'TECHNICAL'}))
-    ];
-
-    const allCriteria: {id: string, weight: number, type: 'FINANCIAL' | 'TECHNICAL'}[] = [
-        ...criteria.financialCriteria.map((c: any) => ({...c, type: 'FINANCIAL'})),
-        ...criteria.technicalCriteria.map((c: any) => ({...c, type: 'TECHNICAL'}))
-    ];
-    
-    allScores.forEach((s: any) => {
-        const criterion = allCriteria.find(c => c.id === s.criterionId);
-        if (criterion) {
-            const overallWeight = criterion.type === 'FINANCIAL' ? criteria.financialWeight : criteria.technicalWeight;
-            totalScore += s.score * (criterion.weight / 100) * (overallWeight / 100);
-        }
-    });
-
-    return { finalScore: totalScore, allScores };
-}
+// This endpoint now accepts compliance checks per quote item instead of numeric scores.
+// Payload: { checks: [{ quoteItemId, comply: boolean, comment?: string }], committeeComment, userId }
 
 
 export async function POST(
@@ -38,7 +16,7 @@ export async function POST(
   const quoteId = params.id;
   try {
     const body = await request.json();
-    const { scores, userId } = body;
+    const { checks, committeeComment, userId } = body;
 
     const user: User | null = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -50,107 +28,79 @@ export async function POST(
         return NextResponse.json({ error: 'Quotation not found' }, { status: 404 });
     }
     
-    const requisition = await prisma.purchaseRequisition.findUnique({
-      where: { id: quoteToUpdate.requisitionId },
-      include: { evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } } }
-    });
-    if (!requisition || !requisition.evaluationCriteria) {
-        return NextResponse.json({ error: 'Associated requisition or its evaluation criteria not found.' }, { status: 404 });
+    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: quoteToUpdate.requisitionId } });
+    if (!requisition) {
+        return NextResponse.json({ error: 'Associated requisition not found.' }, { status: 404 });
     }
-    
+
     const transactionResult = await prisma.$transaction(async (tx) => {
-        const scoreSet = await tx.committeeScoreSet.upsert({
-            where: {
-                quotationId_scorerId: {
-                    quotationId: quoteId,
-                    scorerId: userId,
-                }
-            },
-            update: {
-                committeeComment: scores.committeeComment,
-            },
-            create: {
-                quotation: { connect: { id: quoteId } },
-                scorer: { connect: { id: user.id } },
-                committeeComment: scores.committeeComment,
-                finalScore: 0, // Will be updated later
-            }
-        });
-
-        // Clear previous scores for this set to handle resubmission/updates
-        await tx.itemScore.deleteMany({ where: { scoreSetId: scoreSet.id }});
-
-        let totalWeightedScore = 0;
-        const totalItems = scores.itemScores.length;
-
-        for (const itemScoreData of scores.itemScores) {
-            if (!itemScoreData.quoteItemId) {
-              throw new Error(`Critical error: quoteItemId is missing for an item score. This should not happen.`);
-            }
-            const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
-            totalWeightedScore += finalScore;
-            
-            const createdItemScore = await tx.itemScore.create({
-                data: {
-                    scoreSetId: scoreSet.id,
-                    quoteItemId: itemScoreData.quoteItemId,
-                    finalScore: finalScore,
-                }
-            });
-
-            const scoresToCreate = allScores.map((s: any) => {
-                const isFinancial = requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId);
-                return {
-                  itemScoreId: createdItemScore.id,
-                  score: s.score,
-                  comment: s.comment || '', // Ensure comment is never undefined
-                  type: isFinancial ? 'FINANCIAL' : 'TECHNICAL',
-                  financialCriterionId: isFinancial ? s.criterionId : null,
-                  technicalCriterionId: !isFinancial ? s.criterionId : null,
-                };
-            });
-
-            if (scoresToCreate.length > 0) {
-              await tx.score.createMany({
-                data: scoresToCreate
-              });
-            }
+        // Prevent resubmission: if a compliance set already exists for this user & quotation, reject
+        const existing = await tx.committeeComplianceSet.findUnique({ where: { quotationId_scorerId: { quotationId: quoteId, scorerId: userId } } });
+        if (existing) {
+            // Do not allow updates once submitted
+            throw Object.assign(new Error('Compliance already submitted by this user.'), { code: 'ALREADY_SUBMITTED' });
         }
-        
-        const finalAverageScoreForThisScorer = totalItems > 0 ? totalWeightedScore / totalItems : 0;
-    
-        await tx.committeeScoreSet.update({
-            where: { id: scoreSet.id },
-            data: { finalScore: finalAverageScoreForThisScorer }
+
+        const complianceSet = await tx.committeeComplianceSet.create({
+            data: { quotation: { connect: { id: quoteId } }, scorer: { connect: { id: user.id } }, committeeComment: committeeComment }
         });
 
-        const allScoreSetsForQuote = await tx.committeeScoreSet.findMany({ where: { quotationId: quoteId } });
-        const overallAverage = allScoreSetsForQuote.length > 0 
-            ? allScoreSetsForQuote.reduce((acc, s) => acc + s.finalScore, 0) / allScoreSetsForQuote.length
+        let totalCompliant = 0;
+        const totalItems = (checks || []).length;
+
+        for (const check of (checks || [])) {
+            if (!check.quoteItemId) {
+                throw new Error('quoteItemId is required for each check.');
+            }
+            if (check.comply) totalCompliant += 1;
+
+            await tx.itemCompliance.create({
+                data: {
+                    complianceSet: { connect: { id: complianceSet.id } },
+                    quoteItem: { connect: { id: check.quoteItemId } },
+                    comply: !!check.comply,
+                    comment: check.comment || null,
+                }
+            });
+        }
+
+        const compliancePercent = totalItems > 0 ? (totalCompliant / totalItems) * 100 : 0;
+
+        // Recalculate overall compliance for the quotation (average across compliance sets)
+        const allComplianceSetsForQuote = await tx.committeeComplianceSet.findMany({ where: { quotationId: quoteId }, include: { itemCompliances: true } });
+        const overallCompliance = allComplianceSetsForQuote.length > 0
+            ? allComplianceSetsForQuote.reduce((acc, s) => {
+                const compliantCount = (s.itemCompliances || []).filter(ic => ic.comply).length;
+                const total = (s.itemCompliances || []).length || 1;
+                return acc + (compliantCount / total) * 100;
+              }, 0) / allComplianceSetsForQuote.length
             : 0;
 
-        await tx.quotation.update({ where: { id: quoteId }, data: { finalAverageScore: overallAverage } });
+        await tx.quotation.update({ where: { id: quoteId }, data: { finalAverageScore: overallCompliance } });
 
         await tx.auditLog.create({
             data: {
                 timestamp: new Date(),
                 user: { connect: { id: user.id } },
-                action: 'SCORE_QUOTE',
+                action: 'COMPLIANCE_CHECK',
                 entity: 'Quotation',
                 entityId: quoteId,
-                details: `Submitted scores for quote from ${quoteToUpdate.vendorName}. Final Score: ${finalAverageScoreForThisScorer.toFixed(2)}.`,
+                details: `Submitted compliance checks for quote from ${quoteToUpdate.vendorName}. Compliance: ${compliancePercent.toFixed(2)}%.`,
                 transactionId: requisition.id,
             }
         });
 
-        return scoreSet;
+        return complianceSet;
     });
-
 
     return NextResponse.json(transactionResult);
   } catch (error) {
     console.error('Failed to submit scores:', error);
     if (error instanceof Error) {
+        // Already submitted by this user
+        if ((error as any).code === 'ALREADY_SUBMITTED') {
+            return NextResponse.json({ error: 'Compliance checks already submitted by this user.' }, { status: 409 });
+        }
         // Check for unique constraint violation
         if ((error as any).code === 'P2002') {
              return NextResponse.json({ error: 'A unique constraint violation occurred. This might be due to a duplicate score entry.'}, { status: 409 });

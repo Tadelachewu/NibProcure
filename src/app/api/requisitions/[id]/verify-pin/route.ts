@@ -68,10 +68,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     // If this is a preview (confirmOnly), do not mark the PIN used; just indicate outcome
     if (confirmOnly) {
-      const wouldBeVerified = actorAlreadyVerified ? verifiedDistinctCount : (verifiedDistinctCount + 1);
-      const deptVerifiedAfter = departmentHeadVerified || actorIsDeptHead;
-      const wouldUnmask = alreadyVerified ? true : (wouldBeVerified >= threshold && deptVerifiedAfter);
-      const remainingAfter = alreadyVerified ? 0 : Math.max(0, threshold - wouldBeVerified);
+      const actorIsDirectorPreview = DIRECTOR_ROLES.includes(roleName);
+      const wouldBeDirectorVerified = actorAlreadyVerified ? verifiedDistinctCount : (verifiedDistinctCount + (actorIsDirectorPreview ? 1 : 0));
+      const deptVerifiedAfter = departmentHeadVerified || actorIsDeptHead || roleName === DEPT_HEAD_ROLE;
+      const wouldUnmask = alreadyVerified ? true : (wouldBeDirectorVerified >= threshold && deptVerifiedAfter);
+      const remainingAfter = alreadyVerified ? 0 : Math.max(0, threshold - wouldBeDirectorVerified);
       return NextResponse.json({ wouldUnmask, remaining: remainingAfter, threshold, verifiedCount: verifiedDistinctCount, actorAlreadyVerified, alreadyVerified, departmentHeadVerified: deptVerifiedAfter });
     }
 
@@ -98,12 +99,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 
     let unmasked = false;
-    const afterVerifiedCount = verifiedDistinctCount + 1;
+    const actorIsDirector = DIRECTOR_ROLES.includes(pinRecord.roleName);
+    const afterDirectorVerifiedCount = verifiedDistinctCount + (actorIsDirector ? 1 : 0);
 
     // Department head verified after this operation?
     const deptVerifiedAfter = departmentHeadVerified || pinRecord.roleName === DEPT_HEAD_ROLE || actorIsDeptHead;
 
-    if (afterVerifiedCount >= threshold && deptVerifiedAfter) {
+    if (afterDirectorVerifiedCount >= threshold && deptVerifiedAfter) {
       const updated = {
         ...(typeof currentSettings === 'object' ? currentSettings : {}),
         masked: false,
@@ -115,8 +117,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       unmasked = true;
     }
 
-    const remaining = Math.max(0, threshold - afterVerifiedCount);
-    return NextResponse.json({ unmasked, remaining, threshold, verifiedCount: afterVerifiedCount, actorAlreadyVerified: false, alreadyVerified: false, departmentHeadVerified: deptVerifiedAfter });
+    const remaining = Math.max(0, threshold - afterDirectorVerifiedCount);
+    return NextResponse.json({ unmasked, remaining, threshold, verifiedCount: afterDirectorVerifiedCount, actorAlreadyVerified: false, alreadyVerified: false, departmentHeadVerified: deptVerifiedAfter });
   } catch (error) {
     if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -46,27 +46,64 @@ export const AwardCenterDialog = ({
         return setMinutes(setHours(awardResponseDeadlineDate, hours), minutes);
     }, [awardResponseDeadlineDate, awardResponseDeadlineTime]);
     
+    // For requisitions needing compliance, filter out non-compliant items and vendors
+    const needsCompliance = requisition.rfqSettings?.needsCompliance ?? true;
+    const nonCompliantItemIds = new Set(
+        requisition.items
+            .filter(item => Array.isArray(item.perItemAwardDetails) && item.perItemAwardDetails.length === 0)
+            .map(item => item.id)
+    );
     const eligibleQuotes = useMemo(() => {
         const declinedVendorIds = new Set(
             quotations.filter(q => q.status === 'Declined').map(q => q.vendorId)
         );
-        return quotations.filter(q => !declinedVendorIds.has(q.vendorId));
-    }, [quotations]);
+        return quotations.filter(q => {
+            if (declinedVendorIds.has(q.vendorId)) return false;
+            if (!needsCompliance) return true;
+            // Vendor must have at least one compliant item
+            const compliantItems = q.items.filter(i => !nonCompliantItemIds.has(i.requisitionItemId));
+            return compliantItems.length > 0;
+        });
+    }, [quotations, needsCompliance, nonCompliantItemIds]);
     
     const overallWinner = useMemo(() => {
         if (!eligibleQuotes || eligibleQuotes.length === 0) {
             return null;
         }
-        const sortedQuotes = [...eligibleQuotes].sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
+        // For compliance, calculate total price only for compliant items
+        const sortedQuotes = [...eligibleQuotes].map(q => {
+            let totalPrice = 0;
+            if (needsCompliance) {
+                for (const item of q.items) {
+                    if (!nonCompliantItemIds.has(item.requisitionItemId)) {
+                        totalPrice += item.unitPrice * item.quantity;
+                    }
+                }
+            } else {
+                totalPrice = q.totalPrice || 0;
+            }
+            return { ...q, totalPrice };
+        }).sort((a, b) => (a.totalPrice || 0) - (b.totalPrice || 0));
         return sortedQuotes.length > 0 ? sortedQuotes[0] : null;
-    }, [eligibleQuotes]);
+    }, [eligibleQuotes, needsCompliance, nonCompliantItemIds]);
 
     const standbyVendors = useMemo(() => {
         if (!eligibleQuotes || eligibleQuotes.length < 2) return [];
-        return [...eligibleQuotes]
-            .sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0))
-            .slice(1, 3); // Get 2nd and 3rd place
-    }, [eligibleQuotes]);
+        const sortedQuotes = [...eligibleQuotes].map(q => {
+            let totalPrice = 0;
+            if (needsCompliance) {
+                for (const item of q.items) {
+                    if (!nonCompliantItemIds.has(item.requisitionItemId)) {
+                        totalPrice += item.unitPrice * item.quantity;
+                    }
+                }
+            } else {
+                totalPrice = q.totalPrice || 0;
+            }
+            return { ...q, totalPrice };
+        }).sort((a, b) => (a.totalPrice || 0) - (b.totalPrice || 0));
+        return sortedQuotes.slice(1, 3);
+    }, [eligibleQuotes, needsCompliance, nonCompliantItemIds]);
 
     const handleConfirmAward = async () => {
         let minuteDocumentUrl: string | undefined = undefined;
@@ -133,7 +170,7 @@ export const AwardCenterDialog = ({
                                 </Button>
                             </CardTitle>
                             <CardDescription>
-                                Vendors are ranked by the highest final average score. The winner receives the award, and the next two are put on standby.
+                                Vendors are ranked by the lowest total price. The winner receives the award, and the next two are put on standby.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>

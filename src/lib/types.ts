@@ -202,6 +202,7 @@ export type PurchaseRequisition = {
       allowQuoteEdits?: boolean;
       technicalEvaluatorSeesPrices?: boolean;
       experienceDocumentRequired?: boolean;
+      needsCompliance?: boolean;
       [key: string]: any;
   };
   assignedRfqSenderIds?: string[];
@@ -298,6 +299,22 @@ export type CommitteeScoreSet = {
     finalScore: number;
     committeeComment: string;
     submittedAt: Date;
+}
+
+export type ItemCompliance = {
+  id: string;
+  quoteItemId: string;
+  comply: boolean;
+  comment?: string;
+}
+
+export type CommitteeComplianceSet = {
+  id: string;
+  scorerId: string;
+  scorer: { name?: string };
+  itemCompliances: ItemCompliance[];
+  committeeComment?: string;
+  submittedAt: Date;
 }
 
 export type Quotation = {

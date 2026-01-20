@@ -390,21 +390,21 @@ function CommitteeDashboard() {
     return (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             <StatCard 
-                title="Pending Your Score" 
+                title="Pending Your Check" 
                 value={stats.pendingScore.toString()} 
-                description="Requisitions awaiting your evaluation." 
+                description="Requisitions awaiting your compliance checks." 
                 icon={<Edit className="h-4 w-4 text-muted-foreground" />} 
                 onClick={() => router.push('/quotations?tab=pending')}
-                cta="Go to Scoring"
+                cta="Go to Compliance"
                 variant={stats.pendingScore > 0 ? "default" : "default"}
             />
             <StatCard 
-                title="Scored by You" 
+                title="Checked by You" 
                 value={stats.scored.toString()} 
-                description="Requisitions you have already evaluated." 
+                description="Requisitions you have already completed compliance checks for." 
                 icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />} 
                 onClick={() => router.push('/quotations?tab=scored')}
-                cta="View Scored"
+                cta="View Checked"
             />
         </div>
     );

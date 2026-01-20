@@ -241,10 +241,12 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
         }
     }
     
-    const roleNames = (user.roles || []).map((r: any) => (typeof r === 'string' ? r : r?.name)).filter(Boolean);
-    const isCommitteeMember = roleNames.includes('Committee_Member');
-    const isTechnicalOnlyScorer = isCommitteeMember && requisition.technicalCommitteeMemberIds?.includes(user.id) && !requisition.financialCommitteeMemberIds?.includes(user.id);
-    const hidePrices = isTechnicalOnlyScorer && !requisition.rfqSettings?.technicalEvaluatorSeesPrices;
+    // Only assigned compliance (technical) committee members have prices masked, and only before technical evaluation is finalized
+    const isAssignedTechnicalCommittee = (requisition.technicalCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id && a.type === 'technical');
+    // Assume finalized if isScoringDeadlinePassed or a similar flag (adjust as needed for your actual finalized state)
+    const isTechnicalEvaluationFinalized = isScoringDeadlinePassed || requisition.status === 'Scoring_Complete' || requisition.status === 'Awarded' || requisition.status === 'Completed';
+    // Only mask prices for assigned technical committee before finalization and if rfqSettings disables price visibility
+    const hidePrices = isAssignedTechnicalCommittee && !isTechnicalEvaluationFinalized && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
 
 
     return (
@@ -340,21 +342,14 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                     <p className="text-muted-foreground text-xs italic">{quote.notes}</p>
                                 </div>
                             )}
-                             {isAwarded && typeof quote.finalAverageScore === 'number' && (
+                             {isAwarded && (
                                  <div className="text-center pt-2 border-t">
-                                    <h4 className="font-semibold text-sm">Final Score</h4>
-                                    <p className="text-2xl font-bold text-primary">{quote.finalAverageScore.toFixed(2)}</p>
+                                    <h4 className="font-semibold text-sm">Total Price</h4>
+                                    <p className="text-2xl font-bold text-primary">{quote.totalPrice.toLocaleString()} ETB</p>
                                  </div>
                              )}
                         </CardContent>
-                        <CardFooter className="flex flex-col gap-2">
-                            {isCommitteeMember && (
-                                <Button className="w-full" variant={hasUserScored ? "secondary" : "outline"} onClick={() => onScore(quote, hidePrices)} disabled={isScoringDeadlinePassed && !hasUserScored}>
-                                    {hasUserScored ? <Check className="mr-2 h-4 w-4"/> : <Edit2 className="mr-2 h-4 w-4" />}
-                                    {hasUserScored ? 'View Your Score' : 'Score this Quote'}
-                                </Button>
-                            )}
-                        </CardFooter>
+                        <CardFooter className="flex flex-col gap-2" />
                     </Card>
                 )
             })}
@@ -726,7 +721,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                                 </div>
                                 <div className="grid md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <FormLabel>Committee Scoring Deadline</FormLabel>
+                                        <FormLabel>Committee Compliance Deadline</FormLabel>
                                         <div className="flex gap-2">
                                             <Popover>
                                                 <PopoverTrigger asChild>
@@ -956,6 +951,7 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
     
     const [allowQuoteEdits, setAllowQuoteEdits] = useState(requisition.rfqSettings?.allowQuoteEdits ?? true);
     const [experienceDocumentRequired, setExperienceDocumentRequired] = useState(requisition.rfqSettings?.experienceDocumentRequired ?? false);
+    const [needsCompliance, setNeedsCompliance] = useState<boolean>(requisition.rfqSettings?.needsCompliance ?? true);
     const { user } = useAuth();
     const { toast } = useToast();
     
@@ -973,6 +969,7 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
         setCpoAmount(requisition.cpoAmount);
         setAllowQuoteEdits(requisition.rfqSettings?.allowQuoteEdits ?? true);
         setExperienceDocumentRequired(requisition.rfqSettings?.experienceDocumentRequired ?? false);
+        setNeedsCompliance((requisition.rfqSettings as any)?.needsCompliance ?? true);
     }, [requisition]);
 
     const deadline = useMemo(() => {
@@ -1021,6 +1018,8 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
                     rfqSettings: {
                         allowQuoteEdits,
                         experienceDocumentRequired
+                        ,
+                        needsCompliance
                     }
                 }),
             });
@@ -1471,7 +1470,7 @@ const ScoringDialog = ({
 
     useEffect(() => {
         if (quote && requisition) {
-            const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id);
+            const existingScoreSet = quote.scores?.find(s => s.scorerId === user.id) || (quote as any).complianceSets?.find((c: any) => c.scorerId === user.id);
             const initialItemScores = quote.items.map(item => {
                 const existingItemScore = existingScoreSet?.itemScores.find(i => i.quoteItemId === item.id);
                 return {
@@ -1501,12 +1500,17 @@ const ScoringDialog = ({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ scores: values, userId: user.id }),
             });
-             if (!response.ok) {
+            if (!response.ok) {
                 const errorData = await response.json();
+                if (response.status === 409) {
+                    toast({ title: 'Compliance Already Submitted', description: errorData.error || 'Your compliance checks were already submitted.' });
+                    onScoreSubmitted();
+                    return;
+                }
                 throw new Error(errorData.error || 'Failed to submit scores.');
             }
 
-            toast({ title: "Scores Submitted", description: "Your evaluation has been recorded." });
+            toast({ title: "Compliance Submitted", description: "Your compliance checks have been recorded." });
             onScoreSubmitted();
 
         } catch (error) {
@@ -1521,7 +1525,7 @@ const ScoringDialog = ({
     };
     
     if (!requisition.evaluationCriteria) return null;
-    const existingScore = quote.scores?.find(s => s.scorerId === user.id);
+    const existingScore = quote.scores?.find(s => s.scorerId === user.id) || (quote as any).complianceSets?.find((c: any) => c.scorerId === user.id);
     const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id);
     const isTechnicalScorer = requisition.technicalCommitteeMemberIds?.includes(user.id);
 
@@ -1581,7 +1585,7 @@ const ScoringDialog = ({
         return (
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Scoring Deadline Passed</DialogTitle>
+                    <DialogTitle>Compliance Deadline Passed</DialogTitle>
                 </DialogHeader>
                 <div className="py-4 text-center">
                     <TimerOff className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -1601,8 +1605,8 @@ const ScoringDialog = ({
     return (
         <DialogContent className="max-w-4xl flex flex-col h-[95vh]">
             <DialogHeader>
-                <DialogTitle>Score Quotation from {quote.vendorName}</DialogTitle>
-                <DialogDescription>Evaluate each item in the quote against the requester's criteria. Your scores will be used to determine the final ranking.</DialogDescription>
+                <DialogTitle>Check Specification Compliance — {quote.vendorName}</DialogTitle>
+                <DialogDescription>Mark each quoted item as Comply or Non‑comply against the requester's specifications. This will determine which bids are eligible for award.</DialogDescription>
             </DialogHeader>
             <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0 flex flex-col">
@@ -1669,19 +1673,19 @@ const ScoringDialog = ({
 
                 <DialogFooter className="pt-4 mt-4 border-t">
                     {existingScore ? (
-                        <p className="text-sm text-muted-foreground">You have already scored this quote.</p>
+                        <p className="text-sm text-muted-foreground">You have already completed compliance checks for this quote.</p>
                     ) : (
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
                                 <Button type="button">
-                                    Submit Score
+                                    Submit Compliance
                                 </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
                                 <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirm Your Score</AlertDialogTitle>
+                                    <AlertDialogTitle>Confirm Compliance Submission</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Please review your evaluation before submitting. This action cannot be undone.
+                                        Please review your compliance checks before submitting. This action cannot be undone.
                                     </AlertDialogDescription>
                                 </AlertDialogHeader>
                             
@@ -1737,25 +1741,35 @@ const ScoringProgressTracker = ({
     const scoringStatus = useMemo(() => {
         return assignedCommitteeMembers.map(member => {
             const assignment = (requisition as any).committeeAssignments?.find((a: any) => a.userId === member.id);
-            const hasSubmittedFinalScores = !!assignment?.scoresSubmitted;
-            
+            // hasSubmittedAny: user submitted at least one compliance/score
+            const hasSubmittedAny = quotations
+                .flatMap(q => ([...(q.scores || []), ...(q.complianceSets || [])]))
+                .some((s: any) => s.scorerId === member.id);
+
+            // hasSubmittedAll: user submitted for every quotation
+            const hasSubmittedAll = (quotations?.length || 0) > 0 && quotations.every(q => {
+                return !!(q.scores?.some((s: any) => s.scorerId === member.id) || q.complianceSets?.some((c: any) => c.scorerId === member.id));
+            });
+
+            // Determine a sensible submission date if they have submitted at least once
             let submissionDate: Date | null = null;
-            if (hasSubmittedFinalScores) {
+            if (hasSubmittedAny) {
                 const latestScore = quotations
-                    .flatMap(q => q.scores || [])
-                    .filter(s => s.scorerId === member.id)
-                    .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())[0];
-                
+                    .flatMap(q => ([...(q.scores || []), ...(q.complianceSets || [])]))
+                    .filter((s: any) => s.scorerId === member.id)
+                    .sort((a, b) => new Date(b.submittedAt || b.createdAt || b.timestamp || 0).getTime() - new Date(a.submittedAt || a.createdAt || a.timestamp || 0).getTime())[0];
+
                 if (latestScore) {
-                    submissionDate = new Date(latestScore.submittedAt);
+                    submissionDate = new Date(latestScore.submittedAt || latestScore.createdAt || latestScore.timestamp || Date.now());
                 }
             }
 
-            const isOverdue = isScoringDeadlinePassed && !hasSubmittedFinalScores;
+            const isOverdue = isScoringDeadlinePassed && !hasSubmittedAny;
 
             return {
                 ...member,
-                hasSubmittedFinalScores,
+                hasSubmittedAny,
+                hasSubmittedAll,
                 isOverdue,
                 submittedAt: submissionDate,
             };
@@ -1767,7 +1781,7 @@ const ScoringProgressTracker = ({
         });
     }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id, (requisition as any).committeeAssignments]);
     
-    const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedFinalScores);
+    const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedAll);
 
     const getButtonState = () => {
         if (['Awarded', 'Accepted', 'PO_Created', 'Closed', 'Fulfilled', 'PostApproved'].includes(requisition.status)) {
@@ -1777,8 +1791,9 @@ const ScoringProgressTracker = ({
             return { text: "Award Pending Final Approval", disabled: true };
         }
         if (isFinalizing) return { text: "Finalizing...", disabled: true };
-        if (!allHaveScored) return { text: "Waiting for All Scores...", disabled: true };
-        return { text: "Finalize Scores & Award", disabled: false };
+        const needsCompliance = (requisition.rfqSettings as any)?.needsCompliance ?? true;
+        if (needsCompliance && !allHaveScored) return { text: "Waiting for All Compliance Checks...", disabled: true };
+        return { text: "Finalize & Award", disabled: false };
     }
     const buttonState = getButtonState();
 
@@ -1786,9 +1801,9 @@ const ScoringProgressTracker = ({
     return (
         <Card className="mt-6">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2"><GanttChart /> Scoring Progress</CardTitle>
-                <CardDescription>Track the committee's scoring progress. The award can be finalized once all members have submitted their scores for all quotations.</CardDescription>
-            </CardHeader>
+                        <CardTitle className="flex items-center gap-2"><GanttChart /> Compliance Progress</CardTitle>
+                        <CardDescription>Track the committee's compliance-check progress. The award can be finalized once all members have completed compliance checks for all quotations.</CardDescription>
+                    </CardHeader>
             <CardContent>
                 <ul className="space-y-3">
                     {scoringStatus.map(member => (
@@ -1804,7 +1819,7 @@ const ScoringProgressTracker = ({
                                 </div>
                            </div>
                             <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
-                                {member.hasSubmittedFinalScores && member.submittedAt ? (
+                                {member.hasSubmittedAny && member.submittedAt ? (
                                     <div className="text-right flex-1">
                                         <Badge variant="default" className="bg-green-600"><Check className="mr-1 h-3 w-3" /> Submitted</Badge>
                                         <p className="text-xs text-muted-foreground mt-1">
@@ -2003,7 +2018,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                     {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
                                                 </div>
                                             ))
-                                        ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
+                                        ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No compliance checks submitted for this quote.</p>}
                                     </CardContent>
                                 </Card>
                             ))}
@@ -2148,7 +2163,7 @@ const CommitteeActions = ({
     const [submittedOverride, setSubmittedOverride] = useState(false);
     const { toast } = useToast();
     
-    const userScoredQuotesCount = quotations.filter(q => q.scores?.some(s => s.scorerId === user.id)).length;
+    const userScoredQuotesCount = quotations.filter(q => (q.scores?.some(s => s.scorerId === user.id) || (q as any).complianceSets?.some((c: any) => c.scorerId === user.id))).length;
     const allQuotesScored = quotations.length > 0 && userScoredQuotesCount === quotations.length;
     
     // Corrected logic: Check the live assignment status from the user object
@@ -2177,7 +2192,7 @@ const CommitteeActions = ({
 
             if (response.status === 409) {
                 setSubmittedOverride(true);
-                toast({ title: 'Scores Submitted', description: 'Your final scores were already submitted.'});
+                toast({ title: 'Compliance Submitted', description: 'Your final compliance checks were already submitted.'});
                 onFinalScoresSubmitted();
                 return;
             }
@@ -2186,7 +2201,7 @@ const CommitteeActions = ({
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to submit scores');
             }
-            toast({ title: 'Scores Submitted', description: 'Your final scores have been recorded.'});
+            toast({ title: 'Compliance Submitted', description: 'Your final compliance checks have been recorded.'});
             setSubmittedOverride(true);
             onFinalScoresSubmitted();
         } catch (error) {
@@ -2209,12 +2224,12 @@ const CommitteeActions = ({
             <Card>
                 <CardHeader>
                     <CardTitle>Committee Actions</CardTitle>
-                    <CardDescription>Finalize your evaluation for this requisition.</CardDescription>
+                    <CardDescription>Finalize your compliance checks for this requisition.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Button variant="outline" disabled>
                         <CheckCircle className="mr-2 h-4 w-4" />
-                        Scores Submitted
+                        Compliance Submitted
                     </Button>
                 </CardContent>
             </Card>
@@ -2315,6 +2330,15 @@ const NotifyVendorDialog = ({
                             onChange={(e) => setDeadlineTime(e.target.value)}
                         />
                     </div>
+                </div>
+
+                <div>
+                    <FormLabel>Does this RFQ require a compliance check?</FormLabel>
+                    <div className="flex items-center gap-4 mt-2">
+                        <label className="flex items-center gap-2"><input type="radio" name="needsCompliance" checked={needsCompliance === true} onChange={() => setNeedsCompliance(true)} /> <span>Yes — require compliance checks</span></label>
+                        <label className="flex items-center gap-2"><input type="radio" name="needsCompliance" checked={needsCompliance === false} onChange={() => setNeedsCompliance(false)} /> <span>No — skip compliance checks</span></label>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">If you choose <strong>No</strong>, the requisition will skip committee compliance checks and proceed directly to award/finalize.</p>
                 </div>
                 <DialogFooter>
                     <Button variant="ghost" onClick={onClose}>Cancel</Button>
@@ -2868,7 +2892,7 @@ export default function QuotationDetailsPage() {
              />
         )}
         
-         {(((isAuthorized) || role === 'Committee') &&
+        {(((isAuthorized) || role === 'Committee' || role === 'Procurement_Officer' || role === 'Admin') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
             requisition.status !== 'PreApproved' &&
             requisition.status !== 'Scoring_Complete' && requisition.status !== 'Award_Declined'
