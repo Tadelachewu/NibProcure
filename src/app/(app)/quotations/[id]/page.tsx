@@ -3332,7 +3332,7 @@ export default function QuotationDetailsPage() {
         setSingleAwardCenterOpen(false);
         setBestItemAwardCenterOpen(false);
     }
-
+};
 // Handler for Restart RFQ from error dialog
 const handleRestartRfqFromError = () => {
     setShowNoCompliantDialog(false);
@@ -4030,7 +4030,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
         </Card>
     );
 
-
+}
 
 
 
