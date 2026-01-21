@@ -22,10 +22,14 @@ export async function GET() {
 export async function POST(request: Request) {
     try {
     const body = await request.json();
-    const { name, contactPerson, email, phone, address } = body;
+    let { name, contactPerson, email, phone, address } = body;
+
+    // allow email to be optional from the add-vendor form; generate a unique placeholder when missing
+    const cleanedEmail = (typeof email === 'string' ? email.trim() : '') || '';
+    const userEmail = cleanedEmail !== '' ? cleanedEmail.toLowerCase() : `vendor+${Date.now()}${Math.random().toString(36).slice(2,6)}@example.local`;
 
     // Ensure there's a User record to satisfy the Vendor.user relation
-    let user = await prisma.user.findUnique({ where: { email } });
+    let user = await prisma.user.findUnique({ where: { email: userEmail } });
     if (!user) {
       // Create a lightweight user for the vendor
       const rawPassword = Math.random().toString(36).slice(2, 12);
@@ -39,7 +43,7 @@ export async function POST(request: Request) {
       user = await prisma.user.create({
         data: {
           name: name,
-          email: email,
+          email: userEmail,
           password: hashedPassword,
           roles: { connect: { id: vendorRole.id } }
         }
@@ -50,7 +54,7 @@ export async function POST(request: Request) {
         data: {
           name,
           contactPerson,
-          email,
+          email: userEmail,
           phone,
           address,
           user: { connect: { id: user.id } },

@@ -21,19 +21,24 @@ export function QuorumSettings() {
 
 
     useEffect(() => {
-        const savedData = localStorage.getItem(storageKey);
-        if(savedData) {
-            try {
-                const parsed = JSON.parse(savedData);
-                setRfqQuorum(parsed.rfqQuorum);
-                setCommitteeQuorum(parsed.committeeQuorum);
-                toast({ title: 'Draft Restored', description: 'Your unsaved quorum settings have been restored.'});
-            } catch(e) { console.error(e) }
-        } else {
-            const rfqSetting = settings.find(s => s.key === 'rfqQuorum');
-            const committeeSetting = settings.find(s => s.key === 'committeeQuorum');
+        // Prefer server-saved settings when available; fall back to draft in localStorage only if server settings are missing.
+        const rfqSetting = settings.find((s: any) => s.key === 'rfqQuorum');
+        const committeeSetting = settings.find((s: any) => s.key === 'committeeQuorum');
+
+        if (rfqSetting || committeeSetting) {
             if (rfqSetting) setRfqQuorum(Number(rfqSetting.value));
             if (committeeSetting) setCommitteeQuorum(Number(committeeSetting.value));
+            return;
+        }
+
+        const savedData = localStorage.getItem(storageKey);
+        if (savedData) {
+            try {
+                const parsed = JSON.parse(savedData);
+                if (typeof parsed.rfqQuorum === 'number') setRfqQuorum(parsed.rfqQuorum);
+                if (typeof parsed.committeeQuorum === 'number') setCommitteeQuorum(parsed.committeeQuorum);
+                toast({ title: 'Draft Restored', description: 'Your unsaved quorum settings have been restored.'});
+            } catch (e) { console.error(e) }
         }
     }, [settings, toast]);
     
@@ -79,11 +84,14 @@ export function QuorumSettings() {
                 <div className="grid md:grid-cols-2 gap-6 items-start">
                     <div className="space-y-2">
                         <Label htmlFor="rfq-quorum" className="flex items-center gap-2"><Users /> Minimum Vendors for RFQ</Label>
-                        <Input 
+                        <Input
                             id="rfq-quorum"
-                            type="number" 
+                            type="number"
                             value={rfqQuorum}
-                            onChange={(e) => setRfqQuorum(Number(e.target.value))}
+                            onChange={(e) => {
+                                const v = Number(e.target.value);
+                                setRfqQuorum(Number.isNaN(v) ? 1 : v);
+                            }}
                             min="1"
                         />
                         <p className="text-sm text-muted-foreground">
@@ -92,13 +100,16 @@ export function QuorumSettings() {
                     </div>
                     <div className="space-y-2">
                          <Label htmlFor="committee-quorum" className="flex items-center gap-2"><FileBadge /> Minimum Quotes for Committee Assignment</Label>
-                         <Input 
-                            id="committee-quorum"
-                            type="number" 
-                            value={committeeQuorum}
-                            onChange={(e) => setCommitteeQuorum(Number(e.target.value))}
-                            min="1"
-                         />
+                                 <Input
+                                     id="committee-quorum"
+                                     type="number"
+                                     value={committeeQuorum}
+                                     onChange={(e) => {
+                                          const v = Number(e.target.value);
+                                          setCommitteeQuorum(Number.isNaN(v) ? 1 : v);
+                                     }}
+                                     min="1"
+                                 />
                          <p className="text-sm text-muted-foreground">
                             The minimum number of submitted quotes required to enable the committee assignment stage.
                         </p>

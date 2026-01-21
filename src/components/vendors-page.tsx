@@ -45,7 +45,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 const vendorSchema = z.object({
   name: z.string().min(2, "Vendor name is required."),
   contactPerson: z.string().min(2, "Contact person is required."),
-  email: z.string().email("Invalid email address."),
+  // Email is optional for procurement 'Add Vendor' form — allow empty string or a valid email
+  email: z.union([z.string().email("Invalid email address."), z.literal('')]),
   phone: z.string().min(10, "Phone number seems too short."),
   address: z.string().min(10, "Address is required."),
 });

@@ -492,8 +492,8 @@ function ManualVendorQuotationDialog({
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete, isAssignedCommitteeMember, readyForCommitteeAssignment }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean, isAssignedCommitteeMember: boolean, readyForCommitteeAssignment: boolean }) => {
-    const isMasked = (requisition.rfqSettings?.masked === true) || (readyForCommitteeAssignment && requisition.rfqSettings?.masked !== false);
+const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete, isAssignedCommitteeMember, readyForCommitteeAssignment, quorumNotMetAndDeadlinePassed }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean, isAssignedCommitteeMember: boolean, readyForCommitteeAssignment: boolean, quorumNotMetAndDeadlinePassed: boolean }) => {
+    const isMasked = (requisition.rfqSettings?.masked === true) || (readyForCommitteeAssignment && requisition.rfqSettings?.masked !== false) || quorumNotMetAndDeadlinePassed;
 
     if (quotes.length === 0) {
         return (
@@ -3097,6 +3097,12 @@ export default function QuotationDetailsPage() {
     return awardProcessStatuses.includes(requisition.status) || requisition.status.startsWith('Pending_');
   }, [requisition]);
 
+    // Whether the deadline passed but the number of quotations is below the committee quorum
+    const quorumNotMetAndDeadlinePassed = useMemo(() => {
+        const deadlinePassed = isDeadlinePassed;
+        return deadlinePassed && !isAwarded && quotations.length > 0 && quotations.length < committeeQuorum;
+    }, [isDeadlinePassed, isAwarded, quotations.length, committeeQuorum]);
+
 
   const isAssignedCommitteeMember = useMemo(() => {
       if (!user || !role || !requisition) {
@@ -3452,10 +3458,9 @@ const handleChangeAwardTypeFromError = () => {
 
     const canManageCommittees = isAuthorized;
         const isMasked = (requisition.rfqSettings?.masked === true) || (readyForCommitteeAssignment && requisition.rfqSettings?.masked !== false);
-  const canAddManualQuotation = isAuthorized && !isMasked && requisition.status === 'Accepting_Quotes';
+    const canAddManualQuotation = isAuthorized && requisition.status === 'Accepting_Quotes' && (!isMasked || quorumNotMetAndDeadlinePassed);
   const isReadyForNotification = requisition?.status === 'PostApproved';
-  const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
-  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && !isAwarded && quotations.length > 0 && quotations.length < committeeQuorum;
+    const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
   
   const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
   
@@ -3625,7 +3630,7 @@ const handleChangeAwardTypeFromError = () => {
                             (() => {
                                 const needsCompliance = (requisition.rfqSettings as any)?.needsCompliance;
                                 const isRfqSender = user && ((user.roles || []).some((r: any) => (typeof r === 'string' ? r === 'Procurement_Officer' : r?.name === 'Procurement_Officer')) || (user.roles || []).some((r: any) => (typeof r === 'string' ? r === 'Admin' : r?.name === 'Admin')));
-                                if (needsCompliance === undefined && isRfqSender) {
+                                if (needsCompliance === undefined && isRfqSender && !quorumNotMetAndDeadlinePassed) {
                                     return (
                                         <Card className="border">
                                             <CardHeader>
@@ -3741,7 +3746,7 @@ const handleChangeAwardTypeFromError = () => {
                                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                                         </div>
                                     ) : (
-                                        <QuoteComparison quotes={quotesForDisplay} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember} readyForCommitteeAssignment={readyForCommitteeAssignment} />
+                                        <QuoteComparison quotes={quotesForDisplay} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember} readyForCommitteeAssignment={readyForCommitteeAssignment} quorumNotMetAndDeadlinePassed={quorumNotMetAndDeadlinePassed} />
                                     )}
                                 </CardContent>
 

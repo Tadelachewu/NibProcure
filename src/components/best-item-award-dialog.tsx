@@ -56,51 +56,40 @@ export const BestItemAwardDialog = ({
 
     const itemWinners = useMemo(() => {
         if (!requisition.items) return [];
-
+        // Choose the lowest-priced proposal per item across eligible quotes (least-price wins)
         return requisition.items.map(reqItem => {
-            
             const championBids = eligibleQuotes.map(quote => {
                 const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
                 if (proposalsForItem.length === 0) return null;
 
-                let bestProposalForItem: QuoteItem | null = null;
-                let bestItemScore = -1;
-
-                proposalsForItem.forEach(proposal => {
-                    let totalItemScore = 0;
-                    let scoreCount = 0;
-                    quote.scores?.forEach(scoreSet => {
-                        const itemScore = scoreSet.itemScores?.find(i => i.quoteItemId === proposal.id);
-                        if (itemScore) {
-                            totalItemScore += itemScore.finalScore;
-                            scoreCount++;
-                        }
-                    });
-                    const averageItemScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                    
-                    if (averageItemScore > bestItemScore) {
-                        bestItemScore = averageItemScore;
-                        bestProposalForItem = proposal;
+                // pick the proposal with the lowest unitPrice for this vendor
+                let bestProposal: QuoteItem | null = null;
+                let lowestPrice = Number.POSITIVE_INFINITY;
+                for (const p of proposalsForItem) {
+                    const price = p.unitPrice ?? Number.POSITIVE_INFINITY;
+                    if (price < lowestPrice) {
+                        lowestPrice = price;
+                        bestProposal = p;
                     }
-                });
-
-                if (!bestProposalForItem) return null;
+                }
+                if (!bestProposal) return null;
 
                 return {
                     vendorId: quote.vendorId,
                     vendorName: quote.vendorName,
-                    quoteItemId: bestProposalForItem.id,
+                    quoteItemId: bestProposal.id,
                     quotationId: quote.id,
-                    proposedItemName: bestProposalForItem.name,
-                    unitPrice: bestProposalForItem.unitPrice,
+                    proposedItemName: bestProposal.name,
+                    unitPrice: bestProposal.unitPrice,
                     bidDocumentUrl: quote.bidDocumentUrl,
                     experienceDocumentUrl: quote.experienceDocumentUrl,
-                    score: bestItemScore
+                    score: 0,
                 };
             }).filter((bid): bid is NonNullable<typeof bid> => bid !== null);
-            
-            championBids.sort((a, b) => b.score - a.score);
-            
+
+            // sort ascending by unitPrice so lowest comes first
+            championBids.sort((a, b) => (a.unitPrice ?? 0) - (b.unitPrice ?? 0));
+
             const winner = championBids.length > 0 ? championBids[0] : null;
 
             return {

@@ -417,6 +417,14 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
              }
         }
         
+        // Collect awarded quote item ids from newly promoted items
+        const awardedIdsForPending: string[] = [];
+        for (const item of updatedRequisition.items) {
+            const details = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
+            const pending = details.find(d => d.status === 'Pending_Award');
+            if (pending && pending.quoteItemId) awardedIdsForPending.push(pending.quoteItemId);
+        }
+
         const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...updatedRequisition, totalPrice: newTotalValue }, actor);
 
         await tx.purchaseRequisition.update({
@@ -425,6 +433,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
                 status: nextStatus as any,
                 currentApproverId: nextApproverId,
                 totalPrice: newTotalValue, // Use the newly calculated total
+                awardedQuoteItemIds: awardedIdsForPending.length > 0 ? awardedIdsForPending : undefined,
             }
         });
         

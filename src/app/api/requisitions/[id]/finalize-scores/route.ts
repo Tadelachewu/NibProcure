@@ -238,6 +238,7 @@ export async function POST(
 
                 // Server-driven per-item least-price selection (champion bids)
                 let computedTotal = 0;
+                const itemIdsToAward: string[] = [];
 
                 for (const reqItem of requisition.items) {
                     // Gather all quote items for this requisition item across all quotations
@@ -285,11 +286,17 @@ export async function POST(
                     // Add the top bid's value to total award value (if exists)
                     if (topBids.length > 0) {
                         const top = topBids[0];
+                        itemIdsToAward.push(top.quoteItemId);
                         computedTotal += (top.unitPrice || 0) * (reqItem.quantity || 0);
                     }
                 }
 
                 totalAwardValue = computedTotal;
+
+                // Persist the list of awarded quote item ids for downstream processing
+                if (itemIdsToAward.length > 0) {
+                    await tx.purchaseRequisition.update({ where: { id: requisitionId }, data: { awardedQuoteItemIds: itemIdsToAward } });
+                }
             }
 
             console.log('[FINALIZE-SCORES] Getting next approval step...');

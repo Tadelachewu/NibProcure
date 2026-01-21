@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { addDays } from 'date-fns';
+import { addDays, isPast } from 'date-fns';
 import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 
 export async function POST(request: Request) {
@@ -41,7 +41,16 @@ export async function POST(request: Request) {
 
     const rfqSettings = (requisition.rfqSettings || {}) as any;
     const isUnmasked = rfqSettings?.masked === false || Boolean(rfqSettings?.directorPresenceVerified);
-    if (!isUnmasked) {
+
+    // Allow manual upload when sealed only if the deadline has passed and current quotes are below committee quorum
+    const committeeSetting = await prisma.setting.findUnique({ where: { key: 'committeeQuorum' } });
+    const committeeQuorum = Number(committeeSetting?.value) || 3;
+    const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+    const existingQuoteCount = await prisma.quotation.count({ where: { requisitionId: String(requisitionId) } });
+
+    const allowWhileSealed = deadlinePassed && existingQuoteCount < committeeQuorum;
+
+    if (!isUnmasked && !allowWhileSealed) {
       return NextResponse.json(
         { error: 'RFQ is still sealed. Unmask vendor quotations before adding manual quotations.' },
         { status: 400 }
