@@ -85,7 +85,7 @@ export default function VendorLayout({
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild><Link href="/vendor/profile">Profile</Link></DropdownMenuItem>
-                <DropdownMenuItem disabled>Support</DropdownMenuItem>
+                <DropdownMenuItem asChild><Link href="/vendor/support">Support</Link></DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
               </DropdownMenuContent>
