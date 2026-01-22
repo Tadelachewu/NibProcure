@@ -42,6 +42,17 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
         return requisition.customQuestions?.find(q => q.id === questionId)?.questionText || "Unknown Question";
     }
 
+    // Aggregate compliance results for this quotation's items
+    const complianceMap = new Map<string, { total: number; nonCompliant: number }>();
+    (quote.complianceSets || []).forEach((cs: any) => {
+        (cs.itemCompliances || []).forEach((ic: any) => {
+            const entry = complianceMap.get(ic.quoteItemId) || { total: 0, nonCompliant: 0 };
+            entry.total += 1;
+            if (ic.comply === false) entry.nonCompliant += 1;
+            complianceMap.set(ic.quoteItemId, entry);
+        });
+    });
+
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-3xl h-[90vh] flex flex-col">
@@ -76,9 +87,18 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                              <div className="space-y-4">
                                 {quote.items.map(item => (
                                         <div key={item.id} className="p-4 border rounded-lg">
-                                        <div className="flex justify-between">
+                                        <div className="flex justify-between items-start">
                                             <div>
-                                                <p className="font-semibold">{item.name}</p>
+                                                <div className="flex items-center gap-3">
+                                                    <p className="font-semibold">{item.name}</p>
+                                                    {/* Compliance badge */}
+                                                    {(() => {
+                                                        const stats = complianceMap.get(item.id);
+                                                        if (!stats) return <Badge variant="outline">Not Checked</Badge>;
+                                                        if (stats.nonCompliant > 0) return <Badge variant="destructive">Non‑compliant</Badge>;
+                                                        return <Badge variant="default">Compliant</Badge>;
+                                                    })()}
+                                                </div>
                                                 <p className="text-xs text-muted-foreground">Qty: {item.quantity} | Delivery Time: {item.leadTimeDays} days</p>
                                             </div>
                                             <p className="font-semibold">{hideForUser ? 'Hidden' : item.unitPrice.toLocaleString() + ' ETB / unit'}</p>

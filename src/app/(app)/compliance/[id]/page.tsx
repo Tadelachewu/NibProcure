@@ -179,7 +179,23 @@ const CompliancePage = () => {
                 try {
                   setSubmittingFinalize(true);
                   const res = await fetch(`/api/requisitions/${id}/submit-scores`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ userId: user?.id }) });
-                  if (!res.ok) throw new Error('Failed to finalize your checks.');
+                  if (res.status === 409) {
+                    // Idempotent: already finalized by this user
+                    toast({ title: 'Already Finalized', description: 'Your compliance checks were already finalized.' });
+                    // refresh requisition and quotations to update UI state
+                    const [rRes, qRes] = await Promise.all([fetch(`/api/requisitions/${id}`), fetch(`/api/quotations?requisitionId=${id}`)]);
+                    setRequisition(await rRes.json());
+                    setQuotations(await qRes.json());
+                    setShowPrices(null);
+                    setSubmittingFinalize(false);
+                    return;
+                  }
+
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({} as any));
+                    throw new Error(data.error || 'Failed to finalize your checks.');
+                  }
+
                   toast({ title: 'Finalized', description: 'Your checks have been finalized.' });
                   // refresh requisition and quotations
                   const [rRes, qRes] = await Promise.all([fetch(`/api/requisitions/${id}`), fetch(`/api/quotations?requisitionId=${id}`)]);

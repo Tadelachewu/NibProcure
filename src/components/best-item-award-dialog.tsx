@@ -59,7 +59,9 @@ export const BestItemAwardDialog = ({
         // Choose the lowest-priced proposal per item across eligible quotes (least-price wins)
         return requisition.items.map(reqItem => {
             const championBids = eligibleQuotes.map(quote => {
-                const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id);
+                // Build non-compliant ids for this quote (exclude any quote item marked non-compliant)
+                const nonCompliantIds = new Set<string>((quote.complianceSets || []).flatMap((s: any) => (s.itemCompliances || []).filter((ic: any) => ic.comply === false).map((ic: any) => ic.quoteItemId)));
+                const proposalsForItem = quote.items.filter(i => i.requisitionItemId === reqItem.id && !nonCompliantIds.has(i.id));
                 if (proposalsForItem.length === 0) return null;
 
                 // pick the proposal with the lowest unitPrice for this vendor

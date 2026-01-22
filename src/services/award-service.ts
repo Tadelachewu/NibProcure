@@ -164,11 +164,16 @@ export async function getPreviousApprovalStep(tx: Prisma.TransactionClient, requ
 async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId: string) {
     const quotationsToDelete = await tx.quotation.findMany({
         where: { requisitionId },
-        include: { scores: { include: { itemScores: { include: { scores: true } } } } }
+        include: {
+            scores: { include: { itemScores: { include: { scores: true } } } },
+            complianceSets: { include: { itemCompliances: true } }
+        }
     });
 
     const scoreSetIds = quotationsToDelete.flatMap(q => q.scores.map(s => s.id));
     const itemScoreIds = quotationsToDelete.flatMap(q => q.scores.flatMap(s => s.itemScores.map(i => i.id)));
+    const complianceSetIds = quotationsToDelete.flatMap(q => (q.complianceSets || []).map((c:any) => c.id));
+    const itemComplianceIds = quotationsToDelete.flatMap(q => (q.complianceSets || []).flatMap((c:any) => (c.itemCompliances || []).map((ic:any) => ic.id)));
 
     if (itemScoreIds.length > 0) {
         await tx.score.deleteMany({ where: { itemScoreId: { in: itemScoreIds } } });
@@ -178,6 +183,13 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     }
     if (scoreSetIds.length > 0) {
         await tx.committeeScoreSet.deleteMany({ where: { id: { in: scoreSetIds } } });
+    }
+    // Delete any compliance item records first to avoid FK RESTRICT when quote items are removed
+    if (itemComplianceIds.length > 0) {
+        await tx.itemCompliance.deleteMany({ where: { id: { in: itemComplianceIds } } });
+    }
+    if (complianceSetIds.length > 0) {
+        await tx.committeeComplianceSet.deleteMany({ where: { id: { in: complianceSetIds } } });
     }
     await tx.quotation.deleteMany({ where: { requisitionId } });
     
@@ -310,13 +322,13 @@ export async function handleAwardRejection(
     }
 }
 
-function calculateChampionBidsForVendor(requisition: any, vendorQuote: any): QuoteItem[] {
+function calculateChampionBidsForVendor(requisition: any, vendorQuote: any, nonCompliantSet?: Set<string>): QuoteItem[] {
     if (!vendorQuote) {
         return [];
     }
     // Choose the vendor's lowest-priced proposal per requisition item
     return requisition.items.map((reqItem: any) => {
-        const proposalsForItem = vendorQuote.items.filter((item: any) => item.requisitionItemId === reqItem.id);
+        const proposalsForItem = vendorQuote.items.filter((item: any) => item.requisitionItemId === reqItem.id && !(nonCompliantSet && nonCompliantSet.has(item.id)));
         if (proposalsForItem.length === 0) return null;
         let championBid: QuoteItem | null = null;
         let lowestPrice = Number.POSITIVE_INFINITY;
@@ -468,7 +480,7 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
         const nextStandby = await tx.quotation.findFirst({
             where: { requisitionId, status: 'Standby' },
             orderBy: { rank: 'asc' },
-            include: { items: true, scores: { include: { itemScores: true } } }
+            include: { items: true, scores: { include: { itemScores: true } }, complianceSets: { include: { itemCompliances: true } } }
         });
 
         if (!nextStandby) {
@@ -487,7 +499,12 @@ export async function promoteStandbyVendor(tx: Prisma.TransactionClient, requisi
             return { message: 'No more standby vendors available. Requisition has returned to Scoring Complete status.'};
         }
         
-        const championBids = calculateChampionBidsForVendor(requisition, nextStandby);
+        // Determine globally non-compliant quote items for this requisition
+        const allQuoteItemIds = (requisition.quotations || []).flatMap((q: any) => (q.items || []).map((i: any) => i.id));
+        const badCompliances = allQuoteItemIds.length > 0 ? await tx.itemCompliance.findMany({ where: { quoteItemId: { in: allQuoteItemIds }, comply: false } }) : [];
+        const nonCompliantSet = new Set<string>(badCompliances.map(b => b.quoteItemId));
+
+        const championBids = calculateChampionBidsForVendor(requisition, nextStandby, nonCompliantSet);
         const newTotalValue = championBids.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
 
         const { nextStatus, nextApproverId, auditDetails } = await getNextApprovalStep(tx, { ...requisition, totalPrice: newTotalValue }, actor);

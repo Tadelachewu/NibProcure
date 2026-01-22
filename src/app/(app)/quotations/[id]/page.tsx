@@ -2606,8 +2606,88 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
 
                             <Accordion type="single" collapsible className="w-full" defaultValue="scoring-report">
                                 <AccordionItem value="scoring-report" className="border-none">
-                                    <AccordionTrigger className="text-lg font-semibold">Evaluation Committee Scoring Report</AccordionTrigger>
+                                    <AccordionTrigger className="text-lg font-semibold">Evaluation Committee spec compliance check Report</AccordionTrigger>
                                     <AccordionContent>
+                                     <Card>
+                                         <CardHeader>
+                                             <CardTitle>Compliance Checks</CardTitle>
+                                             <CardDescription>Per-quote, per-item compliance results submitted by committee members.</CardDescription>
+                                         </CardHeader>
+                                         <CardContent className="p-4">
+                                             {quotations.map(quote => (
+                                                <div key={quote.id} className="mb-6 border rounded-md p-3">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <div>
+                                                            <h4 className="font-semibold">{quote.vendorName}</h4>
+                                                            <p className="text-sm text-muted-foreground">Quote ID: {quote.id}</p>
+                                                        </div>
+                                                        <Badge className="ml-2">{quote.status?.replace(/_/g, ' ')}</Badge>
+                                                    </div>
+                                                    <Table>
+                                                        <TableHeader>
+                                                            <TableRow>
+                                                                <TableHead>Item</TableHead>
+                                                                <TableHead>Proposed</TableHead>
+                                                                <TableHead>Committee Member</TableHead>
+                                                                <TableHead>Result</TableHead>
+                                                                <TableHead>Submitted</TableHead>
+                                                                <TableHead>Comment</TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {(() => {
+                                                                const sets: any[] = quote.complianceSets || [];
+                                                                // Rows from each committee member's item compliances
+                                                                const rows: JSX.Element[] = [];
+
+                                                                sets.forEach(set => {
+                                                                    (set.itemCompliances || []).forEach((ic: any) => {
+                                                                        const item = quote.items.find((i: any) => i.id === ic.quoteItemId) || { name: 'Unknown' };
+                                                                        rows.push(
+                                                                            <TableRow key={`${quote.id}-${set.scorerId}-${ic.quoteItemId}`}>
+                                                                                <TableCell>{item.name}</TableCell>
+                                                                                <TableCell>{ic.proposedItemName || item.name}</TableCell>
+                                                                                <TableCell>{set.scorer?.name || 'Unknown'}</TableCell>
+                                                                                <TableCell>
+                                                                                    {ic.comply === true ? <Badge variant="outline">Compliant</Badge> : ic.comply === false ? <Badge variant="destructive">Non-compliant</Badge> : <Badge variant="secondary">Not Checked</Badge>}
+                                                                                </TableCell>
+                                                                                <TableCell>{set.submittedAt ? format(new Date(set.submittedAt), 'PPpp') : '—'}</TableCell>
+                                                                                <TableCell className="max-w-xs break-words">{ic.comment || '—'}</TableCell>
+                                                                            </TableRow>
+                                                                        );
+                                                                    });
+                                                                });
+
+                                                                // Include items that were not checked by any committee member
+                                                                const checkedIds = new Set(sets.flatMap(s => (s.itemCompliances || []).map((ic: any) => ic.quoteItemId)));
+                                                                (quote.items || []).forEach((item: any) => {
+                                                                    if (!checkedIds.has(item.id)) {
+                                                                        rows.push(
+                                                                            <TableRow key={`${quote.id}-notchecked-${item.id}`}>
+                                                                                <TableCell>{item.name}</TableCell>
+                                                                                <TableCell>{item.proposedItemName || item.name}</TableCell>
+                                                                                <TableCell>—</TableCell>
+                                                                                <TableCell><Badge variant="secondary">Not Checked</Badge></TableCell>
+                                                                                <TableCell>—</TableCell>
+                                                                                <TableCell>—</TableCell>
+                                                                            </TableRow>
+                                                                        );
+                                                                    }
+                                                                });
+
+                                                                return rows.length > 0 ? rows : (
+                                                                    <TableRow>
+                                                                        <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">No compliance checks recorded for this quote.</TableCell>
+                                                                    </TableRow>
+                                                                );
+                                                            })()}
+                                                        </TableBody>
+                                                    </Table>
+                                                </div>
+                                             ))}
+                                         </CardContent>
+                                     </Card>
+                                     
                                      <Card>
                                          <CardContent className="p-4">
                                              <Accordion type="multiple" className="w-full space-y-4">
@@ -3212,8 +3292,12 @@ export default function QuotationDetailsPage() {
               quoData = quoData.map(quote => {
                   const itemBids: {requisitionItemId: string; championBidScore: number;}[] = [];
 
+                  // Build set of quoteItemIds marked non-compliant by any committee member
+                  const nonCompliantIds = new Set<string>((quote.complianceSets || []).flatMap((s: any) => (s.itemCompliances || []).filter((ic: any) => ic.comply === false).map((ic: any) => ic.quoteItemId)));
+
                   for (const reqItem of currentReq.items) {
-                      const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
+                      // Exclude proposals (quote items) that are marked non-compliant
+                      const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id && !nonCompliantIds.has(item.id));
                       if (proposalsForItem.length === 0) continue;
 
                       const calculatedProposals = proposalsForItem.map(proposal => {
@@ -3506,7 +3590,7 @@ const handleChangeAwardTypeFromError = () => {
                 )}
                 {canViewCumulativeReport && (
                     <Button variant="secondary" onClick={() => setReportOpen(true)}>
-                        <FileBarChart2 className="mr-2 h-4 w-4" /> View Scoring Report
+                        <FileBarChart2 className="mr-2 h-4 w-4" /> View Spec Compliance Report
                     </Button>
                 )}
            </div>
