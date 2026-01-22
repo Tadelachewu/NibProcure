@@ -1,369 +1,80 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import { PurchaseRequisition, Quotation } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Badge } from './ui/badge';
-import { Separator } from './ui/separator';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Calculator } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { ScrollArea } from './ui/scroll-area';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 
-
-// --- TYPE DEFINITIONS ---
-interface RawScoreDetail {
-    criterionId: string;
-    criterionName: string;
-    scorer: { id: string; name: string };
-    score: number;
-    comment?: string;
+function formatCurrency(n?: number) {
+    if (n == null || Number.isNaN(n)) return '—';
+    return `${n.toLocaleString()} ETB`;
 }
 
-interface CalculatedScore {
-    criterionId: string;
-    criterionName: string;
-    weight: number;
-    // New properties for detailed breakdown
-    averageScore: number;
-    weightedScore: number;
-    rawScores: RawScoreDetail[];
-}
-interface CalculatedItem {
-    quoteItemId: string;
-    itemName: string;
-    financialScores: CalculatedScore[];
-    technicalScores: CalculatedScore[];
-    totalFinancialScore: number;
-    totalTechnicalScore: number;
-    finalItemScore: number;
-}
-
-interface CalculatedItemBids {
-    requisitionItemId: string;
-    requisitionItemName: string;
-    allProposals: CalculatedItem[];
-    championBid: CalculatedItem;
-}
-
-interface CalculatedQuote {
-    vendorId: string;
-    vendorName: string;
-    itemBids: CalculatedItemBids[];
-    finalVendorScore: number;
-    rank?: number;
-}
-
-
-// --- CALCULATION HELPERS ---
-
-/**
- * Calculates the score for a single criterion, including raw scores from each scorer.
- */
-function calculateCriterionScore(
-    criterion: { id: string; name: string; weight: number },
-    allItemScores: (ItemScore & { scoreSet: CommitteeScoreSet & { scorer: {id: string, name: string}} })[]
-): CalculatedScore {
-
-    const rawScores: RawScoreDetail[] = [];
-    let totalScore = 0;
-    let scorerCount = 0;
-
-    allItemScores.forEach(itemScore => {
-        const scoreEntry = (itemScore.scores as ScoreType[]).find(s => s.financialCriterionId === criterion.id || s.technicalCriterionId === criterion.id);
-        if (scoreEntry) {
-            rawScores.push({
-                criterionId: criterion.id,
-                criterionName: criterion.name,
-                scorer: { id: itemScore.scoreSet.scorerId, name: itemScore.scoreSet.scorer.name },
-                score: scoreEntry.score,
-                comment: scoreEntry.comment,
+export function AwardCalculationDetails({ requisition, quotations }: { requisition: PurchaseRequisition; quotations: Quotation[] }) {
+    const nonCompliantQuoteItemIds = React.useMemo(() => {
+        const ids: string[] = [];
+        quotations.forEach(q => {
+            (q as any).complianceSets?.forEach((cs: any) => {
+                cs.itemCompliances?.forEach((ic: any) => {
+                    if (ic.comply === false && ic.quoteItemId) ids.push(ic.quoteItemId);
+                });
             });
-            totalScore += scoreEntry.score;
-            scorerCount++;
-        }
-    });
-
-    const averageScore = scorerCount > 0 ? totalScore / scorerCount : 0;
-
-    return {
-        criterionId: criterion.id,
-        criterionName: criterion.name,
-        weight: criterion.weight,
-        averageScore,
-        weightedScore: averageScore * (criterion.weight / 100),
-        rawScores,
-    };
-}
-
-
-/**
- * Calculates all scores for a single quote item, now including raw score details.
- */
-function calculateItemScores(
-    quoteItem: QuoteItem,
-    evaluationCriteria: EvaluationCriteria,
-    allScoreSetsForQuote: (CommitteeScoreSet & { scorer: {id: string, name: string}, itemScores: (ItemScore & { scores: ScoreType[] })[]})[]
-): CalculatedItem {
-
-    // Get all ItemScore records for this specific quoteItem across all scorers
-    const relevantItemScores = allScoreSetsForQuote.map(scoreSet => {
-        const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === quoteItem.id);
-        return itemScore ? { ...itemScore, scoreSet: { ...scoreSet } } : null;
-    }).filter((is): is is (ItemScore & { scoreSet: CommitteeScoreSet & { scorer: {id: string, name: string}} }) => is !== null);
-    
-    const financialScores = evaluationCriteria.financialCriteria.map(c => calculateCriterionScore(c, relevantItemScores));
-    const technicalScores = evaluationCriteria.technicalCriteria.map(c => calculateCriterionScore(c, relevantItemScores));
-    
-    const totalFinancialScore = financialScores.reduce((acc, s) => acc + s.weightedScore, 0);
-    const totalTechnicalScore = technicalScores.reduce((acc, s) => acc + s.weightedScore, 0);
-
-    const finalItemScore = 
-        (totalFinancialScore * (evaluationCriteria.financialWeight / 100)) +
-        (totalTechnicalScore * (evaluationCriteria.technicalWeight / 100));
-
-    return {
-        quoteItemId: quoteItem.id,
-        itemName: quoteItem.name,
-        financialScores,
-        technicalScores,
-        totalFinancialScore,
-        totalTechnicalScore,
-        finalItemScore,
-    };
-}
-
-
-/**
- * Main calculation logic for the component.
- */
-function useAwardCalculations(requisition: PurchaseRequisition, quotations: Quotation[]) {
-    return useMemo(() => {
-        if (!requisition.evaluationCriteria || quotations.length === 0) {
-            return { singleVendorResults: [], bestItemResults: [] };
-        }
-
-        const evaluationCriteria = requisition.evaluationCriteria;
-        // Build a set of quoteItemIds that have been marked non-compliant by any committee member
-        const nonCompliantQuoteItemIds = new Set<string>(
-            quotations.flatMap(q => (q.complianceSets || []).flatMap((s: any) => (s.itemCompliances || []).filter((ic: any) => ic.comply === false).map((ic: any) => ic.quoteItemId)))
-        );
-
-            // --- Single Vendor Calculation (only fully compliant vendors) ---
-            // First, determine the set of requisition item IDs to consider (all request items)
-            const compliantItemIds = requisition.items.map(item => item.id);
-            const calculatedQuotes: CalculatedQuote[] = quotations.map(quote => {
-                const itemBids: CalculatedItemBids[] = [];
-                let hasAllCompliant = true;
-                for (const reqItemId of compliantItemIds) {
-                    const reqItem = requisition.items.find(i => i.id === reqItemId);
-                    if (!reqItem) continue;
-                    const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id && !nonCompliantQuoteItemIds.has(item.id));
-                    if (proposalsForItem.length === 0) {
-                        hasAllCompliant = false;
-                        break;
-                    }
-                    const calculatedProposals = proposalsForItem.map(proposal => 
-                        calculateItemScores(proposal, evaluationCriteria, (quote.scores as any[]) || [])
-                    );
-                    const championBid = [...calculatedProposals].sort((a, b) => b.finalItemScore - a.finalItemScore)[0];
-                    itemBids.push({
-                        requisitionItemId: reqItem.id,
-                        requisitionItemName: reqItem.name,
-                        allProposals: calculatedProposals,
-                        championBid: championBid
-                    });
-                }
-                // Only include vendors who have a compliant bid for every compliant item
-                if (!hasAllCompliant || itemBids.length !== compliantItemIds.length) {
-                    return null;
-                }
-                const finalVendorScore = itemBids.length > 0
-                    ? itemBids.reduce((acc, bid) => acc + bid.championBid.finalItemScore, 0) / itemBids.length
-                    : 0;
-                return {
-                    vendorId: quote.vendorId,
-                    vendorName: quote.vendorName,
-                    itemBids: itemBids,
-                    finalVendorScore,
-                };
-            }).filter(Boolean) as CalculatedQuote[];
-            calculatedQuotes.sort((a, b) => b.finalVendorScore - a.finalVendorScore);
-            calculatedQuotes.forEach((quote, index) => {
-                quote.rank = index + 1;
         });
+        return new Set(ids);
+    }, [quotations]);
 
-        // --- Best Item Calculation (only compliant items) ---
-            const bestItemResults = compliantItemIds.map(reqItemId => {
-                const reqItem = requisition.items.find(i => i.id === reqItemId);
-                if (!reqItem) return null;
-                // Only consider vendors who have a compliant bid for every compliant item
-                const eligibleQuotations = quotations.filter(quote =>
-                    compliantItemIds.every(cid => quote.items.some(item => item.requisitionItemId === cid && !nonCompliantQuoteItemIds.has(item.id)))
-                );
-                const bidsForItem = eligibleQuotations.flatMap(quote =>
-                    quote.items
-                        .filter(item => item.requisitionItemId === reqItem.id && !nonCompliantQuoteItemIds.has(item.id))
-                        .map(item => ({
-                            vendorName: quote.vendorName,
-                            quoteItemId: item.id,
-                            itemName: item.name,
-                            calculation: calculateItemScores(item, evaluationCriteria, (quote.scores as any[]) || [])
-                        }))
-                ).sort((a,b) => b.calculation.finalItemScore - a.calculation.finalItemScore);
-                return {
-                    itemName: reqItem.name,
-                    bids: bidsForItem,
-                    winner: bidsForItem[0]
-                };
-            }).filter(Boolean);
-        return { singleVendorResults: calculatedQuotes, bestItemResults };
-
-    }, [requisition, quotations]);
-}
-
-// --- UI COMPONENTS ---
-const RawScoresTable = ({ scores, title }: { scores: RawScoreDetail[], title: string }) => (
-    <div className="space-y-1">
-        <h5 className="font-semibold text-xs">{title}</h5>
-        <div className="border rounded-md bg-muted/30">
-        <Table>
-            <TableBody>
-            {scores.map((s, i) => (
-                <TableRow key={`${s.scorer.id}-${i}`}>
-                    <TableCell className="p-2">
-                        <div className="flex items-center gap-2">
-                            <Avatar className="h-6 w-6">
-                                <AvatarImage src={`https://picsum.photos/seed/${s.scorer.id}/24/24`} />
-                                <AvatarFallback>{s.scorer.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <span className="text-xs font-medium">{s.scorer.name}</span>
-                        </div>
-                    </TableCell>
-                    <TableCell className="p-2 text-right font-mono text-xs">{s.score}/100</TableCell>
-                    <TableCell className="p-2 text-xs italic text-muted-foreground">"{s.comment || 'No comment'}"</TableCell>
-                </TableRow>
-            ))}
-            </TableBody>
-        </Table>
-        </div>
-    </div>
-);
-
-
-const ScoreBreakdownDialog = ({ calculation, evaluationCriteria }: { calculation: CalculatedItem, evaluationCriteria: EvaluationCriteria }) => {
-    return (
-        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
-            <DialogHeader>
-                <DialogTitle>Score Breakdown: {calculation.itemName}</DialogTitle>
-                <DialogDescription>
-                    This shows how the final score of <span className="font-bold text-primary">{calculation.finalItemScore.toFixed(2)}</span> was calculated from raw committee scores.
-                </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="flex-1 -mx-6 px-6">
-            <div className="space-y-6 py-4">
-                 <ScoreTable title="Financial Evaluation" scores={calculation.financialScores} weight={evaluationCriteria.financialWeight} totalScore={calculation.totalFinancialScore} />
-                 <ScoreTable title="Technical Evaluation" scores={calculation.technicalScores} weight={evaluationCriteria.technicalWeight} totalScore={calculation.totalTechnicalScore} />
-                 <Separator />
-                <div className="p-4 bg-muted rounded-md text-center">
-                    <p className="text-sm text-muted-foreground">Final Calculation</p>
-                    <p className="text-lg">
-                        (<span className="font-mono">{calculation.totalFinancialScore.toFixed(2)}</span> &times; {evaluationCriteria.financialWeight}%) + (<span className="font-mono">{calculation.totalTechnicalScore.toFixed(2)}</span> &times; {evaluationCriteria.technicalWeight}%) = <span className="font-bold text-xl text-primary">{calculation.finalItemScore.toFixed(2)}</span>
-                    </p>
-                </div>
-            </div>
-            </ScrollArea>
-            <DialogFooter>
-                <Button variant="outline" asChild><DialogClose>Close</DialogClose></Button>
-            </DialogFooter>
-        </DialogContent>
-    )
-}
-
-const ScoreTable = ({ title, scores, weight, totalScore }: { title: string, scores: CalculatedScore[], weight: number, totalScore: number }) => (
-    <div>
-        <h4 className="font-semibold text-base mb-2">{title} (Overall Weight: {weight}%)</h4>
-        <div className="space-y-4">
-            {scores.map(s => (
-                <details key={s.criterionId} className="p-3 border rounded-lg bg-muted/50 open:bg-background open:ring-1 open:ring-border">
-                    <summary className="font-medium text-sm cursor-pointer flex justify-between items-center">
-                        <span>{s.criterionName} (Criterion Weight: {s.weight}%)</span>
-                        <span className="font-mono text-base">Avg. Score: {s.averageScore.toFixed(2)}</span>
-                    </summary>
-                    <div className="mt-4 pl-4 border-l-2">
-                        <RawScoresTable scores={s.rawScores} title="Raw Scores" />
-                         <p className="text-right text-xs mt-2 pr-2">
-                            Weighted Score: {s.averageScore.toFixed(2)} &times; {s.weight}% = <span className="font-bold">{s.weightedScore.toFixed(2)}</span>
-                         </p>
-                    </div>
-                </details>
-            ))}
-        </div>
-        <div className="text-right mt-2 pr-4">
-            <p className="text-sm">Sub-total (Score &times; Weight): <span className="font-bold font-mono">{totalScore.toFixed(2)}</span></p>
-        </div>
-    </div>
-);
-
-
-const RankIcon = ({ rank }: { rank: number }) => {
-    switch (rank) {
-        case 1: return <Crown className="h-5 w-5 text-amber-400" />;
-        case 2: return <Trophy className="h-5 w-5 text-slate-400" />;
-        case 3: return <Medal className="h-5 w-5 text-amber-600" />;
-        default: return <span className="font-bold">{rank}</span>;
-    }
-};
-
-// --- MAIN COMPONENT ---
-export function AwardCalculationDetails({ requisition, quotations }: { requisition: PurchaseRequisition, quotations: Quotation[] }) {
-    const { singleVendorResults, bestItemResults } = (function usePriceCalculations(requisition: PurchaseRequisition, quotations: Quotation[]) {
-        // Get all non-compliant item IDs (from perItemAwardDetails or compliance data)
-        const nonCompliantItemIds = new Set(
-            requisition.items
-                .filter(item => Array.isArray(item.perItemAwardDetails) && item.perItemAwardDetails.length === 0)
-                .map(item => item.id)
-        );
-
-        // --- Price-based: Only vendors with compliant bids for every compliant item ---
-        const compliantItemIdsPrice = requisition.items.filter(item => !nonCompliantItemIds.has(item.id)).map(item => item.id);
-        const singleVendorResults = quotations.map(q => {
+    const singleVendorResults = React.useMemo(() => {
+        const compliantReqItems = requisition.items;
+        const results = quotations.map(q => {
             let total = 0;
-            let hasAllCompliant = true;
-            for (const reqItemId of compliantItemIdsPrice) {
-                const reqItem = requisition.items.find(i => i.id === reqItemId);
-                if (!reqItem) continue;
-                const proposals = q.items.filter(i => i.requisitionItemId === reqItem.id);
-                if (!proposals || proposals.length === 0) {
-                    hasAllCompliant = false;
-                    break;
-                }
-                const lowest = proposals.reduce((min, p) => p.unitPrice < min ? p.unitPrice : min, Number.POSITIVE_INFINITY as number);
-                total += lowest * reqItem.quantity;
+            let missing = false;
+            for (const reqItem of compliantReqItems) {
+                const proposals = q.items?.filter(it => it.requisitionItemId === reqItem.id) || [];
+                const compliantProposals = proposals.filter(p => !nonCompliantQuoteItemIds.has(p.id));
+                if (compliantProposals.length === 0) { missing = true; break; }
+                const lowest = compliantProposals.reduce((min, p) => (p.unitPrice < min ? p.unitPrice : min), Number.POSITIVE_INFINITY as number);
+                total += (lowest === Number.POSITIVE_INFINITY ? 0 : lowest * (reqItem.quantity || 1));
             }
-            if (!hasAllCompliant) return null;
-            return { vendorId: q.vendorId, vendorName: q.vendorName, totalPrice: total };
-        }).filter(Boolean).sort((a,b) => a.totalPrice - b.totalPrice);
-        singleVendorResults.forEach((r, idx) => (r as any).rank = idx + 1);
+            if (missing) return null;
+            return { vendorId: q.vendorId, vendorName: q.vendorName, totalPrice: total } as any;
+        }).filter(Boolean) as any[];
+        results.sort((a, b) => (a.totalPrice ?? 0) - (b.totalPrice ?? 0));
+        results.forEach((r, i) => (r.rank = i + 1));
+        return results;
+    }, [requisition, quotations, nonCompliantQuoteItemIds]);
 
-        // Best Item Calculation: only compliant items
-        const bestItemResults = requisition.items.filter(item => !nonCompliantItemIds.has(item.id)).map(reqItem => {
-            const bids = quotations.flatMap(q => q.items.filter(i => i.requisitionItemId === reqItem.id).map(i => ({
-                vendorName: q.vendorName,
-                quoteItemId: i.id,
-                proposedItemName: i.name,
-                unitPrice: i.unitPrice,
-                totalPrice: i.unitPrice * reqItem.quantity
-            })));
-            const sorted = bids.sort((a,b) => a.unitPrice - b.unitPrice);
-            return { itemName: reqItem.name, bids: sorted, winner: sorted[0] };
+    const bestItemResults = React.useMemo(() => {
+        return requisition.items.map(reqItem => {
+            const bids = quotations.flatMap(q => q.items
+                .filter(it => it.requisitionItemId === reqItem.id && !nonCompliantQuoteItemIds.has(it.id))
+                .map(it => ({ vendorName: q.vendorName, quoteItemId: it.id, proposedItemName: it.name, unitPrice: it.unitPrice, totalPrice: (it.unitPrice || 0) * (reqItem.quantity || 1) })));
+            bids.sort((a, b) => (a.unitPrice ?? Infinity) - (b.unitPrice ?? Infinity));
+            return { itemName: reqItem.name, bids, winner: bids[0] };
         });
+    }, [requisition.items, quotations, nonCompliantQuoteItemIds]);
 
-        return { singleVendorResults, bestItemResults };
-    })(requisition, quotations);
-    const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy || 'all';
+    const rankingEntries = React.useMemo(() => {
+        const entries: any[] = [];
+        if (singleVendorResults.length > 0) entries.push({ role: 'Winner', vendor: singleVendorResults[0] });
+        if (singleVendorResults.length > 1) entries.push({ role: 'Standby', vendor: singleVendorResults[1] });
+        if (singleVendorResults.length > 2) entries.push({ role: 'Standby', vendor: singleVendorResults[2] });
+
+        return entries.map(e => {
+            const v = e.vendor;
+            const q = quotations.find(x => x.vendorId === v.vendorId);
+            const vendorSelected = requisition.items.map(reqItem => {
+                const proposals = (q?.items || []).filter(it => it.requisitionItemId === reqItem.id && !nonCompliantQuoteItemIds.has(it.id));
+                const selected = proposals.length ? proposals.reduce((min, p) => p.unitPrice < min.unitPrice ? p : min, proposals[0]) : null;
+                return { reqItem, selected };
+            });
+            const computedTotal = vendorSelected.reduce((sum, s) => sum + ((s.selected?.unitPrice ?? 0) * (s.selected?.quantity ?? 1)), 0);
+            return { role: e.role, vendor: v, vendorQuotation: q, vendorSelected, computedTotal };
+        });
+    }, [singleVendorResults, quotations, requisition.items, nonCompliantQuoteItemIds]);
 
     return (
         <div className="space-y-6">
@@ -375,12 +86,10 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                     <Alert>
+                    <Alert>
                         <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Award Strategy Used: {awardStrategy === 'item' ? 'Best Offer (Per Item)' : 'Award All to Single Vendor'}</AlertTitle>
-                        <AlertDescription>
-                            This report shows price-based calculations (least-price wins). All scoring breakdowns have been removed.
-                        </AlertDescription>
+                        <AlertTitle>Award Strategy Used: Price-based</AlertTitle>
+                        <AlertDescription>This report shows price-based calculations (least-price wins).</AlertDescription>
                     </Alert>
                 </CardContent>
             </Card>
@@ -392,57 +101,135 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                 </CardHeader>
                 <CardContent>
                     <Accordion type="single" collapsible className="space-y-2">
-                        {singleVendorResults.map((v: any) => {
-                            // build per-item breakdown for this vendor
-                            const vendorQuotation = quotations.find(q => q.vendorId === v.vendorId);
-                            const nonCompliantItemIds = new Set(
-                                requisition.items
-                                    .filter(item => Array.isArray(item.perItemAwardDetails) && item.perItemAwardDetails.length === 0)
-                                    .map(i => i.id)
-                            );
-                            const displayItems = requisition.items.filter(i => !nonCompliantItemIds.has(i.id));
+                        {singleVendorResults.map((v: any) => (
+                            <AccordionItem value={v.vendorId} key={v.vendorId}>
+                                <AccordionTrigger className="flex justify-between items-center px-4">
+                                    <div className="flex items-center gap-4">
+                                        <span className="font-bold">#{v.rank}</span>
+                                        <span className="font-medium">{v.vendorName}</span>
+                                    </div>
+                                    <div className="text-right font-mono">{formatCurrency(v.totalPrice)}</div>
+                                </AccordionTrigger>
+                                <AccordionContent className="pt-4">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Item</TableHead>
+                                                <TableHead>Selected Proposal</TableHead>
+                                                <TableHead className="text-right">Unit Price</TableHead>
+                                                <TableHead className="text-right">Qty</TableHead>
+                                                <TableHead className="text-right">Total</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {requisition.items.map(reqItem => {
+                                                const proposals = (quotations.find(q => q.vendorId === v.vendorId)?.items || []).filter(it => it.requisitionItemId === reqItem.id && !nonCompliantQuoteItemIds.has(it.id));
+                                                const selected = proposals.length ? proposals.reduce((min, p) => p.unitPrice < min.unitPrice ? p : min, proposals[0]) : null;
+                                                const unit = selected?.unitPrice ?? null;
+                                                const qty = reqItem.quantity ?? 1;
+                                                const total = unit != null ? unit * qty : null;
+                                                return (
+                                                    <TableRow key={reqItem.id}>
+                                                        <TableCell className="font-medium">{reqItem.name}</TableCell>
+                                                        <TableCell>{selected?.name || 'N/A'}</TableCell>
+                                                        <TableCell className="text-right font-mono">{unit != null ? `${unit.toFixed(2)} ETB` : 'N/A'}</TableCell>
+                                                        <TableCell className="text-right">{qty}</TableCell>
+                                                        <TableCell className="text-right font-mono">{total != null ? `${total.toLocaleString()} ETB` : 'N/A'}</TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                </AccordionContent>
+                            </AccordionItem>
+                        ))}
+                    </Accordion>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Ranking Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="mb-4">Vendors are ranked by the lowest total price. The winner receives the award, and the next two are put on standby.</p>
+
+                    <Accordion type="single" collapsible className="space-y-2">
+                        {rankingEntries.map((entry: any) => {
+                            const v = entry.vendor;
                             return (
                                 <AccordionItem value={v.vendorId} key={v.vendorId}>
                                     <AccordionTrigger className="flex justify-between items-center px-4">
                                         <div className="flex items-center gap-4">
-                                            <span className="font-bold">#{v.rank}</span>
+                                            <span className="font-bold">{entry.role}</span>
                                             <span className="font-medium">{v.vendorName}</span>
                                         </div>
-                                        <div className="text-right font-mono">{typeof v.totalPrice === 'number' ? `${v.totalPrice.toLocaleString()} ETB` : '—'}</div>
+                                        <div className="text-right font-mono">{formatCurrency(v.totalPrice)}</div>
                                     </AccordionTrigger>
-                                    <AccordionContent className="pt-4">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>Item</TableHead>
-                                                    <TableHead>Selected Proposal</TableHead>
-                                                    <TableHead className="text-right">Unit Price</TableHead>
-                                                    <TableHead className="text-right">Qty</TableHead>
-                                                    <TableHead className="text-right">Total</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {displayItems.map((reqItem) => {
-                                                    const proposals = vendorQuotation?.items.filter(it => it.requisitionItemId === reqItem.id) || [];
-                                                    const selected = proposals.length > 0 ? proposals.reduce((min, p) => p.unitPrice < min.unitPrice ? p : min, proposals[0]) : null;
-                                                    const unit = selected?.unitPrice ?? null;
-                                                    const qty = reqItem.quantity ?? 1;
-                                                    const total = unit != null ? unit * qty : null;
-                                                    return (
-                                                        <TableRow key={reqItem.id}>
-                                                            <TableCell className="font-medium">{reqItem.name}</TableCell>
-                                                            <TableCell>{selected?.name || 'N/A'}</TableCell>
-                                                            <TableCell className="text-right font-mono">{unit != null ? `${unit.toFixed(2)} ETB` : 'N/A'}</TableCell>
-                                                            <TableCell className="text-right">{qty}</TableCell>
-                                                            <TableCell className="text-right font-mono">{total != null ? `${total.toLocaleString()} ETB` : 'N/A'}</TableCell>
+                                    <AccordionContent className="pt-4 space-y-4">
+                                        <div>
+                                            <h5 className="font-semibold">Compliance Checks</h5>
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Item</TableHead>
+                                                        <TableHead>Status</TableHead>
+                                                        <TableHead>Notes</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {requisition.items.map(item => {
+                                                        const vendorHasCompliant = (entry.vendorQuotation?.items || []).some((it: any) => it.requisitionItemId === item.id && !nonCompliantQuoteItemIds.has(it.id));
+                                                        return (
+                                                            <TableRow key={item.id}>
+                                                                <TableCell>{item.name}</TableCell>
+                                                                <TableCell>
+                                                                    {vendorHasCompliant ? (
+                                                                        <span className="inline-block bg-green-100 text-green-800 px-2 py-0.5 rounded">Compliant</span>
+                                                                    ) : (
+                                                                        <span className="inline-block bg-red-100 text-red-800 px-2 py-0.5 rounded">Non-compliant</span>
+                                                                    )}
+                                                                </TableCell>
+                                                                <TableCell>{vendorHasCompliant ? 'Has at least one compliant proposal' : 'No compliant proposals for this item'}</TableCell>
+                                                            </TableRow>
+                                                        );
+                                                    })}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+
+                                        <div>
+                                            <h5 className="font-semibold">Least-priced algorithm (how total was computed)</h5>
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Item</TableHead>
+                                                        <TableHead>Selected Proposal (this vendor)</TableHead>
+                                                        <TableHead className="text-right">Unit Price</TableHead>
+                                                        <TableHead className="text-right">Qty</TableHead>
+                                                        <TableHead className="text-right">Line Total</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {entry.vendorSelected.map((vs: any) => (
+                                                        <TableRow key={vs.reqItem.id}>
+                                                            <TableCell>{vs.reqItem.name}</TableCell>
+                                                            <TableCell>{vs.selected?.name || 'No proposal'}</TableCell>
+                                                            <TableCell className="text-right font-mono">{vs.selected ? `${vs.selected.unitPrice.toFixed(2)} ETB` : '—'}</TableCell>
+                                                            <TableCell className="text-right">{vs.selected ? vs.selected.quantity ?? 1 : '—'}</TableCell>
+                                                            <TableCell className="text-right font-mono">{vs.selected ? `${((vs.selected.unitPrice ?? 0) * (vs.selected.quantity ?? 1)).toLocaleString()} ETB` : '—'}</TableCell>
                                                         </TableRow>
-                                                    )
-                                                })}
-                                            </TableBody>
-                                        </Table>
+                                                    ))}
+                                                    <TableRow>
+                                                        <TableCell colSpan={4} className="font-bold text-right">Computed Total</TableCell>
+                                                        <TableCell className="text-right font-mono font-bold">{formatCurrency(entry.computedTotal)}</TableCell>
+                                                    </TableRow>
+                                                </TableBody>
+                                            </Table>
+                                        </div>
                                     </AccordionContent>
                                 </AccordionItem>
-                            )
+                            );
                         })}
                     </Accordion>
                 </CardContent>
@@ -458,7 +245,7 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                         {bestItemResults.map((item: any) => (
                             <AccordionItem value={item.itemName} key={item.itemName}>
                                 <AccordionTrigger className="font-semibold bg-muted/50 px-4 rounded-md">
-                                    {item.itemName} &rarr; Winner: {item.winner?.vendorName || 'N/A'} ({item.winner ? item.winner.unitPrice.toFixed(2) + ' ETB' : 'N/A'})
+                                    {item.itemName} → Winner: {item.winner?.vendorName || 'N/A'} ({item.winner ? `${item.winner.unitPrice.toFixed(2)} ETB` : 'N/A'})
                                 </AccordionTrigger>
                                 <AccordionContent className="pt-4">
                                     <Table>
@@ -473,8 +260,8 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                                         </TableHeader>
                                         <TableBody>
                                             {item.bids.map((bid: any, index: number) => (
-                                                <TableRow key={bid.vendorName + bid.proposedItemName} className={cn(index === 0 && "bg-green-500/10")}>
-                                                    <TableCell className="font-bold">{index+1}</TableCell>
+                                                <TableRow key={bid.vendorName + bid.proposedItemName} className={cn(index === 0 && 'bg-green-500/10')}>
+                                                    <TableCell className="font-bold">{index + 1}</TableCell>
                                                     <TableCell>{bid.vendorName}</TableCell>
                                                     <TableCell>{bid.proposedItemName}</TableCell>
                                                     <TableCell className="text-right font-mono">{bid.unitPrice.toFixed(2)} ETB</TableCell>
@@ -489,6 +276,7 @@ export function AwardCalculationDetails({ requisition, quotations }: { requisiti
                     </Accordion>
                 </CardContent>
             </Card>
+
         </div>
     );
 }

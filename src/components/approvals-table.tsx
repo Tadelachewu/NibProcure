@@ -399,7 +399,6 @@ export function ApprovalsTable() {
                     </Button>
                 </div>
         </div>
-        )}
       </CardContent>
        <Dialog open={isActionDialogOpen} onOpenChange={setActionDialogOpen}>
         <DialogContent>
