@@ -206,7 +206,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, isAwarded }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, isAwarded: boolean }) => {
+const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, isAwarded, scoresSubmittedOverride }: { quotes: Quotation[], requisition: PurchaseRequisition, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, isAwarded: boolean, scoresSubmittedOverride?: boolean }) => {
 
     if (quotes.length === 0) {
         return (
@@ -244,7 +244,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
     // Only assigned compliance committee members have prices masked, and only until they finalize their checks
     const isAssignedComplianceCommittee = (requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id && a.type === 'compliance');
     const assignment = (user.committeeAssignments || []).find((a:any) => a.requisitionId === requisition.id);
-    const scoresSubmitted = assignment?.scoresSubmitted || false;
+    const scoresSubmitted = assignment?.scoresSubmitted || (scoresSubmittedOverride ?? false);
     // Only mask prices for assigned compliance committee members until they finalize, and if rfqSettings disables price visibility for compliance
     const hidePrices = isAssignedComplianceCommittee && !scoresSubmitted && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
 
@@ -293,7 +293,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                         </div>
                                     ) : (
                                         <>
-                                            {isDeadlinePassed && <div className="text-3xl font-bold text-center">{quote.totalPrice.toLocaleString()} ETB</div>}
+                                            {isDeadlinePassed && <div className="text-3xl font-bold text-center">{hidePrices ? 'Hidden' : quote.totalPrice.toLocaleString() + ' ETB'}</div>}
                                             {isDeadlinePassed && <div className="text-center text-muted-foreground">Est. Delivery: {format(new Date(quote.deliveryDate), 'PP')}</div>}
                                         </>
                                     )}
@@ -345,7 +345,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                              {isAwarded && (
                                  <div className="text-center pt-2 border-t">
                                     <h4 className="font-semibold text-sm">Total Price</h4>
-                                    <p className="text-2xl font-bold text-primary">{quote.totalPrice.toLocaleString()} ETB</p>
+                                    <p className="text-2xl font-bold text-primary">{hidePrices ? 'Hidden' : quote.totalPrice.toLocaleString() + ' ETB'}</p>
                                  </div>
                              )}
                         </CardContent>
@@ -2373,6 +2373,7 @@ export default function QuotationDetailsPage() {
   const [isChangingAward, setIsChangingAward] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isReportOpen, setReportOpen] = useState(false);
+    const [scoresSubmittedOverride, setScoresSubmittedOverride] = useState(false);
   const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
 
   const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
@@ -2494,6 +2495,11 @@ export default function QuotationDetailsPage() {
     fetchRequisitionAndQuotes();
     setLastPOCreated(po);
   }
+  
+    const handleFinalScoresSubmitted = () => {
+        setScoresSubmittedOverride(true);
+        fetchRequisitionAndQuotes();
+    }
   
    const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
@@ -2852,6 +2858,7 @@ export default function QuotationDetailsPage() {
                             isDeadlinePassed={isDeadlinePassed}
                             isScoringDeadlinePassed={isScoringDeadlinePassed}
                             isAwarded={isAwarded}
+                            scoresSubmittedOverride={scoresSubmittedOverride}
                         />
                     )}
                     </CardContent>
@@ -2882,15 +2889,15 @@ export default function QuotationDetailsPage() {
             </>
         )}
         
-        {(currentStep === 'committee' || currentStep === 'award') && role === 'Committee_Member' && (
-             <CommitteeActions 
-                user={user}
-                requisition={requisition}
-                quotations={quotations}
-                onFinalScoresSubmitted={fetchRequisitionAndQuotes}
-            token={token}
-             />
-        )}
+           {(currentStep === 'committee' || currentStep === 'award') && role === 'Committee_Member' && (
+               <CommitteeActions 
+                 user={user}
+                 requisition={requisition}
+                 quotations={quotations}
+                 onFinalScoresSubmitted={handleFinalScoresSubmitted}
+              token={token}
+               />
+           )}
         
         {(((isAuthorized) || role === 'Committee' || role === 'Procurement_Officer' || role === 'Admin') &&
             ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&

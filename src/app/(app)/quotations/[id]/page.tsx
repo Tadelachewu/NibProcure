@@ -683,7 +683,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                                     </div>
                                                     <div className="flex items-center gap-1">
                                                         <Badge variant={getStatusVariant(item.status as any)}>{item.status.replace(/_/g, ' ')}</Badge>
-                                                        {typeof item.unitPrice === 'number' && <Badge variant="outline" className="font-mono">{item.unitPrice.toFixed(2)} ETB</Badge>}
+                                                        {!hidePrices && typeof item.unitPrice === 'number' && <Badge variant="outline" className="font-mono">{item.unitPrice.toFixed(2)} ETB</Badge>}
                                                     </div>
                                                 </div>
                                             ))}
@@ -698,12 +698,12 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                 </div>
                             )}
 
-                             {isAwarded && (
-                                 <div className="text-center pt-2 border-t">
-                                    <h4 className="font-semibold text-sm">Total Price</h4>
-                                    <p className="text-2xl font-bold text-primary">{quote.totalPrice.toLocaleString()} ETB</p>
-                                 </div>
-                             )}
+                                     {isAwarded && (
+                                            <div className="text-center pt-2 border-t">
+                                                <h4 className="font-semibold text-sm">Total Price</h4>
+                                                <p className="text-2xl font-bold text-primary">{hidePrices ? 'Hidden' : quote.totalPrice.toLocaleString() + ' ETB'}</p>
+                                            </div>
+                                      )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
                             <Button className="w-full" variant="outline" onClick={() => onViewDetails(quote)} disabled={isMasked}>
@@ -2465,6 +2465,13 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const printRef = useRef<HTMLDivElement>(null);
     const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy || 'all';
+    const { user } = useAuth();
+
+    // replicate hidePrices logic for this dialog scope
+    const isAssignedCompliance = Boolean(user && ((requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id && a.type === 'compliance')));
+    const assignment = (user && (user.committeeAssignments || []).find((a:any) => a.requisitionId === requisition.id)) || undefined;
+    const scoresSubmitted = Boolean(assignment?.scoresSubmitted);
+    const hidePrices = isAssignedCompliance && !scoresSubmitted && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
 
     const getCriterionName = (criterionId: string | null, criteria?: EvaluationCriterion[]) => {
         if (!criterionId || !criteria) return 'Unknown Criterion';
@@ -2551,7 +2558,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                     <TableRow key={q.id}>
                                                         <TableCell className="font-bold flex items-center gap-1">{getRankIcon(q.rank)} {q.rank}</TableCell>
                                                         <TableCell>{q.vendorName}</TableCell>
-                                                        <TableCell className="text-right font-mono">{q.totalPrice?.toLocaleString()} ETB</TableCell>
+                                                        <TableCell className="text-right font-mono">{hidePrices ? 'Hidden' : (q.totalPrice?.toLocaleString() + ' ETB')}</TableCell>
                                                         <TableCell><Badge variant="outline">{q.status.replace(/_/g, ' ')}</Badge></TableCell>
                                                     </TableRow>
                                                 ))}
@@ -2579,7 +2586,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                                                     <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
                                                                                     <TableCell>{award.vendorName}</TableCell>
                                                                                     <TableCell>{award.proposedItemName}</TableCell>
-                                                                                    <TableCell className="text-right font-mono">{award.unitPrice.toFixed(2)} ETB</TableCell>
+                                                                                    <TableCell className="text-right font-mono">{hidePrices ? 'Hidden' : (award.unitPrice.toFixed(2) + ' ETB')}</TableCell>
                                                                                     <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
                                                                                 </TableRow>
                                                                             ))}
