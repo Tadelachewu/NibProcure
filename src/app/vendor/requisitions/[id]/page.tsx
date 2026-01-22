@@ -1077,6 +1077,7 @@ export default function VendorRequisitionPage() {
                         </>
                      )}
                      {!showActions && !isPaid && (
+                         <>
                          <Alert variant="default" className="border-blue-500/50">
                             <Info className="h-4 w-4 text-blue-500" />
                             <AlertTitle>{ isStandby ? "You are on Standby" : "Quote Under Review" }</AlertTitle>
@@ -1084,7 +1085,12 @@ export default function VendorRequisitionPage() {
                                 { isStandby ? "Your quote is a backup option. You will be notified if the primary vendor declines." : (canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.')}
                             </AlertDescription>
                         </Alert>
+
+                        
+                        </>
                      )}
+
+                    
                 </CardFooter>
             </Card>
         )
@@ -1092,10 +1098,18 @@ export default function VendorRequisitionPage() {
 
     return (
         <div className="space-y-6">
-            <Button variant="outline" size="sm" onClick={() => router.push('/vendor/dashboard')}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Dashboard
-            </Button>
+            <div className="flex items-start justify-between">
+                <Button variant="outline" size="sm" onClick={() => router.push('/vendor/dashboard')}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back to Dashboard
+                </Button>
+
+                {canEditQuote && !isPaid && (
+                    <Button onClick={() => setIsEditingQuote(true)} className="mt-0">
+                        <FileEdit className="mr-2 h-4 w-4" /> Edit Quote
+                    </Button>
+                )}
+            </div>
             
             <Dialog open={declineState.isOpen} onOpenChange={(open) => !open && setDeclineState({isOpen: false})}>
                 <DeclineReasonDialog 

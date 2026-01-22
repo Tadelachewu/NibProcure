@@ -553,12 +553,15 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
     const userRoles = user.roles as UserRole[];
     const roleNames = (userRoles || []).map((r: any) => (typeof r === 'string' ? r : r?.name)).filter(Boolean);
     const isCommitteeRole = roleNames.includes('Committee_Member') || roleNames.some((r: string) => r.includes('Committee'));
-    const committeeAssigned = (requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0;
-    const isCommitteeAssigned = (requisition.financialCommitteeMemberIds || []).includes(user.id) || (requisition.technicalCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id);
-    const isCommitteeMember = isCommitteeRole || isCommitteeAssigned;
+    // Determine compliance committee assignment
+    const committeeAssigned = (requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0 || (requisition.complianceCommitteeMemberIds?.length || 0) > 0;
+    const isAssignedCompliance = (requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id && a.type === 'compliance');
+    const isCommitteeMember = isCommitteeRole || isAssignedCompliance;
     const needsCompliance = (requisition.rfqSettings as any)?.needsCompliance ?? true;
-    // Only hide prices if compliance is required, committee is assigned, toggle is OFF, and user is committee member
-    const hidePrices = needsCompliance && committeeAssigned && isCommitteeMember && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
+    // Only hide prices if compliance is required, committee is assigned, user is an assigned compliance member for this requisition, and the rfqSettings flag disallows visibility
+    const assignment = (user.committeeAssignments || []).find((a:any) => a.requisitionId === requisition.id);
+    const scoresSubmitted = assignment?.scoresSubmitted || false;
+    const hidePrices = needsCompliance && committeeAssigned && isAssignedCompliance && !scoresSubmitted && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -655,9 +658,9 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             )}
                             {(!isMasked && (isDeadlinePassed || quote.cpoDocumentUrl)) ? (
                                 <>
-                                    {hidePrices ? (
+                                            {hidePrices ? (
                                         <div className="text-center py-4">
-                                            <p className="font-semibold text-muted-foreground">Pricing information is hidden for technical evaluation.</p>
+                                            <p className="font-semibold text-muted-foreground">Pricing information is hidden for compliance evaluation.</p>
                                         </div>
                                     ) : (
                                         <>
@@ -976,7 +979,7 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
                             const personVerified = recipientId
                                 ? (pins || []).some((p:any) => p.roleName === rn && p.used && p.usedById && p.usedById === recipientId)
                                 : false;
-                            const canVerify = Boolean(user && (user.id === recipientId));
+                            const canVerify = Boolean(user && (user.id === recipientId) && rn !== DEPT_HEAD_ROLE);
 
                             return (
                                 <div key={`${rn}:${recipientId || 'none'}`} className="border rounded p-3">
@@ -1373,7 +1376,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                                                 checked={technicalViewPrices}
                                                 onCheckedChange={setTechnicalViewPrices}
                                             />
-                                            <Label htmlFor="technical-view-prices">Allow technical evaluators to see prices</Label>
+                                            <Label htmlFor="technical-view-prices">Allow compliance evaluators to see prices</Label>
                                         </div>
                                     </div>
                                 </div>

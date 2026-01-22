@@ -18,7 +18,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     // RFQ senders need visibility into who has verified (status only).
     // Pin recipients should only see their own pin records.
     const where = authorizedRfqSender
-      ? { requisitionId: id, roleName: { in: ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management'] } }
+      ? { requisitionId: id, roleName: { in: ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management', 'Department_Head'] } }
       : { requisitionId: id, recipientId: actor.id };
 
     const pinsRaw = await prisma.pin.findMany({

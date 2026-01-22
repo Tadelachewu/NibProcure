@@ -241,12 +241,12 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
         }
     }
     
-    // Only assigned compliance (technical) committee members have prices masked, and only before technical evaluation is finalized
-    const isAssignedTechnicalCommittee = (requisition.technicalCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id && a.type === 'technical');
-    // Assume finalized if isScoringDeadlinePassed or a similar flag (adjust as needed for your actual finalized state)
-    const isTechnicalEvaluationFinalized = isScoringDeadlinePassed || requisition.status === 'Scoring_Complete' || requisition.status === 'Awarded' || requisition.status === 'Completed';
-    // Only mask prices for assigned technical committee before finalization and if rfqSettings disables price visibility
-    const hidePrices = isAssignedTechnicalCommittee && !isTechnicalEvaluationFinalized && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
+    // Only assigned compliance committee members have prices masked, and only until they finalize their checks
+    const isAssignedComplianceCommittee = (requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id && a.type === 'compliance');
+    const assignment = (user.committeeAssignments || []).find((a:any) => a.requisitionId === requisition.id);
+    const scoresSubmitted = assignment?.scoresSubmitted || false;
+    // Only mask prices for assigned compliance committee members until they finalize, and if rfqSettings disables price visibility for compliance
+    const hidePrices = isAssignedComplianceCommittee && !scoresSubmitted && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
 
 
     return (
@@ -289,7 +289,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                 <>
                                     {hidePrices ? (
                                         <div className="text-center py-4">
-                                            <p className="font-semibold text-muted-foreground">Pricing information is hidden for technical evaluation.</p>
+                                            <p className="font-semibold text-muted-foreground">Pricing information is hidden for compliance evaluation.</p>
                                         </div>
                                     ) : (
                                         <>
@@ -759,7 +759,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                                                 checked={technicalViewPrices}
                                                 onCheckedChange={setTechnicalViewPrices}
                                             />
-                                            <Label htmlFor="technical-view-prices">Allow technical evaluators to see prices</Label>
+                                            <Label htmlFor="technical-view-prices">Allow compliance evaluators to see prices</Label>
                                         </div>
                                     </div>
                                 </div>

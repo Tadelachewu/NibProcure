@@ -12,6 +12,7 @@ import {
   } from '@/components/ui/dialog';
 import { Button } from './ui/button';
 import { PurchaseRequisition, Quotation } from '@/lib/types';
+import { useAuth } from '@/contexts/auth-context';
 import { ScrollArea } from './ui/scroll-area';
 import { Separator } from './ui/separator';
 import { Badge } from './ui/badge';
@@ -28,7 +29,14 @@ interface QuoteDetailsDialogProps {
 export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: QuoteDetailsDialogProps) {
     if (!quote || !requisition) return null;
 
+    const { user } = useAuth();
     const isMasked = Boolean((requisition as any).rfqSettings?.masked);
+
+    // Determine if current user is an assigned compliance committee member and hasn't finalized checks
+    const isAssignedCompliance = Boolean(user && ((requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id && a.type === 'compliance')));
+    const assignment = (user && (user.committeeAssignments || []).find((a:any) => a.requisitionId === requisition.id)) || undefined;
+    const scoresSubmitted = Boolean(assignment?.scoresSubmitted);
+    const hideForUser = isAssignedCompliance && !scoresSubmitted && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
 
     const findQuestionText = (questionId: string) => {
         return requisition.customQuestions?.find(q => q.id === questionId)?.questionText || "Unknown Question";
@@ -51,10 +59,10 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                         </div>
                     ) : (
                     <div className="space-y-6 py-4">
-                        <div className="space-y-1">
+                                <div className="space-y-1">
                             <h3 className="font-semibold">General Information</h3>
                             <div className="p-4 border rounded-md grid grid-cols-2 gap-4 text-sm bg-muted/50">
-                                <div><span className="font-medium text-muted-foreground">Total Price:</span> <span className="font-bold text-lg">{quote.totalPrice.toLocaleString()} ETB</span></div>
+                                <div><span className="font-medium text-muted-foreground">Total Price:</span> <span className="font-bold text-lg">{hideForUser ? 'Hidden' : quote.totalPrice.toLocaleString() + ' ETB'}</span></div>
                                 <div><span className="font-medium text-muted-foreground">Est. Delivery:</span> {new Date(quote.deliveryDate).toLocaleDateString()}</div>
                                 <div className="col-span-2"><span className="font-medium text-muted-foreground">Status:</span> <Badge variant="secondary">{quote.status.replace(/_/g, ' ')}</Badge></div>
                                 {quote.notes && <div className="col-span-2"><span className="font-medium text-muted-foreground">Notes:</span> <p className="italic">"{quote.notes}"</p></div>}
@@ -67,13 +75,13 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                              <h3 className="font-semibold">Quoted Items</h3>
                              <div className="space-y-4">
                                 {quote.items.map(item => (
-                                    <div key={item.id} className="p-4 border rounded-lg">
+                                        <div key={item.id} className="p-4 border rounded-lg">
                                         <div className="flex justify-between">
                                             <div>
                                                 <p className="font-semibold">{item.name}</p>
                                                 <p className="text-xs text-muted-foreground">Qty: {item.quantity} | Delivery Time: {item.leadTimeDays} days</p>
                                             </div>
-                                            <p className="font-semibold">{item.unitPrice.toLocaleString()} ETB / unit</p>
+                                            <p className="font-semibold">{hideForUser ? 'Hidden' : item.unitPrice.toLocaleString() + ' ETB / unit'}</p>
                                         </div>
                                          {item.imageUrl && (
                                             <div className="relative h-40 w-full mt-2 rounded-md overflow-hidden">
