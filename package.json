@@ -8,7 +8,7 @@
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src.ai/dev.ts",
     "build": "next build",
-    "start": "next start -p $PORT",
+    "start": "next start -p 3005",//$PORT
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate dev --name init",
