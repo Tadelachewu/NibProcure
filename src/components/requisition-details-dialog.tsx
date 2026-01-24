@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { CheckCircle, Circle, Clock, FileText, Send, UserCheck, Users, Trophy, Calendar, UserCog, Landmark, Percent, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
+import { useRouter } from 'next/navigation';
 
 interface RequisitionDetailsDialogProps {
   requisition: PurchaseRequisition;
@@ -57,7 +58,8 @@ const DetailItem = ({ label, children }: { label: string, children: React.ReactN
 
 
 export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: RequisitionDetailsDialogProps) {
-    const { allUsers } = useAuth();
+    const { allUsers, user } = useAuth();
+    const router = useRouter();
     if (!requisition) return null;
 
     // --- Department Head Pin Status Logic ---
@@ -492,6 +494,12 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
                 </div>
             </ScrollArea>
             <DialogFooter>
+                {/* If the requisition was rejected allow the requester to resubmit by editing */}
+                {user && requisition.requesterId === user.id && requisition.status === 'Rejected' && (
+                    <Button variant="secondary" onClick={() => { onClose(); router.push(`/requisitions/${requisition.id}/edit`); }} className="mr-2">
+                        Resubmit
+                    </Button>
+                )}
                 <Button onClick={onClose}>Close</Button>
             </DialogFooter>
         </DialogContent>

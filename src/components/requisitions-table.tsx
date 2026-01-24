@@ -321,8 +321,8 @@ export function RequisitionsTable() {
                             </DropdownMenuItem>
                             {req.requesterId === user?.id && (req.status === 'Draft' || req.status === 'Rejected') && (
                               <DropdownMenuItem onClick={() => router.push(`/requisitions/${req.id}/edit`)}>
-                                <FileEdit className="mr-2 h-4 w-4" />
-                                Edit
+                                {req.status === 'Rejected' ? <Send className="mr-2 h-4 w-4" /> : <FileEdit className="mr-2 h-4 w-4" />}
+                                {req.status === 'Rejected' ? 'Resubmit' : 'Edit'}
                               </DropdownMenuItem>
                             )}
                             {req.requesterId === user?.id && req.status === 'Draft' && (

@@ -130,10 +130,10 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
         ...existingRequisition,
         requesterId: existingRequisition.requesterId,
         department: existingRequisition.department || user?.department,
-        title: existingRequisition.title,
-        urgency: existingRequisition.urgency || 'Low',
-        justification: existingRequisition.justification,
-        evaluationCriteria: existingRequisition.evaluationCriteria,
+      title: existingRequisition.title,
+      urgency: existingRequisition.urgency || 'Low',
+      justification: existingRequisition.justification,
+      evaluationCriteria: existingRequisition.evaluationCriteria ?? undefined,
         items: existingRequisition.items.map(item => ({
             id: item.id,
             name: item.name,
@@ -160,8 +160,12 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
     const savedData = localStorage.getItem(storageKey);
     if (savedData) {
         try {
-            const parsedData = JSON.parse(savedData);
-            form.reset(parsedData);
+        const parsedData = JSON.parse(savedData);
+        // sanitize potential nulls coming from saved drafts
+        if (parsedData && Object.prototype.hasOwnProperty.call(parsedData, 'evaluationCriteria') && parsedData.evaluationCriteria === null) {
+          parsedData.evaluationCriteria = undefined;
+        }
+        form.reset(parsedData);
             toast({ title: 'Form Restored', description: 'Your previously entered data has been restored.' });
         } catch (e) {
             console.error("Failed to parse saved form data", e);
@@ -200,34 +204,53 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
     const validationResult = schemaToUse.safeParse(values);
 
     if (!validationResult.success) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: "Please check the form for errors before submitting.",
+      const zodError = validationResult.error;
+      const flattened = zodError.flatten ? zodError.flatten() : { fieldErrors: {}, formErrors: [] };
+      const fieldErrors = (flattened.fieldErrors as Record<string, any[]>) || {};
+      const formErrors = (flattened.formErrors as string[]) || [];
+
+      const messages: string[] = [];
+      Object.entries(fieldErrors).forEach(([path, errs]) => {
+        if (errs && errs.length) {
+          errs.forEach(e => messages.push(`${path}: ${e}`));
+        }
       });
-      try {
-        const fieldErrors = validationResult.error?.flatten?.()?.fieldErrors ?? {};
-        console.error(fieldErrors);
-      } catch (e) {
-        console.error('Validation error (unable to flatten):', validationResult.error ?? e);
+      formErrors.forEach(e => messages.push(e));
+
+      // Fallback to errors array if still empty
+      if (messages.length === 0 && Array.isArray(zodError.errors)) {
+        zodError.errors.forEach((err: any) => {
+          const p = err.path && err.path.length ? err.path.join('.') : 'root';
+          messages.push(`${p}: ${err.message}`);
+        });
       }
+
+      const description = messages.length > 0 ? Array.from(new Set(messages)).slice(0, 3).join(' | ') : 'Please check the form for errors before submitting.';
+      toast({ variant: 'destructive', title: 'Validation Error', description });
+
+      console.error('Zod validation full error:', zodError);
+      console.error('Zod flattened errors:', flattened);
       setLoading(false);
-      // Manually trigger form validation to show errors
       await form.trigger();
       return;
     }
     
     try {
         const formattedValues = {
-            ...validationResult.data,
-            customQuestions: validationResult.data.customQuestions?.map(q => ({
-            ...q,
-            options: q.options?.map(opt => opt.value)
-            }))
+          ...validationResult.data,
+          customQuestions: validationResult.data.customQuestions?.map(q => ({
+          ...q,
+          options: q.options?.map(opt => opt.value)
+          }))
         };
 
         const status = isDraft ? 'Draft' : 'Pending_Approval';
-        const body = { ...formattedValues, id: existingRequisition?.id, status: status, requesterId: user?.id };
+        // Ensure we do not send explicit null for optional objects (zod expects object or undefined)
+        const payload: any = { ...formattedValues, id: existingRequisition?.id, status: status, requesterId: user?.id };
+        if (payload.evaluationCriteria === null) delete payload.evaluationCriteria;
+        if (payload.customQuestions && payload.customQuestions.length === 0) delete payload.customQuestions;
+        // Include both requesterId (requisition owner) and userId (actor performing this request)
+        const body = { ...payload, userId: user?.id };
         
         const response = await fetch('/api/requisitions', {
             method: isEditMode ? 'PATCH' : 'POST',
