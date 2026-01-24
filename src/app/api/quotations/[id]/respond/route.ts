@@ -110,7 +110,10 @@ export async function POST(
             const totalPriceForThisPO = awardedQuoteItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
             console.log(`[RESPOND-AWARD] Total price for new PO: ${totalPriceForThisPO}`);
 
-            const newPO = await tx.purchaseOrder.create({
+            // Idempotency: if PO already created for this requisition+vendor, reuse it instead of creating duplicate
+            let newPO = await tx.purchaseOrder.findFirst({ where: { requisition: { id: requisition.id }, vendorId: quote.vendorId, status: 'Issued' } as any });
+            if (!newPO) {
+              newPO = await tx.purchaseOrder.create({
                 data: {
                     transactionId: requisition.transactionId,
                     requisition: { connect: { id: requisition.id } },
@@ -129,7 +132,8 @@ export async function POST(
                     totalAmount: totalPriceForThisPO,
                     status: 'Issued',
                 }
-            });
+              });
+            }
             console.log(`[RESPOND-AWARD] Created new Purchase Order: ${newPO.id}`);
             
             await tx.auditLog.create({

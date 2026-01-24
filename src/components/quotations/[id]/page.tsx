@@ -37,7 +37,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem } from '@/lib/types';
-import { format, formatDistanceToNow, isBefore, isPast, setHours, setMinutes } from 'date-fns';
+import { format, formatDistanceToNow, isBefore, isPast, setHours, setMinutes, differenceInCalendarDays } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/auth-context';
@@ -294,7 +294,15 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                     ) : (
                                         <>
                                             {isDeadlinePassed && <div className="text-3xl font-bold text-center">{hidePrices ? 'Hidden' : quote.totalPrice.toLocaleString() + ' ETB'}</div>}
-                                            {isDeadlinePassed && <div className="text-center text-muted-foreground">Est. Delivery: {format(new Date(quote.deliveryDate), 'PP')}</div>}
+                                            {isDeadlinePassed && (() => {
+                                                const maxLead = Math.max(...(quote.items?.map(i => Number(i.leadTimeDays) || 0) || [0]));
+                                                if (quote.status === 'Accepted') {
+                                                    const ref = new Date(quote.updatedAt || quote.createdAt || new Date());
+                                                    const days = Math.max(0, differenceInCalendarDays(new Date(quote.deliveryDate), ref));
+                                                    return <div className="text-center text-muted-foreground">Est. Delivery: {days} days after acceptance</div>;
+                                                }
+                                                return <div className="text-center text-muted-foreground">Est. Delivery: Delivery time in {maxLead} days after acceptance</div>;
+                                            })()}
                                         </>
                                     )}
 
@@ -2710,10 +2718,16 @@ export default function QuotationDetailsPage() {
                         <CardTitle className="flex items-center gap-2"><ClipboardList /> Evaluation Criteria</CardTitle>
                         <CardDescription>The following criteria were set by the requester to guide quote evaluation.</CardDescription>
                     </div>
-                     <Button variant="outline" onClick={() => setIsDetailsOpen(true)} className="w-full sm:w-auto">
-                        <Eye className="mr-2 h-4 w-4" />
-                        View Requisition Details
-                    </Button>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                        <Button variant="outline" onClick={() => setIsDetailsOpen(true)} className="w-full sm:w-auto">
+                            <Eye className="mr-2 h-4 w-4" />
+                            View Requisition Details
+                        </Button>
+                        <Button variant="outline" onClick={() => router.push(`/compliance/${requisition.id}`)} className="w-full sm:w-auto">
+                            <FileSignature className="mr-2 h-4 w-4" />
+                            View Spec Compliance Report
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <p className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-md whitespace-pre-wrap">{formatEvaluationCriteria(requisition.evaluationCriteria)}</p>

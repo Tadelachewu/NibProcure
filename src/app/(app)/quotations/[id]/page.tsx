@@ -36,7 +36,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem, PerItemAwardDetail, UserRole, CustomQuestion } from '@/lib/types';
-import { format, formatDistanceToNow, isBefore, isPast, setHours, setMinutes } from 'date-fns';
+import { format, formatDistanceToNow, isBefore, isPast, setHours, setMinutes, differenceInCalendarDays } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/auth-context';
@@ -665,7 +665,15 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                     ) : (
                                         <>
                                             {isDeadlinePassed && <div className="text-3xl font-bold text-center">{quote.totalPrice.toLocaleString()} ETB</div>}
-                                            {isDeadlinePassed && <div className="text-center text-muted-foreground">Est. Delivery: {format(new Date(quote.deliveryDate), 'PP')}</div>}
+                                            {isDeadlinePassed && (() => {
+                                                const maxLead = Math.max(...(quote.items?.map(i => Number(i.leadTimeDays) || 0) || [0]));
+                                                if (quote.status === 'Accepted') {
+                                                    const ref = new Date(quote.updatedAt || quote.createdAt || new Date());
+                                                    const days = Math.max(0, differenceInCalendarDays(new Date(quote.deliveryDate), ref));
+                                                    return <div className="text-center text-muted-foreground">Est. Delivery: {days} days after acceptance</div>;
+                                                }
+                                                return <div className="text-center text-muted-foreground">Est. Delivery: Delivery time in {maxLead} days after acceptance</div>;
+                                            })()}
                                         </>
                                     )}
 
@@ -3588,11 +3596,9 @@ const handleChangeAwardTypeFromError = () => {
                       <Link href={`/requisitions/${id}/award-details`}><Calculator className="mr-2 h-4 w-4" /> View Calculation</Link>
                   </Button>
                 )}
-                {canViewCumulativeReport && (
-                    <Button variant="secondary" onClick={() => setReportOpen(true)}>
-                        <FileBarChart2 className="mr-2 h-4 w-4" /> View Spec Compliance Report
-                    </Button>
-                )}
+                <Button variant="secondary" onClick={() => setReportOpen(true)}>
+                    <FileBarChart2 className="mr-2 h-4 w-4" /> View Spec Compliance Report
+                </Button>
            </div>
         </div>
 

@@ -65,7 +65,10 @@ export async function POST(
 
             const totalPriceForThisPO = thisVendorAwardedItems.reduce((acc: any, item: any) => acc + (item.unitPrice * item.quantity), 0);
 
-            const newPO = await tx.purchaseOrder.create({
+            // Idempotency: if PO already created for this requisition+vendor, reuse it instead of creating duplicate
+            let newPO = await tx.purchaseOrder.findFirst({ where: { requisition: { id: requisition.id }, vendorId: quote.vendorId, status: 'Issued' } as any });
+            if (!newPO) {
+                newPO = await tx.purchaseOrder.create({
                 data: {
                     transactionId: requisition.transactionId,
                     requisition: { connect: { id: requisition.id } },
@@ -84,7 +87,8 @@ export async function POST(
                     totalAmount: totalPriceForThisPO,
                     status: 'Issued',
                 }
-            });
+                });
+            }
 
             // After accepting, check if any other awards are still pending.
             const otherPendingAwards = await tx.quotation.count({

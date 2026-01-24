@@ -133,8 +133,99 @@ export async function POST(
                 });
 
                 if (!anyPortalWinners) {
-                    // ...existing code for manual winners...
-                    responseMessage = 'Notification coming soon.';
+                    // All winning vendors submitted manually — auto-accept and create POs per vendor
+                    const manualVendorIds = winningVendorIdList.filter(id => submissionByVendorId.get(id) === 'Manual');
+
+                    if (manualVendorIds.length > 0) {
+                        // Fetch full quotations for manual vendors including their items
+                        const manualQuotes = await tx.quotation.findMany({
+                            where: { requisitionId: requisitionId, vendorId: { in: manualVendorIds } },
+                            include: { items: true }
+                        } as any);
+
+                        // For each manual vendor, collect accepted quote item ids based on updated requisition perItemAwardDetails
+                        const reqItems = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId } });
+
+                        for (const vendorId of manualVendorIds) {
+                            const acceptedQuoteItemIds: string[] = [];
+                            for (const ri of reqItems) {
+                                const details = (ri.perItemAwardDetails as any[]) || [];
+                                for (const d of details) {
+                                    if (d.vendorId === vendorId && d.status === 'Accepted' && d.quoteItemId) {
+                                        acceptedQuoteItemIds.push(d.quoteItemId);
+                                    }
+                                }
+                            }
+
+                            const quoteForVendor = manualQuotes.find(q => q.vendorId === vendorId);
+                            if (!quoteForVendor) continue;
+
+                            const itemsForPO = (quoteForVendor.items || []).filter((it: any) => acceptedQuoteItemIds.length > 0 ? acceptedQuoteItemIds.includes(it.id) : true);
+                            if (itemsForPO.length === 0) continue;
+
+                            const totalAmount = itemsForPO.reduce((acc: number, item: any) => acc + (item.unitPrice * item.quantity), 0);
+
+                            // Idempotency: avoid creating duplicate PO for same requisition + vendor
+                            const existingPO = await tx.purchaseOrder.findFirst({
+                                where: {
+                                    requisition: { id: requisitionId },
+                                    vendorId: vendorId,
+                                    status: 'Issued'
+                                }
+                            } as any);
+
+                            let newPO;
+                            if (existingPO) {
+                                newPO = existingPO;
+                            } else {
+                                newPO = await tx.purchaseOrder.create({
+                                    data: {
+                                        transactionId: requisition.transactionId,
+                                        requisition: { connect: { id: requisitionId } },
+                                        requisitionTitle: requisition.title,
+                                        vendor: { connect: { id: vendorId } },
+                                        items: {
+                                            create: itemsForPO.map((item: any) => ({
+                                                requisitionItemId: item.requisitionItemId,
+                                                name: item.name,
+                                                quantity: item.quantity,
+                                                unitPrice: item.unitPrice,
+                                                totalPrice: item.quantity * item.unitPrice,
+                                                receivedQuantity: 0,
+                                            }))
+                                        },
+                                        totalAmount,
+                                        status: 'Issued',
+                                    }
+                                });
+
+                                await tx.auditLog.create({
+                                    data: {
+                                        transactionId: requisition.transactionId,
+                                        timestamp: new Date(),
+                                        user: { connect: { id: actor.id } },
+                                        action: 'AUTO_CREATE_PO_MANUAL_AWARD',
+                                        entity: 'PurchaseOrder',
+                                        entityId: newPO.id,
+                                        details: `Auto-created PO ${newPO.id} for manual-awarded vendor ${vendorId} on requisition ${requisitionId}.`
+                                    }
+                                });
+                            }
+
+                            // Mark the vendor quotation as Accepted so vendor-accept flow won't create duplicate POs
+                            await tx.quotation.update({ where: { id: quoteForVendor.id }, data: { status: 'Accepted' } } as any);
+                        }
+                    }
+
+                    // Mark requisition as PO_Created since manual winners were processed
+                    finalUpdatedRequisition = await tx.purchaseRequisition.update({
+                        where: { id: requisitionId },
+                        data: {
+                            status: 'PO_Created',
+                            awardResponseDeadline: null,
+                        }
+                    });
+                    responseMessage = 'Manual winners processed; POs created.';
                 } else {
                     // Queue email jobs for portal winners
                     const portalWinnerIds = winningVendorIdList.filter(id => submissionByVendorId.get(id) !== 'Manual');

@@ -18,6 +18,7 @@ import { Separator } from './ui/separator';
 import { Badge } from './ui/badge';
 import { FileText, UserCog } from 'lucide-react';
 import Image from 'next/image';
+import { differenceInCalendarDays } from 'date-fns';
 
 interface QuoteDetailsDialogProps {
     quote: Quotation;
@@ -72,9 +73,19 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                     <div className="space-y-6 py-4">
                                 <div className="space-y-1">
                             <h3 className="font-semibold">General Information</h3>
-                            <div className="p-4 border rounded-md grid grid-cols-2 gap-4 text-sm bg-muted/50">
+                                <div className="p-4 border rounded-md grid grid-cols-2 gap-4 text-sm bg-muted/50">
                                 <div><span className="font-medium text-muted-foreground">Total Price:</span> <span className="font-bold text-lg">{hideForUser ? 'Hidden' : quote.totalPrice.toLocaleString() + ' ETB'}</span></div>
-                                <div><span className="font-medium text-muted-foreground">Est. Delivery:</span> {new Date(quote.deliveryDate).toLocaleDateString()}</div>
+                                {
+                                    (() => {
+                                        const maxLead = Math.max(...(quote.items?.map((i:any) => Number(i.leadTimeDays) || 0) || [0]));
+                                        if (quote.status === 'Accepted') {
+                                            const ref = new Date(quote.updatedAt || quote.createdAt || new Date());
+                                            const days = Math.max(0, differenceInCalendarDays(new Date(quote.deliveryDate), ref));
+                                            return <div><span className="font-medium text-muted-foreground">Est. Delivery:</span> {days} days after acceptance</div>;
+                                        }
+                                        return <div><span className="font-medium text-muted-foreground">Est. Delivery:</span> Delivery time in {maxLead} days after acceptance</div>;
+                                    })()
+                                }
                                 <div className="col-span-2"><span className="font-medium text-muted-foreground">Status:</span> <Badge variant="secondary">{quote.status.replace(/_/g, ' ')}</Badge></div>
                                 {quote.notes && <div className="col-span-2"><span className="font-medium text-muted-foreground">Notes:</span> <p className="italic">"{quote.notes}"</p></div>}
                             </div>
@@ -99,7 +110,7 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                                                         return <Badge variant="default">Compliant</Badge>;
                                                     })()}
                                                 </div>
-                                                <p className="text-xs text-muted-foreground">Qty: {item.quantity} | Delivery Time: {item.leadTimeDays} days</p>
+                                                <p className="text-xs text-muted-foreground">Qty: {item.quantity} | {quote.status === 'Accepted' ? `${Math.max(0, differenceInCalendarDays(new Date(quote.deliveryDate), new Date(quote.updatedAt || quote.createdAt || new Date())))} days after acceptance` : `Delivery time in ${item.leadTimeDays} days after acceptance`}</p>
                                             </div>
                                             <p className="font-semibold">{hideForUser ? 'Hidden' : item.unitPrice.toLocaleString() + ' ETB / unit'}</p>
                                         </div>

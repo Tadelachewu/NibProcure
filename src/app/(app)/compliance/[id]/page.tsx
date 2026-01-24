@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { differenceInCalendarDays } from 'date-fns';
 import Link from 'next/link';
 
 const CompliancePage = () => {
@@ -224,7 +225,15 @@ const CompliancePage = () => {
                 </div>
                 <div className="text-right">
                   {!hidePrices && <div className="text-sm font-bold">{q.totalPrice?.toLocaleString?.() ?? q.totalPrice} ETB</div>}
-                  {q.deliveryDate && <div className="text-xs text-muted-foreground">Delivery: {new Date(q.deliveryDate).toLocaleDateString()}</div>}
+                  {q.deliveryDate && (() => {
+                    const maxLead = Math.max(...(q.items?.map((i:any) => Number(i.leadTimeDays) || 0) || [0]));
+                    if (q.status === 'Accepted') {
+                      const ref = new Date(q.updatedAt || q.createdAt || new Date());
+                      const days = Math.max(0, differenceInCalendarDays(new Date(q.deliveryDate), ref));
+                      return <div className="text-xs text-muted-foreground">Delivery: {days} days after acceptance</div>;
+                    }
+                    return <div className="text-xs text-muted-foreground">Delivery: Delivery time in {maxLead} days after acceptance</div>;
+                  })()}
                 </div>
               </CardTitle>
               <CardDescription className="mt-1 text-xs text-muted-foreground">
