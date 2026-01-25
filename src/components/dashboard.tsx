@@ -522,9 +522,11 @@ export function Dashboard() {
                 </div>
                 <div>
                     {(
-                        DIRECTOR_ROLES.includes(role || '') ||
-                        // any user assigned as a department head
-                        (!!user && Array.isArray(departments) && departments.some(d => d.headId === user.id))
+                        (
+                            DIRECTOR_ROLES.includes(role || '') ||
+                            // any user assigned as a department head
+                            (!!user && Array.isArray(departments) && departments.some(d => d.headId === user.id))
+                        ) && role !== 'Finance'
                     ) && (
                             <div className="flex gap-2">
                                 <DirectorPinsModal />
