@@ -3,31 +3,31 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
 } from '@/components/ui/card';
-import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
-  ArrowRight,
-  FilePlus,
-  FileText,
-  GanttChartSquare,
-  Loader2,
-  Banknote,
-  AlertTriangle,
-  PackageCheck,
-  FileBadge,
-  Trophy,
-  Users,
-  Wallet,
-  Edit,
-  CheckCircle,
+    ArrowRight,
+    FilePlus,
+    FileText,
+    GanttChartSquare,
+    Loader2,
+    Banknote,
+    AlertTriangle,
+    PackageCheck,
+    FileBadge,
+    Trophy,
+    Users,
+    Wallet,
+    Edit,
+    CheckCircle,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -39,39 +39,39 @@ import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 const StatCard = ({
-  title,
-  value,
-  description,
-  icon,
-  onClick,
-  cta,
-  variant = 'default'
+    title,
+    value,
+    description,
+    icon,
+    onClick,
+    cta,
+    variant = 'default'
 }: {
-  title: string;
-  value: string;
-  description: string;
-  icon: React.ReactNode;
-  onClick?: () => void;
-  cta?: string;
-  variant?: 'default' | 'destructive'
+    title: string;
+    value: string;
+    description: string;
+    icon: React.ReactNode;
+    onClick?: () => void;
+    cta?: string;
+    variant?: 'default' | 'destructive'
 }) => (
-  <Card className={variant === 'destructive' ? 'bg-destructive/10 border-destructive/50' : ''}>
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      {icon}
-    </CardHeader>
-    <CardContent>
-      <div className="text-2xl font-bold">{value}</div>
-      <p className="text-xs text-muted-foreground">{description}</p>
-    </CardContent>
-    {onClick && cta && (
-      <CardFooter>
-        <Button variant="outline" size="sm" onClick={onClick} className="w-full">
-          {cta} <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
-      </CardFooter>
-    )}
-  </Card>
+    <Card className={variant === 'destructive' ? 'bg-destructive/10 border-destructive/50' : ''}>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{title}</CardTitle>
+            {icon}
+        </CardHeader>
+        <CardContent>
+            <div className="text-2xl font-bold">{value}</div>
+            <p className="text-xs text-muted-foreground">{description}</p>
+        </CardContent>
+        {onClick && cta && (
+            <CardFooter>
+                <Button variant="outline" size="sm" onClick={onClick} className="w-full">
+                    {cta} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+            </CardFooter>
+        )}
+    </Card>
 );
 
 const RecentRequisitionsTable = ({ requisitions }: { requisitions: PurchaseRequisition[] }) => {
@@ -83,7 +83,7 @@ const RecentRequisitionsTable = ({ requisitions }: { requisitions: PurchaseRequi
                 <CardDescription>The last 5 requisitions you created.</CardDescription>
             </CardHeader>
             <CardContent>
-                 <Table>
+                <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>Title</TableHead>
@@ -131,7 +131,7 @@ function RequesterDashboard() {
 
     const recentRequisitions = useMemo(() => {
         return [...requisitions]
-            .sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, 5);
     }, [requisitions]);
 
@@ -139,19 +139,19 @@ function RequesterDashboard() {
 
     return (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-             <Card className="col-span-full md:col-span-2 lg:col-span-4">
+            <Card className="col-span-full md:col-span-2 lg:col-span-4">
                 <CardHeader>
                     <CardTitle>Start a New Procurement Request</CardTitle>
                     <CardDescription>Need something for your team? Start by creating a purchase requisition.</CardDescription>
                 </CardHeader>
                 <CardFooter>
                     <Button onClick={() => router.push('/new-requisition')} size="lg">
-                    <FilePlus className="mr-2 h-4 w-4" /> Create New Requisition
+                        <FilePlus className="mr-2 h-4 w-4" /> Create New Requisition
                     </Button>
                 </CardFooter>
             </Card>
-            <StatCard title="Drafts" value={stats.drafts.toString()} description="Requisitions you are working on" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/requisitions')} cta="View Drafts"/>
-            <StatCard title="Pending Approval" value={stats.pending.toString()} description="Requisitions awaiting sign-off" icon={<GanttChartSquare className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/requisitions')} cta="Track Progress"/>
+            <StatCard title="Drafts" value={stats.drafts.toString()} description="Requisitions you are working on" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/requisitions')} cta="View Drafts" />
+            <StatCard title="Pending Approval" value={stats.pending.toString()} description="Requisitions awaiting sign-off" icon={<GanttChartSquare className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/requisitions')} cta="Track Progress" />
             <StatCard title="Rejected" value={stats.rejected.toString()} description="Requisitions that need revision" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/requisitions')} cta="View & Edit" variant="destructive" />
 
             {recentRequisitions.length > 0 && <RecentRequisitionsTable requisitions={recentRequisitions} />}
@@ -183,7 +183,7 @@ function ApproverDashboard({ forAwardReviews = false }: { forAwardReviews?: bool
 
     return (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-             <StatCard
+            <StatCard
                 title={`Pending ${pageTitle}`}
                 value={pendingCount.toString()}
                 description={`Items awaiting your review and decision.`}
@@ -207,7 +207,7 @@ function ProcurementOfficerDashboard() {
             fetch('/api/requisitions').then(res => res.json()),
             fetch('/api/invoices').then(res => res.json()),
         ]).then(([requisitionsData, invoices]) => {
-            setData({ 
+            setData({
                 requisitions: Array.isArray(requisitionsData.requisitions) ? requisitionsData.requisitions : [],
                 invoices: Array.isArray(invoices) ? invoices : []
             });
@@ -224,7 +224,7 @@ function ProcurementOfficerDashboard() {
         const readyToAward = data.requisitions.filter(r => r.status === 'Scoring_Complete').length;
         const pendingFinalReview = data.requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
         const awardDeclined = data.requisitions.filter(r => r.status === 'Award_Declined').length;
-        
+
         const paidInvoicesValue = data.invoices
             .filter(i => i.status === 'Paid')
             .reduce((sum, i) => sum + i.totalAmount, 0);
@@ -240,35 +240,39 @@ function ProcurementOfficerDashboard() {
 
     return (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard title="Ready for RFQ" value={stats.readyForRfq.toString()} description="Approved and waiting for RFQ" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Manage Quotations"/>
-            <StatCard title="Accepting Quotes" value={stats.acceptingQuotes.toString()} description="RFQs currently active with vendors" icon={<FileBadge className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="View Active RFQs"/>
-            <StatCard title="In Committee Scoring" value={stats.inCommitteeScoring.toString()} description="Quotes being evaluated by committee" icon={<Users className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Monitor Progress"/>
-            <StatCard title="Ready to Award" value={stats.readyToAward.toString()} description="Scoring is complete" icon={<Trophy className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Finalize Awards"/>
-            <StatCard title="Pending Award Review" value={stats.pendingFinalReview.toString()} description="Awards in hierarchical approval" icon={<GanttChartSquare className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/award-reviews')} cta="Track Reviews"/>
-            <StatCard title="Award Declined" value={stats.awardDeclined.toString()} description="Vendor declined, action needed" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Promote Standby" variant="destructive"/>
-            <StatCard title="Total Unpaid" value={`${stats.unpaidInvoicesValue.toLocaleString()} ETB`} description="Invoices pending or approved" icon={<Wallet className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View Invoices"/>
-            <StatCard title="Total Paid" value={`${stats.paidInvoicesValue.toLocaleString()} ETB`} description="Successfully paid and closed" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View History"/>
+            <StatCard title="Ready for RFQ" value={stats.readyForRfq.toString()} description="Approved and waiting for RFQ" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Manage Quotations" />
+            <StatCard title="Accepting Quotes" value={stats.acceptingQuotes.toString()} description="RFQs currently active with vendors" icon={<FileBadge className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="View Active RFQs" />
+            <StatCard title="In Committee Scoring" value={stats.inCommitteeScoring.toString()} description="Quotes being evaluated by committee" icon={<Users className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Monitor Progress" />
+            <StatCard title="Ready to Award" value={stats.readyToAward.toString()} description="Scoring is complete" icon={<Trophy className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Finalize Awards" />
+            <StatCard title="Pending Award Review" value={stats.pendingFinalReview.toString()} description="Awards in hierarchical approval" icon={<GanttChartSquare className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/award-reviews')} cta="Track Reviews" />
+            <StatCard title="Award Declined" value={stats.awardDeclined.toString()} description="Vendor declined, action needed" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/quotations')} cta="Promote Standby" variant="destructive" />
+            <StatCard title="Total Unpaid" value={`${stats.unpaidInvoicesValue.toLocaleString()} ETB`} description="Invoices pending or approved" icon={<Wallet className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View Invoices" />
+            <StatCard title="Total Paid" value={`${stats.paidInvoicesValue.toLocaleString()} ETB`} description="Successfully paid and closed" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View History" />
         </div>
     );
 }
 
 function FinanceDashboard() {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showMissingDialog, setShowMissingDialog] = useState(false);
     const router = useRouter();
 
-     useEffect(() => {
+    useEffect(() => {
         setLoading(true);
-        fetch('/api/invoices').then(res => res.json())
-            .then(data => {
-                const activeInvoices = Array.isArray(data) ? data : [];
-                setInvoices(activeInvoices);
-            })
-            .catch(error => {
-                console.error("Failed to fetch invoices:", error);
-                setInvoices([]);
-            })
-            .finally(() => setLoading(false));
+        Promise.all([
+            fetch('/api/invoices').then(res => res.json()),
+            fetch('/api/purchase-orders').then(res => res.json())
+        ]).then(([invoicesData, poData]) => {
+            const activeInvoices = Array.isArray(invoicesData) ? invoicesData : [];
+            setInvoices(activeInvoices);
+            setPurchaseOrders(Array.isArray(poData) ? poData : []);
+        }).catch(error => {
+            console.error("Failed to fetch invoices or purchase orders:", error);
+            setInvoices([]);
+            setPurchaseOrders([]);
+        }).finally(() => setLoading(false));
     }, []);
 
     const stats = useMemo(() => {
@@ -278,7 +282,7 @@ function FinanceDashboard() {
         ).length;
         const approved = invoices.filter(i => i.status === 'Approved_for_Payment').length;
         const paidValue = invoices.filter(i => i.status === 'Paid').reduce((sum, i) => sum + i.totalAmount, 0);
-        
+
         const unpaidValue = invoices
             .filter(i =>
                 (i.status === 'Pending' || i.status === 'Approved_for_Payment') &&
@@ -286,18 +290,26 @@ function FinanceDashboard() {
             )
             .reduce((sum, i) => sum + i.totalAmount, 0);
 
-        return { pending, approved, paidValue, unpaidValue };
-    }, [invoices]);
+        const posMissingInvoice = purchaseOrders.filter(po => (po.receipts || []).length > 0 && !(po.invoices || []).length);
+
+        return { pending, approved, paidValue, unpaidValue, posMissingInvoice };
+    }, [invoices, purchaseOrders]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
     return (
-         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard title="Pending Invoices" value={stats.pending.toString()} description="Awaiting 3-way match and approval" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Review Invoices"/>
-            <StatCard title="Ready for Payment" value={stats.approved.toString()} description="Approved invoices to be paid" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Process Payments"/>
-            <StatCard title="Total Unpaid" value={`${stats.unpaidValue.toLocaleString()} ETB`} description="Value of pending/approved invoices" icon={<Wallet className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View Invoices" />
-            <StatCard title="Total Paid" value={`${stats.paidValue.toLocaleString()} ETB`} description="Value of all successfully paid invoices" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View History" />
-        </div>
+        <>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <StatCard title="Pending Invoices" value={stats.pending.toString()} description="Awaiting 3-way match and approval" icon={<FileText className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Review Invoices" />
+                <StatCard title="Ready for Payment" value={stats.approved.toString()} description="Approved invoices to be paid" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="Process Payments" />
+                <StatCard title="Total Unpaid" value={`${stats.unpaidValue.toLocaleString()} ETB`} description="Value of pending/approved invoices" icon={<Wallet className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View Invoices" />
+                <StatCard title="Total Paid" value={`${stats.paidValue.toLocaleString()} ETB`} description="Value of all successfully paid invoices" icon={<Banknote className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices')} cta="View History" />
+            </div>
+
+            <div className="mt-4">
+                <StatCard title="POs Missing Invoice" value={`${stats.posMissingInvoice.length}`} description="POs with receipts but no invoice submitted" icon={<FileBadge className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/invoices/missing-pos')} cta="List POs" />
+            </div>
+        </>
     )
 }
 
@@ -306,7 +318,7 @@ function ReceivingDashboard() {
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
-     useEffect(() => {
+    useEffect(() => {
         setLoading(true);
         fetch('/api/purchase-orders').then(res => res.json())
             .then(data => setPurchaseOrders(data))
@@ -317,24 +329,24 @@ function ReceivingDashboard() {
     const stats = useMemo(() => {
         const disputedPOs = purchaseOrders.filter(po => po.receipts?.some(r => r.status === 'Disputed'));
         const disputedIds = new Set(disputedPOs.map(p => p.id));
-        
-        const readyToReceiveCount = purchaseOrders.filter(po => 
+
+        const readyToReceiveCount = purchaseOrders.filter(po =>
             ['Issued', 'Acknowledged', 'Shipped', 'Partially_Delivered'].includes(po.status.replace(/ /g, '_')) &&
             !disputedIds.has(po.id)
         ).length;
 
         const completedCount = purchaseOrders.filter(po => po.status === 'Delivered' && !disputedIds.has(po.id)).length;
-        
+
         return { readyToReceiveCount, disputedCount: disputedPOs.length, completedCount };
     }, [purchaseOrders]);
 
     if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
-    
+
     return (
-         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <StatCard title="Orders to Receive" value={stats.readyToReceiveCount.toString()} description="Purchase orders awaiting goods receipt" icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods?view=form')} cta="Log Incoming Goods"/>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <StatCard title="Orders to Receive" value={stats.readyToReceiveCount.toString()} description="Purchase orders awaiting goods receipt" icon={<PackageCheck className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods?view=form')} cta="Log Incoming Goods" />
             <StatCard title="Disputed Receipts" value={stats.disputedCount.toString()} description="GRNs with incorrect or damaged items" icon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods?view=disputed')} cta="View Disputed Items" variant="destructive" />
-            <StatCard title="Completed Receipts" value={stats.completedCount.toString()} description="Orders successfully received and in good condition" icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods?view=completed')} cta="View History"/>
+            <StatCard title="Completed Receipts" value={stats.completedCount.toString()} description="Orders successfully received and in good condition" icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />} onClick={() => router.push('/receive-goods?view=completed')} cta="View History" />
         </div>
     )
 }
@@ -369,7 +381,7 @@ function CommitteeDashboard() {
         // Pending: assigned to this user, scoring currently active, and user hasn't submitted scores yet
         const pendingScore = requisitions.filter(r => {
             const hasScored = r.committeeAssignments?.some((a: any) => a.userId === user?.id && a.scoresSubmitted);
-            
+
             // Corrected Logic: Scoring is active if the deadline has passed and the process is not yet finished.
             const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
             const isRelevantStatus = ['Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete'].includes(r.status);
@@ -378,7 +390,7 @@ function CommitteeDashboard() {
             return !hasScored && inScoring;
         }).length;
 
-        const scored = requisitions.filter(r => 
+        const scored = requisitions.filter(r =>
             r.committeeAssignments?.some((a: any) => a.userId === user?.id && a.scoresSubmitted)
         ).length;
 
@@ -389,20 +401,20 @@ function CommitteeDashboard() {
 
     return (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            <StatCard 
-                title="Pending Your Check" 
-                value={stats.pendingScore.toString()} 
-                description="Requisitions awaiting your compliance checks." 
-                icon={<Edit className="h-4 w-4 text-muted-foreground" />} 
+            <StatCard
+                title="Pending Your Check"
+                value={stats.pendingScore.toString()}
+                description="Requisitions awaiting your compliance checks."
+                icon={<Edit className="h-4 w-4 text-muted-foreground" />}
                 onClick={() => router.push('/quotations?tab=pending')}
                 cta="Go to Compliance"
                 variant={stats.pendingScore > 0 ? "default" : "default"}
             />
-            <StatCard 
-                title="Checked by You" 
-                value={stats.scored.toString()} 
-                description="Requisitions you have already completed compliance checks for." 
-                icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />} 
+            <StatCard
+                title="Checked by You"
+                value={stats.scored.toString()}
+                description="Requisitions you have already completed compliance checks for."
+                icon={<CheckCircle className="h-4 w-4 text-muted-foreground" />}
                 onClick={() => router.push('/quotations?tab=scored')}
                 cta="View Checked"
             />
@@ -413,7 +425,7 @@ function CommitteeDashboard() {
 export function Dashboard() {
     const { role, user, departments } = useAuth();
 
-    const DIRECTOR_ROLES = ['Director_Supply_Chain_and_Property_Management','Finance_Director','Facility_Director'];
+    const DIRECTOR_ROLES = ['Director_Supply_Chain_and_Property_Management', 'Finance_Director', 'Facility_Director'];
 
     const DirectorPinsModal = () => {
         const [open, setOpen] = useState(false);
@@ -422,7 +434,7 @@ export function Dashboard() {
         const [loading, setLoading] = useState(false);
         const [pins, setPins] = useState<any[]>([]);
         const [total, setTotal] = useState(0);
-        const [error, setError] = useState<string|undefined>();
+        const [error, setError] = useState<string | undefined>();
         const { token } = useAuth();
 
         const { toast } = useToast();
@@ -438,7 +450,7 @@ export function Dashboard() {
                 setPins(data.pins || []);
                 setTotal(data.total || (data.pins || []).length);
                 setPage(data.page || p);
-            } catch (e:any) {
+            } catch (e: any) {
                 setError(e.message || 'Failed to load pins');
             } finally { setLoading(false); }
         }
@@ -451,7 +463,7 @@ export function Dashboard() {
                 if (!res.ok) throw new Error(data.error || 'Failed to resend PIN');
                 toast({ title: 'PIN sent', description: 'A one-time PIN was sent to your email.' });
                 await fetchPins(page);
-            } catch (e:any) {
+            } catch (e: any) {
                 toast({ variant: 'destructive', title: 'Error', description: e?.message || 'Failed to resend PIN' });
             }
         }
@@ -477,50 +489,50 @@ export function Dashboard() {
         );
     };
 
-  const renderDashboard = () => {
-    switch (role) {
-      case 'Requester': return <RequesterDashboard />;
-      case 'Approver': return <ApproverDashboard />;
-      case 'Committee_Member': return <CommitteeDashboard />;
-      case 'Committee_A_Member':
-      case 'Committee_B_Member':
-      case 'Manager_Procurement_Division':
-      case 'Director_Supply_Chain_and_Property_Management':
-      case 'VP_Resources_and_Facilities':
-      case 'President':
-        return <ApproverDashboard forAwardReviews={true} />;
-      case 'Procurement_Officer': return <ProcurementOfficerDashboard />;
-      case 'Admin': return <ProcurementOfficerDashboard />; // Admin gets the same overview
-      case 'Finance': return <FinanceDashboard />;
-      case 'Receiving': return <ReceivingDashboard />;
-      default:
-        return <p>No dashboard available for this role.</p>;
-    }
-  };
+    const renderDashboard = () => {
+        switch (role) {
+            case 'Requester': return <RequesterDashboard />;
+            case 'Approver': return <ApproverDashboard />;
+            case 'Committee_Member': return <CommitteeDashboard />;
+            case 'Committee_A_Member':
+            case 'Committee_B_Member':
+            case 'Manager_Procurement_Division':
+            case 'Director_Supply_Chain_and_Property_Management':
+            case 'VP_Resources_and_Facilities':
+            case 'President':
+                return <ApproverDashboard forAwardReviews={true} />;
+            case 'Procurement_Officer': return <ProcurementOfficerDashboard />;
+            case 'Admin': return <ProcurementOfficerDashboard />; // Admin gets the same overview
+            case 'Finance': return <FinanceDashboard />;
+            case 'Receiving': return <ReceivingDashboard />;
+            default:
+                return <p>No dashboard available for this role.</p>;
+        }
+    };
 
-  return (
-    <div className="flex flex-col gap-8">
+    return (
+        <div className="flex flex-col gap-8">
             <div className="flex justify-between items-start">
                 <div>
-                        <h1 className="text-3xl font-bold">Welcome back, {user?.name}!</h1>
-                        <p className="text-muted-foreground">
-                            Here's a summary of procurement activities for your role as a{' '}
-                            <strong>{role?.replace(/_/g, ' ')}</strong>.
-                        </p>
+                    <h1 className="text-3xl font-bold">Welcome back, {user?.name}!</h1>
+                    <p className="text-muted-foreground">
+                        Here's a summary of procurement activities for your role as a{' '}
+                        <strong>{role?.replace(/_/g, ' ')}</strong>.
+                    </p>
                 </div>
                 <div>
-                                        {(
-                                            DIRECTOR_ROLES.includes(role || '') ||
-                                            // any user assigned as a department head
-                                            (!!user && Array.isArray(departments) && departments.some(d => d.headId === user.id))
-                                        ) && (
-                        <div className="flex gap-2">
-                            <DirectorPinsModal />
-                        </div>
-                    )}
+                    {(
+                        DIRECTOR_ROLES.includes(role || '') ||
+                        // any user assigned as a department head
+                        (!!user && Array.isArray(departments) && departments.some(d => d.headId === user.id))
+                    ) && (
+                            <div className="flex gap-2">
+                                <DirectorPinsModal />
+                            </div>
+                        )}
                 </div>
             </div>
-      {renderDashboard()}
-    </div>
-  );
+            {renderDashboard()}
+        </div>
+    );
 }
