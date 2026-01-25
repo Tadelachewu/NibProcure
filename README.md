@@ -163,6 +163,32 @@ docker exec -it <container-name> sh -c "npm run db:migrate && npm run db:seed"
     - If Docker Desktop (WSL2) appears to block host binding, try restarting Docker Desktop or use an alternate host port.
 
 
+---
+
+## Recent Updates (branch: mydock6)
+
+ - **Mixed Award Handling:** When award notifications include a mix of electronically-submitted and manually-uploaded quotations, the notification flow now creates Purchase Orders (POs) idempotently for manual winners and marks manual quotations as `Accepted` so downstream processes (PO generation, GRNs, invoicing) remain consistent.
+ - **PINs & Security:** PIN generation endpoints were optimized for performance and correctness: bcrypt hashing is now asynchronous, bulk PIN creation is parallelized, and the per-user "Resend PIN" flow is atomic (previous unused pins are retired before creating a new one). For development/testing the API can optionally return plaintext PINs when explicitly requested; do not enable this in production.
+ - **Dashboard & UI:** The dashboard hides the "View Pins" control for standard Finance users (visible only to directors/authorized roles). The committee status label was renamed to "In Committee Compliance Check" and counts are taken directly from the database. A new dashboard stat links to a page listing POs that have receipts but no invoices.
+ - **Receiving & Invoicing:** The Goods Receipt view now includes a "Pending Payments" tab to surface POs with receipts but unpaid invoices. The invoice creation UI was restricted so Finance can only add invoices for POs that have receiving logged (three-way matching prerequisites enforced in the UI).
+ - **Performance & Reliability:** Long-running crypto operations were converted to non-blocking async calls and email dispatch for bulk/pin operations is queued (fire-and-forget) to avoid blocking the request lifecycle.
+
+Developers: after checking out `mydock6` run migrations and seed before testing these flows:
+
+```bash
+npm run db:migrate
+npm run db:seed
+npm run dev
+```
+
+
+**Committee Evaluation Behavior:**
+
+- The code supports both (a) separate financial and technical committee workflows and (b) a single compliance-style committee. If your process does not use separate financial/technical committees, the system falls back to a compliance committee flow driven by `committeeAssignments` (and `complianceCommitteeMemberIds`) rather than `financialCommitteeMemberIds` / `technicalCommitteeMemberIds`.
+- Assigned committee members are stored in `committeeAssignments` and `*_CommitteeMemberIds` on the requisition; committee members' evaluations are persisted in `committeeScoreSet` or `committeeComplianceSet` records. While a compliance committee is active, the UI may mask prices for assigned members until they submit their evaluations.
+- If no committee members are assigned and no approval steps remain, the award flow may advance or reset to `Scoring_Complete` depending on standby availability — see `src/services/award-service.ts` for exact behavior.
+
+
 ## The Procurement Workflow Explained
 
 This scenario illustrates the end-to-end journey of a procurement request, involving multiple user roles and system processes.
@@ -185,16 +211,16 @@ This scenario illustrates the end-to-end journey of a procurement request, invol
 ### 4. **Quotation Submission & Deadline**
 - **Actor**: Vendors.
 - **Scenario**: Vendors submit their quotations before the deadline.
-- **System Action**: Once the deadline passes, the requisition's status in Charlie's queue automatically updates to **"Scoring in Progress"** (or "Ready for Committee Assignment" if not yet assigned).
+- **System Action**: Once the deadline passes, the requisition's status in Charlie's queue automatically updates to **"Compliance Check in Progress"** (or "Ready for Committee Assignment" if not yet assigned).
 
-### 5. **Committee Scoring**
+### 5. **Committee Compliance Check**
 - **Actors**: Fiona (Financial Expert) and George (Technical Expert).
-- **Scenario**: Fiona and George are notified. They log in, review the masked vendor submissions, and submit their scores before the scoring deadline.
-- **System Action**: The system tracks which committee members have submitted their scores. In Charlie's queue, the requisition's status now shows **"Scoring in Progress"**.
+- **Scenario**: Fiona and George are notified. They log in, review the masked vendor submissions, and submit their evaluations before the compliance-check deadline.
+- **System Action**: The system tracks which committee members have submitted their evaluations. In Charlie's queue, the requisition's status now shows **"Compliance Check in Progress"**.
 
 ### 6. **Award Finalization (Procurement Officer)**
 - **Actor**: Charlie, the Procurement Officer.
-- **Scenario**: Once all committee members have finalized their scores, the requisition status in Charlie's queue automatically updates to **"Ready to Award"**. Charlie opens it, views the ranked results in the "Award Center," and finalizes the award, recommending "Apple Inc."
+- **Scenario**: Once all committee members have finalized their evaluations, the requisition status in Charlie's queue automatically updates to **"Ready to Award"**. Charlie opens it, views the ranked results in the "Award Center," and finalizes the award, recommending "Apple Inc."
 - **System Action**: Charlie clicks "Finalize & Send Awards." The system calculates the total award value (e.g., 150,000 ETB) and consults the **Approval Matrix** in the database.
 
 ### 7. **Hierarchical Review (Database-Driven)**
