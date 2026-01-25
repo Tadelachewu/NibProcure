@@ -9,8 +9,8 @@ import { format, differenceInMinutes } from 'date-fns';
 import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 
 export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
+    request: Request,
+    { params }: { params: { id: string } }
 ) {
     let actor;
     try {
@@ -28,22 +28,22 @@ export async function POST(
         const body = await request.json();
         const { awardResponseDeadline } = body;
         console.log(`[NOTIFY-VENDOR] Action by User ID: ${actor.id}, Award Response Deadline: ${awardResponseDeadline}`);
-        
+
         const isAuthorized = await isActorAuthorizedForRequisition(actor, requisitionId as string);
         if (!isAuthorized) {
             console.error(`[NOTIFY-VENDOR] User ${actor.id} is not authorized to notify vendors for requisition ${requisitionId}.`);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
-        const requisition = await prisma.purchaseRequisition.findUnique({ 
+        const requisition = await prisma.purchaseRequisition.findUnique({
             where: { id: requisitionId },
             include: { items: true }
         });
         if (!requisition) {
-        console.error(`[NOTIFY-VENDOR] Requisition ${requisitionId} not found.`);
-        return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
+            console.error(`[NOTIFY-VENDOR] Requisition ${requisitionId} not found.`);
+            return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
         }
-        
+
         if (requisition.status !== 'PostApproved') {
             console.error(`[NOTIFY-VENDOR] Requisition ${requisitionId} is not in PostApproved state. Current state: ${requisition.status}`);
             return NextResponse.json({ error: 'This requisition is not ready for vendor notification.' }, { status: 400 });
@@ -63,7 +63,7 @@ export async function POST(
                 for (const item of requisition.items) {
                     const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
                     let hasUpdate = false;
-                    
+
                     const updatedDetails = perItemDetails.map(detail => {
                         if (detail.status === 'Pending_Award') {
                             hasUpdate = true;
@@ -80,7 +80,7 @@ export async function POST(
                         });
                     }
                 }
-                
+
                 if (winningVendorIds.size === 0) {
                     throw new Error("No vendors found in 'Pending Award' status across all items. The requisition might be in an inconsistent state.");
                 }
@@ -253,8 +253,105 @@ export async function POST(
                             });
                         }
                     }
+
+                    // Also ensure manual winners get POs in mixed flows (idempotent, item-level)
+                    const manualVendorIdsInMixed = winningVendorIdList.filter(id => submissionByVendorId.get(id) === 'Manual');
+                    if (manualVendorIdsInMixed.length > 0) {
+                        const manualQuotesForMixed = await tx.quotation.findMany({
+                            where: { requisitionId: requisitionId, vendorId: { in: manualVendorIdsInMixed } },
+                            include: { items: true }
+                        } as any);
+
+                        const reqItemsForMixed = await tx.requisitionItem.findMany({ where: { requisitionId: requisitionId } });
+
+                        // Helper: order-insensitive comparison of two string arrays
+                        function sameItemSet(a: string[], b: string[]) {
+                            if (a.length !== b.length) return false;
+                            const sa = [...a].sort();
+                            const sb = [...b].sort();
+                            for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
+                            return true;
+                        }
+
+                        for (const vendorId of manualVendorIdsInMixed) {
+                            const quoteForVendor = manualQuotesForMixed.find(q => q.vendorId === vendorId);
+                            if (!quoteForVendor) continue;
+
+                            // Determine which quote items were Accepted at the requisition item level
+                            const acceptedQuoteItemIds: string[] = [];
+                            for (const ri of reqItemsForMixed) {
+                                const details = (ri.perItemAwardDetails as any[]) || [];
+                                for (const d of details) {
+                                    if (d.vendorId === vendorId && d.status === 'Accepted' && d.quoteItemId) {
+                                        acceptedQuoteItemIds.push(d.quoteItemId);
+                                    }
+                                }
+                            }
+
+                            const itemsForPO = (quoteForVendor.items || []).filter((it: any) => acceptedQuoteItemIds.length > 0 ? acceptedQuoteItemIds.includes(it.id) : true);
+                            if (itemsForPO.length === 0) continue;
+
+                            const totalAmount = itemsForPO.reduce((acc: number, item: any) => acc + (item.unitPrice * item.quantity), 0);
+
+                            // Idempotency: fetch candidate POs and compare item sets (by requisitionItemId)
+                            const candidatePOs = await tx.purchaseOrder.findMany({
+                                where: { requisition: { id: requisitionId }, vendorId: vendorId, status: 'Issued' },
+                                include: { items: true }
+                            } as any);
+
+                            const itemsForPOReqIds = itemsForPO.map((i: any) => i.requisitionItemId as string);
+
+                            let existingPO = candidatePOs.find((po: any) => {
+                                const poItemReqIds = (po.items || []).map((it: any) => it.requisitionItemId as string);
+                                return sameItemSet(poItemReqIds, itemsForPOReqIds);
+                            });
+
+                            let newPO: any;
+                            if (existingPO) {
+                                newPO = existingPO;
+                            } else {
+                                newPO = await tx.purchaseOrder.create({
+                                    data: {
+                                        transactionId: requisition.transactionId,
+                                        requisition: { connect: { id: requisitionId } },
+                                        requisitionTitle: requisition.title,
+                                        vendor: { connect: { id: vendorId } },
+                                        items: {
+                                            create: itemsForPO.map((item: any) => ({
+                                                requisitionItemId: item.requisitionItemId,
+                                                name: item.name,
+                                                quantity: item.quantity,
+                                                unitPrice: item.unitPrice,
+                                                totalPrice: item.quantity * item.unitPrice,
+                                                receivedQuantity: 0,
+                                            }))
+                                        },
+                                        totalAmount,
+                                        status: 'Issued',
+                                    }
+                                });
+
+                                await tx.auditLog.create({
+                                    data: {
+                                        transactionId: requisition.transactionId,
+                                        timestamp: new Date(),
+                                        user: { connect: { id: actor.id } },
+                                        action: 'AUTO_CREATE_PO_MANUAL_AWARD',
+                                        entity: 'PurchaseOrder',
+                                        entityId: newPO.id,
+                                        details: `Auto-created PO ${newPO.id} for manual-awarded vendor ${vendorId} on requisition ${requisitionId}.`
+                                    }
+                                });
+                            }
+
+                            // Persist quotation status as Accepted for manual vendor
+                            if (quoteForVendor?.id) {
+                                await tx.quotation.update({ where: { id: quoteForVendor.id }, data: { status: 'Accepted' } } as any);
+                            }
+                        }
+                    }
                 }
-            
+
             } else {
                 console.log('[NOTIFY-VENDOR] Handling single-vendor award strategy.');
                 const winningQuote = await tx.quotation.findFirst({
@@ -353,7 +450,7 @@ export async function POST(
                     });
                 }
             }
-            
+
             await tx.auditLog.create({
                 data: {
                     transactionId: requisition.transactionId,
@@ -373,11 +470,11 @@ export async function POST(
         console.log('[NOTIFY-VENDOR] Transaction complete.');
         return NextResponse.json({ message: transactionResult.message, requisition: transactionResult.requisition });
 
-  } catch (error) {
-    console.error("[NOTIFY-VENDOR] Failed to notify vendor:", error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+    } catch (error) {
+        console.error("[NOTIFY-VENDOR] Failed to notify vendor:", error);
+        if (error instanceof Error) {
+            return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+        }
+        return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
-  }
 }
