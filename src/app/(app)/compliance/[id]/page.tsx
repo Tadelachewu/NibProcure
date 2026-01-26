@@ -52,20 +52,20 @@ const CompliancePage = () => {
   const isAssigned = useMemo(() => {
     if (!user || !requisition) return false;
     const uId = user.id;
-    const assignedOnReq = (requisition.financialCommitteeMemberIds || []).includes(uId) || 
-                          (requisition.technicalCommitteeMemberIds || []).includes(uId) ||
-                          (requisition.complianceCommitteeMemberIds || []).includes(uId);
+    const assignedOnReq = (requisition.financialCommitteeMemberIds || []).includes(uId) ||
+      (requisition.technicalCommitteeMemberIds || []).includes(uId) ||
+      (requisition.complianceCommitteeMemberIds || []).includes(uId);
     if (assignedOnReq) return true;
-    
-    return (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id);
+
+    return (user.committeeAssignments || []).some((a: any) => a.requisitionId === requisition.id);
   }, [user, requisition]);
 
   const hasFinalizedChecks = useMemo(() => {
-      if (!user || !allUsers || !requisition) return false;
-      const currentUserWithDetails = allUsers.find(u => u.id === user.id);
-      if (!currentUserWithDetails) return false;
-      const assign = (currentUserWithDetails.committeeAssignments || []).find((a: any) => a.requisitionId === requisition.id);
-      return assign?.scoresSubmitted === true;
+    if (!user || !allUsers || !requisition) return false;
+    const currentUserWithDetails = allUsers.find(u => u.id === user.id);
+    if (!currentUserWithDetails) return false;
+    const assign = (currentUserWithDetails.committeeAssignments || []).find((a: any) => a.requisitionId === requisition.id);
+    return assign?.scoresSubmitted === true;
   }, [user, requisition, allUsers]);
 
   const hidePrices = useMemo(() => {
@@ -76,7 +76,7 @@ const CompliancePage = () => {
     if (!needsCompliance) {
       return false;
     }
-    
+
     // Check if the user is assigned to this requisition's committee
     if (!isAssigned) {
       return false; // Not on the committee, prices are not hidden for them.
@@ -86,20 +86,20 @@ const CompliancePage = () => {
     if (requisition.rfqSettings?.technicalEvaluatorSeesPrices) {
       return false; // Setting is ON, so show prices.
     }
-    
+
     // If the user has already finalized their checks, show the prices.
     if (hasFinalizedChecks) {
       return false;
     }
-    
+
     // If none of the "show price" conditions are met, hide the prices.
     return true;
   }, [user, requisition, isAssigned, hasFinalizedChecks]);
-  
+
   const hasSubmittedAll = useMemo(() => {
     if (!user || !quotations) return false;
     const uid = user.id;
-    return quotations.every(q => (q.complianceSets || []).some((c:any) => c.scorerId === uid));
+    return quotations.every(q => (q.complianceSets || []).some((c: any) => c.scorerId === uid));
   }, [user, quotations]);
 
   const openForQuote = (quote: any) => {
@@ -111,7 +111,7 @@ const CompliancePage = () => {
       const item = existing?.itemCompliances?.find((ic: any) => ic.quoteItemId === it.id);
       checksObj[it.id] = { comply: item ? Boolean(item.comply) : true, comment: item?.comment || '' };
     });
-    setFormState({ committeeComment: (quote.complianceSets || []).find((c:any)=>c.scorerId===user?.id)?.committeeComment || '', checks: checksObj });
+    setFormState({ committeeComment: (quote.complianceSets || []).find((c: any) => c.scorerId === user?.id)?.committeeComment || '', checks: checksObj });
     setOpenQuoteId(quote.id);
   };
 
@@ -151,14 +151,14 @@ const CompliancePage = () => {
 
   const finalizeChecks = async () => {
     if (!hasSubmittedAll) {
-      const remaining = quotations.filter(q => !(q.complianceSets || []).some((c:any) => c.scorerId === user?.id)).length;
+      const remaining = quotations.filter(q => !(q.complianceSets || []).some((c: any) => c.scorerId === user?.id)).length;
       toast({ title: 'Incomplete', description: `You must complete checks for ${remaining} more quotation(s).` });
       return;
     }
     try {
       setSubmittingFinalize(true);
       const res = await fetch(`/api/requisitions/${id}/submit-scores`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ userId: user?.id }) });
-      
+
       if (res.status === 409) {
         toast({ title: 'Already Finalized', description: 'Your compliance checks were already finalized.' });
       } else if (!res.ok) {
@@ -167,13 +167,13 @@ const CompliancePage = () => {
       } else {
         toast({ title: 'Finalized', description: 'Your checks have been finalized.' });
       }
-      
+
       // Full refresh to update all states
       const [rRes, qRes] = await Promise.all([fetch(`/api/requisitions/${id}`), fetch(`/api/quotations?requisitionId=${id}`)]);
       setRequisition(await rRes.json());
       setQuotations(await qRes.json());
 
-    } catch (e:any) {
+    } catch (e: any) {
       toast({ variant: 'destructive', title: 'Error', description: e?.message || 'Failed to finalize.' });
     } finally {
       setSubmittingFinalize(false);
@@ -230,7 +230,7 @@ const CompliancePage = () => {
                 <div className="text-right">
                   {!hidePrices && <div className="text-sm font-bold">{q.totalPrice?.toLocaleString?.() ?? q.totalPrice} ETB</div>}
                   {q.deliveryDate && (() => {
-                    const maxLead = Math.max(...(q.items?.map((i:any) => Number(i.leadTimeDays) || 0) || [0]));
+                    const maxLead = Math.max(...(q.items?.map((i: any) => Number(i.leadTimeDays) || 0) || [0]));
                     if (q.status === 'Accepted') {
                       const ref = new Date(q.updatedAt || q.createdAt || new Date());
                       const days = Math.max(0, differenceInCalendarDays(new Date(q.deliveryDate), ref));
@@ -251,8 +251,8 @@ const CompliancePage = () => {
                     <details>
                       <summary className="cursor-pointer font-semibold p-2">General Questions</summary>
                       <div className="p-2">
-                        {requisition.customQuestions.filter((qst:any) => !qst.requisitionItemId).map((qst:any) => {
-                          const answer = (q.answers || []).find((a:any) => a.questionId === qst.id)?.answer;
+                        {requisition.customQuestions.filter((qst: any) => !qst.requisitionItemId).map((qst: any) => {
+                          const answer = (q.answers || []).find((a: any) => a.questionId === qst.id)?.answer;
                           return (
                             <div key={qst.id} className="mb-2">
                               <div className="font-medium">{qst.questionText}</div>
@@ -266,7 +266,7 @@ const CompliancePage = () => {
                   </div>
                 )}
 
-                {q.items.map((it:any) => (
+                {q.items.map((it: any) => (
                   <div key={it.id} className="border rounded mb-2">
                     <details>
                       <summary className="cursor-pointer font-semibold p-2">{it.name} — Qty: {it.quantity}</summary>
@@ -275,7 +275,7 @@ const CompliancePage = () => {
                         <div className="text-xs text-muted-foreground">{requisition.requesterName} ({requisition.department})</div>
                         <div className="font-medium mt-2">Requested Spec</div>
                         <div className="text-xs text-muted-foreground">{
-                          (requisition.items?.find((reqItem:any) => reqItem.id === it.requisitionItemId)?.description) || 'N/A'
+                          (requisition.items?.find((reqItem: any) => reqItem.id === it.requisitionItemId)?.description) || 'N/A'
                         }</div>
                         {it.imageUrl && <img src={it.imageUrl} alt="Requested Item" className="max-h-32 mt-2" />}
                         <div className="font-medium mt-2">Quotation Info</div>
@@ -287,8 +287,8 @@ const CompliancePage = () => {
                         {requisition.customQuestions && requisition.customQuestions.length > 0 && (
                           <div className="mt-2">
                             <div className="font-medium">Item Questions & Answers</div>
-                            {requisition.customQuestions.filter((qst:any) => qst.requisitionItemId === it.requisitionItemId).map((qst:any) => {
-                              const answer = (q.answers || []).find((a:any) => a.questionId === qst.id)?.answer;
+                            {requisition.customQuestions.filter((qst: any) => qst.requisitionItemId === it.requisitionItemId).map((qst: any) => {
+                              const answer = (q.answers || []).find((a: any) => a.questionId === qst.id)?.answer;
                               return (
                                 <div key={qst.id} className="mb-1">
                                   <div className="text-xs text-muted-foreground">Q: {qst.questionText}</div>
@@ -329,7 +329,7 @@ const CompliancePage = () => {
               </div>
             </CardContent>
             <div className="p-4 border-t flex items-center justify-end">
-              <Button onClick={() => openForQuote(q)}>{(q.complianceSets || []).some((c:any) => c.scorerId === user?.id) ? 'View / Already Checked' : 'Open Compliance'}</Button>
+              <Button onClick={() => openForQuote(q)}>{(q.complianceSets || []).some((c: any) => c.scorerId === user?.id) ? 'View / Already Checked' : 'Open Compliance'}</Button>
             </div>
           </Card>
         ))}
@@ -345,17 +345,17 @@ const CompliancePage = () => {
             <div className="mt-4 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Committee Comment</label>
-                <Textarea value={formState.committeeComment} onChange={(e) => setFormState((s:any) => ({ ...s, committeeComment: e.target.value }))} />
+                <Textarea value={formState.committeeComment} onChange={(e) => setFormState((s: any) => ({ ...s, committeeComment: e.target.value }))} />
               </div>
               <div className="space-y-3 max-h-80 overflow-y-auto">
-                {quotations.find(q => q.id === openQuoteId)?.items.map((it:any) => (
+                {quotations.find(q => q.id === openQuoteId)?.items.map((it: any) => (
                   <div key={it.id} className="flex items-start gap-4">
                     <div className="pt-1">
-                      <Checkbox checked={formState.checks[it.id]?.comply ?? true} onCheckedChange={(v) => setFormState((s:any) => ({ ...s, checks: { ...s.checks, [it.id]: { ...(s.checks[it.id]||{}), comply: v } } }))} />
+                      <Checkbox checked={formState.checks[it.id]?.comply ?? true} onCheckedChange={(v) => setFormState((s: any) => ({ ...s, checks: { ...s.checks, [it.id]: { ...(s.checks[it.id] || {}), comply: v } } }))} />
                     </div>
                     <div className="flex-1">
                       <div className="font-medium">{it.name} — Qty: {it.quantity}</div>
-                      <Input placeholder="Optional comment" value={formState.checks[it.id]?.comment || ''} onChange={(e) => setFormState((s:any) => ({ ...s, checks: { ...s.checks, [it.id]: { ...(s.checks[it.id]||{}), comment: e.target.value } } }))} />
+                      <Input placeholder="Optional comment" value={formState.checks[it.id]?.comment || ''} onChange={(e) => setFormState((s: any) => ({ ...s, checks: { ...s.checks, [it.id]: { ...(s.checks[it.id] || {}), comment: e.target.value } } }))} />
                     </div>
                   </div>
                 ))}
