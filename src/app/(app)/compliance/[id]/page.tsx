@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -15,7 +16,7 @@ import Link from 'next/link';
 
 const CompliancePage = () => {
   const { id } = useParams() as { id: string };
-  const { user, token } = useAuth();
+  const { user, token, allUsers } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -47,7 +48,15 @@ const CompliancePage = () => {
       }
     };
     fetchData();
-  }, [id]);
+  }, [id, toast]);
+
+  const userScoresSubmittedFlag = useMemo(() => {
+    if (!user || !requisition || !allUsers) return false;
+    const currentUserWithDetails = allUsers.find(u => u.id === user.id);
+    if (!currentUserWithDetails) return false;
+    const assign = (currentUserWithDetails.committeeAssignments || []).find((a: any) => a.requisitionId === requisition.id);
+    return assign?.scoresSubmitted === true;
+  }, [user, requisition, allUsers]);
 
   const isAssigned = useMemo(() => {
     if (!user) return false;
@@ -55,16 +64,15 @@ const CompliancePage = () => {
     if (roleNames.includes('Committee_Member') || roleNames.some((r: string) => r.includes('Committee'))) {
       return true;
     }
-    if (!requisition) return false;
+    if (!requisition || !allUsers) return false;
     const uId = user.id;
-    return (requisition.financialCommitteeMemberIds || []).includes(uId) || (requisition.technicalCommitteeMemberIds || []).includes(uId) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id);
-  }, [user, requisition]);
+    const assignedOnReq = (requisition.financialCommitteeMemberIds || []).includes(uId) || (requisition.technicalCommitteeMemberIds || []).includes(uId);
+    if (assignedOnReq) return true;
 
-  const userScoresSubmittedFlag = useMemo(() => {
-    if (!user || !requisition) return false;
-    const assign = (user.committeeAssignments || []).find((a:any) => a.requisitionId === requisition.id);
-    return assign?.scoresSubmitted === true;
-  }, [user, requisition]);
+    const currentUserWithDetails = allUsers.find(u => u.id === user.id);
+    if (!currentUserWithDetails) return false;
+    return (currentUserWithDetails.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id);
+  }, [user, requisition, allUsers]);
 
   const hidePrices = useMemo(() => {
     if (!user || !requisition) return false;
@@ -72,7 +80,7 @@ const CompliancePage = () => {
     // Only hide prices if compliance is required and committee is assigned
     const needsCompliance = requisition.rfqSettings?.needsCompliance;
     const hasCommittee = (requisition.financialCommitteeMemberIds && requisition.financialCommitteeMemberIds.length > 0) || (requisition.technicalCommitteeMemberIds && requisition.technicalCommitteeMemberIds.length > 0);
-    const isAssignedCommittee = (requisition.financialCommitteeMemberIds || []).includes(user.id) || (requisition.technicalCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id);
+    const isAssignedCommittee = isAssigned;
     // If no compliance or no committee assigned, always show prices
     if (!needsCompliance || !hasCommittee) {
       return false;
@@ -84,10 +92,10 @@ const CompliancePage = () => {
     // If toggle is OFF, hide prices for assigned committee until Finalize My Checks is successful
     if (isAssignedCommittee) {
       // After Finalize My Checks, show prices
-      return !userScoresSubmittedFlag ? true : false;
+      return !userScoresSubmittedFlag;
     }
     return false;
-  }, [user, requisition, userScoresSubmittedFlag]);
+  }, [user, requisition, userScoresSubmittedFlag, isAssigned, showPrices]);
 
   const hasSubmittedAll = useMemo(() => {
     if (!user || !quotations) return false;
