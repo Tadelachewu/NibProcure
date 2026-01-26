@@ -495,7 +495,7 @@ function ManualVendorQuotationDialog({
     );
 }
 
-const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, role, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete, isAssignedCommitteeMember, readyForCommitteeAssignment, quorumNotMetAndDeadlinePassed, hidePrices }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean, isAssignedCommitteeMember: boolean, readyForCommitteeAssignment: boolean, quorumNotMetAndDeadlinePassed: boolean, hidePrices: boolean }) => {
+const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, isDeadlinePassed, isScoringDeadlinePassed, itemStatuses, isAwarded, isScoringComplete, isAssignedCommitteeMember, readyForCommitteeAssignment, quorumNotMetAndDeadlinePassed, hidePrices }: { quotes: Quotation[], requisition: PurchaseRequisition, onViewDetails: (quote: Quotation) => void, onScore: (quote: Quotation, hidePrices: boolean) => void, user: User, role: UserRole | null, isDeadlinePassed: boolean, isScoringDeadlinePassed: boolean, itemStatuses: any[], isAwarded: boolean, isScoringComplete: boolean, isAssignedCommitteeMember: boolean, readyForCommitteeAssignment: boolean, quorumNotMetAndDeadlinePassed: boolean, hidePrices: boolean }) => {
     const isMasked = (requisition.rfqSettings?.masked === true) || (readyForCommitteeAssignment && requisition.rfqSettings?.masked !== false) || quorumNotMetAndDeadlinePassed;
 
     if (quotes.length === 0) {
@@ -820,7 +820,7 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
     const [inputs, setInputs] = React.useState<Record<string,string>>({});
     const isRfqSender = (user && ((user.roles as any[]).some(r => (typeof r === 'string' ? r === 'Procurement_Officer' : r.name === 'Procurement_Officer')) || (user.roles as any[]).some(r => (typeof r === 'string' ? r === 'Admin' : r.name === 'Admin'))));
 
-    const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
+    const DIRECTOR_ROLES = ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management'];
     const DEPT_HEAD_ROLE = 'Department_Head';
 
     const isPresenceVerified = Boolean((requisition.rfqSettings as any)?.directorPresenceVerified) || (requisition.rfqSettings as any)?.masked === false;
@@ -1037,7 +1037,6 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
 };
 
 // ... other components
-// ... (rest of the file is very long)
 
 export default function QuotationDetailsPage() {
     const params = useParams();
@@ -1470,7 +1469,5 @@ export default function QuotationDetailsPage() {
                 />
             )}
         </div>
-    )
+    );
 }
-    
-```
