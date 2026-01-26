@@ -219,8 +219,16 @@ function ProcurementOfficerDashboard() {
 
     const stats = useMemo(() => {
         const readyForRfq = data.requisitions.filter(r => r.status === 'PreApproved').length;
-        const acceptingQuotes = data.requisitions.filter(r => r.status === 'Accepting_Quotes').length;
-        const inCommitteeScoring = data.requisitions.filter(r => r.status === 'Scoring_In_Progress').length;
+        
+        const acceptingQuotes = data.requisitions.filter(r => 
+            r.status === 'Accepting_Quotes' && r.deadline && !isPast(new Date(r.deadline))
+        ).length;
+
+        const inCommitteeScoring = data.requisitions.filter(r => {
+            const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
+            return r.status === 'Scoring_In_Progress' || (r.status === 'Accepting_Quotes' && deadlinePassed);
+        }).length;
+        
         const readyToAward = data.requisitions.filter(r => r.status === 'Scoring_Complete').length;
         const pendingFinalReview = data.requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
         const awardDeclined = data.requisitions.filter(r => r.status === 'Award_Declined').length;
@@ -230,7 +238,10 @@ function ProcurementOfficerDashboard() {
             .reduce((sum, i) => sum + i.totalAmount, 0);
 
         const unpaidInvoicesValue = data.invoices
-            .filter(i => i.status !== 'Paid' && !(i.po?.receipts?.some((r: any) => r.status === 'Disputed')))
+            .filter(i =>
+                (i.status === 'Pending' || i.status === 'Approved_for_Payment') &&
+                !(i.po?.receipts?.some((r: any) => r.status === 'Disputed'))
+            )
             .reduce((sum, i) => sum + i.totalAmount, 0);
 
         return { readyForRfq, acceptingQuotes, inCommitteeScoring, readyToAward, pendingFinalReview, awardDeclined, paidInvoicesValue, unpaidInvoicesValue };
