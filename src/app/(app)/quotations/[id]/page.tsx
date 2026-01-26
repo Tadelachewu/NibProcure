@@ -81,6 +81,8 @@ const quoteFormSchema = z.object({
     quantity: z.number(),
     unitPrice: z.coerce.number().min(0.01, "Price is required."),
     leadTimeDays: z.coerce.number().min(0, "Delivery time is required."),
+    brandDetails: z.string().optional(),
+    imageUrl: z.string().optional(),
   })),
 });
 
@@ -1046,6 +1048,7 @@ export default function QuotationDetailsPage() {
     // ...
   const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
@@ -1109,12 +1112,37 @@ export default function QuotationDetailsPage() {
     // If none of the "show price" conditions are met, hide the prices.
     return true;
   }, [user, requisition, isAssignedCommitteeMember, hasFinalizedChecks]);
-  // **** END HOISTED LOGIC ****
-
-
+  
   const fetchRequisitionAndQuotes = useCallback(async () => {
-    // ...
-  }, [id, toast]);
+    if (!id || !user) return;
+    setLoading(true);
+    try {
+        const [reqResponse, venResponse, quoResponse] = await Promise.all([
+            fetch(`/api/requisitions/${id}`),
+            fetch('/api/vendors'),
+            fetch(`/api/quotations?requisitionId=${id}`),
+        ]);
+
+        if (!reqResponse.ok) throw new Error('Failed to fetch requisition details.');
+        const reqData = await reqResponse.json();
+        setRequisition(reqData);
+        
+        if (!venResponse.ok) throw new Error('Failed to fetch vendors.');
+        setVendors(await venResponse.json());
+
+        if (!quoResponse.ok) throw new Error('Failed to fetch quotations.');
+        setQuotations(await quoResponse.json());
+
+    } catch (err) {
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: err instanceof Error ? err.message : 'Could not load data.'
+        });
+    } finally {
+        setLoading(false);
+    }
+  }, [id, toast, user]);
 
   useEffect(() => {
     if (id && user) {
@@ -1122,6 +1150,33 @@ export default function QuotationDetailsPage() {
     }
   }, [id, user, fetchRequisitionAndQuotes]);
 
+  const isDeadlinePassed = useMemo(() => {
+    if (!requisition) return false;
+    return requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+  }, [requisition]);
+
+  const isScoringDeadlinePassed = useMemo(() => {
+    if (!requisition) return false;
+    return requisition.scoringDeadline ? isPast(new Date(requisition.scoringDeadline)) : false;
+  }, [requisition]);
+  
+  const isAuthorized = useMemo(() => {
+    if (!user || !role) return false;
+    if (role === 'Admin') return true;
+
+    const assigned = requisition?.assignedRfqSenderIds || [];
+    if (assigned.length > 0) {
+        return assigned.includes(user.id);
+    }
+
+    if (rfqSenderSetting.type === 'all') {
+        return role === 'Procurement_Officer';
+    }
+    if (rfqSenderSetting.type === 'specific') {
+        return rfqSenderSetting.userIds?.includes(user.id) ?? false;
+    }
+    return false;
+  }, [user, role, rfqSenderSetting, requisition]);
   // ... other hooks and handlers
   
     const handleScoreButtonClick = (quote: Quotation) => {
@@ -1231,7 +1286,26 @@ export default function QuotationDetailsPage() {
     }
   
     const quotationsSorted = useMemo(() => quotations.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)), [quotations]);
-    const { quotesForDisplay, totalQuotes, currentPage, setCurrentPage, totalPages } = usePagination(quotationsSorted);
+    
+    const usePagination = (data: any[], pageSize: number = PAGE_SIZE) => {
+      const [currentPage, setCurrentPage] = useState(1);
+      const totalPages = Math.ceil(data.length / pageSize);
+
+      const paginatedData = useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize;
+        return data.slice(startIndex, startIndex + pageSize);
+      }, [data, currentPage, pageSize]);
+      
+      return {
+        paginatedData,
+        currentPage,
+        setCurrentPage,
+        totalPages,
+        totalQuotes: data.length
+      }
+    }
+
+    const { paginatedData: quotesForDisplay, totalQuotes, currentPage, setCurrentPage, totalPages } = usePagination(quotationsSorted);
     const itemStatuses = useMemo(() => {
         if (!requisition) return [];
         return requisition.items.flatMap(item => 
@@ -1266,7 +1340,7 @@ export default function QuotationDetailsPage() {
                         <div className="flex gap-2">
                              <Dialog open={isAddFormOpen} onOpenChange={setAddFormOpen}>
                                 <DialogTrigger asChild>
-                                    <Button variant="outline" disabled={!isAwarded}>
+                                    <Button variant="outline">
                                         <PlusCircle className="mr-2 h-4 w-4" />
                                         Add Vendor Quotation
                                     </Button>
@@ -1398,24 +1472,5 @@ export default function QuotationDetailsPage() {
         </div>
     )
 }
-
-
-function usePagination(data: any[], pageSize: number = PAGE_SIZE) {
-  const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.ceil(data.length / pageSize);
-
-  const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    return data.slice(startIndex, startIndex + pageSize);
-  }, [data, currentPage, pageSize]);
-  
-  return {
-    paginatedData,
-    currentPage,
-    setCurrentPage,
-    totalPages,
-    totalQuotes: data.length
-  }
-}
-
     
+```
