@@ -31,23 +31,23 @@ import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const quoteFormSchema = z.object({
-  notes: z.string().optional(),
-  items: z.array(z.object({
-    requisitionItemId: z.string(),
-    name: z.string().min(1, "Item name cannot be empty."),
-    quantity: z.number(),
-    unitPrice: z.coerce.number().min(0.01, "Price is required."),
-    leadTimeDays: z.coerce.number().min(0, "Delivery time is required."),
-    brandDetails: z.string().min(1, "Brand/Model details are required."),
-    imageUrl: z.string().optional(),
-  })),
-  answers: z.array(z.object({
-      questionId: z.string(),
-      answer: z.string().min(1, "This question requires an answer."),
-  })).optional(),
-  cpoDocumentUrl: z.string().optional(),
-  experienceDocumentUrl: z.string().optional(),
-  bidDocumentUrl: z.string().optional(),
+    notes: z.string().optional(),
+    items: z.array(z.object({
+        requisitionItemId: z.string(),
+        name: z.string().min(1, "Item name cannot be empty."),
+        quantity: z.number(),
+        unitPrice: z.coerce.number().min(0.01, "Price is required."),
+        leadTimeDays: z.coerce.number().min(0, "Delivery time is required."),
+        brandDetails: z.string().min(1, "Brand/Model details are required."),
+        imageUrl: z.string().optional(),
+    })),
+    answers: z.array(z.object({
+        questionId: z.string(),
+        answer: z.string().min(1, "This question requires an answer."),
+    })).optional(),
+    cpoDocumentUrl: z.string().optional(),
+    experienceDocumentUrl: z.string().optional(),
+    bidDocumentUrl: z.string().optional(),
 }).refine(
     (data, ctx) => {
         return true;
@@ -76,7 +76,7 @@ function InvoiceSubmissionForm({ po, onInvoiceSubmitted }: { po: PurchaseOrder; 
         const formData = new FormData();
         formData.append('file', file);
         formData.append('directory', 'invoices');
-        
+
         try {
             const response = await fetch('/api/upload', {
                 method: 'POST',
@@ -184,13 +184,13 @@ function InvoiceSubmissionForm({ po, onInvoiceSubmitted }: { po: PurchaseOrder; 
                                 </FormItem>
                             )}
                         />
-                         <FormField
+                        <FormField
                             control={form.control}
                             name="invoiceFile"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Invoice Document (PDF)</FormLabel>
-                                     <FormControl>
+                                    <FormControl>
                                         <Input type="file" accept=".pdf" onChange={(e) => field.onChange(e.target.files)} />
                                     </FormControl>
                                     <FormMessage />
@@ -292,7 +292,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
     }, [form, storageKey]);
 
 
-     const { fields, append, remove } = useFieldArray({
+    const { fields, append, remove } = useFieldArray({
         control: form.control,
         name: "items",
     });
@@ -318,7 +318,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
         const formData = new FormData();
         formData.append('file', file);
         formData.append('directory', 'quotes');
-        
+
         try {
             const response = await fetch('/api/upload', {
                 method: 'POST',
@@ -342,7 +342,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
 
     const onSubmit = async (values: z.infer<typeof quoteFormSchema>) => {
         if (!user || !requisition) return;
-        
+
         let hasError = false;
         if (requisition.customQuestions && values.answers) {
             // answers array is ordered (item-specific first, then general)
@@ -356,7 +356,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             }
         }
         if (hasError) {
-             toast({ variant: 'destructive', title: 'Missing Information', description: 'Please answer all required questions.' });
+            toast({ variant: 'destructive', title: 'Missing Information', description: 'Please answer all required questions.' });
             return;
         }
 
@@ -364,7 +364,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             form.setError("cpoDocumentUrl", { type: "manual", message: "CPO Document is required." });
             return;
         }
-        
+
         if (requisition.rfqSettings?.experienceDocumentRequired && !values.experienceDocumentUrl) {
             form.setError("experienceDocumentUrl", { type: "manual", message: "Experience Document is required." });
             return;
@@ -391,7 +391,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.error || `Failed to ${isEditMode ? 'update' : 'submit'} quote.`);
             }
-            
+
             localStorage.removeItem(storageKey);
 
             toast({
@@ -409,7 +409,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             setSubmitting(false);
         }
     };
-    
+
     const onInvalid = () => {
         toast({
             variant: 'destructive',
@@ -417,7 +417,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             description: 'Please correct the errors in the form before submitting your quote.',
         });
     }
-    
+
     const totalQuotePrice = form.watch('items').reduce((acc, item) => acc + (item.quantity * (item.unitPrice || 0)), 0);
     const cpoDocumentValue = form.watch('cpoDocumentUrl');
     const isCpoRequired = !!(requisition.cpoAmount && requisition.cpoAmount > 0);
@@ -440,51 +440,51 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
                         {isCpoRequired && (
-                             <FormField
+                            <FormField
                                 control={form.control}
                                 name="cpoDocumentUrl"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>CPO Document (Required)</FormLabel>
-                                    <FormControl>
-                                        <Input type="file" accept=".pdf" onChange={async (e) => {
-                                            if (e.target.files?.[0]) {
-                                                const path = await handleFileUpload(e.target.files[0]);
-                                                if (path) field.onChange(path);
-                                            }
-                                        }} />
-                                    </FormControl>
-                                    <FormDescription>
-                                        A CPO of {requisition.cpoAmount?.toLocaleString()} ETB is required for this requisition.
-                                    </FormDescription>
-                                    <FormMessage />
+                                        <FormLabel>CPO Document (Required)</FormLabel>
+                                        <FormControl>
+                                            <Input type="file" accept=".pdf" onChange={async (e) => {
+                                                if (e.target.files?.[0]) {
+                                                    const path = await handleFileUpload(e.target.files[0]);
+                                                    if (path) field.onChange(path);
+                                                }
+                                            }} />
+                                        </FormControl>
+                                        <FormDescription>
+                                            A CPO of {requisition.cpoAmount?.toLocaleString()} ETB is required for this requisition.
+                                        </FormDescription>
+                                        <FormMessage />
                                     </FormItem>
                                 )}
-                             />
+                            />
                         )}
-                        
+
                         {isExperienceRequired && (
-                             <FormField
+                            <FormField
                                 control={form.control}
                                 name="experienceDocumentUrl"
                                 render={({ field }) => (
                                     <FormItem>
-                                    <FormLabel>Experience Document (Required)</FormLabel>
-                                    <FormControl>
-                                        <Input type="file" accept=".pdf" onChange={async (e) => {
-                                            if (e.target.files?.[0]) {
-                                                const path = await handleFileUpload(e.target.files[0]);
-                                                if (path) field.onChange(path);
-                                            }
-                                        }} />
-                                    </FormControl>
-                                    <FormDescription>
-                                        Please upload a document detailing your relevant experience for this bid.
-                                    </FormDescription>
-                                    <FormMessage />
+                                        <FormLabel>Experience Document (Required)</FormLabel>
+                                        <FormControl>
+                                            <Input type="file" accept=".pdf" onChange={async (e) => {
+                                                if (e.target.files?.[0]) {
+                                                    const path = await handleFileUpload(e.target.files[0]);
+                                                    if (path) field.onChange(path);
+                                                }
+                                            }} />
+                                        </FormControl>
+                                        <FormDescription>
+                                            Please upload a document detailing your relevant experience for this bid.
+                                        </FormDescription>
+                                        <FormMessage />
                                     </FormItem>
                                 )}
-                             />
+                            />
                         )}
 
                         <FormField
@@ -492,19 +492,19 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                             name="bidDocumentUrl"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Official Bid Document (Optional)</FormLabel>
-                                <FormControl>
-                                    <Input type="file" accept=".pdf" onChange={async (e) => {
-                                        if (e.target.files?.[0]) {
-                                            const path = await handleFileUpload(e.target.files[0]);
-                                            if (path) field.onChange(path);
-                                        }
-                                    }} />
-                                </FormControl>
-                                <FormDescription>
-                                    Upload your official bid document or a summary here.
-                                </FormDescription>
-                                <FormMessage />
+                                    <FormLabel>Official Bid Document (Optional)</FormLabel>
+                                    <FormControl>
+                                        <Input type="file" accept=".pdf" onChange={async (e) => {
+                                            if (e.target.files?.[0]) {
+                                                const path = await handleFileUpload(e.target.files[0]);
+                                                if (path) field.onChange(path);
+                                            }
+                                        }} />
+                                    </FormControl>
+                                    <FormDescription>
+                                        Upload your official bid document or a summary here.
+                                    </FormDescription>
+                                    <FormMessage />
                                 </FormItem>
                             )}
                         />
@@ -515,22 +515,26 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                 const itemSpecificQuestions = (requisition.customQuestions || []).filter(q => q.requisitionItemId === originalItem.id);
                                 return (
                                     <AccordionItem key={originalItem.id} value={`item-${itemIndex}`} className="border-none">
-                                        <AccordionTrigger className="p-4 border rounded-lg bg-muted/20 hover:bg-muted/50 flex justify-between w-full">
-                                            <div className="flex items-center gap-2 text-left">
-                                                <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
-                                                <div>
-                                                    <h4 className="font-semibold">Requested: {originalItem.name}</h4>
-                                                    <p className="text-xs text-muted-foreground">Quantity: {originalItem.quantity}</p>
+                                        <div className="p-4 border rounded-lg bg-muted/20 hover:bg-muted/50 flex justify-between w-full">
+                                            <AccordionTrigger className="flex-1">
+                                                <div className="flex items-center gap-2 text-left">
+                                                    <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
+                                                    <div>
+                                                        <h4 className="font-semibold">Requested: {originalItem.name}</h4>
+                                                        <p className="text-xs text-muted-foreground">Quantity: {originalItem.quantity}</p>
+                                                    </div>
                                                 </div>
+                                            </AccordionTrigger>
+                                            <div>
+                                                <Button type="button" variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); addAlternativeItem(originalItem) }}>
+                                                    <PlusCircle className="mr-2 h-4 w-4" /> Propose Alternative
+                                                </Button>
                                             </div>
-                                            <Button type="button" variant="outline" size="sm" onClick={(e) => {e.stopPropagation(); addAlternativeItem(originalItem)}}>
-                                                <PlusCircle className="mr-2 h-4 w-4" /> Propose Alternative
-                                            </Button>
-                                        </AccordionTrigger>
+                                        </div>
                                         <AccordionContent className="pt-2">
                                             <div className="space-y-4 pl-6 border-l-2 ml-3">
-                                                                    {itemsForThisReqItem.map((field) => {
-                                                                        const overallIndex = fields.findIndex(f => f.id === field.id);
+                                                {itemsForThisReqItem.map((field) => {
+                                                    const overallIndex = fields.findIndex(f => f.id === field.id);
                                                     const isAlternative = field.name !== originalItem.name;
                                                     return (
                                                         <Card key={field.id} className="p-4 relative bg-background">
@@ -559,16 +563,16 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                                                                 <FormField control={form.control} name={`items.${overallIndex}.brandDetails`} render={({ field }) => (
                                                                     <FormItem className="md:col-span-2"><FormLabel>Brand / Model Details</FormLabel><FormControl><Textarea placeholder="e.g., Dell XPS 15, HP Spectre x360..." {...field} /></FormControl><FormMessage /></FormItem>
-                                                                )}/>
+                                                                )} />
                                                                 <FormField control={form.control} name={`items.${overallIndex}.imageUrl`} render={({ field }) => (
-                                                                    <FormItem><FormLabel>Item Image (Optional)</FormLabel><FormControl><Input type="file" accept="image/*" onChange={async (e) => { if (e.target.files?.[0]) { const path = await handleFileUpload(e.target.files[0]); if (path) field.onChange(path); }}} /></FormControl><FormMessage /></FormItem>
-                                                                )}/>
+                                                                    <FormItem><FormLabel>Item Image (Optional)</FormLabel><FormControl><Input type="file" accept="image/*" onChange={async (e) => { if (e.target.files?.[0]) { const path = await handleFileUpload(e.target.files[0]); if (path) field.onChange(path); } }} /></FormControl><FormMessage /></FormItem>
+                                                                )} />
                                                                 <FormField control={form.control} name={`items.${overallIndex}.unitPrice`} render={({ field }) => (
                                                                     <FormItem><FormLabel>Unit Price (ETB)</FormLabel><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                                                                )}/>
+                                                                )} />
                                                                 <FormField control={form.control} name={`items.${overallIndex}.leadTimeDays`} render={({ field }) => (
                                                                     <FormItem><FormLabel>Delivery Time (Days)</FormLabel><FormControl><Input type="number" {...field} /></FormControl><FormMessage /></FormItem>
-                                                                )}/>
+                                                                )} />
                                                             </div>
                                                         </Card>
                                                     )
@@ -626,7 +630,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                         </Accordion>
 
 
-                        { (requisition.customQuestions || []).filter(q => !q.requisitionItemId).length > 0 && (
+                        {(requisition.customQuestions || []).filter(q => !q.requisitionItemId).length > 0 && (
                             <>
                                 <Separator />
                                 <Accordion type="single" collapsible className="w-full">
@@ -678,7 +682,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                 </Accordion>
                             </>
                         )}
-                        
+
                         <Separator />
 
                         <FormField
@@ -686,11 +690,11 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                             name="notes"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Overall Notes (Optional)</FormLabel>
-                                <FormControl>
-                                    <Textarea placeholder="Include any notes about warranty, shipping, etc." {...field} />
-                                </FormControl>
-                                <FormMessage />
+                                    <FormLabel>Overall Notes (Optional)</FormLabel>
+                                    <FormControl>
+                                        <Textarea placeholder="Include any notes about warranty, shipping, etc." {...field} />
+                                    </FormControl>
+                                    <FormMessage />
                                 </FormItem>
                             )}
                         />
@@ -727,10 +731,10 @@ const DeclineReasonDialog = ({ onConfirm, itemDeclining }: { onConfirm: (reason:
                 <Textarea id="decline-reason" value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g., Unable to meet delivery timeline, stock unavailable..." />
             </div>
             <DialogFooter>
-                 <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                 <Button variant="destructive" onClick={() => onConfirm(reason)} disabled={!reason.trim()}>
+                <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+                <Button variant="destructive" onClick={() => onConfirm(reason)} disabled={!reason.trim()}>
                     Confirm Decline
-                 </Button>
+                </Button>
             </DialogFooter>
         </DialogContent>
     );
@@ -751,7 +755,7 @@ export default function VendorRequisitionPage() {
     const id = params.id as string;
     const { token, user } = useAuth();
     const { toast } = useToast();
-    
+
     const isAwardProcessStarted = requisition?.quotations?.some(q => ['Awarded', 'Partially_Awarded', 'Standby', 'Accepted', 'Declined', 'Failed'].includes(q.status)) ?? false;
     const isDeadlinePassed = requisition?.deadline ? isPast(new Date(requisition.deadline)) : false;
     const allowEdits = requisition?.rfqSettings?.allowQuoteEdits ?? true;
@@ -760,13 +764,13 @@ export default function VendorRequisitionPage() {
 
     const awardedItems = useMemo((): (PerItemAwardDetail & { reqItemName: string })[] => {
         if (!requisition || !user?.vendorId) return [];
-        return requisition.items.flatMap(item => 
-            (item.perItemAwardDetails || []).filter(detail => 
+        return requisition.items.flatMap(item =>
+            (item.perItemAwardDetails || []).filter(detail =>
                 detail.vendorId === user.vendorId && (detail.status === 'Awarded' || detail.status === 'Accepted' || detail.status === 'Declined')
-            ).map(d => ({...d, reqItemName: item.name}))
+            ).map(d => ({ ...d, reqItemName: item.name }))
         );
     }, [requisition, user]);
-    
+
     const isPartiallyAwarded = useMemo(() => {
         if ((requisition?.rfqSettings as any)?.awardStrategy !== 'item') return false;
         return awardedItems.length > 0;
@@ -779,7 +783,7 @@ export default function VendorRequisitionPage() {
 
     const itemsToDisplayInQuoteCard = useMemo(() => {
         if (!submittedQuote) return [];
-        
+
         if (isFullyAwarded) {
             const awardedItemIds = new Set(requisition!.awardedQuoteItemIds);
             return submittedQuote.items.filter(item => awardedItemIds.has(item.id));
@@ -789,7 +793,7 @@ export default function VendorRequisitionPage() {
             const awardedQuoteItemIds = new Set(awardedItems.map(item => item.quoteItemId));
             return submittedQuote.items.filter(item => awardedQuoteItemIds.has(item.id));
         }
-        
+
         return submittedQuote.items;
     }, [submittedQuote, isPartiallyAwarded, awardedItems, isFullyAwarded, requisition]);
 
@@ -801,14 +805,14 @@ export default function VendorRequisitionPage() {
 
     const isAccepted = useMemo(() => {
         if (!requisition || !user?.vendorId) return false;
-    
+
         if (isPartiallyAwarded) {
-             const hasAcceptedItem = requisition.items.some(item =>
+            const hasAcceptedItem = requisition.items.some(item =>
                 (item.perItemAwardDetails || []).some(d => d.vendorId === user.vendorId && d.status === 'Accepted')
             );
             return hasAcceptedItem;
         }
-        
+
         const vendorQuote = requisition.quotations?.find(q => q.vendorId === user.vendorId);
         return vendorQuote?.status === 'Accepted';
     }, [requisition, user, isPartiallyAwarded]);
@@ -816,37 +820,37 @@ export default function VendorRequisitionPage() {
 
     const fetchRequisitionData = useCallback(async () => {
         if (!id || !token || !user) return;
-        
+
         setLoading(true);
         setError(null);
         try {
-             const response = await fetch(`/api/requisitions/${id}`);
-             if (!response.ok) {
+            const response = await fetch(`/api/requisitions/${id}`);
+            if (!response.ok) {
                 throw new Error('Failed to fetch requisition data.');
-             }
-             const foundReq: PurchaseRequisition = await response.json();
-                          
-             if (!foundReq) {
-                 throw new Error('Requisition not found or not available for quoting.');
-             }
-             
-             const quoResponse = await fetch(`/api/quotations?requisitionId=${id}`);
-             const allQuotes: Quotation[] = await quoResponse.json();
-             foundReq.quotations = allQuotes;
-             setRequisition(foundReq);
+            }
+            const foundReq: PurchaseRequisition = await response.json();
 
-             const vendorSubmittedQuote = allQuotes.find(q => q.vendorId === user.vendorId);
-             
-             if (vendorSubmittedQuote) {
-                 setSubmittedQuote(vendorSubmittedQuote);
-                 const poResponse = await fetch('/api/purchase-orders');
-                 const allPOs: PurchaseOrder[] = await poResponse.json();
-                 const vendorPOs = allPOs.filter(p => p.requisitionId === foundReq.id && p.vendor.id === user.vendorId);
-                 setPurchaseOrders(vendorPOs);
-             } else {
+            if (!foundReq) {
+                throw new Error('Requisition not found or not available for quoting.');
+            }
+
+            const quoResponse = await fetch(`/api/quotations?requisitionId=${id}`);
+            const allQuotes: Quotation[] = await quoResponse.json();
+            foundReq.quotations = allQuotes;
+            setRequisition(foundReq);
+
+            const vendorSubmittedQuote = allQuotes.find(q => q.vendorId === user.vendorId);
+
+            if (vendorSubmittedQuote) {
+                setSubmittedQuote(vendorSubmittedQuote);
+                const poResponse = await fetch('/api/purchase-orders');
+                const allPOs: PurchaseOrder[] = await poResponse.json();
+                const vendorPOs = allPOs.filter(p => p.requisitionId === foundReq.id && p.vendor.id === user.vendorId);
+                setPurchaseOrders(vendorPOs);
+            } else {
                 setSubmittedQuote(null);
-             }
-             
+            }
+
         } catch (e) {
             setError(e instanceof Error ? e.message : 'An unknown error occurred');
         } finally {
@@ -857,12 +861,12 @@ export default function VendorRequisitionPage() {
     useEffect(() => {
         fetchRequisitionData();
     }, [fetchRequisitionData]);
-    
+
     const handleQuoteSubmitted = () => {
         setIsEditingQuote(false);
         fetchRequisitionData();
     }
-    
+
     const handleAwardResponse = async (action: 'accept' | 'reject', rejectionReason?: string, itemToActOn?: PerItemAwardDetail) => {
         if (!submittedQuote || !user) return;
         setIsResponding(true);
@@ -875,12 +879,12 @@ export default function VendorRequisitionPage() {
 
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || `Failed to ${action} award.`);
-            
+
             toast({ title: 'Response Submitted', description: result.message });
             fetchRequisitionData();
 
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -897,7 +901,7 @@ export default function VendorRequisitionPage() {
 
     const isResponseDeadlineExpired = requisition.awardResponseDeadline ? isPast(new Date(requisition.awardResponseDeadline)) : false;
     const isStandby = isPartiallyAwarded ? awardedItems.some(i => i.status === 'Standby') : submittedQuote?.status === 'Standby';
-    
+
     const isPaid = purchaseOrders.some(po => po.invoices?.some(inv => inv.status === 'Paid'));
 
 
@@ -941,42 +945,42 @@ export default function VendorRequisitionPage() {
                 <CardHeader>
                     <div className="flex justify-between items-start">
                         <CardTitle>Your Submitted Quote</CardTitle>
-                        {isPaid 
+                        {isPaid
                             ? <Badge variant="default" className="bg-emerald-600">You have been paid</Badge>
                             : <Badge variant={quote.status === 'Awarded' || quote.status === 'Accepted' || quote.status === 'Partially_Awarded' ? 'default' : 'secondary'}>{quote.status.replace(/_/g, ' ')}</Badge>
                         }
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    
+
                     {quote.bidDocumentUrl && (
                         <div className="text-sm">
                             <h3 className="font-semibold">Official Bid Document</h3>
                             <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
                                 <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                                    <FileText className="h-4 w-4 text-primary"/>
+                                    <FileText className="h-4 w-4 text-primary" />
                                     <span>{quote.bidDocumentUrl.split('/').pop()}</span>
                                 </a>
                             </div>
                         </div>
                     )}
                     {quote.cpoDocumentUrl && (
-                         <div className="text-sm">
+                        <div className="text-sm">
                             <h3 className="font-semibold">CPO Document</h3>
                             <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
                                 <a href={quote.cpoDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                                    <FileText className="h-4 w-4 text-primary"/>
+                                    <FileText className="h-4 w-4 text-primary" />
                                     <span>{quote.cpoDocumentUrl.split('/').pop()}</span>
                                 </a>
                             </div>
                         </div>
                     )}
-                     {quote.experienceDocumentUrl && (
-                         <div className="text-sm">
+                    {quote.experienceDocumentUrl && (
+                        <div className="text-sm">
                             <h3 className="font-semibold">Experience Document</h3>
                             <div className="flex items-center gap-2 p-2 mt-1 border rounded-md bg-muted/50 text-muted-foreground">
-                                 <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                                    <FileText className="h-4 w-4 text-primary"/>
+                                <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                                    <FileText className="h-4 w-4 text-primary" />
                                     <span>{quote.experienceDocumentUrl.split('/').pop()}</span>
                                 </a>
                             </div>
@@ -998,13 +1002,13 @@ export default function VendorRequisitionPage() {
                                         <p className="text-muted-foreground italic">{item.brandDetails}</p>
                                     </div>
                                 )}
-                                 {item.imageUrl && (
+                                {item.imageUrl && (
                                     <div className="mt-2 pt-2 border-t">
                                         <p className="font-bold text-xs">Image:</p>
                                         <Dialog>
                                             <DialogTrigger asChild>
                                                 <div className="relative h-24 w-full mt-1 rounded-md overflow-hidden cursor-pointer">
-                                                    <Image src={item.imageUrl} alt={item.name} fill style={{objectFit:"contain"}}/>
+                                                    <Image src={item.imageUrl} alt={item.name} fill style={{ objectFit: "contain" }} />
                                                 </div>
                                             </DialogTrigger>
                                             <DialogContent className="max-w-2xl">
@@ -1012,7 +1016,7 @@ export default function VendorRequisitionPage() {
                                                     <DialogTitle>{item.name}</DialogTitle>
                                                 </DialogHeader>
                                                 <div className="relative h-[60vh]">
-                                                    <Image src={item.imageUrl} alt={item.name} fill style={{objectFit:"contain"}}/>
+                                                    <Image src={item.imageUrl} alt={item.name} fill style={{ objectFit: "contain" }} />
                                                 </div>
                                             </DialogContent>
                                         </Dialog>
@@ -1029,17 +1033,17 @@ export default function VendorRequisitionPage() {
                             <p className="text-muted-foreground text-sm p-3 border rounded-md bg-muted/50 italic">"{quote.notes}"</p>
                         </div>
                     )}
-                     <Separator />
-                     <div className="text-right font-bold text-2xl">
+                    <Separator />
+                    <div className="text-right font-bold text-2xl">
                         Total Award Value: {totalQuotedPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
-                     </div>
+                    </div>
                 </CardContent>
                 <CardFooter className="flex-col gap-4 items-stretch">
-                     {isAccepted && purchaseOrders.length > 0 && (
+                    {isAccepted && purchaseOrders.length > 0 && (
                         <>
                             {paidInvoices.map(inv => (
                                 <Alert key={inv.id} variant="default" className="border-emerald-500 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800">
-                                    <CheckCircle className="h-4 w-4 !text-emerald-600"/>
+                                    <CheckCircle className="h-4 w-4 !text-emerald-600" />
                                     <AlertTitle>Payment Confirmed</AlertTitle>
                                     <AlertDescription className="space-y-2">
                                         <div>
@@ -1056,7 +1060,7 @@ export default function VendorRequisitionPage() {
                             ))}
                             {relevantPOs.map(po => {
                                 const poHasPaidInvoice = paidInvoices.some(inv => inv.purchaseOrderId === po.id);
-                                if(poHasPaidInvoice) return null;
+                                if (poHasPaidInvoice) return null;
 
                                 const hasSubmittedInv = po.invoices && po.invoices.length > 0;
                                 return (
@@ -1064,9 +1068,9 @@ export default function VendorRequisitionPage() {
                                         <DialogTrigger asChild>
                                             <Button className="w-full" disabled={hasSubmittedInv}>
                                                 {hasSubmittedInv ? (
-                                                    <><CircleCheck className="mr-2"/> Invoice Submitted for PO {po.id}</>
+                                                    <><CircleCheck className="mr-2" /> Invoice Submitted for PO {po.id}</>
                                                 ) : (
-                                                    <><FileUp className="mr-2"/> Submit Invoice for PO {po.id}</>
+                                                    <><FileUp className="mr-2" /> Submit Invoice for PO {po.id}</>
                                                 )}
                                             </Button>
                                         </DialogTrigger>
@@ -1075,22 +1079,22 @@ export default function VendorRequisitionPage() {
                                 )
                             })}
                         </>
-                     )}
-                     {!showActions && !isPaid && (
-                         <>
-                         <Alert variant="default" className="border-blue-500/50">
-                            <Info className="h-4 w-4 text-blue-500" />
-                            <AlertTitle>{ isStandby ? "You are on Standby" : "Quote Under Review" }</AlertTitle>
-                            <AlertDescription>
-                                { isStandby ? "Your quote is a backup option. You will be notified if the primary vendor declines." : (canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.')}
-                            </AlertDescription>
-                        </Alert>
+                    )}
+                    {!showActions && !isPaid && (
+                        <>
+                            <Alert variant="default" className="border-blue-500/50">
+                                <Info className="h-4 w-4 text-blue-500" />
+                                <AlertTitle>{isStandby ? "You are on Standby" : "Quote Under Review"}</AlertTitle>
+                                <AlertDescription>
+                                    {isStandby ? "Your quote is a backup option. You will be notified if the primary vendor declines." : (canEditQuote ? 'Your quote has been submitted. You can still edit it until the deadline passes or an award is made.' : 'Your quote is under review and can no longer be edited.')}
+                                </AlertDescription>
+                            </Alert>
 
-                        
+
                         </>
-                     )}
+                    )}
 
-                    
+
                 </CardFooter>
             </Card>
         )
@@ -1110,19 +1114,19 @@ export default function VendorRequisitionPage() {
                     </Button>
                 )}
             </div>
-            
-            <Dialog open={declineState.isOpen} onOpenChange={(open) => !open && setDeclineState({isOpen: false})}>
-                <DeclineReasonDialog 
+
+            <Dialog open={declineState.isOpen} onOpenChange={(open) => !open && setDeclineState({ isOpen: false })}>
+                <DeclineReasonDialog
                     itemDeclining={declineState.item}
                     onConfirm={(reason) => {
                         handleAwardResponse('reject', reason, declineState.item);
-                        setDeclineState({isOpen: false});
-                    }} 
+                        setDeclineState({ isOpen: false });
+                    }}
                 />
             </Dialog>
 
             {hasPendingResponseItems && (
-                 <Card>
+                <Card>
                     <CardHeader>
                         <CardTitle className="text-green-600">Congratulations! You've Been Awarded!</CardTitle>
                         <CardDescription>
@@ -1135,12 +1139,12 @@ export default function VendorRequisitionPage() {
                             )}
                         </CardDescription>
                     </CardHeader>
-                     <CardContent>
-                          {isPartiallyAwarded ? (
-                             <div className="space-y-4">
+                    <CardContent>
+                        {isPartiallyAwarded ? (
+                            <div className="space-y-4">
                                 {awardedItems.map(itemAward => {
                                     const quoteItem = submittedQuote?.items.find(i => i.id === itemAward.quoteItemId);
-                                    
+
                                     if (itemAward.status === 'Declined') {
                                         return (
                                             <Card key={itemAward.quoteItemId} className="p-4 bg-destructive/10 border-destructive/30">
@@ -1154,9 +1158,9 @@ export default function VendorRequisitionPage() {
                                             </Card>
                                         )
                                     }
-                                    
+
                                     if (itemAward.status === 'Accepted') {
-                                         return (
+                                        return (
                                             <Card key={itemAward.quoteItemId} className="p-4 bg-green-500/10 border-green-500/30">
                                                 <div className="flex justify-between items-center">
                                                     <p className="font-semibold">{itemAward.reqItemName}</p>
@@ -1166,7 +1170,7 @@ export default function VendorRequisitionPage() {
                                         )
                                     }
 
-                                    return(
+                                    return (
                                         <Card key={itemAward.quoteItemId} className="p-4">
                                             <div className="flex justify-between items-center">
                                                 <div>
@@ -1191,7 +1195,7 @@ export default function VendorRequisitionPage() {
                                                             </AlertDialogFooter>
                                                         </AlertDialogContent>
                                                     </AlertDialog>
-                                                    <Button size="sm" variant="destructive" onClick={() => setDeclineState({isOpen: true, item: itemAward})} disabled={isResponding || isResponseDeadlineExpired}>
+                                                    <Button size="sm" variant="destructive" onClick={() => setDeclineState({ isOpen: true, item: itemAward })} disabled={isResponding || isResponseDeadlineExpired}>
                                                         <ThumbsDown className="mr-2 h-4 w-4" /> Decline
                                                     </Button>
                                                 </div>
@@ -1200,7 +1204,7 @@ export default function VendorRequisitionPage() {
                                     )
                                 })}
                             </div>
-                         ) : (
+                        ) : (
                             <div className="flex gap-4">
                                 <AlertDialog>
                                     <AlertDialogTrigger asChild>
@@ -1221,14 +1225,14 @@ export default function VendorRequisitionPage() {
                                         </AlertDialogFooter>
                                     </AlertDialogContent>
                                 </AlertDialog>
-                                
+
                                 <Button variant="destructive" onClick={() => setDeclineState({ isOpen: true })} disabled={isResponding || isResponseDeadlineExpired}>
                                     <ThumbsDown className="mr-2 h-4 w-4" /> Decline Award
                                 </Button>
                             </div>
-                         )}
+                        )}
                     </CardContent>
-                 </Card>
+                </Card>
             )}
 
             {isAccepted && !isPaid && (
@@ -1251,11 +1255,11 @@ export default function VendorRequisitionPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {requisition.cpoAmount && requisition.cpoAmount > 0 && (
-                             <Alert variant="default">
+                            <Alert variant="default">
                                 <BadgeInfo className="h-4 w-4" />
                                 <AlertTitle>CPO Required</AlertTitle>
                                 <AlertDescription>
-                                A CPO of {requisition.cpoAmount.toLocaleString()} ETB is required to submit a quotation for this requisition.
+                                    A CPO of {requisition.cpoAmount.toLocaleString()} ETB is required to submit a quotation for this requisition.
                                 </AlertDescription>
                             </Alert>
                         )}
@@ -1263,7 +1267,7 @@ export default function VendorRequisitionPage() {
                             <h3 className="font-semibold text-sm">Title</h3>
                             <p className="text-muted-foreground">{requisition.title}</p>
                         </div>
-                        
+
                         <Separator />
 
                         <div>
@@ -1284,17 +1288,17 @@ export default function VendorRequisitionPage() {
                         </div>
 
                         {/* Evaluation criteria hidden for vendors */}
-                        
+
                     </CardContent>
                 </Card>
 
                 {submittedQuote && !isEditingQuote ? (
-                     <QuoteDisplayCard quote={submittedQuote} itemsToShow={itemsToDisplayInQuoteCard} showActions={hasPendingResponseItems} purchaseOrders={purchaseOrders}/>
+                    <QuoteDisplayCard quote={submittedQuote} itemsToShow={itemsToDisplayInQuoteCard} showActions={hasPendingResponseItems} purchaseOrders={purchaseOrders} />
                 ) : (
-                    <QuoteSubmissionForm 
-                        requisition={requisition} 
-                        quote={isEditingQuote ? submittedQuote : null} 
-                        onQuoteSubmitted={handleQuoteSubmitted} 
+                    <QuoteSubmissionForm
+                        requisition={requisition}
+                        quote={isEditingQuote ? submittedQuote : null}
+                        onQuoteSubmitted={handleQuoteSubmitted}
                     />
                 )}
             </div>
