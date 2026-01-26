@@ -192,7 +192,7 @@ const CompliancePage = () => {
         <CardContent>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">If you believe this is an error, contact procurement or the requisition owner.</p>
-            <Link href={`/requisitions/${id}`}><Button>Back</Button></Link>
+            <Link href={`/compliance`}><Button>Back</Button></Link>
           </div>
         </CardContent>
       </Card>
@@ -204,7 +204,7 @@ const CompliancePage = () => {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Compliance Checks — {requisition.title}</h2>
         <div className="flex gap-2">
-          <Link href={`/requisitions/${id}`}><Button variant="outline">Back to Requisition</Button></Link>
+          <Link href={`/compliance`}><Button variant="outline">Back to Compliance</Button></Link>
           <div>
             {hasFinalizedChecks ? (
               <Button disabled>Submitted</Button>
