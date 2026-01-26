@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import {
@@ -25,19 +24,14 @@ interface QuoteDetailsDialogProps {
     requisition: PurchaseRequisition;
     isOpen: boolean;
     onClose: () => void;
+    hidePrices: boolean;
 }
 
-export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: QuoteDetailsDialogProps) {
+export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose, hidePrices }: QuoteDetailsDialogProps) {
     if (!quote || !requisition) return null;
 
     const { user } = useAuth();
     const isMasked = Boolean((requisition as any).rfqSettings?.masked);
-
-    // Determine if current user is an assigned compliance committee member and hasn't finalized checks
-    const isAssignedCompliance = Boolean(user && ((requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id && a.type === 'compliance')));
-    const assignment = (user && (user.committeeAssignments || []).find((a:any) => a.requisitionId === requisition.id)) || undefined;
-    const scoresSubmitted = Boolean(assignment?.scoresSubmitted);
-    const hideForUser = isAssignedCompliance && !scoresSubmitted && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
 
     const findQuestionText = (questionId: string) => {
         return requisition.customQuestions?.find(q => q.id === questionId)?.questionText || "Unknown Question";
@@ -74,7 +68,7 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                                 <div className="space-y-1">
                             <h3 className="font-semibold">General Information</h3>
                                 <div className="p-4 border rounded-md grid grid-cols-2 gap-4 text-sm bg-muted/50">
-                                <div><span className="font-medium text-muted-foreground">Total Price:</span> <span className="font-bold text-lg">{hideForUser ? 'Hidden' : quote.totalPrice.toLocaleString() + ' ETB'}</span></div>
+                                <div><span className="font-medium text-muted-foreground">Total Price:</span> <span className="font-bold text-lg">{hidePrices ? 'Hidden' : quote.totalPrice.toLocaleString() + ' ETB'}</span></div>
                                 {
                                     (() => {
                                         const maxLead = Math.max(...(quote.items?.map((i:any) => Number(i.leadTimeDays) || 0) || [0]));
@@ -112,7 +106,7 @@ export function QuoteDetailsDialog({ quote, requisition, isOpen, onClose }: Quot
                                                 </div>
                                                 <p className="text-xs text-muted-foreground">Qty: {item.quantity} | {quote.status === 'Accepted' ? `${Math.max(0, differenceInCalendarDays(new Date(quote.deliveryDate), new Date(quote.updatedAt || quote.createdAt || new Date())))} days after acceptance` : `Delivery time in ${item.leadTimeDays} days after acceptance`}</p>
                                             </div>
-                                            <p className="font-semibold">{hideForUser ? 'Hidden' : item.unitPrice.toLocaleString() + ' ETB / unit'}</p>
+                                            <p className="font-semibold">{hidePrices ? 'Hidden' : item.unitPrice.toLocaleString() + ' ETB / unit'}</p>
                                         </div>
                                          {item.imageUrl && (
                                             <div className="relative h-40 w-full mt-2 rounded-md overflow-hidden">
