@@ -1038,11 +1038,28 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
 // ... (rest of the file is very long)
 
 export default function QuotationDetailsPage() {
-    // ...
+    const params = useParams();
+    const router = useRouter();
+    const id = params.id as string;
+    const { toast } = useToast();
     const { user, allUsers, role, rolePermissions, rfqSenderSetting, committeeQuorum, token } = useAuth();
     // ...
   const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
-  // ... other states
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [isChangingAward, setIsChangingAward] = useState(false);
+  const [isCommitteeDialogOpen, setCommitteeDialogOpen] = useState(false);
+  const [isAddFormOpen, setAddFormOpen] = useState(false);
+  const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
+  const [isNotifying, setIsNotifying] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [isScoringFormOpen, setScoringFormOpen] = useState(false);
+  const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
+  const [selectedQuoteForDetails, setSelectedQuoteForDetails] = useState<Quotation | null>(null);
+  const [scoresSubmittedOverride, setScoresSubmittedOverride] = useState(false);
 
   // **** START HOISTED LOGIC ****
   const isAssignedCommitteeMember = useMemo(() => {
@@ -1100,16 +1117,172 @@ export default function QuotationDetailsPage() {
   }, [id, toast]);
 
   useEffect(() => {
-    // ...
+    if (id && user) {
+        fetchRequisitionAndQuotes();
+    }
   }, [id, user, fetchRequisitionAndQuotes]);
 
   // ... other hooks and handlers
   
+    const handleScoreButtonClick = (quote: Quotation) => {
+        setSelectedQuoteForScoring(quote);
+        setScoringFormOpen(true);
+    };
+    
+    const handleViewDetailsClick = (quote: Quotation) => {
+        setSelectedQuoteForDetails(quote);
+    };
+
+    const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date, minuteDocumentUrl?: string, minuteJustification?: string) => {
+        if (!user || !requisition || !token) return;
+        
+        setIsFinalizing(true);
+        try {
+             const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, minuteDocumentUrl, minuteJustification }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to finalize scores.');
+            }
+            toast({ title: 'Success', description: data.message || 'Scores have been finalized and awards are being routed for final review.' });
+            fetchRequisitionAndQuotes();
+        } catch(error) {
+             toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsFinalizing(false);
+        }
+    }
+    
+    const handleAwardChange = async () => {
+        if (!user || !id || !requisition) return;
+        
+        setIsChangingAward(true);
+        try {
+            const response = await fetch(`/api/requisitions/${id}/promote-standby`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ userId: user.id }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Failed to handle award change.' }));
+                throw new Error(errorData.error);
+            }
+            
+            const result = await response.json();
+            toast({
+                title: `Action Successful`,
+                description: result.message || `The award status has been updated.`
+            });
+            fetchRequisitionAndQuotes();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsChangingAward(false);
+        }
+    }
+
+    const handleNotifyVendor = async (deadline?: Date) => {
+        if (!user || !requisition || !token) return;
+        setIsNotifying(true);
+        try {
+          const response = await fetch(`/api/requisitions/${requisition.id}/notify-vendor`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ userId: user.id, awardResponseDeadline: deadline })
+          });
+
+          if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({} as any));
+                    throw new Error(errorData.error || "Failed to notify vendor.");
+          }
+
+                const data = await response.json().catch(() => ({} as any));
+                const serverMessage = (data as any)?.message as string | undefined;
+                const isComingSoon = typeof serverMessage === 'string' && serverMessage.toLowerCase().includes('coming soon');
+
+          toast({
+                    title: isComingSoon ? 'Notification coming soon' : 'Vendor Notified',
+                    description: isComingSoon
+                        ? 'Manual quotation award will proceed without vendor portal response.'
+                        : (serverMessage || 'The winning vendor has been notified and the award is pending their response.')
+          });
+          fetchRequisitionAndQuotes();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsNotifying(false);
+        }
+    }
+  
+    const quotationsSorted = useMemo(() => quotations.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0)), [quotations]);
+    const { quotesForDisplay, totalQuotes, currentPage, setCurrentPage, totalPages } = usePagination(quotationsSorted);
+    const itemStatuses = useMemo(() => {
+        if (!requisition) return [];
+        return requisition.items.flatMap(item => 
+            (item.perItemAwardDetails || []).map(detail => ({ ...detail, reqItemName: item.name, id: item.id }))
+        );
+    }, [requisition]);
+    
+    const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
+    const isScoringComplete = requisition?.status === 'Scoring_Complete' || isAwarded;
+    const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
+    const readyForCommitteeAssignment = isDeadlinePassed && !quorumNotMetAndDeadlinePassed;
+
+    if (loading) return <div className="p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    if (!requisition) return <div className="p-8 text-destructive">Requisition not found.</div>;
+
+    
     return (
         <div className="space-y-6">
-            {/* ... JSX */}
+            <div className="flex items-center justify-between">
+              <Button variant="outline" size="sm" onClick={() => router.back()}>
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back
+              </Button>
+            </div>
              <Card>
-                {/* ... CardHeader */}
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle>{requisition.title}</CardTitle>
+                        <CardDescription>RFQ ID: {requisition.id}</CardDescription>
+                    </div>
+                    {isAuthorized && (
+                        <div className="flex gap-2">
+                             <Dialog open={isAddFormOpen} onOpenChange={setAddFormOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" disabled={!isAwarded}>
+                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                        Add Vendor Quotation
+                                    </Button>
+                                </DialogTrigger>
+                                <ManualVendorQuotationDialog 
+                                    requisition={requisition} 
+                                    vendors={vendors} 
+                                    existingQuotations={quotations}
+                                    isOpen={isAddFormOpen} 
+                                    onOpenChange={setAddFormOpen} 
+                                    onSubmitted={fetchRequisitionAndQuotes}
+                                />
+                            </Dialog>
+                        </div>
+                    )}
+                </CardHeader>
                 <CardContent>
                     {loading ? (
                         <div className="flex items-center justify-center h-24">
@@ -1136,10 +1309,82 @@ export default function QuotationDetailsPage() {
                     )}
                 </CardContent>
 
-                {/* ... other CardFooter etc. */}
+                 {totalPages > 1 && (
+                    <CardFooter className="flex items-center justify-end gap-2">
+                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
+                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}><ChevronLeft /></Button>
+                        <span className="text-sm text-muted-foreground">Page {currentPage} of {totalPages}</span>
+                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages}><ChevronRight /></Button>
+                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronsRight /></Button>
+                    </CardFooter>
+                 )}
             </Card>
 
-            {/* ... other components */}
+             {isAuthorized && <DirectorPinVerification requisition={requisition} onUnmasked={fetchRequisitionAndQuotes}/>}
+
+            {readyForCommitteeAssignment && (
+                <EvaluationCommitteeManagement 
+                    requisition={requisition} 
+                    onCommitteeUpdated={fetchRequisitionAndQuotes} 
+                    open={isCommitteeDialogOpen} 
+                    onOpenChange={setCommitteeDialogOpen} 
+                    isAuthorized={isAuthorized}
+                />
+            )}
+
+             {readyForCommitteeAssignment && (
+                <ScoringProgressTracker
+                    requisition={requisition}
+                    quotations={quotations}
+                    allUsers={allUsers}
+                    onFinalize={handleFinalizeScores}
+                    onCommitteeUpdate={setCommitteeDialogOpen}
+                    isFinalizing={isFinalizing}
+                />
+            )}
+
+            {isAuthorized && (
+                 <div className="mt-6 flex flex-wrap gap-2">
+                     <AwardStandbyButton
+                        requisition={requisition}
+                        quotations={quotations}
+                        onPromote={handleAwardChange}
+                        isChangingAward={isChangingAward}
+                     />
+                     <RestartRfqDialog
+                        requisition={requisition}
+                        vendors={vendors}
+                        onRfqRestarted={fetchRequisitionAndQuotes}
+                    />
+                 </div>
+            )}
+            
+            {requisition.status === 'PostApproved' && isAuthorized && (
+                <Card className="mt-6 border-amber-500">
+                    <CardHeader>
+                        <CardTitle>Action Required: Notify Vendor</CardTitle>
+                        <CardDescription>The award has passed all reviews. You may now notify the winning vendor.</CardDescription>
+                    </CardHeader>
+                    <CardFooter>
+                         <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button disabled={isNotifying}>
+                                    {isNotifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Send Award Notification
+                                </Button>
+                            </DialogTrigger>
+                             <NotifyVendorDialog
+                                isOpen={isNotifyDialogOpen}
+                                onClose={() => setIsNotifyDialogOpen(false)}
+                                onConfirm={(deadline) => {
+                                    handleNotifyVendor(deadline);
+                                    setIsNotifyDialogOpen(false);
+                                }}
+                            />
+                        </Dialog>
+                    </CardFooter>
+                </Card>
+            )}
 
              {selectedQuoteForDetails && requisition && (
                 <QuoteDetailsDialog 
@@ -1150,13 +1395,27 @@ export default function QuotationDetailsPage() {
                     hidePrices={hidePrices}
                 />
             )}
-            {/* ... */}
         </div>
     )
 }
 
-// ... other components
 
-// The entire file content is too long to include here, but I will make sure the final
-// output contains the complete, correct file content for `src/app/(app)/quotations/[id]/page.tsx`
-// and `src/components/quote-details-dialog.tsx`.
+function usePagination(data: any[], pageSize: number = PAGE_SIZE) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.ceil(data.length / pageSize);
+
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return data.slice(startIndex, startIndex + pageSize);
+  }, [data, currentPage, pageSize]);
+  
+  return {
+    paginatedData,
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    totalQuotes: data.length
+  }
+}
+
+    
