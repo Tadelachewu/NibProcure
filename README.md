@@ -1,4 +1,3 @@
-
 # Nib InternationalBank Procurement System
 
 This is a comprehensive, full-stack procurement management system built with Next.js, Prisma, and PostgreSQL. It is designed to streamline the entire procurement lifecycle, from initial requisition to final payment, incorporating robust approval workflows, vendor management, and automated three-way matching.
@@ -167,11 +166,11 @@ docker exec -it <container-name> sh -c "npm run db:migrate && npm run db:seed"
 
 ## Recent Updates (branch: mydock6)
 
- - **Mixed Award Handling:** When award notifications include a mix of electronically-submitted and manually-uploaded quotations, the notification flow now creates Purchase Orders (POs) idempotently for manual winners and marks manual quotations as `Accepted` so downstream processes (PO generation, GRNs, invoicing) remain consistent.
- - **PINs & Security:** PIN generation endpoints were optimized for performance and correctness: bcrypt hashing is now asynchronous, bulk PIN creation is parallelized, and the per-user "Resend PIN" flow is atomic (previous unused pins are retired before creating a new one). For development/testing the API can optionally return plaintext PINs when explicitly requested; do not enable this in production.
- - **Dashboard & UI:** The dashboard hides the "View Pins" control for standard Finance users (visible only to directors/authorized roles). The committee status label was renamed to "In Committee Compliance Check" and counts are taken directly from the database. A new dashboard stat links to a page listing POs that have receipts but no invoices.
- - **Receiving & Invoicing:** The Goods Receipt view now includes a "Pending Payments" tab to surface POs with receipts but unpaid invoices. The invoice creation UI was restricted so Finance can only add invoices for POs that have receiving logged (three-way matching prerequisites enforced in the UI).
- - **Performance & Reliability:** Long-running crypto operations were converted to non-blocking async calls and email dispatch for bulk/pin operations is queued (fire-and-forget) to avoid blocking the request lifecycle.
+ - **Enhanced Security & Compliance**: Introduced a PIN-based verification system for unsealing sensitive vendor quotations, ensuring director-level presence for critical decisions. PIN generation and verification logic has been optimized for performance and security, using asynchronous hashing and atomic operations.
+ - **Flexible Award & RFQ Workflows**: The system now supports a "compliance-first" evaluation model, allowing committees to perform simple comply/non-comply checks. It also gracefully handles mixed-award scenarios (manual and electronic quotes) and allows procurement officers to restart the RFQ process for specific items that failed to be awarded.
+ - **Improved Financial Controls**: The invoicing process is now more tightly integrated with goods receipt, enforcing three-way matching prerequisites in the UI. A new "Pending Payments" view provides better visibility into POs that are awaiting invoices.
+ - **UI & Usability Enhancements**: The dashboard has been updated with role-specific controls and clearer status indicators. Navigation has been streamlined to better guide users through the procurement lifecycle.
+ - **Performance and Reliability**: Key backend operations, such as cryptography and email notifications, have been optimized to be non-blocking, improving overall application responsiveness.
 
 Developers: after checking out `mydock6` run migrations and seed before testing these flows:
 
@@ -184,9 +183,10 @@ npm run dev
 
 **Committee Evaluation Behavior:**
 
-- The code supports both (a) separate financial and technical committee workflows and (b) a single compliance-style committee. If your process does not use separate financial/technical committees, the system falls back to a compliance committee flow driven by `committeeAssignments` (and `complianceCommitteeMemberIds`) rather than `financialCommitteeMemberIds` / `technicalCommitteeMemberIds`.
-- Assigned committee members are stored in `committeeAssignments` and `*_CommitteeMemberIds` on the requisition; committee members' evaluations are persisted in `committeeScoreSet` or `committeeComplianceSet` records. While a compliance committee is active, the UI may mask prices for assigned members until they submit their evaluations.
-- If no committee members are assigned and no approval steps remain, the award flow may advance or reset to `Scoring_Complete` depending on standby availability — see `src/services/award-service.ts` for exact behavior.
+- The system defaults to a **compliance-first** evaluation model. Procurement Officers can configure requisitions to require a formal committee compliance check.
+- During this stage, assigned committee members perform a simple **comply/non-comply** check on each item in a vendor's quotation. Vendor pricing is masked during this process to ensure objective technical evaluation.
+- Once all committee members have submitted their compliance checks, the system automatically transitions to the **Ready to Award** stage. Awards are then determined based on the **least price** among all compliant bids.
+- The system retains the infrastructure for more complex, weighted scoring (financial and technical), but the primary workflow is optimized for this streamlined compliance-then-price model.
 
 
 ## The Procurement Workflow Explained
