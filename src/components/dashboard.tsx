@@ -224,10 +224,7 @@ function ProcurementOfficerDashboard() {
             r.status === 'Accepting_Quotes' && r.deadline && !isPast(new Date(r.deadline))
         ).length;
 
-        const inCommitteeScoring = data.requisitions.filter(r => {
-            const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
-            return r.status === 'Scoring_In_Progress' || (r.status === 'Accepting_Quotes' && deadlinePassed);
-        }).length;
+        const inCommitteeScoring = data.requisitions.filter(r => r.status === 'Scoring_In_Progress').length;
         
         const readyToAward = data.requisitions.filter(r => r.status === 'Scoring_Complete').length;
         const pendingFinalReview = data.requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
