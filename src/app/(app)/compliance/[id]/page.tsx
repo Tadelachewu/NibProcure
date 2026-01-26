@@ -21,7 +21,6 @@ const CompliancePage = () => {
   const router = useRouter();
 
   const [requisition, setRequisition] = useState<any | null>(null);
-    const [showPrices, setShowPrices] = useState<boolean | null>(null);
   const [quotations, setQuotations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [openQuoteId, setOpenQuoteId] = useState<string | null>(null);
@@ -50,53 +49,53 @@ const CompliancePage = () => {
     fetchData();
   }, [id, toast]);
 
-  const userScoresSubmittedFlag = useMemo(() => {
-    if (!user || !requisition || !allUsers) return false;
-    const currentUserWithDetails = allUsers.find(u => u.id === user.id);
-    if (!currentUserWithDetails) return false;
-    const assign = (currentUserWithDetails.committeeAssignments || []).find((a: any) => a.requisitionId === requisition.id);
-    return assign?.scoresSubmitted === true;
-  }, [user, requisition, allUsers]);
-
   const isAssigned = useMemo(() => {
-    if (!user) return false;
-    const roleNames = (user.roles || []).map((r: any) => (typeof r === 'string' ? r : r?.name)).filter(Boolean);
-    if (roleNames.includes('Committee_Member') || roleNames.some((r: string) => r.includes('Committee'))) {
-      return true;
-    }
-    if (!requisition || !allUsers) return false;
+    if (!user || !requisition) return false;
     const uId = user.id;
-    const assignedOnReq = (requisition.financialCommitteeMemberIds || []).includes(uId) || (requisition.technicalCommitteeMemberIds || []).includes(uId);
+    const assignedOnReq = (requisition.financialCommitteeMemberIds || []).includes(uId) || 
+                          (requisition.technicalCommitteeMemberIds || []).includes(uId) ||
+                          (requisition.complianceCommitteeMemberIds || []).includes(uId);
     if (assignedOnReq) return true;
+    
+    return (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id);
+  }, [user, requisition]);
 
-    const currentUserWithDetails = allUsers.find(u => u.id === user.id);
-    if (!currentUserWithDetails) return false;
-    return (currentUserWithDetails.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id);
+  const hasFinalizedChecks = useMemo(() => {
+      if (!user || !allUsers || !requisition) return false;
+      const currentUserWithDetails = allUsers.find(u => u.id === user.id);
+      if (!currentUserWithDetails) return false;
+      const assign = (currentUserWithDetails.committeeAssignments || []).find((a: any) => a.requisitionId === requisition.id);
+      return assign?.scoresSubmitted === true;
   }, [user, requisition, allUsers]);
 
   const hidePrices = useMemo(() => {
-    if (!user || !requisition) return false;
-    if (showPrices !== null) return !showPrices;
-    // Only hide prices if compliance is required and committee is assigned
-    const needsCompliance = requisition.rfqSettings?.needsCompliance;
-    const hasCommittee = (requisition.financialCommitteeMemberIds && requisition.financialCommitteeMemberIds.length > 0) || (requisition.technicalCommitteeMemberIds && requisition.technicalCommitteeMemberIds.length > 0);
-    const isAssignedCommittee = isAssigned;
-    // If no compliance or no committee assigned, always show prices
-    if (!needsCompliance || !hasCommittee) {
-      return false;
-    }
-    // If toggle is ON, always show prices
-    if (requisition.rfqSettings?.technicalEvaluatorSeesPrices) {
-      return false;
-    }
-    // If toggle is OFF, hide prices for assigned committee until Finalize My Checks is successful
-    if (isAssignedCommittee) {
-      // After Finalize My Checks, show prices
-      return !userScoresSubmittedFlag;
-    }
-    return false;
-  }, [user, requisition, userScoresSubmittedFlag, isAssigned, showPrices]);
+    if (!user || !requisition) return false; // Default to showing prices if data is not loaded
 
+    // Only hide prices if the RFQ requires compliance checks
+    const needsCompliance = (requisition.rfqSettings as any)?.needsCompliance ?? true;
+    if (!needsCompliance) {
+      return false;
+    }
+    
+    // Check if the user is assigned to this requisition's committee
+    if (!isAssigned) {
+      return false; // Not on the committee, prices are not hidden for them.
+    }
+
+    // Check if the RFQ setting explicitly allows evaluators to see prices
+    if (requisition.rfqSettings?.technicalEvaluatorSeesPrices) {
+      return false; // Setting is ON, so show prices.
+    }
+    
+    // If the user has already finalized their checks, show the prices.
+    if (hasFinalizedChecks) {
+      return false;
+    }
+    
+    // If none of the "show price" conditions are met, hide the prices.
+    return true;
+  }, [user, requisition, isAssigned, hasFinalizedChecks]);
+  
   const hasSubmittedAll = useMemo(() => {
     if (!user || !quotations) return false;
     const uid = user.id;
@@ -150,6 +149,37 @@ const CompliancePage = () => {
     }
   };
 
+  const finalizeChecks = async () => {
+    if (!hasSubmittedAll) {
+      const remaining = quotations.filter(q => !(q.complianceSets || []).some((c:any) => c.scorerId === user?.id)).length;
+      toast({ title: 'Incomplete', description: `You must complete checks for ${remaining} more quotation(s).` });
+      return;
+    }
+    try {
+      setSubmittingFinalize(true);
+      const res = await fetch(`/api/requisitions/${id}/submit-scores`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ userId: user?.id }) });
+      
+      if (res.status === 409) {
+        toast({ title: 'Already Finalized', description: 'Your compliance checks were already finalized.' });
+      } else if (!res.ok) {
+        const data = await res.json().catch(() => ({} as any));
+        throw new Error(data.error || 'Failed to finalize your checks.');
+      } else {
+        toast({ title: 'Finalized', description: 'Your checks have been finalized.' });
+      }
+      
+      // Full refresh to update all states
+      const [rRes, qRes] = await Promise.all([fetch(`/api/requisitions/${id}`), fetch(`/api/quotations?requisitionId=${id}`)]);
+      setRequisition(await rRes.json());
+      setQuotations(await qRes.json());
+
+    } catch (e:any) {
+      toast({ variant: 'destructive', title: 'Error', description: e?.message || 'Failed to finalize.' });
+    } finally {
+      setSubmittingFinalize(false);
+    }
+  }
+
   if (loading || !requisition) return <div className="p-8">Loading...</div>;
 
   if (!isAssigned) return (
@@ -176,47 +206,13 @@ const CompliancePage = () => {
         <div className="flex gap-2">
           <Link href={`/requisitions/${id}`}><Button variant="outline">Back to Requisition</Button></Link>
           <div>
-            {userScoresSubmittedFlag ? (
+            {hasFinalizedChecks ? (
               <Button disabled>Submitted</Button>
             ) : (
-              <Button disabled={!hasSubmittedAll || submittingFinalize} onClick={async () => {
-                if (!hasSubmittedAll) {
-                  const remaining = quotations.filter(q => !(q.complianceSets || []).some((c:any) => c.scorerId === user?.id)).length;
-                  toast({ title: 'Incomplete', description: `You must complete checks for ${remaining} more quotation(s).` });
-                  return;
-                }
-                try {
-                  setSubmittingFinalize(true);
-                  const res = await fetch(`/api/requisitions/${id}/submit-scores`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ userId: user?.id }) });
-                  if (res.status === 409) {
-                    // Idempotent: already finalized by this user
-                    toast({ title: 'Already Finalized', description: 'Your compliance checks were already finalized.' });
-                    // refresh requisition and quotations to update UI state
-                    const [rRes, qRes] = await Promise.all([fetch(`/api/requisitions/${id}`), fetch(`/api/quotations?requisitionId=${id}`)]);
-                    setRequisition(await rRes.json());
-                    setQuotations(await qRes.json());
-                    setShowPrices(null);
-                    setSubmittingFinalize(false);
-                    return;
-                  }
-
-                  if (!res.ok) {
-                    const data = await res.json().catch(() => ({} as any));
-                    throw new Error(data.error || 'Failed to finalize your checks.');
-                  }
-
-                  toast({ title: 'Finalized', description: 'Your checks have been finalized.' });
-                  // refresh requisition and quotations
-                  const [rRes, qRes] = await Promise.all([fetch(`/api/requisitions/${id}`), fetch(`/api/quotations?requisitionId=${id}`)]);
-                  setRequisition(await rRes.json());
-                  setQuotations(await qRes.json());
-                  setShowPrices(null); // Reset price visibility to default after finalize
-                } catch (e:any) {
-                  toast({ variant: 'destructive', title: 'Error', description: e?.message || 'Failed to finalize.' });
-                } finally {
-                  setSubmittingFinalize(false);
-                }
-              }}>Finalize My Checks</Button>
+              <Button disabled={!hasSubmittedAll || submittingFinalize} onClick={finalizeChecks}>
+                {submittingFinalize && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Finalize My Checks
+              </Button>
             )}
           </div>
         </div>
@@ -250,7 +246,6 @@ const CompliancePage = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {/* General Questions Accordion with Answers */}
                 {requisition.customQuestions && requisition.customQuestions.length > 0 && (
                   <div className="border rounded mb-2">
                     <details>
@@ -271,7 +266,6 @@ const CompliancePage = () => {
                   </div>
                 )}
 
-                {/* Items Accordion */}
                 {q.items.map((it:any) => (
                   <div key={it.id} className="border rounded mb-2">
                     <details>
@@ -285,12 +279,11 @@ const CompliancePage = () => {
                         }</div>
                         {it.imageUrl && <img src={it.imageUrl} alt="Requested Item" className="max-h-32 mt-2" />}
                         <div className="font-medium mt-2">Quotation Info</div>
-                        <div className="text-xs text-muted-foreground">Unit Price: {it.unitPrice?.toFixed?.(2) ?? it.unitPrice} ETB</div>
-                        <div className="text-xs text-muted-foreground">Total: {(it.unitPrice * it.quantity)?.toFixed?.(2) ?? ''} ETB</div>
+                        {!hidePrices && <div className="text-xs text-muted-foreground">Unit Price: {it.unitPrice?.toFixed?.(2) ?? it.unitPrice} ETB</div>}
+                        {!hidePrices && <div className="text-xs text-muted-foreground">Total: {(it.unitPrice * it.quantity)?.toFixed?.(2) ?? ''} ETB</div>}
                         <div className="font-medium mt-2">Vendor Spec</div>
                         <div className="text-xs text-muted-foreground">{it.brandDetails || 'N/A'}</div>
                         {it.vendorImageUrl && <img src={it.vendorImageUrl} alt="Vendor Item" className="max-h-32 mt-2" />}
-                        {/* Item-specific Vendor Questions & Answers */}
                         {requisition.customQuestions && requisition.customQuestions.length > 0 && (
                           <div className="mt-2">
                             <div className="font-medium">Item Questions & Answers</div>
@@ -310,7 +303,6 @@ const CompliancePage = () => {
                   </div>
                 ))}
 
-                {/* Documents and Notes */}
                 {q.cpoDocumentUrl && (
                   <div className="text-sm space-y-1">
                     <h4 className="font-semibold">CPO Document</h4>
@@ -343,7 +335,6 @@ const CompliancePage = () => {
         ))}
       </div>
 
-      {/* Inline dialog implementation */}
       {openQuoteId && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded shadow max-w-3xl w-full p-6">
@@ -384,3 +375,4 @@ const CompliancePage = () => {
 };
 
 export default CompliancePage;
+
