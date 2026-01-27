@@ -14,8 +14,8 @@
     "db:rebuild": "npm install && prisma migrate reset --force && npm run db:seed",
     "db:reset": "prisma migrate reset --force",
     "postinstall": "prisma generate",
-    "test:e2e": "playwright test",
-    "test:codegen": "playwright codegen http://localhost:9002"
+    "test:e2e": "node scripts/playwright.js test",
+    "test:codegen": "node scripts/playwright.js codegen http://localhost:9002"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
