@@ -3,30 +3,30 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardFooter,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+    CardFooter,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from '@/components/ui/select';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-  DialogClose,
-  DialogDescription,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+    DialogFooter,
+    DialogClose,
+    DialogDescription,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -73,14 +73,14 @@ import { EditableQuestions } from '@/components/editable-questions';
 const PAGE_SIZE = 6;
 
 const quoteFormSchema = z.object({
-  notes: z.string().optional(),
-  items: z.array(z.object({
-    requisitionItemId: z.string(),
-    name: z.string().min(1, "Item name cannot be empty."),
-    quantity: z.number(),
-    unitPrice: z.coerce.number().min(0.01, "Price is required."),
-    leadTimeDays: z.coerce.number().min(0, "Delivery time is required."),
-  })),
+    notes: z.string().optional(),
+    items: z.array(z.object({
+        requisitionItemId: z.string(),
+        name: z.string().min(1, "Item name cannot be empty."),
+        quantity: z.number(),
+        unitPrice: z.coerce.number().min(0.01, "Price is required."),
+        leadTimeDays: z.coerce.number().min(0, "Delivery time is required."),
+    })),
 });
 
 const manualQuoteFormSchema = z.object({
@@ -504,7 +504,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
             </div>
         );
     }
-    
+
     const getOverallStatusForVendor = (quote: Quotation): QuotationStatus | 'Not Awarded' | 'Partially Awarded' => {
         const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
 
@@ -519,23 +519,23 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                 return isAwarded ? 'Not Awarded' : 'Submitted';
             }
         }
-        
+
         return quote.status;
     };
 
     const getStatusVariant = (status: QuotationStatus | 'Not Awarded' | 'Partially Awarded') => {
         switch (status) {
-            case 'Awarded': 
-            case 'Accepted': 
+            case 'Awarded':
+            case 'Accepted':
             case 'Pending_Award':
             case 'Partially_Awarded':
                 return 'default';
             case 'Standby': return 'secondary';
             case 'Submitted': return 'outline';
-            case 'Rejected': 
+            case 'Rejected':
             case 'Not Awarded':
-            case 'Declined': 
-            case 'Failed': 
+            case 'Declined':
+            case 'Failed':
                 return 'destructive';
             case 'Invoice_Submitted': return 'outline';
         }
@@ -555,11 +555,11 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
     const isCommitteeRole = roleNames.includes('Committee_Member') || roleNames.some((r: string) => r.includes('Committee'));
     // Determine compliance committee assignment
     const committeeAssigned = (requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0 || (requisition.complianceCommitteeMemberIds?.length || 0) > 0;
-    const isAssignedCompliance = (requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id && a.type === 'compliance');
+    const isAssignedCompliance = (requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a: any) => a.requisitionId === requisition.id && a.type === 'compliance');
     const isCommitteeMember = isCommitteeRole || isAssignedCompliance;
     const needsCompliance = (requisition.rfqSettings as any)?.needsCompliance ?? true;
     // Only hide prices if compliance is required, committee is assigned, user is an assigned compliance member for this requisition, and the rfqSettings flag disallows visibility
-    const assignment = (user.committeeAssignments || []).find((a:any) => a.requisitionId === requisition.id);
+    const assignment = (user.committeeAssignments || []).find((a: any) => a.requisitionId === requisition.id);
     const scoresSubmitted = assignment?.scoresSubmitted || false;
     const hidePrices = needsCompliance && committeeAssigned && isAssignedCompliance && !scoresSubmitted && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
 
@@ -575,7 +575,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                 const submissionVariant = quote.submissionMethod === 'Manual' ? 'secondary' : 'outline';
 
                 const shouldShowItems = isPerItemStrategy && isAwarded && thisVendorItemStatuses.length > 0;
-                
+
                 const declinedItemAwards = isPerItemStrategy
                     ? requisition.items
                         .flatMap(item => {
@@ -597,14 +597,14 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             (mainStatus === 'Partially_Awarded' || mainStatus === 'Accepted') && !isPerItemStrategy && 'border-primary ring-2 ring-primary'
                         )}
                     >
-                       <CardHeader>
+                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
-                               <div className="flex items-center gap-2">
-                                 {isAwarded && !isPerItemStrategy && getRankIcon(quote.rank)}
-                                 <span>{isMasked ? "Masked Vendor" : quote.vendorName}</span>
-                               </div>
+                                <div className="flex items-center gap-2">
+                                    {isAwarded && !isPerItemStrategy && getRankIcon(quote.rank)}
+                                    <span>{isMasked ? "Masked Vendor" : quote.vendorName}</span>
+                                </div>
                                 <div className="flex items-center gap-1">
-                                        <Badge variant={submissionVariant as any}>{submissionLabel}</Badge>
+                                    <Badge variant={submissionVariant as any}>{submissionLabel}</Badge>
                                     <Badge
                                         variant={getStatusVariant(mainStatus as any)}
                                         className={cn(mainStatus === 'Awarded' && 'bg-green-600 text-white hover:bg-green-600')}
@@ -635,7 +635,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                             </Tooltip>
                                         </TooltipProvider>
                                     )}
-                               </div>
+                                </div>
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
@@ -645,20 +645,20 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                             {!isMasked && quote.bidDocumentUrl && (
                                 <Button asChild variant="outline" size="sm" className="w-full">
                                     <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer">
-                                        <FileText className="mr-2 h-4 w-4"/> View Bid Document
+                                        <FileText className="mr-2 h-4 w-4" /> View Bid Document
                                     </a>
                                 </Button>
                             )}
-                             {!isMasked && quote.experienceDocumentUrl && (
+                            {!isMasked && quote.experienceDocumentUrl && (
                                 <Button asChild variant="outline" size="sm" className="w-full">
                                     <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer">
-                                        <UserCog className="mr-2 h-4 w-4"/> View Experience Document
+                                        <UserCog className="mr-2 h-4 w-4" /> View Experience Document
                                     </a>
                                 </Button>
                             )}
                             {(!isMasked && (isDeadlinePassed || quote.cpoDocumentUrl)) ? (
                                 <>
-                                            {hidePrices ? (
+                                    {hidePrices ? (
                                         <div className="text-center py-4">
                                             <p className="font-semibold text-muted-foreground">Pricing information is hidden for compliance evaluation.</p>
                                         </div>
@@ -696,7 +696,7 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                                 </div>
                                             ))}
                                         </div>
-                                     )}
+                                    )}
                                 </>
                             ) : (
                                 <div className="text-center py-8">
@@ -706,18 +706,18 @@ const QuoteComparison = ({ quotes, requisition, onViewDetails, onScore, user, ro
                                 </div>
                             )}
 
-                                     {isAwarded && (
-                                            <div className="text-center pt-2 border-t">
-                                                <h4 className="font-semibold text-sm">Total Price</h4>
-                                                <p className="text-2xl font-bold text-primary">{hidePrices ? 'Hidden' : quote.totalPrice.toLocaleString() + ' ETB'}</p>
-                                            </div>
-                                      )}
+                            {isAwarded && (
+                                <div className="text-center pt-2 border-t">
+                                    <h4 className="font-semibold text-sm">Total Price</h4>
+                                    <p className="text-2xl font-bold text-primary">{hidePrices ? 'Hidden' : quote.totalPrice.toLocaleString() + ' ETB'}</p>
+                                </div>
+                            )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2">
                             <Button className="w-full" variant="outline" onClick={() => onViewDetails(quote)} disabled={isMasked}>
                                 <Eye className="mr-2 h-4 w-4" /> {isMasked ? 'Sealed' : 'View Full Quote'}
                             </Button>
-                            
+
                             {/* Scoring UI removed: ranking and award are now price-based */}
                         </CardFooter>
                     </Card>
@@ -776,7 +776,7 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
             toast({ title: "Contract Details Saved!", description: "The PO can now be formally sent to the vendor." });
             onContractFinalized();
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -799,7 +799,7 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
             </CardHeader>
             <form onSubmit={onContractSubmit}>
                 <CardContent className="space-y-4">
-                     <div>
+                    <div>
                         <Label htmlFor="fileName">Final Contract Document</Label>
                         <Input id="fileName" name="fileName" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                     </div>
@@ -827,10 +827,10 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
     const { toast } = useToast();
     const [pins, setPins] = React.useState<any[]>([]);
     const [unsealThreshold, setUnsealThreshold] = React.useState<number | undefined>((requisition.rfqSettings as any)?.unsealThreshold);
-    const [inputs, setInputs] = React.useState<Record<string,string>>({});
+    const [inputs, setInputs] = React.useState<Record<string, string>>({});
     const isRfqSender = (user && ((user.roles as any[]).some(r => (typeof r === 'string' ? r === 'Procurement_Officer' : r.name === 'Procurement_Officer')) || (user.roles as any[]).some(r => (typeof r === 'string' ? r === 'Admin' : r.name === 'Admin'))));
 
-    const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
+    const DIRECTOR_ROLES = ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management'];
     const DEPT_HEAD_ROLE = 'Department_Head';
 
     const isPresenceVerified = Boolean((requisition.rfqSettings as any)?.directorPresenceVerified) || (requisition.rfqSettings as any)?.masked === false;
@@ -900,16 +900,16 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
     };
 
     // Directors obtain PINs via email or the dedicated Pins page.
-    const isDirectorUser = user && DIRECTOR_ROLES.some(rn => (user.roles as any[]).some((x:any) => (typeof x === 'string' ? x === rn : x.name === rn)));
+    const isDirectorUser = user && DIRECTOR_ROLES.some(rn => (user.roles as any[]).some((x: any) => (typeof x === 'string' ? x === rn : x.name === rn)));
 
     const verifiedDistinctCount = React.useMemo(() => {
-        const usedByIds = new Set((pins || []).filter((p:any) => p.used && p.usedById).map((p:any) => p.usedById));
+        const usedByIds = new Set((pins || []).filter((p: any) => p.used && p.usedById).map((p: any) => p.usedById));
         return usedByIds.size;
     }, [pins]);
 
     const directorRecipients = React.useMemo(() => {
         const byKey = new Map<string, { recipient: any; roleName: string }>();
-        (pins || []).forEach((p:any) => {
+        (pins || []).forEach((p: any) => {
             if (![...DIRECTOR_ROLES, DEPT_HEAD_ROLE].includes(p.roleName)) return;
             if (!p.recipient?.id) return;
             const key = `${p.roleName}:${p.recipient.id}`;
@@ -974,7 +974,7 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
                                         const d = await res.json();
                                         if (!res.ok) throw new Error(d.error || 'Failed to set threshold');
                                         toast({ title: 'Threshold updated', description: `Unseal threshold set to ${d.threshold}` });
-                                    } catch (e:any) {
+                                    } catch (e: any) {
                                         toast({ variant: 'destructive', title: 'Error', description: e?.message || 'Failed to set threshold' });
                                     }
                                 }} disabled={!isRfqSender || isPresenceVerified}>Save</Button>
@@ -985,7 +985,7 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
                             const recipient = entry.recipient as any | undefined;
                             const recipientId = recipient?.id as string | undefined;
                             const personVerified = recipientId
-                                ? (pins || []).some((p:any) => p.roleName === rn && p.used && p.usedById && p.usedById === recipientId)
+                                ? (pins || []).some((p: any) => p.roleName === rn && p.used && p.usedById && p.usedById === recipientId)
                                 : false;
                             const canVerify = Boolean(user && (user.id === recipientId) && rn !== DEPT_HEAD_ROLE);
 
@@ -1018,7 +1018,7 @@ const DirectorPinVerification = ({ requisition, onUnmasked }: { requisition: Pur
 
                                     {isRfqSender && (
                                         <div className="mt-3 space-y-1">
-                                            {(pins || []).filter((p:any) => p.roleName === rn && (!recipientId || p.recipient?.id === recipientId)).slice(0, 5).map((p:any) => (
+                                            {(pins || []).filter((p: any) => p.roleName === rn && (!recipientId || p.recipient?.id === recipientId)).slice(0, 5).map((p: any) => (
                                                 <div key={p.id} className="flex items-center justify-between text-xs text-muted-foreground">
                                                     <span>{p.recipient?.name || p.recipient?.email || p.recipient?.id || 'Recipient'}</span>
                                                     <span>{p.used && p.usedById ? `Verified${p.usedBy?.name ? ` by ${p.usedBy.name}` : ''}` : 'Pending'}</span>
@@ -1061,7 +1061,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
     const { user, allUsers, token } = useAuth();
     const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
-    const [deadlineDate, setDeadlineDate] = useState<Date|undefined>(
+    const [deadlineDate, setDeadlineDate] = useState<Date | undefined>(
         requisition.scoringDeadline ? new Date(requisition.scoringDeadline) : undefined
     );
     const [deadlineTime, setDeadlineTime] = useState(
@@ -1072,12 +1072,12 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
     const form = useForm<CommitteeFormValues>({
         resolver: zodResolver(committeeFormSchema),
         defaultValues: {
-                committeeName: requisition.committeeName || "",
-                committeePurpose: requisition.committeePurpose || "",
-                financialCommitteeMemberIds: requisition.financialCommitteeMemberIds || [],
-                technicalCommitteeMemberIds: requisition.technicalCommitteeMemberIds || [],
-                complianceCommitteeMemberIds: (requisition.financialCommitteeMemberIds || []).concat(requisition.technicalCommitteeMemberIds || []).filter(Boolean),
-            },
+            committeeName: requisition.committeeName || "",
+            committeePurpose: requisition.committeePurpose || "",
+            financialCommitteeMemberIds: requisition.financialCommitteeMemberIds || [],
+            technicalCommitteeMemberIds: requisition.technicalCommitteeMemberIds || [],
+            complianceCommitteeMemberIds: (requisition.financialCommitteeMemberIds || []).concat(requisition.technicalCommitteeMemberIds || []).filter(Boolean),
+        },
     });
 
     const finalDeadline = useMemo(() => {
@@ -1103,7 +1103,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
 
     const handleSaveCommittee = async (values: CommitteeFormValues) => {
         if (!user || !finalDeadline || !token) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Invalid Deadline',
                 description: 'A scoring deadline must be set.',
@@ -1171,7 +1171,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             onOpenChange(false);
             onCommitteeUpdated();
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -1214,7 +1214,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
 
     const MemberSelection = ({ type }: { type: 'financial' | 'technical' | 'compliance' }) => {
         const [search, setSearch] = useState("");
-        
+
         const availableMembers = useMemo(() => {
             const lowercasedSearch = search.toLowerCase();
             return committeeMembers.filter(member =>
@@ -1233,51 +1233,51 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                         onChange={(e) => setSearch(e.target.value)}
                     />
                 </div>
-                 <FormField
+                <FormField
                     control={form.control}
                     name={`${type}CommitteeMemberIds` as any}
                     render={() => (
-                    <FormItem className="flex-1 flex flex-col min-h-0">
-                        <ScrollArea className="flex-1 rounded-md border h-60">
-                            <div className="space-y-1 p-1">
-                                {availableMembers.map(member => (
-                                <FormField
-                                    key={member.id}
-                                    control={form.control}
-                                    name={`${type}CommitteeMemberIds` as any}
-                                    render={({ field }) => (
-                                        <FormItem className="flex items-start space-x-4 rounded-md border p-2 has-[:checked]:bg-muted">
-                                            <FormControl>
-                                                <Checkbox
-                                                    checked={field.value?.includes(member.id)}
-                                                    onCheckedChange={(checked) => {
-                                                        return checked
-                                                        ? field.onChange([...(field.value || []), member.id])
-                                                        : field.onChange(field.value?.filter((id) => id !== member.id))
-                                                    }}
-                                                />
-                                            </FormControl>
-                                            <div className="flex items-start gap-3 flex-1">
-                                                <Avatar className="h-8 w-8">
-                                                    <AvatarImage src={`https://picsum.photos/seed/${member.id}/32/32`} data-ai-hint="profile picture" />
-                                                    <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                                <div className="grid gap-0.5">
-                                                    <Label className="font-normal cursor-pointer text-sm">{member.name}</Label>
-                                                    <p className="text-xs text-muted-foreground">{member.email}</p>
-                                                </div>
-                                            </div>
-                                        </FormItem>
+                        <FormItem className="flex-1 flex flex-col min-h-0">
+                            <ScrollArea className="flex-1 rounded-md border h-60">
+                                <div className="space-y-1 p-1">
+                                    {availableMembers.map(member => (
+                                        <FormField
+                                            key={member.id}
+                                            control={form.control}
+                                            name={`${type}CommitteeMemberIds` as any}
+                                            render={({ field }) => (
+                                                <FormItem className="flex items-start space-x-4 rounded-md border p-2 has-[:checked]:bg-muted">
+                                                    <FormControl>
+                                                        <Checkbox
+                                                            checked={field.value?.includes(member.id)}
+                                                            onCheckedChange={(checked) => {
+                                                                return checked
+                                                                    ? field.onChange([...(field.value || []), member.id])
+                                                                    : field.onChange(field.value?.filter((id) => id !== member.id))
+                                                            }}
+                                                        />
+                                                    </FormControl>
+                                                    <div className="flex items-start gap-3 flex-1">
+                                                        <Avatar className="h-8 w-8">
+                                                            <AvatarImage src={`https://picsum.photos/seed/${member.id}/32/32`} data-ai-hint="profile picture" />
+                                                            <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="grid gap-0.5">
+                                                            <Label className="font-normal cursor-pointer text-sm">{member.name}</Label>
+                                                            <p className="text-xs text-muted-foreground">{member.email}</p>
+                                                        </div>
+                                                    </div>
+                                                </FormItem>
+                                            )}
+                                        />
+                                    ))}
+                                    {availableMembers.length === 0 && (
+                                        <div className="text-center text-muted-foreground py-10">No members available.</div>
                                     )}
-                                />
-                            ))}
-                            {availableMembers.length === 0 && (
-                                <div className="text-center text-muted-foreground py-10">No members available.</div>
-                            )}
-                            </div>
-                        </ScrollArea>
-                        <FormMessage />
-                    </FormItem>
+                                </div>
+                            </ScrollArea>
+                            <FormMessage />
+                        </FormItem>
                     )}
                 />
             </div>
@@ -1299,13 +1299,13 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div>
                     <CardTitle>Evaluation Committee (Scorers)</CardTitle>
-                     <CardDescription>
-                         {requisition.committeePurpose ? `Purpose: ${requisition.committeePurpose}` : 'Assign scorers to evaluate vendor quotations.'}
+                    <CardDescription>
+                        {requisition.committeePurpose ? `Purpose: ${requisition.committeePurpose}` : 'Assign scorers to evaluate vendor quotations.'}
                     </CardDescription>
                 </div>
-                 <Dialog open={open} onOpenChange={onOpenChange}>
+                <Dialog open={open} onOpenChange={onOpenChange}>
                     <DialogTrigger asChild>
-                         {isAuthorized ? (
+                        {isAuthorized ? (
                             triggerButton
                         ) : (
                             <TooltipProvider>
@@ -1321,127 +1321,127 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                         )}
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl flex flex-col max-h-[90vh]">
-                         <Form {...form}>
-                         <form onSubmit={form.handleSubmit(handleSaveCommittee)} className="flex flex-col flex-1 min-h-0">
-                        <DialogHeader>
-                            <DialogTitle>Manage Evaluation Committee</DialogTitle>
-                            <DialogDescription>Assign members to score the quotations for this requisition.</DialogDescription>
-                        </DialogHeader>
-                        <div className="flex-1 overflow-y-auto space-y-4 p-1 -mx-1">
-                                <div className="grid md:grid-cols-2 gap-4">
-                                    <FormField
-                                        control={form.control}
-                                        name="committeeName"
-                                        render={({ field }) => (
-                                            <FormItem><FormLabel>Committee Name</FormLabel><FormControl><Input {...field} placeholder="e.g., Q4 Laptop Procurement Committee" /></FormControl><FormMessage /></FormItem>
-                                        )}
-                                    />
-                                     <FormField
-                                        control={form.control}
-                                        name="committeePurpose"
-                                        render={({ field }) => (
-                                            <FormItem><FormLabel>Purpose / Mandate</FormLabel><FormControl><Input {...field} placeholder="e.g., To evaluate vendor submissions for REQ-..." /></FormControl><FormMessage /></FormItem>
-                                        )}
-                                    />
-                                </div>
-                                <div className="grid md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <FormLabel>Committee Compliance Deadline</FormLabel>
-                                        <div className="flex gap-2">
-                                            <Popover>
-                                                <PopoverTrigger asChild>
-                                                    <Button
-                                                        variant={"outline"}
-                                                        className={cn("flex-1", !deadlineDate && "text-muted-foreground")}
-                                                    >
-                                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                                        {deadlineDate ? format(deadlineDate, "PPP") : <span>Pick a date</span>}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0">
-                                                    <Calendar
-                                                        mode="single"
-                                                        selected={deadlineDate}
-                                                        onSelect={setDeadlineDate}
-                                                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
-                                                        initialFocus
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                            <Input
-                                                type="time"
-                                                className="w-32"
-                                                value={deadlineTime}
-                                                onChange={(e) => setDeadlineTime(e.target.value)}
-                                            />
+                        <Form {...form}>
+                            <form onSubmit={form.handleSubmit(handleSaveCommittee)} className="flex flex-col flex-1 min-h-0">
+                                <DialogHeader>
+                                    <DialogTitle>Manage Evaluation Committee</DialogTitle>
+                                    <DialogDescription>Assign members to score the quotations for this requisition.</DialogDescription>
+                                </DialogHeader>
+                                <div className="flex-1 overflow-y-auto space-y-4 p-1 -mx-1">
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="committeeName"
+                                            render={({ field }) => (
+                                                <FormItem><FormLabel>Committee Name</FormLabel><FormControl><Input {...field} placeholder="e.g., Q4 Laptop Procurement Committee" /></FormControl><FormMessage /></FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="committeePurpose"
+                                            render={({ field }) => (
+                                                <FormItem><FormLabel>Purpose / Mandate</FormLabel><FormControl><Input {...field} placeholder="e.g., To evaluate vendor submissions for REQ-..." /></FormControl><FormMessage /></FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <FormLabel>Committee Compliance Deadline</FormLabel>
+                                            <div className="flex gap-2">
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant={"outline"}
+                                                            className={cn("flex-1", !deadlineDate && "text-muted-foreground")}
+                                                        >
+                                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                                            {deadlineDate ? format(deadlineDate, "PPP") : <span>Pick a date</span>}
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-0">
+                                                        <Calendar
+                                                            mode="single"
+                                                            selected={deadlineDate}
+                                                            onSelect={setDeadlineDate}
+                                                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                                                            initialFocus
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
+                                                <Input
+                                                    type="time"
+                                                    className="w-32"
+                                                    value={deadlineTime}
+                                                    onChange={(e) => setDeadlineTime(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <FormLabel>Price Visibility</FormLabel>
+                                            <div className="flex items-center space-x-2 rounded-md border p-2 h-10">
+                                                <Switch
+                                                    id="technical-view-prices"
+                                                    checked={technicalViewPrices}
+                                                    onCheckedChange={setTechnicalViewPrices}
+                                                />
+                                                <Label htmlFor="technical-view-prices">Allow compliance evaluators to see prices</Label>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <FormLabel>Price Visibility</FormLabel>
-                                        <div className="flex items-center space-x-2 rounded-md border p-2 h-10">
-                                            <Switch
-                                                id="technical-view-prices"
-                                                checked={technicalViewPrices}
-                                                onCheckedChange={setTechnicalViewPrices}
-                                            />
-                                            <Label htmlFor="technical-view-prices">Allow compliance evaluators to see prices</Label>
-                                        </div>
-                                    </div>
-                                </div>
 
-                                <div className="grid md:grid-cols-2 gap-6">
-                                    {requisition.rfqSettings?.needsCompliance ? (
-                                        <div className="md:col-span-2">
-                                            <h3 className="font-semibold text-lg">Compliance Committee</h3>
-                                            <p className="text-sm text-muted-foreground mb-2">Merged financial and technical criteria committee for compliance checks.</p>
-                                            <FormField
-                                                control={form.control}
-                                                name="complianceCommitteeMemberIds"
-                                                render={() => (
-                                                    <FormItem>
-                                                        <MemberSelection type="compliance" />
-                                                    </FormItem>
-                                                )}
-                                            />
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <div>
-                                                <h3 className="font-semibold text-lg">Financial Committee</h3>
-                                                <MemberSelection type="financial" />
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        {requisition.rfqSettings?.needsCompliance ? (
+                                            <div className="md:col-span-2">
+                                                <h3 className="font-semibold text-lg">Compliance Committee</h3>
+                                                <p className="text-sm text-muted-foreground mb-2">Merged financial and technical criteria committee for compliance checks.</p>
+                                                <FormField
+                                                    control={form.control}
+                                                    name="complianceCommitteeMemberIds"
+                                                    render={() => (
+                                                        <FormItem>
+                                                            <MemberSelection type="compliance" />
+                                                        </FormItem>
+                                                    )}
+                                                />
                                             </div>
-                                            <div>
-                                                <h3 className="font-semibold text-lg">Technical Committee</h3>
-                                                <MemberSelection type="technical" />
-                                            </div>
-                                        </>
-                                    )}
+                                        ) : (
+                                            <>
+                                                <div>
+                                                    <h3 className="font-semibold text-lg">Financial Committee</h3>
+                                                    <MemberSelection type="financial" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-semibold text-lg">Technical Committee</h3>
+                                                    <MemberSelection type="technical" />
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
-                        </div>
-                        <DialogFooter className="pt-4 border-t mt-4">
-                            <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                            <Button type="submit" disabled={isSubmitting}>
-                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                Save Committee
-                            </Button>
-                        </DialogFooter>
-                        </form>
+                                <DialogFooter className="pt-4 border-t mt-4">
+                                    <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+                                    <Button type="submit" disabled={isSubmitting}>
+                                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        Save Committee
+                                    </Button>
+                                </DialogFooter>
+                            </form>
                         </Form>
                     </DialogContent>
                 </Dialog>
             </CardHeader>
             <CardContent className="space-y-6">
-                      {requisition.rfqSettings?.needsCompliance ? (
-                          <MemberList title="Compliance Committee" description="Merged committee responsible for compliance checks (financial + technical)." members={assignedComplianceMembers} />
-                      ) : (
-                          <>
-                                <MemberList title="Financial Committee" description="Responsible for evaluating cost and financial stability." members={assignedFinancialMembers} />
-                                <MemberList title="Technical Committee" description="Responsible for assessing technical specs and compliance." members={assignedTechnicalMembers} />
-                          </>
-                      )}
-                 {requisition.scoringDeadline && (
+                {requisition.rfqSettings?.needsCompliance ? (
+                    <MemberList title="Compliance Committee" description="Merged committee responsible for compliance checks (financial + technical)." members={assignedComplianceMembers} />
+                ) : (
+                    <>
+                        <MemberList title="Financial Committee" description="Responsible for evaluating cost and financial stability." members={assignedFinancialMembers} />
+                        <MemberList title="Technical Committee" description="Responsible for assessing technical specs and compliance." members={assignedTechnicalMembers} />
+                    </>
+                )}
+                {requisition.scoringDeadline && (
                     <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground border-t pt-4">
-                        <Timer className="h-4 w-4"/>
+                        <Timer className="h-4 w-4" />
                         <span className="font-semibold">Scoring Deadline:</span>
                         <span>{format(new Date(requisition.scoringDeadline), 'PPpp')}</span>
                     </div>
@@ -1480,17 +1480,17 @@ const RFQActionDialog = ({
     const handleSubmit = async () => {
         if (!user || !token) return;
         if (action !== 'update' && !reason.trim()) {
-            toast({ variant: 'destructive', title: 'Error', description: 'A reason must be provided.'});
+            toast({ variant: 'destructive', title: 'Error', description: 'A reason must be provided.' });
             return;
         }
         if (action === 'update' && (!finalNewDeadline || isBefore(finalNewDeadline, new Date()))) {
-            toast({ variant: 'destructive', title: 'Error', description: 'The new deadline must be in the future.'});
+            toast({ variant: 'destructive', title: 'Error', description: 'The new deadline must be in the future.' });
             return;
         }
 
         setIsSubmitting(true);
         try {
-             const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
+            const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
@@ -1501,13 +1501,13 @@ const RFQActionDialog = ({
                 }),
             });
             if (!response.ok) {
-                 const errorData = await response.json();
+                const errorData = await response.json();
                 throw new Error(errorData.error || `Failed to ${action} RFQ.`);
             }
-            toast({ title: 'Success', description: `The RFQ has been successfully ${action === 'update' ? 'updated' : 'managed'}.`});
+            toast({ title: 'Success', description: `The RFQ has been successfully ${action === 'update' ? 'updated' : 'managed'}.` });
             onSuccess();
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
+            toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
             setIsSubmitting(false);
             onClose();
@@ -1528,7 +1528,7 @@ const RFQActionDialog = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-                <DialogContent>
+            <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{titles[action]}</DialogTitle>
                     <DialogDescription>{descriptions[action]}</DialogDescription>
@@ -1537,14 +1537,14 @@ const RFQActionDialog = ({
                     {action === 'update' && (
                         <div className="space-y-2">
                             <Label>New Quotation Submission Deadline</Label>
-                                <div className="flex gap-2">
-                                    <Popover>
+                            <div className="flex gap-2">
+                                <Popover>
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant={"outline"}
                                             className={cn(
-                                            "w-full justify-start text-left font-normal",
-                                            !newDeadlineDate && "text-muted-foreground"
+                                                "w-full justify-start text-left font-normal",
+                                                !newDeadlineDate && "text-muted-foreground"
                                             )}
                                         >
                                             <CalendarIcon className="mr-2 h-4 w-4" />
@@ -1556,7 +1556,7 @@ const RFQActionDialog = ({
                                             mode="single"
                                             selected={newDeadlineDate}
                                             onSelect={setNewDeadlineDate}
-                                            disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                                             initialFocus
                                         />
                                     </PopoverContent>
@@ -1570,17 +1570,17 @@ const RFQActionDialog = ({
                             </div>
                         </div>
                     )}
-                     {action !== 'update' && (
+                    {action !== 'update' && (
                         <div>
-                        <Label htmlFor="reason">Reason for Action</Label>
-                        <Textarea id="reason" value={reason} onChange={e => setReason(e.target.value)} className="mt-2" />
-                    </div>
-                     )}
+                            <Label htmlFor="reason">Reason for Action</Label>
+                            <Textarea id="reason" value={reason} onChange={e => setReason(e.target.value)} className="mt-2" />
+                        </div>
+                    )}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Close</Button></DialogClose>
                     <Button onClick={handleSubmit} disabled={isSubmitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
-                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Confirm {action.charAt(0).toUpperCase() + action.slice(1)}
                     </Button>
                 </DialogFooter>
@@ -1594,19 +1594,20 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
     const [vendorSearch, setVendorSearch] = useState("");
     const [isSubmitting, setSubmitting] = useState(false);
-    const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
+    const [deadlineDate, setDeadlineDate] = useState<Date | undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
     const [cpoAmount, setCpoAmount] = useState<number | undefined>(requisition.cpoAmount);
 
     const [allowQuoteEdits, setAllowQuoteEdits] = useState(requisition.rfqSettings?.allowQuoteEdits ?? true);
     const [experienceDocumentRequired, setExperienceDocumentRequired] = useState(requisition.rfqSettings?.experienceDocumentRequired ?? false);
+    const [procurementMethod, setProcurementMethod] = useState<string>(requisition.procurementMethod ?? ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'));
     const { user, token } = useAuth();
     const { toast } = useToast();
 
     const isSent = requisition.status === 'Accepting_Quotes' || requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
 
 
-     useEffect(() => {
+    useEffect(() => {
         if (requisition.deadline) {
             setDeadlineDate(new Date(requisition.deadline));
             setDeadlineTime(format(new Date(requisition.deadline), 'HH:mm'));
@@ -1617,6 +1618,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
         setCpoAmount(requisition.cpoAmount);
         setAllowQuoteEdits(requisition.rfqSettings?.allowQuoteEdits ?? true);
         setExperienceDocumentRequired(requisition.rfqSettings?.experienceDocumentRequired ?? true);
+        setProcurementMethod(requisition.procurementMethod ?? ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'));
     }, [requisition]);
 
     const deadline = useMemo(() => {
@@ -1628,6 +1630,12 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
 
     const handleSendRFQ = async () => {
         if (!user || !deadline || !token) return;
+
+        // If procurement method isn't RFQ, inform the sender that the selected method is coming soon
+        if (procurementMethod !== 'RFQ') {
+            toast({ title: 'Coming Soon', description: `${procurementMethod} procurement method is coming soon. Only RFQ is supported currently.` });
+            return;
+        }
 
         if (isBefore(deadline, new Date())) {
             toast({
@@ -1664,8 +1672,10 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                     cpoAmount,
                     rfqSettings: {
                         allowQuoteEdits,
-                        experienceDocumentRequired
-                    }
+                        experienceDocumentRequired,
+                        method: procurementMethod
+                    },
+                    procurementMethod
                 }),
             });
 
@@ -1677,7 +1687,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
             toast({ title: 'RFQ Sent!', description: 'The requisition is now open for quotations from the selected vendors.' });
             onRfqSent();
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -1711,11 +1721,22 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                         <CardTitle>RFQ Distribution</CardTitle>
                         <CardDescription>
                             {isSent
-                            ? "The RFQ has been distributed to vendors."
-                            : "Send the Request for Quotation to vendors to begin receiving bids."
+                                ? "The RFQ has been distributed to vendors."
+                                : "Send the Request for Quotation to vendors to begin receiving bids."
                             }
                         </CardDescription>
                     </div>
+                </div>
+                <div className="space-y-2">
+                    <Label>Procurement Method</Label>
+                    <select value={procurementMethod} onChange={(e) => setProcurementMethod(e.target.value)} disabled={!canTakeAction} className="w-full border rounded px-2 py-1">
+                        <option value="RFQ">RFQ (Request for Quotation)</option>
+                        <option value="RFP">RFP (Request for Proposal) — Coming Soon</option>
+                        <option value="OpenTender">Open Tender — Coming Soon</option>
+                        <option value="RestrictedTender">Restricted Tender — Coming Soon</option>
+                        <option value="DirectProcurement">Direct Procurement — Coming Soon</option>
+                        <option value="TwoStage">Two-Stage Bidding — Coming Soon</option>
+                    </select>
                 </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1737,8 +1758,8 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                                     variant={"outline"}
                                     disabled={!canTakeAction}
                                     className={cn(
-                                    "w-full justify-start text-left font-normal",
-                                    !deadlineDate && "text-muted-foreground"
+                                        "w-full justify-start text-left font-normal",
+                                        !deadlineDate && "text-muted-foreground"
                                     )}
                                 >
                                     <CalendarIcon className="mr-2 h-4 w-4" />
@@ -1750,7 +1771,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                                     mode="single"
                                     selected={deadlineDate}
                                     onSelect={setDeadlineDate}
-                                    disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) || !canTakeAction}
+                                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || !canTakeAction}
                                     initialFocus
                                 />
                             </PopoverContent>
@@ -1795,45 +1816,45 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                         <CardContent>
                             <ScrollArea className="h-60">
                                 <div className="space-y-4">
-                                {filteredVendors.map(vendor => (
-                                    <div key={vendor.id} className="flex items-start space-x-4 rounded-md border p-4 has-[:checked]:bg-muted">
-                                        <Checkbox
-                                            id={`vendor-${vendor.id}`}
-                                            checked={selectedVendors.includes(vendor.id)}
-                                            onCheckedChange={(checked) => {
-                                                setSelectedVendors(prev =>
-                                                    checked ? [...prev, vendor.id] : prev.filter(id => id !== vendor.id)
-                                                )
-                                            }}
-                                            className="mt-1"
-                                            disabled={!canTakeAction}
-                                        />
-                                        <div className="flex items-start gap-4 flex-1">
-                                            <Avatar>
-                                                <AvatarImage src={`https://picsum.photos/seed/${vendor.id}/40/40`} data-ai-hint="logo" />
-                                                <AvatarFallback>{vendor.name.charAt(0)}</AvatarFallback>
-                                            </Avatar>
-                                            <div className="grid gap-1">
-                                                <Label htmlFor={`vendor-${vendor.id}`} className="font-semibold cursor-pointer">
-                                                    {vendor.name}
-                                                </Label>
-                                                <p className="text-xs text-muted-foreground">{vendor.email}</p>
-                                                <p className="text-xs text-muted-foreground">Contact: {vendor.contactPerson}</p>
+                                    {filteredVendors.map(vendor => (
+                                        <div key={vendor.id} className="flex items-start space-x-4 rounded-md border p-4 has-[:checked]:bg-muted">
+                                            <Checkbox
+                                                id={`vendor-${vendor.id}`}
+                                                checked={selectedVendors.includes(vendor.id)}
+                                                onCheckedChange={(checked) => {
+                                                    setSelectedVendors(prev =>
+                                                        checked ? [...prev, vendor.id] : prev.filter(id => id !== vendor.id)
+                                                    )
+                                                }}
+                                                className="mt-1"
+                                                disabled={!canTakeAction}
+                                            />
+                                            <div className="flex items-start gap-4 flex-1">
+                                                <Avatar>
+                                                    <AvatarImage src={`https://picsum.photos/seed/${vendor.id}/40/40`} data-ai-hint="logo" />
+                                                    <AvatarFallback>{vendor.name.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                                <div className="grid gap-1">
+                                                    <Label htmlFor={`vendor-${vendor.id}`} className="font-semibold cursor-pointer">
+                                                        {vendor.name}
+                                                    </Label>
+                                                    <p className="text-xs text-muted-foreground">{vendor.email}</p>
+                                                    <p className="text-xs text-muted-foreground">Contact: {vendor.contactPerson}</p>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
-                                {filteredVendors.length === 0 && (
-                                    <div className="text-center text-muted-foreground py-10">
-                                        No vendors found matching your search.
-                                    </div>
-                                )}
+                                    ))}
+                                    {filteredVendors.length === 0 && (
+                                        <div className="text-center text-muted-foreground py-10">
+                                            No vendors found matching your search.
+                                        </div>
+                                    )}
                                 </div>
                             </ScrollArea>
                         </CardContent>
                     </Card>
                 )}
-                
+
                 <div className="space-y-2">
                     <Label htmlFor="cpoAmount">CPO Amount (ETB)</Label>
                     <div className="relative">
@@ -1908,7 +1929,7 @@ const ManageRFQ = ({
     onSuccess: () => void,
     isAuthorized: boolean,
 }) => {
-    const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'update'});
+    const [actionDialog, setActionDialog] = useState<{ isOpen: boolean, type: 'update' | 'cancel' | 'restart' }>({ isOpen: false, type: 'update' });
     const canManageRfq = isAuthorized && requisition.status === 'Accepting_Quotes' && !isPast(new Date(requisition.deadline!));
 
     if (!canManageRfq) return null;
@@ -1921,15 +1942,15 @@ const ManageRFQ = ({
                     <CardDescription>Update the deadline or cancel the RFQ for this requisition.</CardDescription>
                 </CardHeader>
                 <CardFooter className="flex gap-2">
-                    <Button variant="outline" onClick={() => setActionDialog({isOpen: true, type: 'update'})}><Settings2 className="mr-2"/> Update RFQ</Button>
-                    <Button variant="destructive" onClick={() => setActionDialog({isOpen: true, type: 'cancel'})}><Ban className="mr-2"/> Cancel RFQ</Button>
+                    <Button variant="outline" onClick={() => setActionDialog({ isOpen: true, type: 'update' })}><Settings2 className="mr-2" /> Update RFQ</Button>
+                    <Button variant="destructive" onClick={() => setActionDialog({ isOpen: true, type: 'cancel' })}><Ban className="mr-2" /> Cancel RFQ</Button>
                 </CardFooter>
             </Card>
             <RFQActionDialog
                 action={actionDialog.type}
                 requisition={requisition}
                 isOpen={actionDialog.isOpen}
-                onClose={() => setActionDialog({isOpen: false, type: 'update'})}
+                onClose={() => setActionDialog({ isOpen: false, type: 'update' })}
                 onSuccess={onSuccess}
             />
         </>
@@ -1937,7 +1958,7 @@ const ManageRFQ = ({
 }
 
 const WorkflowStepper = ({ step }: { step: 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' }) => {
-     const getStepClass = (currentStep: string, targetStep: string) => {
+    const getStepClass = (currentStep: string, targetStep: string) => {
         const stepOrder = ['rfq', 'committee', 'award', 'finalize', 'completed'];
         const currentIndex = stepOrder.indexOf(currentStep);
         const targetIndex = stepOrder.indexOf(targetStep);
@@ -1967,30 +1988,30 @@ const WorkflowStepper = ({ step }: { step: 'rfq' | 'committee' | 'award' | 'fina
         <div className="flex items-center justify-center space-x-1 sm:space-x-2 flex-wrap">
             <div className="flex items-center gap-2">
                 <div className={cn("flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold", stateClasses[rfqState])}>
-                    {rfqState === 'completed' ? <Check className="h-4 w-4"/> : '1'}
+                    {rfqState === 'completed' ? <Check className="h-4 w-4" /> : '1'}
                 </div>
                 <span className={cn("font-medium", textClasses[rfqState])}>Send RFQ</span>
             </div>
-             <div className={cn("h-px flex-1 bg-border transition-colors", (committeeState === 'active' || committeeState === 'completed') && "bg-primary")}></div>
+            <div className={cn("h-px flex-1 bg-border transition-colors", (committeeState === 'active' || committeeState === 'completed') && "bg-primary")}></div>
 
             <div className="flex items-center gap-2">
                 <div className={cn("flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold", stateClasses[committeeState])}>
-                    {committeeState === 'completed' ? <Check className="h-4 w-4"/> : '2'}
+                    {committeeState === 'completed' ? <Check className="h-4 w-4" /> : '2'}
                 </div>
                 <span className={cn("font-medium", textClasses[committeeState])}>Assign Committee &amp; Score</span>
             </div>
-             <div className={cn("h-px flex-1 bg-border transition-colors", (awardState === 'active' || awardState === 'completed') && "bg-primary")}></div>
+            <div className={cn("h-px flex-1 bg-border transition-colors", (awardState === 'active' || awardState === 'completed') && "bg-primary")}></div>
 
             <div className="flex items-center gap-2">
                 <div className={cn("flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold", stateClasses[awardState])}>
-                    {awardState === 'completed' ? <Check className="h-4 w-4"/> : '3'}
+                    {awardState === 'completed' ? <Check className="h-4 w-4" /> : '3'}
                 </div>
                 <span className={cn("font-medium", textClasses[awardState])}>Award</span>
             </div>
             <div className={cn("h-px flex-1 bg-border transition-colors", (finalizeState === 'active' || finalizeState === 'completed') && "bg-primary")}></div>
-             <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
                 <div className={cn("flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold", stateClasses[finalizeState])}>
-                    {finalizeState === 'completed' ? <Check className="h-4 w-4"/> : '4'}
+                    {finalizeState === 'completed' ? <Check className="h-4 w-4" /> : '4'}
                 </div>
                 <span className={cn("font-medium", textClasses[finalizeState])}>Finalize</span>
             </div>
@@ -2034,15 +2055,15 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                         <Dialog>
                             <DialogTrigger asChild>
                                 <div className="md:col-span-2 relative aspect-video cursor-pointer hover:opacity-80 transition-opacity">
-                                    <Image src={quoteItem.imageUrl} alt={quoteItem.name} fill style={{objectFit:"contain"}} className="rounded-md" />
+                                    <Image src={quoteItem.imageUrl} alt={quoteItem.name} fill style={{ objectFit: "contain" }} className="rounded-md" />
                                 </div>
                             </DialogTrigger>
                             <DialogContent className="max-w-4xl h-[80vh]">
                                 <DialogHeader>
-                                <DialogTitle>{quoteItem.name}</DialogTitle>
+                                    <DialogTitle>{quoteItem.name}</DialogTitle>
                                 </DialogHeader>
                                 <div className="relative w-full h-full">
-                                <Image src={quoteItem.imageUrl} alt={quoteItem.name} fill style={{objectFit:"contain"}} />
+                                    <Image src={quoteItem.imageUrl} alt={quoteItem.name} fill style={{ objectFit: "contain" }} />
                                 </div>
                             </DialogContent>
                         </Dialog>
@@ -2063,7 +2084,7 @@ const ScoringItemCard = ({ itemIndex, control, quoteItem, originalItem, requisit
                     }
                 </div>
 
-                <Separator/>
+                <Separator />
 
                 <div className="space-y-3">
                     <div className="flex items-center gap-4">
@@ -2158,7 +2179,7 @@ const ScoringDialog = ({
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ checks: values.checks, committeeComment: values.committeeComment, userId: user.id }),
             });
-             if (!response.ok) {
+            if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to submit compliance checks.');
             }
@@ -2167,7 +2188,7 @@ const ScoringDialog = ({
             onScoreSubmitted();
 
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -2176,7 +2197,7 @@ const ScoringDialog = ({
             setSubmitting(false);
         }
     };
-    
+
     const onInvalid = () => {
         toast({
             variant: 'destructive',
@@ -2200,7 +2221,7 @@ const ScoringDialog = ({
                     <TimerOff className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                     <p className="text-muted-foreground">The deadline for scoring this quotation has passed.</p>
                 </div>
-                 <DialogFooter><DialogClose asChild><Button variant="outline">Close</Button></DialogClose></DialogFooter>
+                <DialogFooter><DialogClose asChild><Button variant="outline">Close</Button></DialogClose></DialogFooter>
             </DialogContent>
         );
     }
@@ -2212,139 +2233,139 @@ const ScoringDialog = ({
                 <DialogDescription>Mark each quoted item as Comply or Non‑comply against the requester's specifications.</DialogDescription>
             </DialogHeader>
             <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="flex-1 min-h-0 flex flex-col">
-                <ScrollArea className="flex-1 pr-4 -mr-4">
-                     <div className="space-y-6">
-                        <div className="flex gap-2">
-                             {quote.bidDocumentUrl && (
-                                 <Button asChild variant="outline" size="sm" className="w-full">
-                                     <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer">
-                                         <FileText className="mr-2 h-4 w-4"/> View Bid Document
-                                     </a>
-                                 </Button>
-                            )}
-                            {quote.experienceDocumentUrl && (
-                                <Button asChild variant="outline" size="sm" className="w-full">
-                                    <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer">
-                                        <UserCog className="mr-2 h-4 w-4"/> View Experience Document
-                                    </a>
-                                </Button>
-                            )}
-                        </div>
-                        {quote.answers && quote.answers.length > 0 && (
-                            <Card className="bg-muted/30">
-                                <CardHeader>
-                                    <CardTitle className="text-lg flex items-center gap-2"><MessageSquare/>Vendor's Answers</CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3 text-sm">
-                                    {quote.answers.map(answer => (
-                                        <div key={answer.questionId}>
-                                            <p className="font-semibold">{findQuestionText(answer.questionId)}</p>
-                                            <p className="text-muted-foreground pl-2 border-l-2 ml-2 mt-1">{answer.answer}</p>
-                                        </div>
-                                    ))}
-                                </CardContent>
-                            </Card>
-                        )}
-                        <Accordion type="single" collapsible className="space-y-4">
-                            {checkFields.map((field, itemIndex) => {
-                                const itemScoreData = form.getValues().checks[itemIndex];
-                                if (!itemScoreData) return null;
-                            
-                                const quoteItem = quote.items.find(item => item.id === itemScoreData.quoteItemId);
-                                if (!quoteItem) return null;
-
-                                const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
-
-                                return (
-                                    <AccordionItem key={field.id} value={`item-${itemIndex}`} className="border rounded-lg bg-muted/20">
-                                        <AccordionTrigger className="px-4 py-3">
-                                            <div className="flex items-center gap-2 text-left">
-                                                <h4 className="font-semibold">{quoteItem.name}</h4>
-                                                <p className="text-xs text-muted-foreground">(for: {originalItem?.name})</p>
+                <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="flex-1 min-h-0 flex flex-col">
+                    <ScrollArea className="flex-1 pr-4 -mr-4">
+                        <div className="space-y-6">
+                            <div className="flex gap-2">
+                                {quote.bidDocumentUrl && (
+                                    <Button asChild variant="outline" size="sm" className="w-full">
+                                        <a href={quote.bidDocumentUrl} target="_blank" rel="noopener noreferrer">
+                                            <FileText className="mr-2 h-4 w-4" /> View Bid Document
+                                        </a>
+                                    </Button>
+                                )}
+                                {quote.experienceDocumentUrl && (
+                                    <Button asChild variant="outline" size="sm" className="w-full">
+                                        <a href={quote.experienceDocumentUrl} target="_blank" rel="noopener noreferrer">
+                                            <UserCog className="mr-2 h-4 w-4" /> View Experience Document
+                                        </a>
+                                    </Button>
+                                )}
+                            </div>
+                            {quote.answers && quote.answers.length > 0 && (
+                                <Card className="bg-muted/30">
+                                    <CardHeader>
+                                        <CardTitle className="text-lg flex items-center gap-2"><MessageSquare />Vendor's Answers</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3 text-sm">
+                                        {quote.answers.map(answer => (
+                                            <div key={answer.questionId}>
+                                                <p className="font-semibold">{findQuestionText(answer.questionId)}</p>
+                                                <p className="text-muted-foreground pl-2 border-l-2 ml-2 mt-1">{answer.answer}</p>
                                             </div>
-                                        </AccordionTrigger>
-                                        <AccordionContent className="p-4 border-t">
-                                            <ScoringItemCard
-                                                itemIndex={itemIndex}
-                                                control={form.control}
-                                                quoteItem={quoteItem}
-                                                originalItem={originalItem}
-                                                requisition={requisition}
-                                                hidePrices={hidePrices}
-                                                existingScore={existingScore}
-                                            />
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                );
-                            })}
-                        </Accordion>
-
-
-                        <FormField
-                            control={form.control}
-                            name="committeeComment"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel className="text-lg font-semibold">Overall Comment</FormLabel>
-                                    <FormControl>
-                                        <Textarea placeholder="Provide an overall summary or justification for your scores..." {...field} rows={4} disabled={!!existingScore} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
+                                        ))}
+                                    </CardContent>
+                                </Card>
                             )}
-                        />
-                    </div>
-                </ScrollArea>
+                            <Accordion type="single" collapsible className="space-y-4">
+                                {checkFields.map((field, itemIndex) => {
+                                    const itemScoreData = form.getValues().checks[itemIndex];
+                                    if (!itemScoreData) return null;
 
-                <DialogFooter className="pt-4 mt-4 border-t">
-                    {existingScore ? (
-                        <DialogClose asChild><Button>Close</Button></DialogClose>
-                    ) : (
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button type="button">
-                                    Submit Compliance Check
-                                </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirm Your Score</AlertDialogTitle>
-                                    <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Go Back & Edit</AlertDialogCancel>
-                                    <AlertDialogAction onClick={form.handleSubmit(onSubmit, onInvalid)} disabled={isSubmitting}>
-                                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Confirm & Submit
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    )}
-                </DialogFooter>
-            </form>
+                                    const quoteItem = quote.items.find(item => item.id === itemScoreData.quoteItemId);
+                                    if (!quoteItem) return null;
+
+                                    const originalItem = requisition.items.find(i => i.id === quoteItem.requisitionItemId);
+
+                                    return (
+                                        <AccordionItem key={field.id} value={`item-${itemIndex}`} className="border rounded-lg bg-muted/20">
+                                            <AccordionTrigger className="px-4 py-3">
+                                                <div className="flex items-center gap-2 text-left">
+                                                    <h4 className="font-semibold">{quoteItem.name}</h4>
+                                                    <p className="text-xs text-muted-foreground">(for: {originalItem?.name})</p>
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent className="p-4 border-t">
+                                                <ScoringItemCard
+                                                    itemIndex={itemIndex}
+                                                    control={form.control}
+                                                    quoteItem={quoteItem}
+                                                    originalItem={originalItem}
+                                                    requisition={requisition}
+                                                    hidePrices={hidePrices}
+                                                    existingScore={existingScore}
+                                                />
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    );
+                                })}
+                            </Accordion>
+
+
+                            <FormField
+                                control={form.control}
+                                name="committeeComment"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel className="text-lg font-semibold">Overall Comment</FormLabel>
+                                        <FormControl>
+                                            <Textarea placeholder="Provide an overall summary or justification for your scores..." {...field} rows={4} disabled={!!existingScore} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    </ScrollArea>
+
+                    <DialogFooter className="pt-4 mt-4 border-t">
+                        {existingScore ? (
+                            <DialogClose asChild><Button>Close</Button></DialogClose>
+                        ) : (
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button type="button">
+                                        Submit Compliance Check
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Confirm Your Score</AlertDialogTitle>
+                                        <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Go Back & Edit</AlertDialogCancel>
+                                        <AlertDialogAction onClick={form.handleSubmit(onSubmit, onInvalid)} disabled={isSubmitting}>
+                                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Confirm & Submit
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        )}
+                    </DialogFooter>
+                </form>
             </Form>
         </DialogContent>
     );
 };
 
 const ScoringProgressTracker = ({
-  requisition,
-  quotations,
-  allUsers,
-  onSuccess,
-  onCommitteeUpdate,
-  isFinalizing,
-  isAuthorized
+    requisition,
+    quotations,
+    allUsers,
+    onSuccess,
+    onCommitteeUpdate,
+    isFinalizing,
+    isAuthorized
 }: {
-  requisition: PurchaseRequisition;
-  quotations: Quotation[];
-  allUsers: User[];
-  onSuccess: () => void;
-  onCommitteeUpdate: (open: boolean) => void;
-  isFinalizing: boolean;
-  isAuthorized: boolean
+    requisition: PurchaseRequisition;
+    quotations: Quotation[];
+    allUsers: User[];
+    onSuccess: () => void;
+    onCommitteeUpdate: (open: boolean) => void;
+    isFinalizing: boolean;
+    isAuthorized: boolean
 }) => {
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
@@ -2391,10 +2412,10 @@ const ScoringProgressTracker = ({
                 submittedAt: submissionDate,
             };
         }).sort((a, b) => {
-             if (a.submittedAt && b.submittedAt) return a.submittedAt.getTime() - b.submittedAt.getTime();
-             if (a.submittedAt) return -1;
-             if (b.submittedAt) return 1;
-             return 0;
+            if (a.submittedAt && b.submittedAt) return a.submittedAt.getTime() - b.submittedAt.getTime();
+            if (a.submittedAt) return -1;
+            if (b.submittedAt) return 1;
+            return 0;
         });
     }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id]);
 
@@ -2413,7 +2434,7 @@ const ScoringProgressTracker = ({
                 <ul className="space-y-3">
                     {scoringStatus.map(member => (
                         <li key={member.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-md border">
-                           <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3">
                                 <Avatar>
                                     <AvatarImage src={`https://picsum.photos/seed/${member.id}/40/40`} />
                                     <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
@@ -2422,7 +2443,7 @@ const ScoringProgressTracker = ({
                                     <p className="font-semibold">{member.name}</p>
                                     <p className="text-xs text-muted-foreground">{member.email}</p>
                                 </div>
-                           </div>
+                            </div>
                             <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
                                 {member.hasSubmittedFinalScores ? (
                                     <div className="text-right flex-1">
@@ -2435,13 +2456,13 @@ const ScoringProgressTracker = ({
                                     </div>
                                 ) : member.isOverdue ? (
                                     <>
-                                     <Badge variant="destructive"><AlertTriangle className="mr-1 h-3 w-3" />Overdue</Badge>
-                                     <Button size="sm" variant="secondary" onClick={()=>{ setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
-                                     <Button size="sm" variant="secondary" onClick={() => onCommitteeUpdate(true)}>Replace</Button>
-                                     <Button size="sm" variant="outline" onClick={()=>{ setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
+                                        <Badge variant="destructive"><AlertTriangle className="mr-1 h-3 w-3" />Overdue</Badge>
+                                        <Button size="sm" variant="secondary" onClick={() => { setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
+                                        <Button size="sm" variant="secondary" onClick={() => onCommitteeUpdate(true)}>Replace</Button>
+                                        <Button size="sm" variant="outline" onClick={() => { setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
                                     </>
                                 ) : (
-                                     <Badge variant="secondary">Pending</Badge>
+                                    <Badge variant="secondary">Pending</Badge>
                                 )}
                             </div>
                         </li>
@@ -2476,8 +2497,8 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
     const { user } = useAuth();
 
     // replicate hidePrices logic for this dialog scope
-    const isAssignedCompliance = Boolean(user && ((requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id && a.type === 'compliance')));
-    const assignment = (user && (user.committeeAssignments || []).find((a:any) => a.requisitionId === requisition.id)) || undefined;
+    const isAssignedCompliance = Boolean(user && ((requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a: any) => a.requisitionId === requisition.id && a.type === 'compliance')));
+    const assignment = (user && (user.committeeAssignments || []).find((a: any) => a.requisitionId === requisition.id)) || undefined;
     const scoresSubmitted = Boolean(assignment?.scoresSubmitted);
     const hidePrices = isAssignedCompliance && !scoresSubmitted && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
 
@@ -2523,13 +2544,13 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             setIsGeneratingPdf(false);
         }
     };
-    
+
     const getRankIcon = (rank?: number) => {
-        switch(rank) {
-          case 1: return <Crown className="h-4 w-4 text-amber-400" />;
-          case 2: return <Trophy className="h-4 w-4 text-slate-400" />;
-          case 3: return <Medal className="h-4 w-4 text-amber-600" />;
-          default: return null;
+        switch (rank) {
+            case 1: return <Crown className="h-4 w-4 text-amber-400" />;
+            case 2: return <Trophy className="h-4 w-4 text-slate-400" />;
+            case 3: return <Medal className="h-4 w-4 text-amber-600" />;
+            default: return null;
         }
     };
 
@@ -2552,7 +2573,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                 <p className="text-sm text-gray-500">{requisition.id}</p>
                                 <p className="text-sm text-gray-500">Report Generated: {format(new Date(), 'PPpp')}</p>
                             </div>
-                            
+
                             {awardStrategy === 'all' ? (
                                 <Card>
                                     <CardHeader>
@@ -2562,7 +2583,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                         <Table>
                                             <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead className="text-right">Total Price</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                                             <TableBody>
-                                                {quotations.sort((a,b) => (a.totalPrice || 0) - (b.totalPrice || 0)).map(q => (
+                                                {quotations.sort((a, b) => (a.totalPrice || 0) - (b.totalPrice || 0)).map(q => (
                                                     <TableRow key={q.id}>
                                                         <TableCell className="font-bold flex items-center gap-1">{getRankIcon(q.rank)} {q.rank}</TableCell>
                                                         <TableCell>{q.vendorName}</TableCell>
@@ -2582,25 +2603,25 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                             <Card>
                                                 <CardContent className="p-0">
                                                     {requisition.items.map(item => {
-                                                        const awards = (item.perItemAwardDetails || []).sort((a,b) => a.rank - b.rank);
+                                                        const awards = (item.perItemAwardDetails || []).sort((a, b) => a.rank - b.rank);
                                                         return (
-                                                                <div key={item.id} className="p-4 border-b last:border-b-0">
-                                                                    <h4 className="font-semibold">{item.name}</h4>
-                                                                    <Table>
-                                                                        <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Unit Price</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                                                                        <TableBody>
-                                                                            {awards.map(award => (
-                                                                                <TableRow key={award.quoteItemId}>
-                                                                                    <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
-                                                                                    <TableCell>{award.vendorName}</TableCell>
-                                                                                    <TableCell>{award.proposedItemName}</TableCell>
-                                                                                    <TableCell className="text-right font-mono">{hidePrices ? 'Hidden' : (award.unitPrice.toFixed(2) + ' ETB')}</TableCell>
-                                                                                    <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
-                                                                                </TableRow>
-                                                                            ))}
-                                                                        </TableBody>
-                                                                    </Table>
-                                                                </div>
+                                                            <div key={item.id} className="p-4 border-b last:border-b-0">
+                                                                <h4 className="font-semibold">{item.name}</h4>
+                                                                <Table>
+                                                                    <TableHeader><TableRow><TableHead>Rank</TableHead><TableHead>Vendor</TableHead><TableHead>Proposed Item</TableHead><TableHead className="text-right">Unit Price</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                                                                    <TableBody>
+                                                                        {awards.map(award => (
+                                                                            <TableRow key={award.quoteItemId}>
+                                                                                <TableCell className="font-bold flex items-center gap-1">{getRankIcon(award.rank)} {award.rank}</TableCell>
+                                                                                <TableCell>{award.vendorName}</TableCell>
+                                                                                <TableCell>{award.proposedItemName}</TableCell>
+                                                                                <TableCell className="text-right font-mono">{hidePrices ? 'Hidden' : (award.unitPrice.toFixed(2) + ' ETB')}</TableCell>
+                                                                                <TableCell><Badge variant="outline">{award.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                                            </TableRow>
+                                                                        ))}
+                                                                    </TableBody>
+                                                                </Table>
+                                                            </div>
                                                         )
                                                     })}
                                                 </CardContent>
@@ -2610,183 +2631,183 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                 </Accordion>
                             )}
 
-                             <Separator className="my-6"/>
+                            <Separator className="my-6" />
 
                             <Accordion type="single" collapsible className="w-full" defaultValue="scoring-report">
                                 <AccordionItem value="scoring-report" className="border-none">
                                     <AccordionTrigger className="text-lg font-semibold">Evaluation Committee spec compliance check Report</AccordionTrigger>
                                     <AccordionContent>
-                                     <Card>
-                                         <CardHeader>
-                                             <CardTitle>Compliance Checks</CardTitle>
-                                             <CardDescription>Per-quote, per-item compliance results submitted by committee members.</CardDescription>
-                                         </CardHeader>
-                                         <CardContent className="p-4">
-                                             {quotations.map(quote => (
-                                                <div key={quote.id} className="mb-6 border rounded-md p-3">
-                                                    <div className="flex items-center justify-between mb-3">
-                                                        <div>
-                                                            <h4 className="font-semibold">{quote.vendorName}</h4>
-                                                            <p className="text-sm text-muted-foreground">Quote ID: {quote.id}</p>
+                                        <Card>
+                                            <CardHeader>
+                                                <CardTitle>Compliance Checks</CardTitle>
+                                                <CardDescription>Per-quote, per-item compliance results submitted by committee members.</CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="p-4">
+                                                {quotations.map(quote => (
+                                                    <div key={quote.id} className="mb-6 border rounded-md p-3">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <div>
+                                                                <h4 className="font-semibold">{quote.vendorName}</h4>
+                                                                <p className="text-sm text-muted-foreground">Quote ID: {quote.id}</p>
+                                                            </div>
+                                                            <Badge className="ml-2">{quote.status?.replace(/_/g, ' ')}</Badge>
                                                         </div>
-                                                        <Badge className="ml-2">{quote.status?.replace(/_/g, ' ')}</Badge>
-                                                    </div>
-                                                    <Table>
-                                                        <TableHeader>
-                                                            <TableRow>
-                                                                <TableHead>Item</TableHead>
-                                                                <TableHead>Proposed</TableHead>
-                                                                <TableHead>Committee Member</TableHead>
-                                                                <TableHead>Result</TableHead>
-                                                                <TableHead>Submitted</TableHead>
-                                                                <TableHead>Comment</TableHead>
-                                                            </TableRow>
-                                                        </TableHeader>
-                                                        <TableBody>
-                                                            {(() => {
-                                                                const sets: any[] = quote.complianceSets || [];
-                                                                // Rows from each committee member's item compliances
-                                                                const rows: JSX.Element[] = [];
+                                                        <Table>
+                                                            <TableHeader>
+                                                                <TableRow>
+                                                                    <TableHead>Item</TableHead>
+                                                                    <TableHead>Proposed</TableHead>
+                                                                    <TableHead>Committee Member</TableHead>
+                                                                    <TableHead>Result</TableHead>
+                                                                    <TableHead>Submitted</TableHead>
+                                                                    <TableHead>Comment</TableHead>
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {(() => {
+                                                                    const sets: any[] = quote.complianceSets || [];
+                                                                    // Rows from each committee member's item compliances
+                                                                    const rows: JSX.Element[] = [];
 
-                                                                sets.forEach(set => {
-                                                                    (set.itemCompliances || []).forEach((ic: any) => {
-                                                                        const item = quote.items.find((i: any) => i.id === ic.quoteItemId) || { name: 'Unknown' };
-                                                                        rows.push(
-                                                                            <TableRow key={`${quote.id}-${set.scorerId}-${ic.quoteItemId}`}>
-                                                                                <TableCell>{item.name}</TableCell>
-                                                                                <TableCell>{ic.proposedItemName || item.name}</TableCell>
-                                                                                <TableCell>{set.scorer?.name || 'Unknown'}</TableCell>
-                                                                                <TableCell>
-                                                                                    {ic.comply === true ? <Badge variant="outline">Compliant</Badge> : ic.comply === false ? <Badge variant="destructive">Non-compliant</Badge> : <Badge variant="secondary">Not Checked</Badge>}
-                                                                                </TableCell>
-                                                                                <TableCell>{set.submittedAt ? format(new Date(set.submittedAt), 'PPpp') : '—'}</TableCell>
-                                                                                <TableCell className="max-w-xs break-words">{ic.comment || '—'}</TableCell>
-                                                                            </TableRow>
-                                                                        );
+                                                                    sets.forEach(set => {
+                                                                        (set.itemCompliances || []).forEach((ic: any) => {
+                                                                            const item = quote.items.find((i: any) => i.id === ic.quoteItemId) || { name: 'Unknown' };
+                                                                            rows.push(
+                                                                                <TableRow key={`${quote.id}-${set.scorerId}-${ic.quoteItemId}`}>
+                                                                                    <TableCell>{item.name}</TableCell>
+                                                                                    <TableCell>{ic.proposedItemName || item.name}</TableCell>
+                                                                                    <TableCell>{set.scorer?.name || 'Unknown'}</TableCell>
+                                                                                    <TableCell>
+                                                                                        {ic.comply === true ? <Badge variant="outline">Compliant</Badge> : ic.comply === false ? <Badge variant="destructive">Non-compliant</Badge> : <Badge variant="secondary">Not Checked</Badge>}
+                                                                                    </TableCell>
+                                                                                    <TableCell>{set.submittedAt ? format(new Date(set.submittedAt), 'PPpp') : '—'}</TableCell>
+                                                                                    <TableCell className="max-w-xs break-words">{ic.comment || '—'}</TableCell>
+                                                                                </TableRow>
+                                                                            );
+                                                                        });
                                                                     });
-                                                                });
 
-                                                                // Include items that were not checked by any committee member
-                                                                const checkedIds = new Set(sets.flatMap(s => (s.itemCompliances || []).map((ic: any) => ic.quoteItemId)));
-                                                                (quote.items || []).forEach((item: any) => {
-                                                                    if (!checkedIds.has(item.id)) {
-                                                                        rows.push(
-                                                                            <TableRow key={`${quote.id}-notchecked-${item.id}`}>
-                                                                                <TableCell>{item.name}</TableCell>
-                                                                                <TableCell>{item.proposedItemName || item.name}</TableCell>
-                                                                                <TableCell>—</TableCell>
-                                                                                <TableCell><Badge variant="secondary">Not Checked</Badge></TableCell>
-                                                                                <TableCell>—</TableCell>
-                                                                                <TableCell>—</TableCell>
-                                                                            </TableRow>
-                                                                        );
-                                                                    }
-                                                                });
+                                                                    // Include items that were not checked by any committee member
+                                                                    const checkedIds = new Set(sets.flatMap(s => (s.itemCompliances || []).map((ic: any) => ic.quoteItemId)));
+                                                                    (quote.items || []).forEach((item: any) => {
+                                                                        if (!checkedIds.has(item.id)) {
+                                                                            rows.push(
+                                                                                <TableRow key={`${quote.id}-notchecked-${item.id}`}>
+                                                                                    <TableCell>{item.name}</TableCell>
+                                                                                    <TableCell>{item.proposedItemName || item.name}</TableCell>
+                                                                                    <TableCell>—</TableCell>
+                                                                                    <TableCell><Badge variant="secondary">Not Checked</Badge></TableCell>
+                                                                                    <TableCell>—</TableCell>
+                                                                                    <TableCell>—</TableCell>
+                                                                                </TableRow>
+                                                                            );
+                                                                        }
+                                                                    });
 
-                                                                return rows.length > 0 ? rows : (
-                                                                    <TableRow>
-                                                                        <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">No compliance checks recorded for this quote.</TableCell>
-                                                                    </TableRow>
-                                                                );
-                                                            })()}
-                                                        </TableBody>
-                                                    </Table>
-                                                </div>
-                                             ))}
-                                         </CardContent>
-                                     </Card>
-                                     
-                                     <Card>
-                                         <CardContent className="p-4">
-                                             <Accordion type="multiple" className="w-full space-y-4">
-                                                 {quotations.sort((a,b) => (a.totalPrice || 0) - (b.totalPrice || 0)).map(quote => (
-                                                    <AccordionItem key={quote.id} value={quote.id} className="border rounded-lg">
-                                                        <AccordionTrigger className="p-4 hover:no-underline">
-                                                            <div className="flex justify-between items-start w-full">
-                                                                <div>
-                                                                    <h4 className="font-semibold text-lg">{quote.vendorName}</h4>
-                                                                    <p className="text-sm text-muted-foreground pt-1">
-                                                                        Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> |
-                                                                        Rank: <span className="font-bold">{quote.rank || 'N/A'}</span>
-                                                                    </p>
-                                                                </div>
-                                                                <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
-                                                            </div>
-                                                        </AccordionTrigger>
-                                                        <AccordionContent className="p-4 border-t">
-                                                            <div className="space-y-4">
-                                                            {quote.scores && quote.scores.length > 0 ? (
-                                                                quote.scores.map(scoreSet => (
-                                                                    <div key={scoreSet.scorerId} className="p-3 border rounded-md break-inside-avoid print:border-gray-200">
-                                                                        <div className="flex items-center justify-between mb-3 pb-2 border-b print:border-gray-200">
-                                                                            <div className="flex items-center gap-3">
-                                                                                <Avatar className="h-8 w-8">
-                                                                                    <AvatarImage src={`https://picsum.photos/seed/${scoreSet.scorerId}/32/32`} />
-                                                                                    <AvatarFallback>{scoreSet.scorer?.name?.charAt(0) || 'U'}</AvatarFallback>
-                                                                                </Avatar>
-                                                                                <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
-                                                                            </div>
-                                                                            <div className="text-right">
-                                                                            <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
-                                                                            <p className="text-xs text-muted-foreground mt-1">
-                                                                                Submitted {format(new Date(scoreSet.submittedAt), 'PPpp')}
-                                                                            </p>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="space-y-4">
-                                                                            {scoreSet.itemScores.map(itemScore => {
-                                                                                const scoredQuoteItem = quote.items.find(qi => qi.id === itemScore.quoteItemId);
-                                                                                const hasFinancialScores = (requisition.evaluationCriteria?.financialCriteria?.length ?? 0) > 0;
-                                                                                const hasTechnicalScores = (requisition.evaluationCriteria?.technicalCriteria?.length ?? 0) > 0;
-                                                                                
-                                                                                return (
-                                                                                    <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
-                                                                                        <h4 className="font-semibold text-sm mb-2">Item: {scoredQuoteItem?.name || 'Unknown Item'}</h4>
-                                                                                        <div className={cn("grid gap-4 print:grid-cols-2", hasFinancialScores && hasTechnicalScores ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
-                                                                                            {hasFinancialScores && itemScore.scores.some(s => s.type === 'FINANCIAL') && (
-                                                                                                <div>
-                                                                                                    <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Financial Scores ({requisition.evaluationCriteria?.financialWeight}%)</h5>
-                                                                                                    {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
-                                                                                                        <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
-                                                                                                            <div className="flex justify-between items-center font-medium">
-                                                                                                                <p>{getCriterionName(s.financialCriterionId ?? null, requisition.evaluationCriteria?.financialCriteria)}</p>
-                                                                                                                <p className="font-bold">{s.score}/100</p>
-                                                                                                            </div>
-                                                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                                                        </div>
-                                                                                                    ))}
-                                                                                                </div>
-                                                                                            )}
-                                                                                            {hasTechnicalScores && itemScore.scores.some(s => s.type === 'TECHNICAL') && (
-                                                                                                <div>
-                                                                                                    <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical Scores ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
-                                                                                                    {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
-                                                                                                        <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
-                                                                                                            <div className="flex justify-between items-center font-medium">
-                                                                                                                <p>{getCriterionName(s.technicalCriterionId ?? null, requisition.evaluationCriteria?.technicalCriteria)}</p>
-                                                                                                                <p className="font-bold">{s.score}/100</p>
-                                                                                                            </div>
-                                                                                                            {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
-                                                                                                        </div>
-                                                                                                    ))}
-                                                                                                </div>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )
-                                                                            })}
-                                                                        </div>
-                                                                        {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
+                                                                    return rows.length > 0 ? rows : (
+                                                                        <TableRow>
+                                                                            <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">No compliance checks recorded for this quote.</TableCell>
+                                                                        </TableRow>
+                                                                    );
+                                                                })()}
+                                                            </TableBody>
+                                                        </Table>
+                                                    </div>
+                                                ))}
+                                            </CardContent>
+                                        </Card>
+
+                                        <Card>
+                                            <CardContent className="p-4">
+                                                <Accordion type="multiple" className="w-full space-y-4">
+                                                    {quotations.sort((a, b) => (a.totalPrice || 0) - (b.totalPrice || 0)).map(quote => (
+                                                        <AccordionItem key={quote.id} value={quote.id} className="border rounded-lg">
+                                                            <AccordionTrigger className="p-4 hover:no-underline">
+                                                                <div className="flex justify-between items-start w-full">
+                                                                    <div>
+                                                                        <h4 className="font-semibold text-lg">{quote.vendorName}</h4>
+                                                                        <p className="text-sm text-muted-foreground pt-1">
+                                                                            Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> |
+                                                                            Rank: <span className="font-bold">{quote.rank || 'N/A'}</span>
+                                                                        </p>
                                                                     </div>
-                                                                ))
-                                                            ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
-                                                            </div>
-                                                        </AccordionContent>
-                                                    </AccordionItem>
-                                                 ))}
-                                             </Accordion>
-                                         </CardContent>
-                                     </Card>
+                                                                    <Badge variant={quote.status === 'Awarded' || quote.status === 'Partially_Awarded' || quote.status === 'Accepted' ? 'default' : quote.status === 'Standby' ? 'secondary' : 'destructive'}>{quote.status.replace(/_/g, ' ')}</Badge>
+                                                                </div>
+                                                            </AccordionTrigger>
+                                                            <AccordionContent className="p-4 border-t">
+                                                                <div className="space-y-4">
+                                                                    {quote.scores && quote.scores.length > 0 ? (
+                                                                        quote.scores.map(scoreSet => (
+                                                                            <div key={scoreSet.scorerId} className="p-3 border rounded-md break-inside-avoid print:border-gray-200">
+                                                                                <div className="flex items-center justify-between mb-3 pb-2 border-b print:border-gray-200">
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <Avatar className="h-8 w-8">
+                                                                                            <AvatarImage src={`https://picsum.photos/seed/${scoreSet.scorerId}/32/32`} />
+                                                                                            <AvatarFallback>{scoreSet.scorer?.name?.charAt(0) || 'U'}</AvatarFallback>
+                                                                                        </Avatar>
+                                                                                        <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
+                                                                                    </div>
+                                                                                    <div className="text-right">
+                                                                                        <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
+                                                                                        <p className="text-xs text-muted-foreground mt-1">
+                                                                                            Submitted {format(new Date(scoreSet.submittedAt), 'PPpp')}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="space-y-4">
+                                                                                    {scoreSet.itemScores.map(itemScore => {
+                                                                                        const scoredQuoteItem = quote.items.find(qi => qi.id === itemScore.quoteItemId);
+                                                                                        const hasFinancialScores = (requisition.evaluationCriteria?.financialCriteria?.length ?? 0) > 0;
+                                                                                        const hasTechnicalScores = (requisition.evaluationCriteria?.technicalCriteria?.length ?? 0) > 0;
+
+                                                                                        return (
+                                                                                            <div key={itemScore.id} className="p-3 bg-muted/30 rounded-md">
+                                                                                                <h4 className="font-semibold text-sm mb-2">Item: {scoredQuoteItem?.name || 'Unknown Item'}</h4>
+                                                                                                <div className={cn("grid gap-4 print:grid-cols-2", hasFinancialScores && hasTechnicalScores ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1')}>
+                                                                                                    {hasFinancialScores && itemScore.scores.some(s => s.type === 'FINANCIAL') && (
+                                                                                                        <div>
+                                                                                                            <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Financial Scores ({requisition.evaluationCriteria?.financialWeight}%)</h5>
+                                                                                                            {itemScore.scores.filter(s => s.type === 'FINANCIAL').map(s => (
+                                                                                                                <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                                                    <div className="flex justify-between items-center font-medium">
+                                                                                                                        <p>{getCriterionName(s.financialCriterionId ?? null, requisition.evaluationCriteria?.financialCriteria)}</p>
+                                                                                                                        <p className="font-bold">{s.score}/100</p>
+                                                                                                                    </div>
+                                                                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                                                                </div>
+                                                                                                            ))}
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                    {hasTechnicalScores && itemScore.scores.some(s => s.type === 'TECHNICAL') && (
+                                                                                                        <div>
+                                                                                                            <h5 className="font-semibold text-xs mb-2 print:text-gray-800">Technical Scores ({requisition.evaluationCriteria?.technicalWeight}%)</h5>
+                                                                                                            {itemScore.scores.filter(s => s.type === 'TECHNICAL').map(s => (
+                                                                                                                <div key={s.id} className="text-xs p-2 bg-background print:bg-gray-50 rounded-md mb-2">
+                                                                                                                    <div className="flex justify-between items-center font-medium">
+                                                                                                                        <p>{getCriterionName(s.technicalCriterionId ?? null, requisition.evaluationCriteria?.technicalCriteria)}</p>
+                                                                                                                        <p className="font-bold">{s.score}/100</p>
+                                                                                                                    </div>
+                                                                                                                    {s.comment && <p className="italic text-muted-foreground print:text-gray-500 mt-1 pl-1 border-l-2 print:border-gray-300">"{s.comment}"</p>}
+                                                                                                                </div>
+                                                                                                            ))}
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        )
+                                                                                    })}
+                                                                                </div>
+                                                                                {scoreSet.committeeComment && <p className="text-sm italic text-muted-foreground print:text-gray-600 mt-3 p-3 bg-muted/50 print:bg-gray-100 rounded-md"><strong>Overall Comment:</strong> "{scoreSet.committeeComment}"</p>}
+                                                                            </div>
+                                                                        ))
+                                                                    ) : <p className="text-sm text-muted-foreground text-center py-8 print:text-gray-500">No scores submitted for this quote.</p>}
+                                                                </div>
+                                                            </AccordionContent>
+                                                        </AccordionItem>
+                                                    ))}
+                                                </Accordion>
+                                            </CardContent>
+                                        </Card>
                                     </AccordionContent>
                                 </AccordionItem>
                             </Accordion>
@@ -2796,7 +2817,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>Close</Button>
                     <Button onClick={handleGeneratePdf} disabled={isGeneratingPdf}>
-                        {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4"/>}
+                        {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
                         Print / Export PDF
                     </Button>
                 </DialogFooter>
@@ -2808,7 +2829,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
     const { toast } = useToast();
     const { user } = useAuth();
     const [isSubmitting, setSubmitting] = useState(false);
-    const [newDeadline, setNewDeadline] = useState<Date|undefined>();
+    const [newDeadline, setNewDeadline] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
 
     const finalNewDeadline = useMemo(() => {
@@ -2816,7 +2837,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
         const [hours, minutes] = newDeadlineTime.split(':').map(Number);
         return setMinutes(setHours(newDeadline, hours), minutes);
     }, [newDeadline, newDeadlineTime]);
-    
+
     const handleSubmit = async () => {
         if (!user || !finalNewDeadline) return;
         if (isBefore(finalNewDeadline, new Date())) {
@@ -2842,7 +2863,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
             onClose();
 
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -2875,14 +2896,25 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0">
-                                    <Calendar mode="single" selected={newDeadline} onSelect={setNewDeadline} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
+                                    <Calendar mode="single" selected={newDeadline} onSelect={setNewDeadline} disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))} initialFocus />
                                 </PopoverContent>
                             </Popover>
-                            <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
+                            <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)} />
                         </div>
                     </div>
+                    <div className="space-y-2">
+                        <Label>Procurement Method</Label>
+                        <select value={procurementMethod} onChange={(e) => setProcurementMethod(e.target.value)} disabled={!canTakeAction} className="w-full border rounded px-2 py-1">
+                            <option value="RFQ">RFQ (Request for Quotation)</option>
+                            <option value="RFP">RFP (Request for Proposal) — Coming Soon</option>
+                            <option value="OpenTender">Open Tender — Coming Soon</option>
+                            <option value="RestrictedTender">Restricted Tender — Coming Soon</option>
+                            <option value="DirectProcurement">Direct Procurement — Coming Soon</option>
+                            <option value="TwoStage">Two-Stage Bidding — Coming Soon</option>
+                        </select>
+                    </div>
                 </div>
-                 <DialogFooter>
+                <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
                     <Button onClick={handleSubmit} disabled={isSubmitting || !finalNewDeadline}>
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -2905,12 +2937,12 @@ const OverdueReportDialog = ({ isOpen, onClose, member }: { isOpen: boolean, onC
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
-                     <p>This is a placeholder for a detailed report about the overdue committee member for internal follow-up.</p>
-                     <div className="p-4 border rounded-md bg-muted/50">
+                    <p>This is a placeholder for a detailed report about the overdue committee member for internal follow-up.</p>
+                    <div className="p-4 border rounded-md bg-muted/50">
                         <p><span className="font-semibold">Member Name:</span> {member.name}</p>
                         <p><span className="font-semibold">Email:</span> {member.email}</p>
                         <p><span className="font-semibold">Assigned Role:</span> {(member.roles as any[])?.map(r => r.name).join(', ').replace(/_/g, ' ')}</p>
-                     </div>
+                    </div>
                 </div>
                 <DialogFooter>
                     <Button onClick={onClose}>Close</Button>
@@ -2934,11 +2966,11 @@ const CommitteeActions = ({
     const [submittedOverride, setSubmittedOverride] = useState(false);
     const { toast } = useToast();
     const { token } = useAuth();
-    
+
     if (!user) {
         return null;
     }
-    
+
     const isCommitteeUser = useMemo(() => (user.roles as UserRole[]).some(r => r.includes('Committee')), [user.roles]);
 
     const assignment = useMemo(() => user.committeeAssignments?.find(a => a.requisitionId === requisition.id), [user.committeeAssignments, requisition.id]);
@@ -2948,7 +2980,7 @@ const CommitteeActions = ({
     if (!isCommitteeUser) {
         return null;
     }
-    
+
     const userScoredQuotesCount = requisition.quotations?.filter(q => (q.scores?.some(s => s.scorerId === user.id) || (q as any).complianceSets?.some((c: any) => c.scorerId === user.id))).length || 0;
     const allQuotesScored = (requisition.quotations?.length || 0) > 0 && userScoredQuotesCount === requisition.quotations?.length;
 
@@ -2965,7 +2997,7 @@ const CommitteeActions = ({
 
             if (response.status === 409) {
                 setSubmittedOverride(true);
-                toast({ title: 'Compliance Submitted', description: 'Your final compliance checks were already submitted.'});
+                toast({ title: 'Compliance Submitted', description: 'Your final compliance checks were already submitted.' });
                 onFinalScoresSubmitted();
                 return;
             }
@@ -2974,11 +3006,11 @@ const CommitteeActions = ({
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to submit scores');
             }
-            toast({ title: 'Compliance Submitted', description: 'Your final compliance checks have been recorded.'});
+            toast({ title: 'Compliance Submitted', description: 'Your final compliance checks have been recorded.' });
             setSubmittedOverride(true);
             onFinalScoresSubmitted();
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -3109,35 +3141,35 @@ const NotifyVendorDialog = ({
 
 
 export default function QuotationDetailsPage() {
-  const router = useRouter();
-  const params = useParams();
-  const { toast } = useToast();
-  const { user, allUsers, role, rolePermissions, rfqSenderSetting, committeeQuorum, token } = useAuth();
-  const id = params.id as string;
+    const router = useRouter();
+    const params = useParams();
+    const { toast } = useToast();
+    const { user, allUsers, role, rolePermissions, rfqSenderSetting, committeeQuorum, token } = useAuth();
+    const id = params.id as string;
 
-  const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isCommitteeDialogOpen, setCommitteeDialogOpen] = useState(false);
-  const [isScoringFormOpen, setScoringFormOpen] = useState(false);
-  const [isFinalizing, setIsFinalizing] = useState(false);
-  const [isNotifying, setIsNotifying] = useState(false);
-  const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
-  const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
-  const [selectedQuoteForDetails, setSelectedQuoteForDetails] = useState<Quotation | null>(null);
-  const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
-  const [isChangingAward, setIsChangingAward] = useState(false);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [isReportOpen, setReportOpen] = useState(false);
-  const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
-  const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
-  const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
-  const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
+    const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
+    const [vendors, setVendors] = useState<Vendor[]>([]);
+    const [quotations, setQuotations] = useState<Quotation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isCommitteeDialogOpen, setCommitteeDialogOpen] = useState(false);
+    const [isScoringFormOpen, setScoringFormOpen] = useState(false);
+    const [isFinalizing, setIsFinalizing] = useState(false);
+    const [isNotifying, setIsNotifying] = useState(false);
+    const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
+    const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
+    const [selectedQuoteForDetails, setSelectedQuoteForDetails] = useState<Quotation | null>(null);
+    const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
+    const [isChangingAward, setIsChangingAward] = useState(false);
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+    const [isReportOpen, setReportOpen] = useState(false);
+    const [actionDialog, setActionDialog] = useState<{ isOpen: boolean, type: 'update' | 'cancel' | 'restart' }>({ isOpen: false, type: 'restart' });
+    const [currentQuotesPage, setCurrentQuotesPage] = useState(1);
+    const [committeeTab, setCommitteeTab] = useState<'pending' | 'scored'>('pending');
+    const [isRestartRfqOpen, setIsRestartRfqOpen] = useState(false);
     const [isSingleAwardCenterOpen, setSingleAwardCenterOpen] = useState(false);
     const [isBestItemAwardCenterOpen, setBestItemAwardCenterOpen] = useState(false);
     const [showNoCompliantDialog, setShowNoCompliantDialog] = useState(false);
-  const [deadlineCheckPerformed, setDeadlineCheckPerformed] = useState(false);
+    const [deadlineCheckPerformed, setDeadlineCheckPerformed] = useState(false);
     const [isManualQuoteOpen, setIsManualQuoteOpen] = useState(false);
 
 
@@ -3158,42 +3190,42 @@ export default function QuotationDetailsPage() {
             return userRoles.includes('Procurement_Officer');
         }
         return false;
-}, [user, role, rfqSenderSetting, requisition]);
-  
-  const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
+    }, [user, role, rfqSenderSetting, requisition]);
 
-  const isDeadlinePassed = useMemo(() => {
-    if (!requisition) return false;
-    return requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
-  }, [requisition]);
+    const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
 
-  const isScoringDeadlinePassed = useMemo(() => {
-    if (!requisition || !requisition.scoringDeadline) return false;
-    return isPast(new Date(requisition.scoringDeadline));
-  }, [requisition]);
+    const isDeadlinePassed = useMemo(() => {
+        if (!requisition) return false;
+        return requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+    }, [requisition]);
 
-  const isScoringComplete = useMemo(() => {
-    if (!requisition) return false;
-    const allMemberIds = [
-        ...(requisition.financialCommitteeMemberIds || []),
-        ...(requisition.technicalCommitteeMemberIds || [])
-    ];
-    if (allMemberIds.length === 0) return false;
-    if (quotations.length === 0) return false;
+    const isScoringDeadlinePassed = useMemo(() => {
+        if (!requisition || !requisition.scoringDeadline) return false;
+        return isPast(new Date(requisition.scoringDeadline));
+    }, [requisition]);
 
-    // Check if every assigned member has finalized their scores.
-    const uniqueMemberIds = [...new Set(allMemberIds)];
-    return uniqueMemberIds.every(memberId => {
-        const member = allUsers.find(u => u.id === memberId);
-        return member?.committeeAssignments?.some(a => a.requisitionId === requisition.id && a.scoresSubmitted) || false;
-    });
-  }, [requisition, quotations, allUsers]);
+    const isScoringComplete = useMemo(() => {
+        if (!requisition) return false;
+        const allMemberIds = [
+            ...(requisition.financialCommitteeMemberIds || []),
+            ...(requisition.technicalCommitteeMemberIds || [])
+        ];
+        if (allMemberIds.length === 0) return false;
+        if (quotations.length === 0) return false;
 
-  const isAwarded = useMemo(() => {
-    if (!requisition || !requisition.status) return false;
-    const awardProcessStatuses = ['PostApproved', 'Awarded', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled', 'Partially_Closed'];
-    return awardProcessStatuses.includes(requisition.status) || requisition.status.startsWith('Pending_');
-  }, [requisition]);
+        // Check if every assigned member has finalized their scores.
+        const uniqueMemberIds = [...new Set(allMemberIds)];
+        return uniqueMemberIds.every(memberId => {
+            const member = allUsers.find(u => u.id === memberId);
+            return member?.committeeAssignments?.some(a => a.requisitionId === requisition.id && a.scoresSubmitted) || false;
+        });
+    }, [requisition, quotations, allUsers]);
+
+    const isAwarded = useMemo(() => {
+        if (!requisition || !requisition.status) return false;
+        const awardProcessStatuses = ['PostApproved', 'Awarded', 'Award_Declined', 'PO_Created', 'Closed', 'Fulfilled', 'Partially_Closed'];
+        return awardProcessStatuses.includes(requisition.status) || requisition.status.startsWith('Pending_');
+    }, [requisition]);
 
     // Whether the deadline passed but the number of quotations is below the committee quorum
     const quorumNotMetAndDeadlinePassed = useMemo(() => {
@@ -3202,55 +3234,55 @@ export default function QuotationDetailsPage() {
     }, [isDeadlinePassed, isAwarded, quotations.length, committeeQuorum]);
 
 
-  const isAssignedCommitteeMember = useMemo(() => {
-      if (!user || !role || !requisition) {
-          return false;
-      }
-      const userRoles = user.roles as UserRole[];
-      if (!userRoles.some(r => r.includes('Committee'))) return false;
+    const isAssignedCommitteeMember = useMemo(() => {
+        if (!user || !role || !requisition) {
+            return false;
+        }
+        const userRoles = user.roles as UserRole[];
+        if (!userRoles.some(r => r.includes('Committee'))) return false;
 
-      return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
-  }, [user, role, requisition]);
-  
-  const isReviewer = useMemo(() => {
-    if (!user || !role || !requisition) return false;
-    // A user is a reviewer if they have permission to access the award reviews page.
-    const allowedPaths = rolePermissions['Combined'] || [];
-    return allowedPaths.includes('/award-reviews');
-  }, [user, role, requisition, rolePermissions]);
+        return (requisition.financialCommitteeMemberIds?.includes(user.id) || requisition.technicalCommitteeMemberIds?.includes(user.id)) ?? false;
+    }, [user, role, requisition]);
 
-  const readyForCommitteeAssignment = useMemo(() => {
-    if (!requisition) return false;
-    const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
-    const hasEnoughQuotes = quotations.length >= committeeQuorum;
+    const isReviewer = useMemo(() => {
+        if (!user || !role || !requisition) return false;
+        // A user is a reviewer if they have permission to access the award reviews page.
+        const allowedPaths = rolePermissions['Combined'] || [];
+        return allowedPaths.includes('/award-reviews');
+    }, [user, role, requisition, rolePermissions]);
+
+    const readyForCommitteeAssignment = useMemo(() => {
+        if (!requisition) return false;
+        const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+        const hasEnoughQuotes = quotations.length >= committeeQuorum;
         const needsCompliance = (requisition.rfqSettings as any)?.needsCompliance ?? true;
         return deadlinePassed && hasEnoughQuotes && requisition.status === 'Accepting_Quotes' && needsCompliance;
-  }, [requisition, quotations.length, committeeQuorum]);
-  
-  const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
-    if (!requisition || !requisition.status) return 'rfq';
-    if (readyForCommitteeAssignment) return 'committee';
+    }, [requisition, quotations.length, committeeQuorum]);
 
-    const completeStatuses = ['Fulfilled', 'Closed'];
-    if (completeStatuses.includes(requisition.status)) return 'completed';
+    const currentStep = useMemo((): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
+        if (!requisition || !requisition.status) return 'rfq';
+        if (readyForCommitteeAssignment) return 'committee';
 
-    const finalizeStatuses = ['PO_Created', 'Partially_Closed'];
-    if (finalizeStatuses.includes(requisition.status) || isAccepted) return 'finalize';
+        const completeStatuses = ['Fulfilled', 'Closed'];
+        if (completeStatuses.includes(requisition.status)) return 'completed';
 
-    const awardStatuses = ['Awarded', 'PostApproved', 'Award_Declined'];
-    if (awardStatuses.includes(requisition.status) || requisition.status.startsWith('Pending_')) return 'award';
-    
-    const committeeStatuses = ['Scoring_In_Progress', 'Scoring_Complete'];
-    if (committeeStatuses.includes(requisition.status)) return 'committee';
-    
-    const needsComplianceFlag = (requisition.rfqSettings as any)?.needsCompliance ?? true;
-    if (requisition.status === 'Accepting_Quotes' && isDeadlinePassed && needsComplianceFlag) return 'committee';
-    
-    return 'rfq';
-  }, [requisition, isAccepted, isDeadlinePassed, readyForCommitteeAssignment]);
-  
+        const finalizeStatuses = ['PO_Created', 'Partially_Closed'];
+        if (finalizeStatuses.includes(requisition.status) || isAccepted) return 'finalize';
+
+        const awardStatuses = ['Awarded', 'PostApproved', 'Award_Declined'];
+        if (awardStatuses.includes(requisition.status) || requisition.status.startsWith('Pending_')) return 'award';
+
+        const committeeStatuses = ['Scoring_In_Progress', 'Scoring_Complete'];
+        if (committeeStatuses.includes(requisition.status)) return 'committee';
+
+        const needsComplianceFlag = (requisition.rfqSettings as any)?.needsCompliance ?? true;
+        if (requisition.status === 'Accepting_Quotes' && isDeadlinePassed && needsComplianceFlag) return 'committee';
+
+        return 'rfq';
+    }, [requisition, isAccepted, isDeadlinePassed, readyForCommitteeAssignment]);
+
     const { pendingQuotes, scoredQuotes } = useMemo(() => {
-        if (!user || !(user.roles as string[]).some(r => r.includes('Committee')) ) return { pendingQuotes: quotations, scoredQuotes: [] };
+        if (!user || !(user.roles as string[]).some(r => r.includes('Committee'))) return { pendingQuotes: quotations, scoredQuotes: [] };
         const hasUserChecked = (q: any) => {
             return !!(q.scores?.some((s: any) => s.scorerId === user.id) || q.complianceSets?.some((c: any) => c.scorerId === user.id));
         }
@@ -3258,9 +3290,9 @@ export default function QuotationDetailsPage() {
         const scored = quotations.filter(q => hasUserChecked(q));
         return { pendingQuotes: pending, scoredQuotes: scored };
     }, [quotations, user]);
-  
+
     const quotesForDisplay = quotations;
-  const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
+    const totalQuotePages = Math.ceil(quotesForDisplay.length / PAGE_SIZE);
     const itemStatuses = useMemo(() => {
         if (!requisition || !requisition.items) return [] as any[];
         return requisition.items.flatMap(item => {
@@ -3277,181 +3309,181 @@ export default function QuotationDetailsPage() {
             }));
         });
     }, [requisition]);
-  
-  const fetchRequisitionAndQuotes = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
 
-    try {
-        const [reqResponse, venResponse, quoResponse] = await Promise.all([
-            fetch(`/api/requisitions/${id}`),
-            fetch('/api/vendors'),
-            fetch(`/api/quotations?requisitionId=${id}`),
-        ]);
-        const currentReq = await reqResponse.json();
-        const venData = await venResponse.json();
-        let quoData: Quotation[] = await quoResponse.json();
+    const fetchRequisitionAndQuotes = useCallback(async () => {
+        if (!id) return;
+        setLoading(true);
 
-        if (currentReq) {
-            setVendors(venData || []);
+        try {
+            const [reqResponse, venResponse, quoResponse] = await Promise.all([
+                fetch(`/api/requisitions/${id}`),
+                fetch('/api/vendors'),
+                fetch(`/api/quotations?requisitionId=${id}`),
+            ]);
+            const currentReq = await reqResponse.json();
+            const venData = await venResponse.json();
+            let quoData: Quotation[] = await quoResponse.json();
 
-            // --- Start of new frontend calculation logic ---
-            if (currentReq.evaluationCriteria && quoData.length > 0) {
-              quoData = quoData.map(quote => {
-                  const itemBids: {requisitionItemId: string; championBidScore: number;}[] = [];
+            if (currentReq) {
+                setVendors(venData || []);
 
-                  // Build set of quoteItemIds marked non-compliant by any committee member
-                  const nonCompliantIds = new Set<string>((quote.complianceSets || []).flatMap((s: any) => (s.itemCompliances || []).filter((ic: any) => ic.comply === false).map((ic: any) => ic.quoteItemId)));
+                // --- Start of new frontend calculation logic ---
+                if (currentReq.evaluationCriteria && quoData.length > 0) {
+                    quoData = quoData.map(quote => {
+                        const itemBids: { requisitionItemId: string; championBidScore: number; }[] = [];
 
-                  for (const reqItem of currentReq.items) {
-                      // Exclude proposals (quote items) that are marked non-compliant
-                      const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id && !nonCompliantIds.has(item.id));
-                      if (proposalsForItem.length === 0) continue;
+                        // Build set of quoteItemIds marked non-compliant by any committee member
+                        const nonCompliantIds = new Set<string>((quote.complianceSets || []).flatMap((s: any) => (s.itemCompliances || []).filter((ic: any) => ic.comply === false).map((ic: any) => ic.quoteItemId)));
 
-                      const calculatedProposals = proposalsForItem.map(proposal => {
-                          let totalItemScore = 0;
-                          let scoreCount = 0;
-                          quote.scores?.forEach(scoreSet => {
-                              const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
-                              if (itemScore) {
-                                  totalItemScore += itemScore.finalScore;
-                                  scoreCount++;
-                              }
-                          });
-                          return scoreCount > 0 ? totalItemScore / scoreCount : 0;
-                      });
+                        for (const reqItem of currentReq.items) {
+                            // Exclude proposals (quote items) that are marked non-compliant
+                            const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id && !nonCompliantIds.has(item.id));
+                            if (proposalsForItem.length === 0) continue;
 
-                      const championBidScore = Math.max(...calculatedProposals);
-                      itemBids.push({ requisitionItemId: reqItem.id, championBidScore });
-                  }
-                  
-                  const finalVendorScore = itemBids.length > 0
-                      ? itemBids.reduce((acc, bid) => acc + bid.championBidScore, 0) / itemBids.length
-                      : 0;
+                            const calculatedProposals = proposalsForItem.map(proposal => {
+                                let totalItemScore = 0;
+                                let scoreCount = 0;
+                                quote.scores?.forEach(scoreSet => {
+                                    const itemScore = scoreSet.itemScores.find(is => is.quoteItemId === proposal.id);
+                                    if (itemScore) {
+                                        totalItemScore += itemScore.finalScore;
+                                        scoreCount++;
+                                    }
+                                });
+                                return scoreCount > 0 ? totalItemScore / scoreCount : 0;
+                            });
 
-                  return { ...quote, finalAverageScore: finalVendorScore };
-              });
+                            const championBidScore = Math.max(...calculatedProposals);
+                            itemBids.push({ requisitionItemId: reqItem.id, championBidScore });
+                        }
+
+                        const finalVendorScore = itemBids.length > 0
+                            ? itemBids.reduce((acc, bid) => acc + bid.championBidScore, 0) / itemBids.length
+                            : 0;
+
+                        return { ...quote, finalAverageScore: finalVendorScore };
+                    });
+                }
+                // --- End of new frontend calculation logic ---
+
+                setRequisition({ ...currentReq, quotations: quoData });
+                setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+            } else {
+                toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
             }
-            // --- End of new frontend calculation logic ---
 
-            setRequisition({...currentReq, quotations: quoData});
-            setQuotations(quoData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-        } else {
-            toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
+        } finally {
+            setLoading(false);
         }
+    }, [id, toast]);
 
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch data.' });
-    } finally {
-        setLoading(false);
-    }
-  }, [id, toast]);
+    useEffect(() => {
+        if (id && user) {
+            fetchRequisitionAndQuotes();
+        }
+    }, [id, user, fetchRequisitionAndQuotes]);
 
-  useEffect(() => {
-    if (id && user) {
-        fetchRequisitionAndQuotes();
-    }
-  }, [id, user, fetchRequisitionAndQuotes]);
-  
-  useEffect(() => {
-    if (!requisition || !user || !token || deadlineCheckPerformed) return;
+    useEffect(() => {
+        if (!requisition || !user || !token || deadlineCheckPerformed) return;
 
-    const checkAndDecline = async () => {
-        let needsRefetch = false;
-        
-        if (requisition.awardResponseDeadline && isPast(new Date(requisition.awardResponseDeadline))) {
-            const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
-            
-            if (awardStrategy === 'item') {
-                 for (const item of requisition.items) {
-                    const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-                    const awardedDetail = perItemDetails.find(d => d.status === 'Awarded' || d.status === 'Pending_Award');
-                    
-                    if (awardedDetail) {
-                         needsRefetch = true;
-                         await fetch(`/api/quotations/${awardedDetail.quotationId}/respond`, {
+        const checkAndDecline = async () => {
+            let needsRefetch = false;
+
+            if (requisition.awardResponseDeadline && isPast(new Date(requisition.awardResponseDeadline))) {
+                const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
+
+                if (awardStrategy === 'item') {
+                    for (const item of requisition.items) {
+                        const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+                        const awardedDetail = perItemDetails.find(d => d.status === 'Awarded' || d.status === 'Pending_Award');
+
+                        if (awardedDetail) {
+                            needsRefetch = true;
+                            await fetch(`/api/quotations/${awardedDetail.quotationId}/respond`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                body: JSON.stringify({ actor: user, action: 'reject', quoteItemId: awardedDetail.quoteItemId, rejectionReason: 'deadline is passed' })
+                            });
+                        }
+                    }
+                } else { // Single award
+                    const awardedQuote = quotations.find(q => q.status === 'Awarded' || q.status === 'Pending_Award');
+                    if (awardedQuote) {
+                        needsRefetch = true;
+                        await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                            body: JSON.stringify({ actor: user, action: 'reject', quoteItemId: awardedDetail.quoteItemId, rejectionReason: 'deadline is passed' })
+                            body: JSON.stringify({ actor: user, action: 'reject', rejectionReason: 'deadline is passed' })
                         });
                     }
                 }
-            } else { // Single award
-                 const awardedQuote = quotations.find(q => q.status === 'Awarded' || q.status === 'Pending_Award');
-                 if (awardedQuote) {
-                     needsRefetch = true;
-                      await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ actor: user, action: 'reject', rejectionReason: 'deadline is passed' })
-                    });
-                 }
             }
-        }
-        
-        setDeadlineCheckPerformed(true);
 
-        if (needsRefetch) {
-            toast({ title: 'Deadline Expired', description: 'An awarded vendor failed to respond in time. The award has been automatically declined.' });
+            setDeadlineCheckPerformed(true);
+
+            if (needsRefetch) {
+                toast({ title: 'Deadline Expired', description: 'An awarded vendor failed to respond in time. The award has been automatically declined.' });
+                fetchRequisitionAndQuotes();
+            }
+        };
+
+        checkAndDecline();
+    }, [requisition, quotations, user, token, toast, fetchRequisitionAndQuotes, deadlineCheckPerformed]);
+
+
+    const handleFinalizeScores = async (
+        awardStrategy: 'all' | 'item',
+        awards: any,
+        awardResponseDeadline?: Date,
+        minuteDocumentUrl?: string,
+        minuteJustification?: string
+    ) => {
+        if (!user || !requisition || !quotations || !token) return;
+
+
+        setIsFinalizing(true);
+        try {
+            const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, minuteDocumentUrl, minuteJustification }),
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                // Special handling for no compliant vendor error
+                if (errorData.error && errorData.error.includes('No vendor is compliant for all champion bids')) {
+                    setShowNoCompliantDialog(true);
+                    return;
+                }
+                throw new Error(errorData.error || 'Failed to finalize scores.');
+            }
+            toast({ title: 'Success', description: 'Scores have been finalized and awards are being routed for final review.' });
             fetchRequisitionAndQuotes();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsFinalizing(false);
+            setSingleAwardCenterOpen(false);
+            setBestItemAwardCenterOpen(false);
         }
     };
+    // Handler for Restart RFQ from error dialog
+    const handleRestartRfqFromError = () => {
+        setShowNoCompliantDialog(false);
+        setActionDialog({ isOpen: true, type: 'restart' });
+    };
 
-    checkAndDecline();
-  }, [requisition, quotations, user, token, toast, fetchRequisitionAndQuotes, deadlineCheckPerformed]);
-
-
-  const handleFinalizeScores = async (
-    awardStrategy: 'all' | 'item', 
-    awards: any, 
-    awardResponseDeadline?: Date,
-    minuteDocumentUrl?: string,
-    minuteJustification?: string
-) => {
-    if (!user || !requisition || !quotations || !token) return;
-    
-
-    setIsFinalizing(true);
-    try {
-        const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, minuteDocumentUrl, minuteJustification }),
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            // Special handling for no compliant vendor error
-            if (errorData.error && errorData.error.includes('No vendor is compliant for all champion bids')) {
-                setShowNoCompliantDialog(true);
-                return;
-            }
-            throw new Error(errorData.error || 'Failed to finalize scores.');
-        }
-        toast({ title: 'Success', description: 'Scores have been finalized and awards are being routed for final review.' });
-        fetchRequisitionAndQuotes();
-    } catch (error) {
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: error instanceof Error ? error.message : 'An unknown error occurred.',
-        });
-    } finally {
-        setIsFinalizing(false);
-        setSingleAwardCenterOpen(false);
-        setBestItemAwardCenterOpen(false);
-    }
-};
-// Handler for Restart RFQ from error dialog
-const handleRestartRfqFromError = () => {
-    setShowNoCompliantDialog(false);
-    setActionDialog({ isOpen: true, type: 'restart' });
-};
-
-// Handler for Change Award Type from error dialog
-const handleChangeAwardTypeFromError = () => {
-    setShowNoCompliantDialog(false);
-    setBestItemAwardCenterOpen(true);
-};
+    // Handler for Change Award Type from error dialog
+    const handleChangeAwardTypeFromError = () => {
+        setShowNoCompliantDialog(false);
+        setBestItemAwardCenterOpen(true);
+    };
 
     const handleAwardChange = async () => {
         if (!user || !id || !requisition || !token) return;
@@ -3479,61 +3511,61 @@ const handleChangeAwardTypeFromError = () => {
         }
     }
 
-  const handleNotifyVendor = async (deadline?: Date) => {
-    if (!user || !requisition || !token) return;
-    setIsNotifying(true);
-    try {
-      const response = await fetch(`/api/requisitions/${requisition.id}/notify-vendor`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ userId: user.id, awardResponseDeadline: deadline })
-      });
+    const handleNotifyVendor = async (deadline?: Date) => {
+        if (!user || !requisition || !token) return;
+        setIsNotifying(true);
+        try {
+            const response = await fetch(`/api/requisitions/${requisition.id}/notify-vendor`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ userId: user.id, awardResponseDeadline: deadline })
+            });
 
-      if (!response.ok) {
+            if (!response.ok) {
                 const errorData = await response.json().catch(() => ({} as any));
                 throw new Error(errorData.error || "Failed to notify vendor.");
-      }
+            }
 
             const data = await response.json().catch(() => ({} as any));
             const serverMessage = (data as any)?.message as string | undefined;
             const isComingSoon = typeof serverMessage === 'string' && serverMessage.toLowerCase().includes('coming soon');
 
-      toast({
+            toast({
                 title: isComingSoon ? 'Notification coming soon' : 'Vendor Notified',
                 description: isComingSoon
                     ? 'Manual quotation award will proceed without vendor portal response.'
                     : (serverMessage || 'The winning vendor has been notified and the award is pending their response.')
-      });
-      fetchRequisitionAndQuotes();
-    } catch (error) {
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: error instanceof Error ? error.message : 'An unknown error occurred.',
-        });
-    } finally {
-        setIsNotifying(false);
+            });
+            fetchRequisitionAndQuotes();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsNotifying(false);
+        }
     }
-  }
 
-  const handleScoreButtonClick = (quote: Quotation, hidePrices: boolean) => {
-    setSelectedQuoteForScoring(quote);
-    setHidePricesForScoring(hidePrices);
-    setScoringFormOpen(true);
-  }
-  
-  const handleViewDetailsClick = (quote: Quotation) => {
-    setSelectedQuoteForDetails(quote);
-  };
+    const handleScoreButtonClick = (quote: Quotation, hidePrices: boolean) => {
+        setSelectedQuoteForScoring(quote);
+        setHidePricesForScoring(hidePrices);
+        setScoringFormOpen(true);
+    }
 
-  const handleScoreSubmitted = () => {
-      setScoringFormOpen(false);
-      setSelectedQuoteForScoring(null);
-      setCommitteeTab('scored'); // Switch to scored tab after submission
-      fetchRequisitionAndQuotes();
-  }
+    const handleViewDetailsClick = (quote: Quotation) => {
+        setSelectedQuoteForDetails(quote);
+    };
 
-  const isProcurementActionAllowed = isAuthorized && (requisition?.status === 'PreApproved' || requisition?.status === 'Accepting_Quotes');
+    const handleScoreSubmitted = () => {
+        setScoringFormOpen(false);
+        setSelectedQuoteForScoring(null);
+        setCommitteeTab('scored'); // Switch to scored tab after submission
+        fetchRequisitionAndQuotes();
+    }
+
+    const isProcurementActionAllowed = isAuthorized && (requisition?.status === 'PreApproved' || requisition?.status === 'Accepting_Quotes');
 
     const invitedVendorsForStatus = useMemo(() => {
         if (!requisition) return [] as Vendor[];
@@ -3554,509 +3586,509 @@ const handleChangeAwardTypeFromError = () => {
         return verifiedVendors.filter((v) => invitedIdSet.has(v.id));
     }, [requisition, vendors]);
 
-  if (loading || !user || !requisition) {
-     return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  }
+    if (loading || !user || !requisition) {
+        return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    }
 
     const canManageCommittees = isAuthorized;
-        const isMasked = (requisition.rfqSettings?.masked === true) || (readyForCommitteeAssignment && requisition.rfqSettings?.masked !== false);
+    const isMasked = (requisition.rfqSettings?.masked === true) || (readyForCommitteeAssignment && requisition.rfqSettings?.masked !== false);
     const canAddManualQuotation = isAuthorized && requisition.status === 'Accepting_Quotes' && (!isMasked || quorumNotMetAndDeadlinePassed);
-  const isReadyForNotification = requisition?.status === 'PostApproved';
+    const isReadyForNotification = requisition?.status === 'PostApproved';
     const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition?.status === 'Accepting_Quotes';
-  
-  const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
-  
-  const showAwardingCenter = (requisition.status === 'Scoring_Complete') && isAuthorized;
-  const awardIsDeclined = requisition.status === 'Award_Declined';
 
-  const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
-  const hasDeclinedWithStandby = isPerItemStrategy && requisition.items.some(item => {
-      const details = (item.perItemAwardDetails as any[]) || [];
-      return details.some(d => d.status === 'Declined') && details.some(d => d.status === 'Standby');
-  });
-  const hasFailedOrDeclined = isPerItemStrategy && requisition.items.some(item => {
-      const details = (item.perItemAwardDetails as any[]) || [];
-      return details.some(d => d.status === 'Declined' || d.status === 'Failed_to_Award');
-  });
-  
-  const hasAssignedCommittee = (requisition.financialCommitteeMemberIds && requisition.financialCommitteeMemberIds.length > 0) || (requisition.technicalCommitteeMemberIds && requisition.technicalCommitteeMemberIds.length > 0);
-  const isScoringStarted = requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes';
+    const canViewCumulativeReport = isAwarded && isScoringComplete && (isAuthorized || isAssignedCommitteeMember || isReviewer);
+
+    const showAwardingCenter = (requisition.status === 'Scoring_Complete') && isAuthorized;
+    const awardIsDeclined = requisition.status === 'Award_Declined';
+
+    const isPerItemStrategy = (requisition.rfqSettings as any)?.awardStrategy === 'item';
+    const hasDeclinedWithStandby = isPerItemStrategy && requisition.items.some(item => {
+        const details = (item.perItemAwardDetails as any[]) || [];
+        return details.some(d => d.status === 'Declined') && details.some(d => d.status === 'Standby');
+    });
+    const hasFailedOrDeclined = isPerItemStrategy && requisition.items.some(item => {
+        const details = (item.perItemAwardDetails as any[]) || [];
+        return details.some(d => d.status === 'Declined' || d.status === 'Failed_to_Award');
+    });
+
+    const hasAssignedCommittee = (requisition.financialCommitteeMemberIds && requisition.financialCommitteeMemberIds.length > 0) || (requisition.technicalCommitteeMemberIds && requisition.technicalCommitteeMemberIds.length > 0);
+    const isScoringStarted = requisition.status !== 'PreApproved' && requisition.status !== 'Accepting_Quotes';
 
 
-  return (
-    <div className="space-y-6">
-       <div className="flex items-center justify-between">
-          <Button variant="outline" onClick={() => router.back()}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-          </Button>
-           <div className="flex items-center gap-2">
-                {isAwarded && (
-                  <Button asChild variant="secondary" onClick={() => router.push(`/requisitions/${id}/award-details`)}>
-                      <Link href={`/requisitions/${id}/award-details`}><Calculator className="mr-2 h-4 w-4" /> View Calculation</Link>
-                  </Button>
-                )}
-                <Button variant="secondary" onClick={() => setReportOpen(true)}>
-                    <FileBarChart2 className="mr-2 h-4 w-4" /> View Spec Compliance Report
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <Button variant="outline" onClick={() => router.back()}>
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back
                 </Button>
-           </div>
-        </div>
-
-
-        <Card className="p-4 sm:p-6">
-            <WorkflowStepper step={currentStep} />
-        </Card>
-
-        {isProcurementActionAllowed && (
-          <Accordion type="multiple" className="w-full space-y-4">
-              <EditableCriteria requisition={requisition} onUpdate={fetchRequisitionAndQuotes} />
-              <EditableQuestions requisition={requisition} onUpdate={fetchRequisitionAndQuotes} />
-          </Accordion>
-        )}
-
-        {noBidsAndDeadlinePassed && isAuthorized && (
-            <Card className="border-amber-500">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> RFQ Closed: No Bids Received</CardTitle>
-                    <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardDescription>
-                </CardHeader>
-                <CardFooter className="gap-2">
-                    <Button onClick={() => setActionDialog({isOpen: true, type: 'restart'})}>
-                        <RefreshCw className="mr-2 h-4 w-4" /> Restart RFQ
+                <div className="flex items-center gap-2">
+                    {isAwarded && (
+                        <Button asChild variant="secondary" onClick={() => router.push(`/requisitions/${id}/award-details`)}>
+                            <Link href={`/requisitions/${id}/award-details`}><Calculator className="mr-2 h-4 w-4" /> View Calculation</Link>
+                        </Button>
+                    )}
+                    <Button variant="secondary" onClick={() => setReportOpen(true)}>
+                        <FileBarChart2 className="mr-2 h-4 w-4" /> View Spec Compliance Report
                     </Button>
-                    <Button variant="destructive" onClick={() => setActionDialog({isOpen: true, type: 'cancel'})}>
-                        <XCircle className="mr-2 h-4 w-4" /> Cancel RFQ
-                    </Button>
-                </CardFooter>
-            </Card>
-        )}
-
-        {quorumNotMetAndDeadlinePassed && isAuthorized && (
-            <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
-        )}
-        
-        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && (
-            <div className="grid md:grid-cols-2 gap-6 items-start">
-                <RFQDistribution
-                    requisition={requisition}
-                    vendors={vendors}
-                    onRfqSent={fetchRequisitionAndQuotes}
-                    isAuthorized={isAuthorized}
-                />
-                <Card className="border-dashed h-full">
-                    <CardHeader>
-                        <CardTitle>Evaluation Committee</CardTitle>
-                        <CardDescription>Committee assignment will be available after the quotation deadline has passed.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-col items-center justify-center text-center text-muted-foreground h-4/5">
-                        <Users className="h-12 w-12 mb-4" />
-                        <p>Waiting for vendor quotes...</p>
-                    </CardContent>
-                </Card>
+                </div>
             </div>
-        )}
-
-        {isAuthorized && requisition.deadline && (
-            <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="invited-vendors">
-                    <AccordionTrigger>
-                        <CardTitle className="text-lg">Invited Vendors</CardTitle>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                        <CardDescription className="mb-4">
-                            Track which invited vendors have submitted a quotation.
-                        </CardDescription>
-                        {invitedVendorsForStatus.length === 0 ? (
-                            <div className="text-sm text-muted-foreground">No invited vendors found.</div>
-                        ) : (
-                            <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Vendor</TableHead>
-                                            <TableHead>Status</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {invitedVendorsForStatus.map((vendor) => {
-                                            const hasSubmitted = quotations.some((q) => q.vendorId === vendor.id);
-                                            return (
-                                                <TableRow key={vendor.id}>
-                                                    <TableCell className="font-medium">{vendor.name}</TableCell>
-                                                    <TableCell>
-                                                        <Badge
-                                                            variant={hasSubmitted ? 'default' : 'secondary'}
-                                                            className={hasSubmitted ? 'bg-green-600 text-white hover:bg-green-600' : undefined}
-                                                        >
-                                                            {hasSubmitted ? 'Submitted' : 'Not Submitted'}
-                                                        </Badge>
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        )}
-                    </AccordionContent>
-                </AccordionItem>
-            </Accordion>
-        )}
-
-        <ManageRFQ
-            requisition={requisition}
-            onSuccess={fetchRequisitionAndQuotes}
-            isAuthorized={isAuthorized}
-        />
-        
-        {(currentStep === 'committee' || readyForCommitteeAssignment) && canManageCommittees && (
-             <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="committee-management">
-                    <AccordionTrigger>
-                        <CardTitle className="flex items-center gap-2 text-lg"><Users /> Evaluation Committee (Scorers)</CardTitle>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                        {isMasked ? (
-                            <Card className="border-amber-500 bg-amber-50">
-                                <CardHeader>
-                                    <CardTitle>Director Verification Required</CardTitle>
-                                    <CardDescription>Vendor cards stay sealed and committee assignment is locked until all three directors enter their PINs.</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <DirectorPinVerification requisition={requisition} onUnmasked={fetchRequisitionAndQuotes} />
-                                </CardContent>
-                            </Card>
-                        ) : (
-                            (() => {
-                                const needsCompliance = (requisition.rfqSettings as any)?.needsCompliance;
-                                const isRfqSender = user && ((user.roles || []).some((r: any) => (typeof r === 'string' ? r === 'Procurement_Officer' : r?.name === 'Procurement_Officer')) || (user.roles || []).some((r: any) => (typeof r === 'string' ? r === 'Admin' : r?.name === 'Admin')));
-                                if (needsCompliance === undefined && isRfqSender && !quorumNotMetAndDeadlinePassed) {
-                                    return (
-                                        <Card className="border">
-                                            <CardHeader>
-                                                <CardTitle>Require Compliance Checks?</CardTitle>
-                                                <CardDescription>Choose whether this RFQ needs committee compliance checks before award.</CardDescription>
-                                            </CardHeader>
-                                            <CardContent>
-                                                <p className="text-sm text-muted-foreground">If you choose <strong>Yes</strong>, the committee will perform item-level comply/non-compliant checks before the award stage. If <strong>No</strong>, the requisition will skip compliance and proceed directly to award/finalize.</p>
-                                                <div className="mt-4 flex items-center gap-3">
-                                                    <Button onClick={async () => {
-                                                        try {
-                                                            const res = await fetch(`/api/requisitions/${requisition.id}/set-needs-compliance`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ needsCompliance: true }) });
-                                                            if (!res.ok) throw new Error((await res.json()).error || 'Failed');
-                                                            fetchRequisitionAndQuotes();
-                                                        } catch (e) { console.error(e); }
-                                                    }}>Yes — Require Compliance</Button>
-                                                    <Button variant="outline" onClick={async () => {
-                                                        try {
-                                                            const res = await fetch(`/api/requisitions/${requisition.id}/set-needs-compliance`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ needsCompliance: false }) });
-                                                            if (!res.ok) throw new Error((await res.json()).error || 'Failed');
-                                                            fetchRequisitionAndQuotes();
-                                                        } catch (e) { console.error(e); }
-                                                    }}>No — Skip Compliance</Button>
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    );
-                                }
-                                if (needsCompliance === true) {
-                                    return (
-                                        <EvaluationCommitteeManagement
-                                            requisition={requisition}
-                                            onCommitteeUpdated={fetchRequisitionAndQuotes}
-                                            open={isCommitteeDialogOpen}
-                                            onOpenChange={setCommitteeDialogOpen}
-                                            isAuthorized={isAuthorized}
-                                            isEditDisabled={isAwarded}
-                                        />
-                                    );
-                                }
-                                return (
-                                    <Card className="border">
-                                        <CardHeader>
-                                            <CardTitle>Compliance Skipped</CardTitle>
-                                            <CardDescription>This RFQ is configured to skip committee compliance checks and can proceed to award/finalize.</CardDescription>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <p className="text-sm text-muted-foreground">You may proceed to the award center to finalize the award.</p>
-                                        </CardContent>
-                                    </Card>
-                                );
-                            })()
-                        )}
-                    </AccordionContent>
-                </AccordionItem>
-            </Accordion>
-        )}
 
 
-        {(currentStep !== 'rfq') && (
-            <div className="w-full flex flex-col gap-4">
-                {/* Quotation Overview Accordion (now on top) */}
-                <Accordion type="single" collapsible className="w-full" defaultValue="quotation-overview">
-                    <AccordionItem value="quotation-overview">
+            <Card className="p-4 sm:p-6">
+                <WorkflowStepper step={currentStep} />
+            </Card>
+
+            {isProcurementActionAllowed && (
+                <Accordion type="multiple" className="w-full space-y-4">
+                    <EditableCriteria requisition={requisition} onUpdate={fetchRequisitionAndQuotes} />
+                    <EditableQuestions requisition={requisition} onUpdate={fetchRequisitionAndQuotes} />
+                </Accordion>
+            )}
+
+            {noBidsAndDeadlinePassed && isAuthorized && (
+                <Card className="border-amber-500">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle /> RFQ Closed: No Bids Received</CardTitle>
+                        <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardDescription>
+                    </CardHeader>
+                    <CardFooter className="gap-2">
+                        <Button onClick={() => setActionDialog({ isOpen: true, type: 'restart' })}>
+                            <RefreshCw className="mr-2 h-4 w-4" /> Restart RFQ
+                        </Button>
+                        <Button variant="destructive" onClick={() => setActionDialog({ isOpen: true, type: 'cancel' })}>
+                            <XCircle className="mr-2 h-4 w-4" /> Cancel RFQ
+                        </Button>
+                    </CardFooter>
+                </Card>
+            )}
+
+            {quorumNotMetAndDeadlinePassed && isAuthorized && (
+                <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
+            )}
+
+            {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && (
+                <div className="grid md:grid-cols-2 gap-6 items-start">
+                    <RFQDistribution
+                        requisition={requisition}
+                        vendors={vendors}
+                        onRfqSent={fetchRequisitionAndQuotes}
+                        isAuthorized={isAuthorized}
+                    />
+                    <Card className="border-dashed h-full">
+                        <CardHeader>
+                            <CardTitle>Evaluation Committee</CardTitle>
+                            <CardDescription>Committee assignment will be available after the quotation deadline has passed.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col items-center justify-center text-center text-muted-foreground h-4/5">
+                            <Users className="h-12 w-12 mb-4" />
+                            <p>Waiting for vendor quotes...</p>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {isAuthorized && requisition.deadline && (
+                <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="invited-vendors">
                         <AccordionTrigger>
-                            <CardTitle className="flex items-center gap-2 text-lg"><FileBadge/> Quotation Overview</CardTitle>
+                            <CardTitle className="text-lg">Invited Vendors</CardTitle>
                         </AccordionTrigger>
                         <AccordionContent>
-                            {readyForCommitteeAssignment && isMasked && (
-                                <Card className="mb-4 border-amber-200">
+                            <CardDescription className="mb-4">
+                                Track which invited vendors have submitted a quotation.
+                            </CardDescription>
+                            {invitedVendorsForStatus.length === 0 ? (
+                                <div className="text-sm text-muted-foreground">No invited vendors found.</div>
+                            ) : (
+                                <div className="rounded-md border">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Vendor</TableHead>
+                                                <TableHead>Status</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {invitedVendorsForStatus.map((vendor) => {
+                                                const hasSubmitted = quotations.some((q) => q.vendorId === vendor.id);
+                                                return (
+                                                    <TableRow key={vendor.id}>
+                                                        <TableCell className="font-medium">{vendor.name}</TableCell>
+                                                        <TableCell>
+                                                            <Badge
+                                                                variant={hasSubmitted ? 'default' : 'secondary'}
+                                                                className={hasSubmitted ? 'bg-green-600 text-white hover:bg-green-600' : undefined}
+                                                            >
+                                                                {hasSubmitted ? 'Submitted' : 'Not Submitted'}
+                                                            </Badge>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            )}
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
+            )}
+
+            <ManageRFQ
+                requisition={requisition}
+                onSuccess={fetchRequisitionAndQuotes}
+                isAuthorized={isAuthorized}
+            />
+
+            {(currentStep === 'committee' || readyForCommitteeAssignment) && canManageCommittees && (
+                <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="committee-management">
+                        <AccordionTrigger>
+                            <CardTitle className="flex items-center gap-2 text-lg"><Users /> Evaluation Committee (Scorers)</CardTitle>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                            {isMasked ? (
+                                <Card className="border-amber-500 bg-amber-50">
                                     <CardHeader>
-                                        <CardTitle>Director Verification</CardTitle>
-                                        <CardDescription>Generate one-time PINs and verify directors to unseal vendor quotes.</CardDescription>
+                                        <CardTitle>Director Verification Required</CardTitle>
+                                        <CardDescription>Vendor cards stay sealed and committee assignment is locked until all three directors enter their PINs.</CardDescription>
                                     </CardHeader>
                                     <CardContent>
                                         <DirectorPinVerification requisition={requisition} onUnmasked={fetchRequisitionAndQuotes} />
                                     </CardContent>
                                 </Card>
+                            ) : (
+                                (() => {
+                                    const needsCompliance = (requisition.rfqSettings as any)?.needsCompliance;
+                                    const isRfqSender = user && ((user.roles || []).some((r: any) => (typeof r === 'string' ? r === 'Procurement_Officer' : r?.name === 'Procurement_Officer')) || (user.roles || []).some((r: any) => (typeof r === 'string' ? r === 'Admin' : r?.name === 'Admin')));
+                                    if (needsCompliance === undefined && isRfqSender && !quorumNotMetAndDeadlinePassed) {
+                                        return (
+                                            <Card className="border">
+                                                <CardHeader>
+                                                    <CardTitle>Require Compliance Checks?</CardTitle>
+                                                    <CardDescription>Choose whether this RFQ needs committee compliance checks before award.</CardDescription>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <p className="text-sm text-muted-foreground">If you choose <strong>Yes</strong>, the committee will perform item-level comply/non-compliant checks before the award stage. If <strong>No</strong>, the requisition will skip compliance and proceed directly to award/finalize.</p>
+                                                    <div className="mt-4 flex items-center gap-3">
+                                                        <Button onClick={async () => {
+                                                            try {
+                                                                const res = await fetch(`/api/requisitions/${requisition.id}/set-needs-compliance`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ needsCompliance: true }) });
+                                                                if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+                                                                fetchRequisitionAndQuotes();
+                                                            } catch (e) { console.error(e); }
+                                                        }}>Yes — Require Compliance</Button>
+                                                        <Button variant="outline" onClick={async () => {
+                                                            try {
+                                                                const res = await fetch(`/api/requisitions/${requisition.id}/set-needs-compliance`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ needsCompliance: false }) });
+                                                                if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+                                                                fetchRequisitionAndQuotes();
+                                                            } catch (e) { console.error(e); }
+                                                        }}>No — Skip Compliance</Button>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    }
+                                    if (needsCompliance === true) {
+                                        return (
+                                            <EvaluationCommitteeManagement
+                                                requisition={requisition}
+                                                onCommitteeUpdated={fetchRequisitionAndQuotes}
+                                                open={isCommitteeDialogOpen}
+                                                onOpenChange={setCommitteeDialogOpen}
+                                                isAuthorized={isAuthorized}
+                                                isEditDisabled={isAwarded}
+                                            />
+                                        );
+                                    }
+                                    return (
+                                        <Card className="border">
+                                            <CardHeader>
+                                                <CardTitle>Compliance Skipped</CardTitle>
+                                                <CardDescription>This RFQ is configured to skip committee compliance checks and can proceed to award/finalize.</CardDescription>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <p className="text-sm text-muted-foreground">You may proceed to the award center to finalize the award.</p>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })()
                             )}
-
-                            <Card className="border-0 shadow-none">
-                                <CardHeader>
-                                    <CardDescription className="text-base font-semibold text-foreground">{requisition.title}</CardDescription>
-                                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
-                                        {requisition.deadline && (
-                                            <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
-                                                <CalendarIcon className="h-4 w-4"/>
-                                                <span>Quote Deadline:</span>
-                                                <span className="font-semibold text-foreground">{format(new Date(requisition.deadline), 'PPpp')}</span>
-                                            </div>
-                                        )}
-                                        {requisition.scoringDeadline && (
-                                            <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
-                                                    <Timer className="h-4 w-4"/>
-                                                    <span>Compliance Deadline:</span>
-                                                    <span className="font-semibold text-foreground">{format(new Date(requisition.scoringDeadline), 'PPpp')}</span>
-                                                </div>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-4 mt-2 text-sm" />
-                                    {canAddManualQuotation && (
-                                        <div className="mt-4 flex items-center justify-end">
-                                            <Button onClick={() => setIsManualQuoteOpen(true)}>
-                                                <FileUp className="mr-2 h-4 w-4" />
-                                                Add Vendor Quotation
-                                            </Button>
-                                        </div>
-                                    )}
-                                </CardHeader>
-                                <CardContent>
-                                    {loading ? (
-                                        <div className="flex items-center justify-center h-24">
-                                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                        </div>
-                                    ) : (
-                                        <QuoteComparison quotes={quotesForDisplay} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember} readyForCommitteeAssignment={readyForCommitteeAssignment} quorumNotMetAndDeadlinePassed={quorumNotMetAndDeadlinePassed} />
-                                    )}
-                                </CardContent>
-
-                                {totalQuotePages > 1 && (
-                                    <CardFooter className="flex items-center justify-end gap-2 pt-4">
-                                        <span className="text-sm text-muted-foreground">Page {currentQuotesPage} of {totalQuotePages}</span>
-                                        <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(1)} disabled={currentQuotesPage === 1}><ChevronsLeft /></Button>
-                                        <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p - 1)} disabled={currentQuotesPage === 1}><ChevronLeft /></Button>
-                                        <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p + 1)} disabled={currentQuotesPage === totalQuotePages}><ChevronRight /></Button>
-                                        <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(totalQuotePages)} disabled={currentQuotesPage === totalQuotePages}><ChevronsRight /></Button>
-                                    </CardFooter>
-                                )}
-
-                                {isAccepted && (
-                                    <CardFooter>
-                                        <Alert variant="default" className="w-full border-green-600">
-                                            <CheckCircle className="h-4 w-4 text-green-600" />
-                                            <AlertTitle>Award Accepted</AlertTitle>
-                                            <AlertDescription>
-                                                The vendor has accepted the award. The PO has been generated.
-                                            </AlertDescription>
-                                        </Alert>
-                                    </CardFooter>
-                                )}
-                            </Card>
-
-                            <ManualVendorQuotationDialog
-                                requisition={requisition}
-                                vendors={vendors}
-                                existingQuotations={quotations}
-                                isOpen={isManualQuoteOpen}
-                                onOpenChange={setIsManualQuoteOpen}
-                                onSubmitted={fetchRequisitionAndQuotes}
-                            />
                         </AccordionContent>
                     </AccordionItem>
                 </Accordion>
+            )}
 
-                {/* Compliance Progress Accordion (now at bottom) */}
-                {(readyForCommitteeAssignment && (requisition.rfqSettings?.needsCompliance) && (isAuthorized)) && (
-                    <Accordion type="single" collapsible className="w-full" defaultValue="compliance-progress">
-                        <AccordionItem value="compliance-progress">
+
+            {(currentStep !== 'rfq') && (
+                <div className="w-full flex flex-col gap-4">
+                    {/* Quotation Overview Accordion (now on top) */}
+                    <Accordion type="single" collapsible className="w-full" defaultValue="quotation-overview">
+                        <AccordionItem value="quotation-overview">
                             <AccordionTrigger>
-                                <CardTitle className="flex items-center gap-2 text-lg"><GanttChart /> Compliance Progress</CardTitle>
+                                <CardTitle className="flex items-center gap-2 text-lg"><FileBadge /> Quotation Overview</CardTitle>
                             </AccordionTrigger>
                             <AccordionContent>
-                                <ScoringProgressTracker
+                                {readyForCommitteeAssignment && isMasked && (
+                                    <Card className="mb-4 border-amber-200">
+                                        <CardHeader>
+                                            <CardTitle>Director Verification</CardTitle>
+                                            <CardDescription>Generate one-time PINs and verify directors to unseal vendor quotes.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <DirectorPinVerification requisition={requisition} onUnmasked={fetchRequisitionAndQuotes} />
+                                        </CardContent>
+                                    </Card>
+                                )}
+
+                                <Card className="border-0 shadow-none">
+                                    <CardHeader>
+                                        <CardDescription className="text-base font-semibold text-foreground">{requisition.title}</CardDescription>
+                                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
+                                            {requisition.deadline && (
+                                                <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                                                    <CalendarIcon className="h-4 w-4" />
+                                                    <span>Quote Deadline:</span>
+                                                    <span className="font-semibold text-foreground">{format(new Date(requisition.deadline), 'PPpp')}</span>
+                                                </div>
+                                            )}
+                                            {requisition.scoringDeadline && (
+                                                <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                                                    <Timer className="h-4 w-4" />
+                                                    <span>Compliance Deadline:</span>
+                                                    <span className="font-semibold text-foreground">{format(new Date(requisition.scoringDeadline), 'PPpp')}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-4 mt-2 text-sm" />
+                                        {canAddManualQuotation && (
+                                            <div className="mt-4 flex items-center justify-end">
+                                                <Button onClick={() => setIsManualQuoteOpen(true)}>
+                                                    <FileUp className="mr-2 h-4 w-4" />
+                                                    Add Vendor Quotation
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </CardHeader>
+                                    <CardContent>
+                                        {loading ? (
+                                            <div className="flex items-center justify-center h-24">
+                                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                            </div>
+                                        ) : (
+                                            <QuoteComparison quotes={quotesForDisplay} requisition={requisition} onViewDetails={handleViewDetailsClick} onScore={handleScoreButtonClick} user={user!} role={role} isDeadlinePassed={isDeadlinePassed} isScoringDeadlinePassed={isScoringDeadlinePassed} itemStatuses={itemStatuses} isAwarded={isAwarded} isScoringComplete={isScoringComplete} isAssignedCommitteeMember={isAssignedCommitteeMember} readyForCommitteeAssignment={readyForCommitteeAssignment} quorumNotMetAndDeadlinePassed={quorumNotMetAndDeadlinePassed} />
+                                        )}
+                                    </CardContent>
+
+                                    {totalQuotePages > 1 && (
+                                        <CardFooter className="flex items-center justify-end gap-2 pt-4">
+                                            <span className="text-sm text-muted-foreground">Page {currentQuotesPage} of {totalQuotePages}</span>
+                                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(1)} disabled={currentQuotesPage === 1}><ChevronsLeft /></Button>
+                                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p - 1)} disabled={currentQuotesPage === 1}><ChevronLeft /></Button>
+                                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(p => p + 1)} disabled={currentQuotesPage === totalQuotePages}><ChevronRight /></Button>
+                                            <Button variant="outline" size="icon" onClick={() => setCurrentQuotesPage(totalQuotePages)} disabled={currentQuotesPage === totalQuotePages}><ChevronsRight /></Button>
+                                        </CardFooter>
+                                    )}
+
+                                    {isAccepted && (
+                                        <CardFooter>
+                                            <Alert variant="default" className="w-full border-green-600">
+                                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                                <AlertTitle>Award Accepted</AlertTitle>
+                                                <AlertDescription>
+                                                    The vendor has accepted the award. The PO has been generated.
+                                                </AlertDescription>
+                                            </Alert>
+                                        </CardFooter>
+                                    )}
+                                </Card>
+
+                                <ManualVendorQuotationDialog
                                     requisition={requisition}
-                                    quotations={quotations}
-                                    allUsers={allUsers}
-                                    onSuccess={fetchRequisitionAndQuotes}
-                                    onCommitteeUpdate={() => fetchRequisitionAndQuotes()}
-                                    isFinalizing={isFinalizing}
-                                    isAuthorized={isAuthorized}
+                                    vendors={vendors}
+                                    existingQuotations={quotations}
+                                    isOpen={isManualQuoteOpen}
+                                    onOpenChange={setIsManualQuoteOpen}
+                                    onSubmitted={fetchRequisitionAndQuotes}
                                 />
                             </AccordionContent>
                         </AccordionItem>
                     </Accordion>
-                )}
-            </div>
-        )}
 
-        {(showAwardingCenter || awardIsDeclined || (isPerItemStrategy && (hasDeclinedWithStandby || hasFailedOrDeclined))) && (
-            <Accordion type="single" collapsible className="w-full" defaultValue="awarding-center">
-                <AccordionItem value="awarding-center">
-                    <AccordionTrigger>
-                        <CardTitle className="flex items-center gap-2 text-lg"><TrophyIcon /> Awarding Center</CardTitle>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                        <Card className="mt-6 border-amber-400">
-                            <CardHeader>
-                                <CardDescription>
-                                {showAwardingCenter && 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
-                                {awardIsDeclined && 'An award was declined. You may now promote a standby vendor or restart the RFQ for any failed items.'}
-                                {isPerItemStrategy && hasDeclinedWithStandby && 'Per-item awards: declined items with standby detected — you may promote standby vendors.'}
-                                {isPerItemStrategy && hasFailedOrDeclined && 'Per-item awards: failed or declined items detected — you may restart RFQs for those items.'}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardFooter className="gap-4">
-                                <AwardStandbyButton
-                                    requisition={requisition}
-                                    quotations={quotations}
-                                    onPromote={handleAwardChange}
-                                    isChangingAward={isChangingAward}
-                                />
-
-                                {showAwardingCenter && (
-                                <>
-                                    <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
-                                    <DialogTrigger asChild>
-                                        <Button disabled={isFinalizing || !isAuthorized}>Award All to Single Vendor</Button>
-                                    </DialogTrigger>
-                                    <AwardCenterDialog
+                    {/* Compliance Progress Accordion (now at bottom) */}
+                    {(readyForCommitteeAssignment && (requisition.rfqSettings?.needsCompliance) && (isAuthorized)) && (
+                        <Accordion type="single" collapsible className="w-full" defaultValue="compliance-progress">
+                            <AccordionItem value="compliance-progress">
+                                <AccordionTrigger>
+                                    <CardTitle className="flex items-center gap-2 text-lg"><GanttChart /> Compliance Progress</CardTitle>
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                    <ScoringProgressTracker
                                         requisition={requisition}
                                         quotations={quotations}
-                                        onFinalize={handleFinalizeScores}
-                                        onClose={() => setSingleAwardCenterOpen(false)}
+                                        allUsers={allUsers}
+                                        onSuccess={fetchRequisitionAndQuotes}
+                                        onCommitteeUpdate={() => fetchRequisitionAndQuotes()}
+                                        isFinalizing={isFinalizing}
+                                        isAuthorized={isAuthorized}
                                     />
-                                    </Dialog>
+                                </AccordionContent>
+                            </AccordionItem>
+                        </Accordion>
+                    )}
+                </div>
+            )}
 
-                                    {requisition.items.length > 1 && (
-                                        <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
-                                        <DialogTrigger asChild>
-                                            <Button variant="secondary" disabled={isFinalizing || !isAuthorized}>
-                                            Award by Best Offer (Per Item)
-                                            </Button>
-                                        </DialogTrigger>
-                                        <BestItemAwardDialog
-                                            requisition={requisition}
-                                            quotations={quotations}
-                                            onFinalize={handleFinalizeScores}
-                                            isOpen={isBestItemAwardCenterOpen}
-                                            onClose={() => setBestItemAwardCenterOpen(false)}
-                                        />
-                                        </Dialog>
+            {(showAwardingCenter || awardIsDeclined || (isPerItemStrategy && (hasDeclinedWithStandby || hasFailedOrDeclined))) && (
+                <Accordion type="single" collapsible className="w-full" defaultValue="awarding-center">
+                    <AccordionItem value="awarding-center">
+                        <AccordionTrigger>
+                            <CardTitle className="flex items-center gap-2 text-lg"><TrophyIcon /> Awarding Center</CardTitle>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                            <Card className="mt-6 border-amber-400">
+                                <CardHeader>
+                                    <CardDescription>
+                                        {showAwardingCenter && 'Scoring is complete. Finalize scores and decide on the award strategy for this requisition.'}
+                                        {awardIsDeclined && 'An award was declined. You may now promote a standby vendor or restart the RFQ for any failed items.'}
+                                        {isPerItemStrategy && hasDeclinedWithStandby && 'Per-item awards: declined items with standby detected — you may promote standby vendors.'}
+                                        {isPerItemStrategy && hasFailedOrDeclined && 'Per-item awards: failed or declined items detected — you may restart RFQs for those items.'}
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardFooter className="gap-4">
+                                    <AwardStandbyButton
+                                        requisition={requisition}
+                                        quotations={quotations}
+                                        onPromote={handleAwardChange}
+                                        isChangingAward={isChangingAward}
+                                    />
+
+                                    {showAwardingCenter && (
+                                        <>
+                                            <Dialog open={isSingleAwardCenterOpen} onOpenChange={setSingleAwardCenterOpen}>
+                                                <DialogTrigger asChild>
+                                                    <Button disabled={isFinalizing || !isAuthorized}>Award All to Single Vendor</Button>
+                                                </DialogTrigger>
+                                                <AwardCenterDialog
+                                                    requisition={requisition}
+                                                    quotations={quotations}
+                                                    onFinalize={handleFinalizeScores}
+                                                    onClose={() => setSingleAwardCenterOpen(false)}
+                                                />
+                                            </Dialog>
+
+                                            {requisition.items.length > 1 && (
+                                                <Dialog open={isBestItemAwardCenterOpen} onOpenChange={setBestItemAwardCenterOpen}>
+                                                    <DialogTrigger asChild>
+                                                        <Button variant="secondary" disabled={isFinalizing || !isAuthorized}>
+                                                            Award by Best Offer (Per Item)
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <BestItemAwardDialog
+                                                        requisition={requisition}
+                                                        quotations={quotations}
+                                                        onFinalize={handleFinalizeScores}
+                                                        isOpen={isBestItemAwardCenterOpen}
+                                                        onClose={() => setBestItemAwardCenterOpen(false)}
+                                                    />
+                                                </Dialog>
+                                            )}
+                                        </>
                                     )}
-                                </>
-                                )}
 
-                                <RestartRfqDialog 
-                                    requisition={requisition} 
-                                    vendors={vendors} 
-                                    onRfqRestarted={fetchRequisitionAndQuotes}
-                                />
-                            </CardFooter>
-                        </Card>
-                    </AccordionContent>
-                </AccordionItem>
-            </Accordion>
-        )}
+                                    <RestartRfqDialog
+                                        requisition={requisition}
+                                        vendors={vendors}
+                                        onRfqRestarted={fetchRequisitionAndQuotes}
+                                    />
+                                </CardFooter>
+                            </Card>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
+            )}
 
 
-        {isReadyForNotification && isAuthorized && (
-            <Card className="mt-6 border-amber-500">
-                 <CardHeader>
-                    <CardTitle>Action Required: Notify Vendor</CardTitle>
-                    <CardDescription>The award has passed all reviews. You may now notify the winning vendor.</CardDescription>
-                </CardHeader>
-                <CardFooter>
-                     <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
-                        <DialogTrigger asChild>
-                             <Button disabled={isNotifying || requisition.status === 'Awarded' || !isAuthorized}>
-                                {isNotifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {requisition.status === 'Awarded' ? 'Notification Sent' : 'Send Award Notification'}
-                            </Button>
-                        </DialogTrigger>
-                        <NotifyVendorDialog
-                            isOpen={isNotifyDialogOpen}
-                            onClose={() => setIsNotifyDialogOpen(false)}
-                            onConfirm={(deadline) => {
-                                handleNotifyVendor(deadline);
-                                setIsNotifyDialogOpen(false);
-                            }}
-                        />
-                    </Dialog>
-                </CardFooter>
-            </Card>
-        )}
+            {isReadyForNotification && isAuthorized && (
+                <Card className="mt-6 border-amber-500">
+                    <CardHeader>
+                        <CardTitle>Action Required: Notify Vendor</CardTitle>
+                        <CardDescription>The award has passed all reviews. You may now notify the winning vendor.</CardDescription>
+                    </CardHeader>
+                    <CardFooter>
+                        <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button disabled={isNotifying || requisition.status === 'Awarded' || !isAuthorized}>
+                                    {isNotifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    {requisition.status === 'Awarded' ? 'Notification Sent' : 'Send Award Notification'}
+                                </Button>
+                            </DialogTrigger>
+                            <NotifyVendorDialog
+                                isOpen={isNotifyDialogOpen}
+                                onClose={() => setIsNotifyDialogOpen(false)}
+                                onConfirm={(deadline) => {
+                                    handleNotifyVendor(deadline);
+                                    setIsNotifyDialogOpen(false);
+                                }}
+                            />
+                        </Dialog>
+                    </CardFooter>
+                </Card>
+            )}
 
-        {isAccepted && requisition.status !== 'PO_Created' && role && !(user.roles as string[]).some(r => r.includes('Committee')) && (
-            <ContractManagement requisition={requisition} onContractFinalized={fetchRequisitionAndQuotes} />
-        )}
-         {requisition && (
-            <RequisitionDetailsDialog
+            {isAccepted && requisition.status !== 'PO_Created' && role && !(user.roles as string[]).some(r => r.includes('Committee')) && (
+                <ContractManagement requisition={requisition} onContractFinalized={fetchRequisitionAndQuotes} />
+            )}
+            {requisition && (
+                <RequisitionDetailsDialog
+                    requisition={requisition}
+                    isOpen={isDetailsOpen}
+                    onClose={() => setIsDetailsOpen(false)}
+                />
+            )}
+            {requisition && quotations && (
+                <CumulativeScoringReportDialog
+                    requisition={requisition}
+                    quotations={quotations}
+                    isOpen={isReportOpen}
+                    onClose={() => setReportOpen(false)}
+                />
+            )}
+            {selectedQuoteForDetails && requisition && (
+                <QuoteDetailsDialog
+                    quote={selectedQuoteForDetails}
+                    requisition={requisition}
+                    isOpen={!!selectedQuoteForDetails}
+                    onClose={() => setSelectedQuoteForDetails(null)}
+                />
+            )}
+            <RFQActionDialog
+                action={actionDialog.type}
                 requisition={requisition}
-                isOpen={isDetailsOpen}
-                onClose={() => setIsDetailsOpen(false)}
+                isOpen={actionDialog.isOpen}
+                onClose={() => setActionDialog({ isOpen: false, type: 'restart' })}
+                onSuccess={fetchRequisitionAndQuotes}
             />
-        )}
-        {requisition && quotations && (
-            <CumulativeScoringReportDialog
-                requisition={requisition}
-                quotations={quotations}
-                isOpen={isReportOpen}
-                onClose={() => setReportOpen(false)}
-            />
-        )}
-        {selectedQuoteForDetails && requisition && (
-            <QuoteDetailsDialog 
-                quote={selectedQuoteForDetails}
-                requisition={requisition}
-                isOpen={!!selectedQuoteForDetails}
-                onClose={() => setSelectedQuoteForDetails(null)}
-            />
-        )}
-        <RFQActionDialog
-            action={actionDialog.type}
-            requisition={requisition}
-            isOpen={actionDialog.isOpen}
-            onClose={() => setActionDialog({isOpen: false, type: 'restart'})}
-            onSuccess={fetchRequisitionAndQuotes}
-        />
 
-        {/* Dialog for No Compliant Vendor Error */}
-        <Dialog open={showNoCompliantDialog} onOpenChange={setShowNoCompliantDialog}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>No Vendor is Compliant for All Champion Bids</DialogTitle>
-                    <DialogDescription>
-                        The system could not award all items to a single vendor because no vendor is compliant for all champion bids. Please choose an action:
-                    </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                    <Button variant="destructive" onClick={handleRestartRfqFromError}>Restart RFQ (reset to PreApproved)</Button>
-                    <Button variant="secondary" onClick={handleChangeAwardTypeFromError}>Change Award Type (Best Offer Per Item)</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    </div>
-  );
+            {/* Dialog for No Compliant Vendor Error */}
+            <Dialog open={showNoCompliantDialog} onOpenChange={setShowNoCompliantDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>No Vendor is Compliant for All Champion Bids</DialogTitle>
+                        <DialogDescription>
+                            The system could not award all items to a single vendor because no vendor is compliant for all champion bids. Please choose an action:
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="destructive" onClick={handleRestartRfqFromError}>Restart RFQ (reset to PreApproved)</Button>
+                        <Button variant="secondary" onClick={handleChangeAwardTypeFromError}>Change Award Type (Best Offer Per Item)</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
 }
 
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
@@ -4065,7 +4097,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
-    
+
     const finalNewDeadline = useMemo(() => {
         if (!newDeadlineDate) return undefined;
         const [hours, minutes] = newDeadlineTime.split(':').map(Number);
@@ -4100,35 +4132,35 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     };
 
     return (
-         <Card className="border-amber-500">
+        <Card className="border-amber-500">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> Quorum Not Met</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle /> Quorum Not Met</CardTitle>
                 <CardDescription>
                     The submission deadline has passed, but not enough quotes were submitted. You can re-open the RFQ to all other verified vendors.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                 <div className="space-y-2">
+                <div className="space-y-2">
                     <Label>New Quotation Submission Deadline</Label>
                     <div className="flex gap-2">
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal",!newDeadlineDate && "text-muted-foreground")}>
+                                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !newDeadlineDate && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                     {newDeadlineDate ? format(newDeadlineDate, "PPP") : <span>Pick a new date</span>}
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" selected={newDeadlineDate} onSelect={setNewDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
+                                <Calendar mode="single" selected={newDeadlineDate} onSelect={setNewDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))} initialFocus />
                             </PopoverContent>
                         </Popover>
-                        <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
+                        <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)} />
                     </div>
                 </div>
             </CardContent>
             <CardFooter>
                 <Button onClick={handleReopen} disabled={isSubmitting || !finalNewDeadline}>
-                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} 
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                     Re-open RFQ
                 </Button>
             </CardFooter>

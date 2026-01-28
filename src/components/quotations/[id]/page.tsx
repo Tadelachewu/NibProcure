@@ -4,30 +4,30 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardFooter,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+    CardFooter,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from '@/components/ui/select';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-  DialogClose,
-  DialogDescription,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+    DialogFooter,
+    DialogClose,
+    DialogDescription,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -66,14 +66,14 @@ import { AwardStandbyButton } from '@/components/award-standby-button';
 import { RestartRfqDialog } from '@/components/restart-rfq-dialog';
 
 const quoteFormSchema = z.object({
-  notes: z.string().optional(),
-  items: z.array(z.object({
-    requisitionItemId: z.string(),
-    name: z.string().min(1, "Item name cannot be empty."),
-    quantity: z.number(),
-    unitPrice: z.coerce.number().min(0.01, "Price is required."),
-    leadTimeDays: z.coerce.number().min(0, "Lead time is required."),
-  })),
+    notes: z.string().optional(),
+    items: z.array(z.object({
+        requisitionItemId: z.string(),
+        name: z.string().min(1, "Item name cannot be empty."),
+        quantity: z.number(),
+        unitPrice: z.coerce.number().min(0.01, "Price is required."),
+        leadTimeDays: z.coerce.number().min(0, "Lead time is required."),
+    })),
 });
 
 const contractFormSchema = z.object({
@@ -135,7 +135,7 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
             setSubmitting(false);
         }
     };
-    
+
     // Filter for only verified vendors
     const verifiedVendors = vendors.filter(v => v.kycStatus === 'Verified');
 
@@ -149,19 +149,19 @@ function AddQuoteForm({ requisition, vendors, onQuoteAdded }: { requisition: Pur
             </DialogHeader>
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                     <FormField
+                    <FormField
                         control={form.control}
                         name="notes"
                         render={({ field }) => (
                             <FormItem>
-                            <FormLabel>Overall Notes</FormLabel>
-                            <FormControl>
-                                <Textarea placeholder="Any overall notes for this quote..." {...field} />
-                            </FormControl>
-                            <FormMessage />
+                                <FormLabel>Overall Notes</FormLabel>
+                                <FormControl>
+                                    <Textarea placeholder="Any overall notes for this quote..." {...field} />
+                                </FormControl>
+                                <FormMessage />
                             </FormItem>
                         )}
-                        />
+                    />
                     <div className="space-y-4 max-h-64 overflow-y-auto pr-2">
                         {fields.map((field, index) => (
                             <Card key={field.id} className="p-4">
@@ -217,7 +217,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             </div>
         );
     }
-    
+
     const getStatusVariant = (status: QuotationStatus) => {
         switch (status) {
             case 'Awarded': return 'default';
@@ -240,10 +240,10 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
             default: return null;
         }
     }
-    
+
     // Only assigned compliance committee members have prices masked, and only until they finalize their checks
-    const isAssignedComplianceCommittee = (requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a:any) => a.requisitionId === requisition.id && a.type === 'compliance');
-    const assignment = (user.committeeAssignments || []).find((a:any) => a.requisitionId === requisition.id);
+    const isAssignedComplianceCommittee = (requisition.complianceCommitteeMemberIds || []).includes(user.id) || (user.committeeAssignments || []).some((a: any) => a.requisitionId === requisition.id && a.type === 'compliance');
+    const assignment = (user.committeeAssignments || []).find((a: any) => a.requisitionId === requisition.id);
     const scoresSubmitted = assignment?.scoresSubmitted || (scoresSubmittedOverride ?? false);
     // Only mask prices for assigned compliance committee members until they finalize, and if rfqSettings disables price visibility for compliance
     const hidePrices = isAssignedComplianceCommittee && !scoresSubmitted && !(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
@@ -264,13 +264,13 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                             (quote.status === 'Accepted' || quote.status === 'Partially_Awarded') && 'border-primary ring-2 ring-primary'
                         )}
                     >
-                       <CardHeader>
+                        <CardHeader>
                             <CardTitle className="flex justify-between items-start">
-                               <div className="flex items-center gap-2">
-                                 {isDeadlinePassed && getRankIcon(quote.rank)}
-                                 <span>{quote.vendorName}</span>
-                               </div>
-                               <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-2">
+                                    {isDeadlinePassed && getRankIcon(quote.rank)}
+                                    <span>{quote.vendorName}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
                                     <Badge variant={submissionVariant as any}>{submissionLabel}</Badge>
                                     <Badge
                                         variant={getStatusVariant(quote.status)}
@@ -278,14 +278,14 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                     >
                                         {quote.status.replace(/_/g, ' ')}
                                     </Badge>
-                               </div>
+                                </div>
                             </CardTitle>
                             <CardDescription>
                                 <span className="text-xs">Submitted {formatDistanceToNow(new Date(quote.createdAt), { addSuffix: true })}</span>
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="flex-grow space-y-4">
-                             {(isDeadlinePassed || quote.cpoDocumentUrl) ? (
+                            {(isDeadlinePassed || quote.cpoDocumentUrl) ? (
                                 <>
                                     {hidePrices ? (
                                         <div className="text-center py-4">
@@ -306,7 +306,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                         </>
                                     )}
 
-                                    
+
                                     {quote.cpoDocumentUrl && (
                                         <div className="text-sm space-y-1 pt-2 border-t">
                                             <h4 className="font-semibold">CPO Document</h4>
@@ -315,7 +315,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                             </Button>
                                         </div>
                                     )}
-                                     {quote.experienceDocumentUrl && (
+                                    {quote.experienceDocumentUrl && (
                                         <div className="text-sm space-y-1 pt-2 border-t">
                                             <h4 className="font-semibold">Experience Document</h4>
                                             <Button asChild variant="link" className="p-0 h-auto">
@@ -326,7 +326,7 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
 
                                     {isDeadlinePassed && (
                                         <div className="text-sm space-y-2">
-                                        <h4 className="font-semibold">Items:</h4>
+                                            <h4 className="font-semibold">Items:</h4>
                                             {quote.items.map(item => (
                                                 <div key={item.requisitionItemId} className="flex justify-between items-center text-muted-foreground">
                                                     <span>{item.name} x {item.quantity}</span>
@@ -350,12 +350,12 @@ const QuoteComparison = ({ quotes, requisition, onScore, user, isDeadlinePassed,
                                     <p className="text-muted-foreground text-xs italic">{quote.notes}</p>
                                 </div>
                             )}
-                             {isAwarded && (
-                                 <div className="text-center pt-2 border-t">
+                            {isAwarded && (
+                                <div className="text-center pt-2 border-t">
                                     <h4 className="font-semibold text-sm">Total Price</h4>
                                     <p className="text-2xl font-bold text-primary">{hidePrices ? 'Hidden' : quote.totalPrice.toLocaleString() + ' ETB'}</p>
-                                 </div>
-                             )}
+                                </div>
+                            )}
                         </CardContent>
                         <CardFooter className="flex flex-col gap-2" />
                     </Card>
@@ -407,7 +407,7 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
             toast({ title: "Contract Details Saved!", description: "The PO can now be formally sent to the vendor." });
             onContractFinalized();
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -416,7 +416,7 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
             setSubmitting(false);
         }
     }
-    
+
     if (!awardedQuote) return null;
 
     return (
@@ -424,13 +424,13 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
             <CardHeader>
                 <CardTitle>Contract &amp; PO Finalization</CardTitle>
                 <CardDescription>
-                    The vendor <span className="font-semibold">{awardedQuote?.vendorName}</span> has accepted the award. 
+                    The vendor <span className="font-semibold">{awardedQuote?.vendorName}</span> has accepted the award.
                     A PO (<span className="font-mono">{requisition.purchaseOrderId}</span>) has been generated. Please finalize and send the documents.
                 </CardDescription>
             </CardHeader>
             <form onSubmit={onContractSubmit}>
                 <CardContent className="space-y-4">
-                     <div>
+                    <div>
                         <Label htmlFor="fileName">Final Contract Document</Label>
                         <Input id="fileName" name="fileName" type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                     </div>
@@ -454,10 +454,10 @@ const ContractManagement = ({ requisition, onContractFinalized }: { requisition:
 }
 
 const committeeFormSchema = z.object({
-  committeeName: z.string().min(3, "Committee name is required."),
-  committeePurpose: z.string().min(10, "Purpose is required."),
-  financialCommitteeMemberIds: z.array(z.string()).min(1, "At least one financial member is required."),
-  technicalCommitteeMemberIds: z.array(z.string()).min(1, "At least one technical member is required."),
+    committeeName: z.string().min(3, "Committee name is required."),
+    committeePurpose: z.string().min(10, "Purpose is required."),
+    financialCommitteeMemberIds: z.array(z.string()).min(1, "At least one financial member is required."),
+    technicalCommitteeMemberIds: z.array(z.string()).min(1, "At least one technical member is required."),
 }).refine(data => {
     const financialIds = new Set(data.financialCommitteeMemberIds);
     const hasOverlap = data.technicalCommitteeMemberIds.some(id => financialIds.has(id));
@@ -473,14 +473,14 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
     const { user, allUsers } = useAuth();
     const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
-    const [deadlineDate, setDeadlineDate] = useState<Date|undefined>(
+    const [deadlineDate, setDeadlineDate] = useState<Date | undefined>(
         requisition.scoringDeadline ? new Date(requisition.scoringDeadline) : undefined
     );
     const [deadlineTime, setDeadlineTime] = useState(
         requisition.scoringDeadline ? format(new Date(requisition.scoringDeadline), 'HH:mm') : '17:00'
     );
     const [technicalViewPrices, setTechnicalViewPrices] = useState(requisition.rfqSettings?.technicalEvaluatorSeesPrices ?? false);
-    
+
     const form = useForm<CommitteeFormValues>({
         resolver: zodResolver(committeeFormSchema),
         defaultValues: {
@@ -496,7 +496,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         const [hours, minutes] = deadlineTime.split(':').map(Number);
         return setMinutes(setHours(deadlineDate, hours), minutes);
     }, [deadlineDate, deadlineTime]);
-    
+
     useEffect(() => {
         form.reset({
             committeeName: requisition.committeeName || "",
@@ -513,7 +513,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
 
     const handleSaveCommittee = async (values: CommitteeFormValues) => {
         if (!user || !finalDeadline) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Invalid Deadline',
                 description: 'A scoring deadline must be set.',
@@ -535,8 +535,8 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             const response = await fetch(`/api/requisitions/${requisition.id}/assign-committee`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userId: user.id, 
+                body: JSON.stringify({
+                    userId: user.id,
                     ...values,
                     scoringDeadline: finalDeadline,
                     rfqSettings: {
@@ -555,7 +555,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             onOpenChange(false);
             onCommitteeUpdated();
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -564,7 +564,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             setSubmitting(false);
         }
     }
-    
+
     const committeeMembers = allUsers.filter(u => u.role === 'Committee_Member');
     const assignedFinancialMembers = allUsers.filter(u => requisition.financialCommitteeMemberIds?.includes(u.id));
     const assignedTechnicalMembers = allUsers.filter(u => requisition.technicalCommitteeMemberIds?.includes(u.id));
@@ -591,7 +591,7 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             </div>
         </div>
     );
-    
+
     const MemberSelection = ({ type }: { type: 'financial' | 'technical' }) => {
         const [search, setSearch] = useState("");
         const otherType = type === 'financial' ? 'technical' : 'financial';
@@ -609,58 +609,58 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             <div className="space-y-2">
                 <div className="relative pt-2">
                     <Search className="absolute left-2.5 top-5 h-4 w-4 text-muted-foreground" />
-                    <Input 
+                    <Input
                         placeholder={`Search ${type} members...`}
                         className="pl-8 w-full"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
                 </div>
-                 <FormField
+                <FormField
                     control={form.control}
                     name={`${type}CommitteeMemberIds`}
                     render={() => (
-                    <FormItem className="flex-1 flex flex-col min-h-0">
-                        <ScrollArea className="flex-1 rounded-md border h-60">
-                            <div className="space-y-1 p-1">
-                            {availableMembers.map(member => (
-                                <FormField
-                                    key={member.id}
-                                    control={form.control}
-                                    name={`${type}CommitteeMemberIds`}
-                                    render={({ field }) => (
-                                        <FormItem className="flex items-start space-x-4 rounded-md border p-2 has-[:checked]:bg-muted">
-                                            <FormControl>
-                                                <Checkbox
-                                                    checked={field.value?.includes(member.id)}
-                                                    onCheckedChange={(checked) => {
-                                                        return checked
-                                                        ? field.onChange([...(field.value || []), member.id])
-                                                        : field.onChange(field.value?.filter((id) => id !== member.id))
-                                                    }}
-                                                />
-                                            </FormControl>
-                                            <div className="flex items-start gap-3 flex-1">
-                                                <Avatar className="h-8 w-8">
-                                                    <AvatarImage src={`https://picsum.photos/seed/${member.id}/32/32`} data-ai-hint="profile picture" />
-                                                    <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                                <div className="grid gap-0.5">
-                                                    <Label className="font-normal cursor-pointer text-sm">{member.name}</Label>
-                                                    <p className="text-xs text-muted-foreground">{member.email}</p>
-                                                </div>
-                                            </div>
-                                        </FormItem>
+                        <FormItem className="flex-1 flex flex-col min-h-0">
+                            <ScrollArea className="flex-1 rounded-md border h-60">
+                                <div className="space-y-1 p-1">
+                                    {availableMembers.map(member => (
+                                        <FormField
+                                            key={member.id}
+                                            control={form.control}
+                                            name={`${type}CommitteeMemberIds`}
+                                            render={({ field }) => (
+                                                <FormItem className="flex items-start space-x-4 rounded-md border p-2 has-[:checked]:bg-muted">
+                                                    <FormControl>
+                                                        <Checkbox
+                                                            checked={field.value?.includes(member.id)}
+                                                            onCheckedChange={(checked) => {
+                                                                return checked
+                                                                    ? field.onChange([...(field.value || []), member.id])
+                                                                    : field.onChange(field.value?.filter((id) => id !== member.id))
+                                                            }}
+                                                        />
+                                                    </FormControl>
+                                                    <div className="flex items-start gap-3 flex-1">
+                                                        <Avatar className="h-8 w-8">
+                                                            <AvatarImage src={`https://picsum.photos/seed/${member.id}/32/32`} data-ai-hint="profile picture" />
+                                                            <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="grid gap-0.5">
+                                                            <Label className="font-normal cursor-pointer text-sm">{member.name}</Label>
+                                                            <p className="text-xs text-muted-foreground">{member.email}</p>
+                                                        </div>
+                                                    </div>
+                                                </FormItem>
+                                            )}
+                                        />
+                                    ))}
+                                    {availableMembers.length === 0 && (
+                                        <div className="text-center text-muted-foreground py-10">No members available.</div>
                                     )}
-                                />
-                            ))}
-                            {availableMembers.length === 0 && (
-                                <div className="text-center text-muted-foreground py-10">No members available.</div>
-                            )}
-                            </div>
-                        </ScrollArea>
-                        <FormMessage />
-                    </FormItem>
+                                </div>
+                            </ScrollArea>
+                            <FormMessage />
+                        </FormItem>
                     )}
                 />
             </div>
@@ -682,13 +682,13 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
             <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div>
                     <CardTitle>Evaluation Committee (Scorers)</CardTitle>
-                     <CardDescription>
-                         {requisition.committeePurpose ? `Purpose: ${requisition.committeePurpose}` : 'Assign scorers to evaluate vendor quotations.'}
+                    <CardDescription>
+                        {requisition.committeePurpose ? `Purpose: ${requisition.committeePurpose}` : 'Assign scorers to evaluate vendor quotations.'}
                     </CardDescription>
                 </div>
-                 <Dialog open={open} onOpenChange={onOpenChange}>
+                <Dialog open={open} onOpenChange={onOpenChange}>
                     <DialogTrigger asChild>
-                         {isAuthorized ? (
+                        {isAuthorized ? (
                             triggerButton
                         ) : (
                             <TooltipProvider>
@@ -704,103 +704,103 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
                         )}
                     </DialogTrigger>
                     <DialogContent className="max-w-4xl flex flex-col max-h-[90vh]">
-                         <Form {...form}>
-                         <form onSubmit={form.handleSubmit(handleSaveCommittee)} className="flex flex-col flex-1 min-h-0">
-                        <DialogHeader>
-                            <DialogTitle>Manage Evaluation Committee</DialogTitle>
-                            <DialogDescription>Assign members to score the quotations for this requisition.</DialogDescription>
-                        </DialogHeader>
-                        <div className="flex-1 overflow-y-auto space-y-4 p-1 -mx-1">
-                                <div className="grid md:grid-cols-2 gap-4">
-                                    <FormField
-                                        control={form.control}
-                                        name="committeeName"
-                                        render={({ field }) => (
-                                            <FormItem><FormLabel>Committee Name</FormLabel><FormControl><Input {...field} placeholder="e.g., Q4 Laptop Procurement Committee" /></FormControl><FormMessage /></FormItem>
-                                        )}
-                                    />
-                                     <FormField
-                                        control={form.control}
-                                        name="committeePurpose"
-                                        render={({ field }) => (
-                                            <FormItem><FormLabel>Purpose / Mandate</FormLabel><FormControl><Input {...field} placeholder="e.g., To evaluate vendor submissions for REQ-..." /></FormControl><FormMessage /></FormItem>
-                                        )}
-                                    />
-                                </div>
-                                <div className="grid md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <FormLabel>Committee Compliance Deadline</FormLabel>
-                                        <div className="flex gap-2">
-                                            <Popover>
-                                                <PopoverTrigger asChild>
-                                                    <Button
-                                                        variant={"outline"}
-                                                        className={cn("flex-1", !deadlineDate && "text-muted-foreground")}
-                                                    >
-                                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                                        {deadlineDate ? format(deadlineDate, "PPP") : <span>Pick a date</span>}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0">
-                                                    <Calendar
-                                                        mode="single"
-                                                        selected={deadlineDate}
-                                                        onSelect={setDeadlineDate}
-                                                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
-                                                        initialFocus
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                            <Input 
-                                                type="time" 
-                                                className="w-32"
-                                                value={deadlineTime}
-                                                onChange={(e) => setDeadlineTime(e.target.value)}
-                                            />
+                        <Form {...form}>
+                            <form onSubmit={form.handleSubmit(handleSaveCommittee)} className="flex flex-col flex-1 min-h-0">
+                                <DialogHeader>
+                                    <DialogTitle>Manage Evaluation Committee</DialogTitle>
+                                    <DialogDescription>Assign members to score the quotations for this requisition.</DialogDescription>
+                                </DialogHeader>
+                                <div className="flex-1 overflow-y-auto space-y-4 p-1 -mx-1">
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="committeeName"
+                                            render={({ field }) => (
+                                                <FormItem><FormLabel>Committee Name</FormLabel><FormControl><Input {...field} placeholder="e.g., Q4 Laptop Procurement Committee" /></FormControl><FormMessage /></FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="committeePurpose"
+                                            render={({ field }) => (
+                                                <FormItem><FormLabel>Purpose / Mandate</FormLabel><FormControl><Input {...field} placeholder="e.g., To evaluate vendor submissions for REQ-..." /></FormControl><FormMessage /></FormItem>
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <FormLabel>Committee Compliance Deadline</FormLabel>
+                                            <div className="flex gap-2">
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant={"outline"}
+                                                            className={cn("flex-1", !deadlineDate && "text-muted-foreground")}
+                                                        >
+                                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                                            {deadlineDate ? format(deadlineDate, "PPP") : <span>Pick a date</span>}
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-0">
+                                                        <Calendar
+                                                            mode="single"
+                                                            selected={deadlineDate}
+                                                            onSelect={setDeadlineDate}
+                                                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                                                            initialFocus
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
+                                                <Input
+                                                    type="time"
+                                                    className="w-32"
+                                                    value={deadlineTime}
+                                                    onChange={(e) => setDeadlineTime(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <FormLabel>Price Visibility</FormLabel>
+                                            <div className="flex items-center space-x-2 rounded-md border p-2 h-10">
+                                                <Switch
+                                                    id="technical-view-prices"
+                                                    checked={technicalViewPrices}
+                                                    onCheckedChange={setTechnicalViewPrices}
+                                                />
+                                                <Label htmlFor="technical-view-prices">Allow compliance evaluators to see prices</Label>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <FormLabel>Price Visibility</FormLabel>
-                                        <div className="flex items-center space-x-2 rounded-md border p-2 h-10">
-                                            <Switch 
-                                                id="technical-view-prices" 
-                                                checked={technicalViewPrices}
-                                                onCheckedChange={setTechnicalViewPrices}
-                                            />
-                                            <Label htmlFor="technical-view-prices">Allow compliance evaluators to see prices</Label>
+
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        <div>
+                                            <h3 className="font-semibold text-lg">Financial Committee</h3>
+                                            <MemberSelection type="financial" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-lg">Technical Committee</h3>
+                                            <MemberSelection type="technical" />
                                         </div>
                                     </div>
                                 </div>
-                                
-                                <div className="grid md:grid-cols-2 gap-6">
-                                     <div>
-                                        <h3 className="font-semibold text-lg">Financial Committee</h3>
-                                        <MemberSelection type="financial" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-semibold text-lg">Technical Committee</h3>
-                                        <MemberSelection type="technical" />
-                                    </div>
-                                </div>
-                        </div>
-                        <DialogFooter className="pt-4 border-t mt-4">
-                            <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
-                            <Button type="submit" disabled={isSubmitting}>
-                                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                Save Committee
-                            </Button>
-                        </DialogFooter>
-                        </form>
+                                <DialogFooter className="pt-4 border-t mt-4">
+                                    <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
+                                    <Button type="submit" disabled={isSubmitting}>
+                                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        Save Committee
+                                    </Button>
+                                </DialogFooter>
+                            </form>
                         </Form>
                     </DialogContent>
                 </Dialog>
             </CardHeader>
             <CardContent className="space-y-6">
-                 <MemberList title="Financial Committee" description="Responsible for evaluating cost and financial stability." members={assignedFinancialMembers} />
-                 <MemberList title="Technical Committee" description="Responsible for assessing technical specs and compliance." members={assignedTechnicalMembers} />
-                 {requisition.scoringDeadline && (
+                <MemberList title="Financial Committee" description="Responsible for evaluating cost and financial stability." members={assignedFinancialMembers} />
+                <MemberList title="Technical Committee" description="Responsible for assessing technical specs and compliance." members={assignedTechnicalMembers} />
+                {requisition.scoringDeadline && (
                     <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground border-t pt-4">
-                        <Timer className="h-4 w-4"/>
+                        <Timer className="h-4 w-4" />
                         <span className="font-semibold">Scoring Deadline:</span>
                         <span>{format(new Date(requisition.scoringDeadline), 'PPpp')}</span>
                     </div>
@@ -829,44 +829,44 @@ const RFQActionDialog = ({
     const [reason, setReason] = useState('');
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>(requisition.deadline ? new Date(requisition.deadline) : undefined);
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>(requisition.deadline ? format(new Date(requisition.deadline), 'HH:mm') : '17:00');
-    
+
     const finalNewDeadline = useMemo(() => {
         if (!newDeadlineDate) return undefined;
         const [hours, minutes] = newDeadlineTime.split(':').map(Number);
         return setMinutes(setHours(newDeadlineDate, hours), minutes);
     }, [newDeadlineDate, newDeadlineTime]);
-    
+
     const handleSubmit = async () => {
         if (!user) return;
         if (action !== 'update' && !reason.trim()) {
-            toast({ variant: 'destructive', title: 'Error', description: 'A reason must be provided.'});
+            toast({ variant: 'destructive', title: 'Error', description: 'A reason must be provided.' });
             return;
         }
         if (action === 'update' && (!finalNewDeadline || isBefore(finalNewDeadline, new Date()))) {
-            toast({ variant: 'destructive', title: 'Error', description: 'The new deadline must be in the future.'});
+            toast({ variant: 'destructive', title: 'Error', description: 'The new deadline must be in the future.' });
             return;
         }
 
         setIsSubmitting(true);
         try {
-             const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
+            const response = await fetch(`/api/requisitions/${requisition.id}/manage-rfq`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userId: user.id, 
+                body: JSON.stringify({
+                    userId: user.id,
                     action,
                     reason,
                     newDeadline: action === 'update' ? finalNewDeadline : undefined
                 }),
             });
             if (!response.ok) {
-                 const errorData = await response.json();
+                const errorData = await response.json();
                 throw new Error(errorData.error || `Failed to ${action} RFQ.`);
             }
-            toast({ title: 'Success', description: `The RFQ has been successfully ${action === 'update' ? 'updated' : 'managed'}.`});
+            toast({ title: 'Success', description: `The RFQ has been successfully ${action === 'update' ? 'updated' : 'managed'}.` });
             onSuccess();
         } catch (error) {
-            toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
+            toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
             setIsSubmitting(false);
             onClose();
@@ -887,7 +887,7 @@ const RFQActionDialog = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-                <DialogContent>
+            <DialogContent>
                 <DialogHeader>
                     <DialogTitle>{titles[action]}</DialogTitle>
                     <DialogDescription>{descriptions[action]}</DialogDescription>
@@ -896,14 +896,14 @@ const RFQActionDialog = ({
                     {action === 'update' && (
                         <div className="space-y-2">
                             <Label>New Quotation Submission Deadline</Label>
-                                <div className="flex gap-2">
-                                    <Popover>
+                            <div className="flex gap-2">
+                                <Popover>
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant={"outline"}
                                             className={cn(
-                                            "w-full justify-start text-left font-normal",
-                                            !newDeadlineDate && "text-muted-foreground"
+                                                "w-full justify-start text-left font-normal",
+                                                !newDeadlineDate && "text-muted-foreground"
                                             )}
                                         >
                                             <CalendarIcon className="mr-2 h-4 w-4" />
@@ -915,13 +915,13 @@ const RFQActionDialog = ({
                                             mode="single"
                                             selected={newDeadlineDate}
                                             onSelect={setNewDeadlineDate}
-                                            disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                                             initialFocus
                                         />
                                     </PopoverContent>
                                 </Popover>
-                                <Input 
-                                    type="time" 
+                                <Input
+                                    type="time"
                                     className="w-32"
                                     value={newDeadlineTime}
                                     onChange={(e) => setNewDeadlineTime(e.target.value)}
@@ -929,17 +929,17 @@ const RFQActionDialog = ({
                             </div>
                         </div>
                     )}
-                     {action !== 'update' && (
+                    {action !== 'update' && (
                         <div>
-                        <Label htmlFor="reason">Reason for Action</Label>
-                        <Textarea id="reason" value={reason} onChange={e => setReason(e.target.value)} className="mt-2" />
-                    </div>
-                     )}
+                            <Label htmlFor="reason">Reason for Action</Label>
+                            <Textarea id="reason" value={reason} onChange={e => setReason(e.target.value)} className="mt-2" />
+                        </div>
+                    )}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Close</Button></DialogClose>
                     <Button onClick={handleSubmit} disabled={isSubmitting} variant={(action === 'cancel' || action === 'restart') ? 'destructive' : 'default'}>
-                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Confirm {action.charAt(0).toUpperCase() + action.slice(1)}
                     </Button>
                 </DialogFooter>
@@ -953,20 +953,21 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
     const [selectedVendors, setSelectedVendors] = useState<string[]>([]);
     const [vendorSearch, setVendorSearch] = useState("");
     const [isSubmitting, setSubmitting] = useState(false);
-    const [deadlineDate, setDeadlineDate] = useState<Date|undefined>();
+    const [deadlineDate, setDeadlineDate] = useState<Date | undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
     const [cpoAmount, setCpoAmount] = useState<number | undefined>(requisition.cpoAmount);
-    
+
     const [allowQuoteEdits, setAllowQuoteEdits] = useState(requisition.rfqSettings?.allowQuoteEdits ?? true);
     const [experienceDocumentRequired, setExperienceDocumentRequired] = useState(requisition.rfqSettings?.experienceDocumentRequired ?? false);
     const [needsCompliance, setNeedsCompliance] = useState<boolean>(requisition.rfqSettings?.needsCompliance ?? true);
+    const [procurementMethod, setProcurementMethod] = useState<string>(requisition.procurementMethod ?? ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'));
     const { user } = useAuth();
     const { toast } = useToast();
-    
+
     const isSent = requisition.status === 'Accepting_Quotes' || requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete';
 
 
-     useEffect(() => {
+    useEffect(() => {
         if (requisition.deadline) {
             setDeadlineDate(new Date(requisition.deadline));
             setDeadlineTime(format(new Date(requisition.deadline), 'HH:mm'));
@@ -978,6 +979,7 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
         setAllowQuoteEdits(requisition.rfqSettings?.allowQuoteEdits ?? true);
         setExperienceDocumentRequired(requisition.rfqSettings?.experienceDocumentRequired ?? false);
         setNeedsCompliance((requisition.rfqSettings as any)?.needsCompliance ?? true);
+        setProcurementMethod(requisition.procurementMethod ?? ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'));
     }, [requisition]);
 
     const deadline = useMemo(() => {
@@ -990,6 +992,12 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
     const handleSendRFQ = async () => {
         if (!user || !deadline) return;
 
+        // If procurement method isn't RFQ, inform the sender that the selected method is coming soon
+        if (procurementMethod !== 'RFQ') {
+            toast({ title: 'Coming Soon', description: `${procurementMethod} procurement method is coming soon. Only RFQ is supported currently.` });
+            return;
+        }
+
         if (isBefore(deadline, new Date())) {
             toast({
                 variant: 'destructive',
@@ -998,7 +1006,7 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
             });
             return;
         }
-        
+
         if (requisition.scoringDeadline && !isBefore(deadline, new Date(requisition.scoringDeadline))) {
             toast({
                 variant: 'destructive',
@@ -1018,17 +1026,18 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
             const response = await fetch(`/api/requisitions/${requisition.id}/send-rfq`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userId: user.id, 
+                body: JSON.stringify({
+                    userId: user.id,
                     vendorIds: distributionType === 'all' ? [] : selectedVendors,
                     deadline,
                     cpoAmount,
                     rfqSettings: {
                         allowQuoteEdits,
-                        experienceDocumentRequired
-                        ,
-                        needsCompliance
-                    }
+                        experienceDocumentRequired,
+                        needsCompliance,
+                        method: procurementMethod
+                    },
+                    procurementMethod
                 }),
             });
 
@@ -1040,7 +1049,7 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
             toast({ title: 'RFQ Sent!', description: 'The requisition is now open for quotations from the selected vendors.' });
             onRfqSent();
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -1049,8 +1058,8 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
             setSubmitting(false);
         }
     }
-    
-    
+
+
     const filteredVendors = useMemo(() => {
         const verifiedVendors = Array.isArray(vendors) ? vendors.filter(v => v.kycStatus === 'Verified') : [];
         if (!vendorSearch) {
@@ -1075,8 +1084,8 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
                             <CardTitle>RFQ Distribution</CardTitle>
                             <CardDescription>
                                 {isSent
-                                ? "The RFQ has been distributed to vendors."
-                                : "Send the Request for Quotation to vendors to begin receiving bids."
+                                    ? "The RFQ has been distributed to vendors."
+                                    : "Send the Request for Quotation to vendors to begin receiving bids."
                                 }
                             </CardDescription>
                         </div>
@@ -1101,8 +1110,8 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
                                         variant={"outline"}
                                         disabled={!canTakeAction}
                                         className={cn(
-                                        "w-full justify-start text-left font-normal",
-                                        !deadlineDate && "text-muted-foreground"
+                                            "w-full justify-start text-left font-normal",
+                                            !deadlineDate && "text-muted-foreground"
                                         )}
                                     >
                                         <CalendarIcon className="mr-2 h-4 w-4" />
@@ -1114,19 +1123,30 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
                                         mode="single"
                                         selected={deadlineDate}
                                         onSelect={setDeadlineDate}
-                                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) || !canTakeAction}
+                                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0)) || !canTakeAction}
                                         initialFocus
                                     />
                                 </PopoverContent>
                             </Popover>
-                            <Input 
-                                type="time" 
+                            <Input
+                                type="time"
                                 className="w-32"
                                 value={deadlineTime}
                                 onChange={(e) => setDeadlineTime(e.target.value)}
                                 disabled={!canTakeAction}
                             />
                         </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Procurement Method</Label>
+                        <select value={procurementMethod} onChange={(e) => setProcurementMethod(e.target.value)} disabled={!canTakeAction} className="w-full border rounded px-2 py-1">
+                            <option value="RFQ">RFQ (Request for Quotation)</option>
+                            <option value="RFP">RFP (Request for Proposal) — Coming Soon</option>
+                            <option value="OpenTender">Open Tender — Coming Soon</option>
+                            <option value="RestrictedTender">Restricted Tender — Coming Soon</option>
+                            <option value="DirectProcurement">Direct Procurement — Coming Soon</option>
+                            <option value="TwoStage">Two-Stage Bidding — Coming Soon</option>
+                        </select>
                     </div>
                     <div className="space-y-2">
                         <Label>Distribution Type</Label>
@@ -1144,10 +1164,10 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
                         <Label htmlFor="cpoAmount">CPO Amount (ETB)</Label>
                         <div className="relative">
                             <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input 
+                            <Input
                                 id="cpoAmount"
                                 type="number"
-                                placeholder="Enter required CPO amount" 
+                                placeholder="Enter required CPO amount"
                                 className="pl-10"
                                 value={cpoAmount || ''}
                                 onChange={(e) => setCpoAmount(Number(e.target.value))}
@@ -1189,8 +1209,8 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
                                 <CardTitle className="text-lg">Select Vendors</CardTitle>
                                 <div className="relative mt-2">
                                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input 
-                                        placeholder="Search vendors..." 
+                                    <Input
+                                        placeholder="Search vendors..."
                                         className="pl-8 w-full"
                                         value={vendorSearch}
                                         onChange={(e) => setVendorSearch(e.target.value)}
@@ -1201,39 +1221,39 @@ const RFQDistribution = ({ requisition, vendors, quotations, onRfqSent, isAuthor
                             <CardContent>
                                 <ScrollArea className="h-60">
                                     <div className="space-y-4">
-                                    {filteredVendors.map(vendor => (
-                                        <div key={vendor.id} className="flex items-start space-x-4 rounded-md border p-4 has-[:checked]:bg-muted">
-                                            <Checkbox 
-                                                id={`vendor-${vendor.id}`} 
-                                                checked={selectedVendors.includes(vendor.id)}
-                                                onCheckedChange={(checked) => {
-                                                    setSelectedVendors(prev => 
-                                                        checked ? [...prev, vendor.id] : prev.filter(id => id !== vendor.id)
-                                                    )
-                                                }}
-                                                className="mt-1"
-                                                disabled={!canTakeAction}
-                                            />
-                                            <div className="flex items-start gap-4 flex-1">
-                                                <Avatar>
-                                                    <AvatarImage src={`https://picsum.photos/seed/${vendor.id}/40/40`} data-ai-hint="logo" />
-                                                    <AvatarFallback>{vendor.name.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                                <div className="grid gap-1">
-                                                    <Label htmlFor={`vendor-${vendor.id}`} className="font-semibold cursor-pointer">
-                                                        {vendor.name}
-                                                    </Label>
-                                                    <p className="text-xs text-muted-foreground">{vendor.email}</p>
-                                                    <p className="text-xs text-muted-foreground">Contact: {vendor.contactPerson}</p>
+                                        {filteredVendors.map(vendor => (
+                                            <div key={vendor.id} className="flex items-start space-x-4 rounded-md border p-4 has-[:checked]:bg-muted">
+                                                <Checkbox
+                                                    id={`vendor-${vendor.id}`}
+                                                    checked={selectedVendors.includes(vendor.id)}
+                                                    onCheckedChange={(checked) => {
+                                                        setSelectedVendors(prev =>
+                                                            checked ? [...prev, vendor.id] : prev.filter(id => id !== vendor.id)
+                                                        )
+                                                    }}
+                                                    className="mt-1"
+                                                    disabled={!canTakeAction}
+                                                />
+                                                <div className="flex items-start gap-4 flex-1">
+                                                    <Avatar>
+                                                        <AvatarImage src={`https://picsum.photos/seed/${vendor.id}/40/40`} data-ai-hint="logo" />
+                                                        <AvatarFallback>{vendor.name.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="grid gap-1">
+                                                        <Label htmlFor={`vendor-${vendor.id}`} className="font-semibold cursor-pointer">
+                                                            {vendor.name}
+                                                        </Label>
+                                                        <p className="text-xs text-muted-foreground">{vendor.email}</p>
+                                                        <p className="text-xs text-muted-foreground">Contact: {vendor.contactPerson}</p>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
-                                    {filteredVendors.length === 0 && (
-                                        <div className="text-center text-muted-foreground py-10">
-                                            No vendors found matching your search.
-                                        </div>
-                                    )}
+                                        ))}
+                                        {filteredVendors.length === 0 && (
+                                            <div className="text-center text-muted-foreground py-10">
+                                                No vendors found matching your search.
+                                            </div>
+                                        )}
                                     </div>
                                 </ScrollArea>
                             </CardContent>
@@ -1311,9 +1331,9 @@ const ManageRFQ = ({
     onSuccess: () => void,
     isAuthorized: boolean,
 }) => {
-    const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'update'});
+    const [actionDialog, setActionDialog] = useState<{ isOpen: boolean, type: 'update' | 'cancel' | 'restart' }>({ isOpen: false, type: 'update' });
     const canManageRfq = isAuthorized && requisition.status === 'Accepting_Quotes' && !isPast(new Date(requisition.deadline!));
-    
+
     if (!canManageRfq) return null;
 
     return (
@@ -1359,15 +1379,15 @@ const ManageRFQ = ({
                     )}
                 </CardContent>
                 <CardFooter className="flex gap-2">
-                    <Button variant="outline" onClick={() => setActionDialog({isOpen: true, type: 'update'})}><Settings2 className="mr-2"/> Update RFQ</Button>
-                    <Button variant="destructive" onClick={() => setActionDialog({isOpen: true, type: 'cancel'})}><Ban className="mr-2"/> Cancel RFQ</Button>
+                    <Button variant="outline" onClick={() => setActionDialog({ isOpen: true, type: 'update' })}><Settings2 className="mr-2" /> Update RFQ</Button>
+                    <Button variant="destructive" onClick={() => setActionDialog({ isOpen: true, type: 'cancel' })}><Ban className="mr-2" /> Cancel RFQ</Button>
                 </CardFooter>
             </Card>
-            <RFQActionDialog 
+            <RFQActionDialog
                 action={actionDialog.type}
                 requisition={requisition}
                 isOpen={actionDialog.isOpen}
-                onClose={() => setActionDialog({isOpen: false, type: 'update'})}
+                onClose={() => setActionDialog({ isOpen: false, type: 'update' })}
                 onSuccess={onSuccess}
             />
         </>
@@ -1375,7 +1395,7 @@ const ManageRFQ = ({
 }
 
 const WorkflowStepper = ({ step }: { step: 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' }) => {
-     const getStepClass = (currentStep: string, targetStep: string) => {
+    const getStepClass = (currentStep: string, targetStep: string) => {
         const stepOrder = ['rfq', 'committee', 'award', 'finalize', 'completed'];
         const currentIndex = stepOrder.indexOf(currentStep);
         const targetIndex = stepOrder.indexOf(targetStep);
@@ -1405,30 +1425,30 @@ const WorkflowStepper = ({ step }: { step: 'rfq' | 'committee' | 'award' | 'fina
         <div className="flex items-center justify-center space-x-1 sm:space-x-2 flex-wrap">
             <div className="flex items-center gap-2">
                 <div className={cn("flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold", stateClasses[rfqState])}>
-                    {rfqState === 'completed' ? <Check className="h-4 w-4"/> : '1'}
+                    {rfqState === 'completed' ? <Check className="h-4 w-4" /> : '1'}
                 </div>
                 <span className={cn("font-medium", textClasses[rfqState])}>Send RFQ</span>
             </div>
-             <div className={cn("h-px flex-1 bg-border transition-colors", (committeeState === 'active' || committeeState === 'completed') && "bg-primary")}></div>
+            <div className={cn("h-px flex-1 bg-border transition-colors", (committeeState === 'active' || committeeState === 'completed') && "bg-primary")}></div>
 
             <div className="flex items-center gap-2">
                 <div className={cn("flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold", stateClasses[committeeState])}>
-                    {committeeState === 'completed' ? <Check className="h-4 w-4"/> : '2'}
+                    {committeeState === 'completed' ? <Check className="h-4 w-4" /> : '2'}
                 </div>
                 <span className={cn("font-medium", textClasses[committeeState])}>Assign Committee &amp; Score</span>
             </div>
-             <div className={cn("h-px flex-1 bg-border transition-colors", (awardState === 'active' || awardState === 'completed') && "bg-primary")}></div>
+            <div className={cn("h-px flex-1 bg-border transition-colors", (awardState === 'active' || awardState === 'completed') && "bg-primary")}></div>
 
             <div className="flex items-center gap-2">
                 <div className={cn("flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold", stateClasses[awardState])}>
-                    {awardState === 'completed' ? <Check className="h-4 w-4"/> : '3'}
+                    {awardState === 'completed' ? <Check className="h-4 w-4" /> : '3'}
                 </div>
                 <span className={cn("font-medium", textClasses[awardState])}>Award</span>
             </div>
             <div className={cn("h-px flex-1 bg-border transition-colors", (finalizeState === 'active' || finalizeState === 'completed') && "bg-primary")}></div>
-             <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
                 <div className={cn("flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold", stateClasses[finalizeState])}>
-                    {finalizeState === 'completed' ? <Check className="h-4 w-4"/> : '4'}
+                    {finalizeState === 'completed' ? <Check className="h-4 w-4" /> : '4'}
                 </div>
                 <span className={cn("font-medium", textClasses[finalizeState])}>Finalize</span>
             </div>
@@ -1437,41 +1457,41 @@ const WorkflowStepper = ({ step }: { step: 'rfq' | 'committee' | 'award' | 'fina
 };
 
 const scoreFormSchema = z.object({
-  committeeComment: z.string().optional(),
-  itemScores: z.array(z.object({
-      quoteItemId: z.string(),
-      financialScores: z.array(z.object({
-          criterionId: z.string(),
-          score: z.coerce.number().min(0).max(100),
-          comment: z.string().optional(),
-      })),
-      technicalScores: z.array(z.object({
-          criterionId: z.string(),
-          score: z.coerce.number().min(0).max(100),
-          comment: z.string().optional(),
-      })),
-  }))
+    committeeComment: z.string().optional(),
+    itemScores: z.array(z.object({
+        quoteItemId: z.string(),
+        financialScores: z.array(z.object({
+            criterionId: z.string(),
+            score: z.coerce.number().min(0).max(100),
+            comment: z.string().optional(),
+        })),
+        technicalScores: z.array(z.object({
+            criterionId: z.string(),
+            score: z.coerce.number().min(0).max(100),
+            comment: z.string().optional(),
+        })),
+    }))
 });
 type ScoreFormValues = z.infer<typeof scoreFormSchema>;
 
-const ScoringDialog = ({ 
-    quote, 
-    requisition, 
-    user, 
+const ScoringDialog = ({
+    quote,
+    requisition,
+    user,
     onScoreSubmitted,
     isScoringDeadlinePassed,
     hidePrices,
-}: { 
-    quote: Quotation; 
-    requisition: PurchaseRequisition; 
-    user: User; 
+}: {
+    quote: Quotation;
+    requisition: PurchaseRequisition;
+    user: User;
     onScoreSubmitted: () => void;
     isScoringDeadlinePassed: boolean;
     hidePrices: boolean;
 }) => {
     const { toast } = useToast();
     const [isSubmitting, setSubmitting] = useState(false);
-    
+
     const form = useForm<ScoreFormValues>({
         resolver: zodResolver(scoreFormSchema),
     });
@@ -1522,7 +1542,7 @@ const ScoringDialog = ({
             onScoreSubmitted();
 
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -1531,7 +1551,7 @@ const ScoringDialog = ({
             setSubmitting(false);
         }
     };
-    
+
     if (!requisition.evaluationCriteria) return null;
     const existingScore = quote.scores?.find(s => s.scorerId === user.id) || (quote as any).complianceSets?.find((c: any) => c.scorerId === user.id);
     const isFinancialScorer = requisition.financialCommitteeMemberIds?.includes(user.id);
@@ -1547,43 +1567,43 @@ const ScoringDialog = ({
                     <FormLabel>{criterion.name}</FormLabel>
                     <Badge variant="secondary">Weight: {criterion.weight}%</Badge>
                 </div>
-                 <FormField
+                <FormField
                     control={form.control}
                     name={`${fieldName}.${criterionIndex}.score`}
                     render={({ field }) => (
-                         <FormItem>
+                        <FormItem>
                             <FormControl>
                                 <div className="flex items-center gap-4">
-                                <Slider
-                                    defaultValue={[field.value]}
-                                    max={100}
-                                    step={5}
-                                    onValueChange={(v) => field.onChange(v[0])}
-                                    disabled={!!existingScore}
-                                />
-                                <Input type="number" {...field} className="w-24" disabled={!!existingScore} />
+                                    <Slider
+                                        defaultValue={[field.value]}
+                                        max={100}
+                                        step={5}
+                                        onValueChange={(v) => field.onChange(v[0])}
+                                        disabled={!!existingScore}
+                                    />
+                                    <Input type="number" {...field} className="w-24" disabled={!!existingScore} />
                                 </div>
                             </FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
-                 />
-                 <FormField
+                />
+                <FormField
                     control={form.control}
                     name={`${fieldName}.${criterionIndex}.comment`}
                     render={({ field }) => (
-                         <FormItem>
-                             <FormControl>
+                        <FormItem>
+                            <FormControl>
                                 <Textarea placeholder="Optional comment for this criterion..." {...field} rows={2} disabled={!!existingScore} />
-                             </FormControl>
+                            </FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
-                 />
+                />
             </div>
         ));
     };
-    
+
     const originalItems = useMemo(() => {
         const itemIds = new Set(quote.items.map(i => i.requisitionItemId));
         return requisition.items.filter(i => itemIds.has(i.id));
@@ -1601,7 +1621,7 @@ const ScoringDialog = ({
                         The deadline for scoring this quotation has passed. Please contact the procurement officer if you need an extension.
                     </p>
                 </div>
-                 <DialogFooter>
+                <DialogFooter>
                     <DialogClose asChild>
                         <Button variant="outline">Close</Button>
                     </DialogClose>
@@ -1609,7 +1629,7 @@ const ScoringDialog = ({
             </DialogContent>
         );
     }
-    
+
     return (
         <DialogContent className="max-w-4xl flex flex-col h-[95vh]">
             <DialogHeader>
@@ -1617,123 +1637,123 @@ const ScoringDialog = ({
                 <DialogDescription>Mark each quoted item as Comply or Non‑comply against the requester's specifications. This will determine which bids are eligible for award.</DialogDescription>
             </DialogHeader>
             <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0 flex flex-col">
-                <ScrollArea className="flex-1 pr-4 -mr-4">
-                     <div className="space-y-6">
-                        {originalItems.map(originalItem => {
-                             const proposalsForItem = quote.items.filter(i => i.requisitionItemId === originalItem.id);
-                             return (
-                                 <Card key={originalItem.id} className="bg-muted/30">
-                                     <CardHeader>
-                                         <CardTitle>Requested Item: {originalItem.name} (Qty: {originalItem.quantity})</CardTitle>
-                                         <CardDescription>Evaluate the following proposal(s) for this item.</CardDescription>
-                                     </CardHeader>
-                                     <CardContent className="space-y-4">
-                                         {proposalsForItem.map(proposal => {
-                                             const itemIndex = quote.items.findIndex(i => i.id === proposal.id);
-                                             return (
-                                                <Card key={proposal.id} className="bg-background">
-                                                    <CardHeader>
-                                                        <CardTitle className="text-lg">{proposal.name}</CardTitle>
-                                                        {!hidePrices && 
-                                                            <CardDescription>
-                                                                Quantity: {proposal.quantity} | Unit Price: {proposal.unitPrice.toFixed(2)} ETB
-                                                            </CardDescription>
-                                                        }
-                                                    </CardHeader>
-                                                    <CardContent className="space-y-4">
-                                                        {isFinancialScorer && !hidePrices && (
-                                                            <div className="space-y-4">
-                                                                <h4 className="font-semibold text-lg flex items-center gap-2"><Scale /> Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
-                                                                {renderCriteria(itemIndex, 'financial')}
-                                                            </div>
-                                                        )}
-                                                        {isTechnicalScorer && (
-                                                            <div className="space-y-4">
-                                                                <h4 className="font-semibold text-lg flex items-center gap-2"><TrendingUp /> Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
-                                                                {renderCriteria(itemIndex, 'technical')}
-                                                            </div>
-                                                        )}
-                                                    </CardContent>
-                                                </Card>
-                                             );
-                                         })}
-                                     </CardContent>
-                                 </Card>
-                            )
-                        })}
-                        
-                        <FormField
-                            control={form.control}
-                            name="committeeComment"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel className="text-lg font-semibold">Overall Comment</FormLabel>
-                                    <FormControl>
-                                        <Textarea placeholder="Provide an overall summary or justification for your scores for this entire quotation..." {...field} rows={4} disabled={!!existingScore} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-                </ScrollArea>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0 flex flex-col">
+                    <ScrollArea className="flex-1 pr-4 -mr-4">
+                        <div className="space-y-6">
+                            {originalItems.map(originalItem => {
+                                const proposalsForItem = quote.items.filter(i => i.requisitionItemId === originalItem.id);
+                                return (
+                                    <Card key={originalItem.id} className="bg-muted/30">
+                                        <CardHeader>
+                                            <CardTitle>Requested Item: {originalItem.name} (Qty: {originalItem.quantity})</CardTitle>
+                                            <CardDescription>Evaluate the following proposal(s) for this item.</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            {proposalsForItem.map(proposal => {
+                                                const itemIndex = quote.items.findIndex(i => i.id === proposal.id);
+                                                return (
+                                                    <Card key={proposal.id} className="bg-background">
+                                                        <CardHeader>
+                                                            <CardTitle className="text-lg">{proposal.name}</CardTitle>
+                                                            {!hidePrices &&
+                                                                <CardDescription>
+                                                                    Quantity: {proposal.quantity} | Unit Price: {proposal.unitPrice.toFixed(2)} ETB
+                                                                </CardDescription>
+                                                            }
+                                                        </CardHeader>
+                                                        <CardContent className="space-y-4">
+                                                            {isFinancialScorer && !hidePrices && (
+                                                                <div className="space-y-4">
+                                                                    <h4 className="font-semibold text-lg flex items-center gap-2"><Scale /> Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
+                                                                    {renderCriteria(itemIndex, 'financial')}
+                                                                </div>
+                                                            )}
+                                                            {isTechnicalScorer && (
+                                                                <div className="space-y-4">
+                                                                    <h4 className="font-semibold text-lg flex items-center gap-2"><TrendingUp /> Technical Evaluation ({requisition.evaluationCriteria?.technicalWeight}%)</h4>
+                                                                    {renderCriteria(itemIndex, 'technical')}
+                                                                </div>
+                                                            )}
+                                                        </CardContent>
+                                                    </Card>
+                                                );
+                                            })}
+                                        </CardContent>
+                                    </Card>
+                                )
+                            })}
 
-                <DialogFooter className="pt-4 mt-4 border-t">
-                    {existingScore ? (
-                        <p className="text-sm text-muted-foreground">You have already completed compliance checks for this quote.</p>
-                    ) : (
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button type="button">
-                                    Submit Compliance
-                                </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirm Compliance Submission</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        Please review your compliance checks before submitting. This action cannot be undone.
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
-                            
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Go Back &amp; Edit</AlertDialogCancel>
-                                    <AlertDialogAction onClick={form.handleSubmit(onSubmit)} disabled={isSubmitting}>
-                                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Confirm &amp; Submit
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    )}
-                </DialogFooter>
-            </form>
+                            <FormField
+                                control={form.control}
+                                name="committeeComment"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel className="text-lg font-semibold">Overall Comment</FormLabel>
+                                        <FormControl>
+                                            <Textarea placeholder="Provide an overall summary or justification for your scores for this entire quotation..." {...field} rows={4} disabled={!!existingScore} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    </ScrollArea>
+
+                    <DialogFooter className="pt-4 mt-4 border-t">
+                        {existingScore ? (
+                            <p className="text-sm text-muted-foreground">You have already completed compliance checks for this quote.</p>
+                        ) : (
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button type="button">
+                                        Submit Compliance
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Confirm Compliance Submission</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            Please review your compliance checks before submitting. This action cannot be undone.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Go Back &amp; Edit</AlertDialogCancel>
+                                        <AlertDialogAction onClick={form.handleSubmit(onSubmit)} disabled={isSubmitting}>
+                                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Confirm &amp; Submit
+                                        </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        )}
+                    </DialogFooter>
+                </form>
             </Form>
         </DialogContent>
     );
 };
 
 const ScoringProgressTracker = ({
-  requisition,
-  quotations,
-  allUsers,
-  onFinalize,
-  onCommitteeUpdate,
-  isFinalizing,
+    requisition,
+    quotations,
+    allUsers,
+    onFinalize,
+    onCommitteeUpdate,
+    isFinalizing,
 }: {
-  requisition: PurchaseRequisition;
-  quotations: Quotation[];
-  allUsers: User[];
-  onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
-  onCommitteeUpdate: (open: boolean) => void;
-  isFinalizing: boolean;
+    requisition: PurchaseRequisition;
+    quotations: Quotation[];
+    allUsers: User[];
+    onFinalize: (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => void;
+    onCommitteeUpdate: (open: boolean) => void;
+    isFinalizing: boolean;
 }) => {
     const [isExtendDialogOpen, setExtendDialogOpen] = useState(false);
     const [isReportDialogOpen, setReportDialogOpen] = useState(false);
     const [selectedMember, setSelectedMember] = useState<User | null>(null);
     const [isAwardCenterOpen, setAwardCenterOpen] = useState(false);
-    
+
     const { toast } = useToast();
     const isScoringDeadlinePassed = requisition.scoringDeadline && isPast(new Date(requisition.scoringDeadline));
 
@@ -1782,13 +1802,13 @@ const ScoringProgressTracker = ({
                 submittedAt: submissionDate,
             };
         }).sort((a, b) => {
-             if (a.submittedAt && b.submittedAt) return a.submittedAt.getTime() - b.submittedAt.getTime();
-             if (a.submittedAt) return -1;
-             if (b.submittedAt) return 1;
-             return 0;
+            if (a.submittedAt && b.submittedAt) return a.submittedAt.getTime() - b.submittedAt.getTime();
+            if (a.submittedAt) return -1;
+            if (b.submittedAt) return 1;
+            return 0;
         });
     }, [assignedCommitteeMembers, quotations, isScoringDeadlinePassed, requisition.id, (requisition as any).committeeAssignments]);
-    
+
     const allHaveScored = scoringStatus.length > 0 && scoringStatus.every(s => s.hasSubmittedAll);
 
     const getButtonState = () => {
@@ -1809,14 +1829,14 @@ const ScoringProgressTracker = ({
     return (
         <Card className="mt-6">
             <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><GanttChart /> Compliance Progress</CardTitle>
-                        <CardDescription>Track the committee's compliance-check progress. The award can be finalized once all members have completed compliance checks for all quotations.</CardDescription>
-                    </CardHeader>
+                <CardTitle className="flex items-center gap-2"><GanttChart /> Compliance Progress</CardTitle>
+                <CardDescription>Track the committee's compliance-check progress. The award can be finalized once all members have completed compliance checks for all quotations.</CardDescription>
+            </CardHeader>
             <CardContent>
                 <ul className="space-y-3">
                     {scoringStatus.map(member => (
                         <li key={member.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-md border">
-                           <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3">
                                 <Avatar>
                                     <AvatarImage src={`https://picsum.photos/seed/${member.id}/40/40`} data-ai-hint="profile picture" />
                                     <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
@@ -1825,7 +1845,7 @@ const ScoringProgressTracker = ({
                                     <p className="font-semibold">{member.name}</p>
                                     <p className="text-xs text-muted-foreground">{member.email}</p>
                                 </div>
-                           </div>
+                            </div>
                             <div className="flex items-center gap-2 mt-2 sm:mt-0 w-full sm:w-auto">
                                 {member.hasSubmittedAny && member.submittedAt ? (
                                     <div className="text-right flex-1">
@@ -1836,13 +1856,13 @@ const ScoringProgressTracker = ({
                                     </div>
                                 ) : member.isOverdue ? (
                                     <>
-                                     <Badge variant="destructive" className="mr-auto"><AlertCircle className="mr-1 h-3 w-3" />Overdue</Badge>
-                                     <Button size="sm" variant="secondary" onClick={()=>{ setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
-                                     <Button size="sm" variant="secondary" onClick={() => onCommitteeUpdate(true)}>Replace</Button>
-                                     <Button size="sm" variant="outline" onClick={()=>{ setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
+                                        <Badge variant="destructive" className="mr-auto"><AlertCircle className="mr-1 h-3 w-3" />Overdue</Badge>
+                                        <Button size="sm" variant="secondary" onClick={() => { setSelectedMember(member); setExtendDialogOpen(true); }}>Extend</Button>
+                                        <Button size="sm" variant="secondary" onClick={() => onCommitteeUpdate(true)}>Replace</Button>
+                                        <Button size="sm" variant="outline" onClick={() => { setSelectedMember(member); setReportDialogOpen(true); }}>Report</Button>
                                     </>
                                 ) : (
-                                     <Badge variant="secondary">Pending</Badge>
+                                    <Badge variant="secondary">Pending</Badge>
                                 )}
                             </div>
                         </li>
@@ -1850,31 +1870,31 @@ const ScoringProgressTracker = ({
                 </ul>
             </CardContent>
             <CardFooter>
-                 <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
+                <Dialog open={isAwardCenterOpen} onOpenChange={setAwardCenterOpen}>
                     <DialogTrigger asChild>
-                         <Button disabled={buttonState.disabled}>
+                        <Button disabled={buttonState.disabled}>
                             {isFinalizing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             {buttonState.text}
                         </Button>
                     </DialogTrigger>
-                    <AwardCenterDialog 
+                    <AwardCenterDialog
                         requisition={requisition}
                         quotations={quotations}
                         onFinalize={onFinalize}
                         onClose={() => setAwardCenterOpen(false)}
                     />
-                 </Dialog>
+                </Dialog>
             </CardFooter>
             {selectedMember && (
                 <>
-                    <ExtendDeadlineDialog 
+                    <ExtendDeadlineDialog
                         isOpen={isExtendDialogOpen}
                         onClose={() => { setExtendDialogOpen(false); setSelectedMember(null); }}
                         member={selectedMember}
                         requisition={requisition}
                         onSuccess={() => onCommitteeUpdate(false)}
                     />
-                    <OverdueReportDialog 
+                    <OverdueReportDialog
                         isOpen={isReportDialogOpen}
                         onClose={() => { setReportDialogOpen(false); setSelectedMember(null); }}
                         member={selectedMember}
@@ -1917,20 +1937,20 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
             let width = pdfWidth - 20; // with margin
             let height = width / ratio;
 
-             if (height > pdfHeight - 20) {
-                 height = pdfHeight - 20;
-                 width = height * ratio;
+            if (height > pdfHeight - 20) {
+                height = pdfHeight - 20;
+                width = height * ratio;
             }
-            
+
             const x = (pdfWidth - width) / 2;
             const y = 10;
 
             // Add a white background to the PDF before adding the image
             pdf.setFillColor(255, 255, 255);
             pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
-            
+
             pdf.addImage(imgData, 'PNG', x, y, width, height);
-            
+
             pdf.save(`Scoring-Report-${requisition.id}.pdf`);
             toast({ title: "PDF Generated", description: "Your report has been downloaded." });
 
@@ -1970,7 +1990,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                             <div>
                                                 <CardTitle className="text-xl">{quote.vendorName}</CardTitle>
                                                 <CardDescription className="print:text-gray-700 pt-1">
-                                                    Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> | 
+                                                    Final Score: <span className="font-bold text-primary">{quote.finalAverageScore?.toFixed(2)}</span> |
                                                     Rank: <span className="font-bold">{quote.rank || 'N/A'}</span> |
                                                     Total Price: <span className="font-bold">{quote.totalPrice.toLocaleString()} ETB</span>
                                                 </CardDescription>
@@ -1991,11 +2011,11 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                                                             <span className="font-semibold print:text-black">{scoreSet.scorer?.name || 'Unknown User'}</span>
                                                         </div>
                                                         <div className="text-right">
-                                                        <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
-                                                        <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPp')}</p>
+                                                            <span className="font-bold text-lg text-primary">{scoreSet.finalScore.toFixed(2)}</span>
+                                                            <p className="text-xs text-muted-foreground print:text-gray-500">Submitted {format(new Date(scoreSet.submittedAt), 'PPp')}</p>
                                                         </div>
                                                     </div>
-                                                    
+
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
                                                         <div>
                                                             <h4 className="font-semibold text-sm mb-2 print:text-gray-800">Financial Evaluation ({requisition.evaluationCriteria?.financialWeight}%)</h4>
@@ -2036,7 +2056,7 @@ const CumulativeScoringReportDialog = ({ requisition, quotations, isOpen, onClos
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>Close</Button>
                     <Button onClick={handleGeneratePdf} disabled={isGeneratingPdf}>
-                        {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4"/>}
+                        {isGeneratingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
                         Print / Export PDF
                     </Button>
                 </DialogFooter>
@@ -2050,7 +2070,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
     const { toast } = useToast();
     const { user } = useAuth();
     const [isSubmitting, setSubmitting] = useState(false);
-    const [newDeadline, setNewDeadline] = useState<Date|undefined>();
+    const [newDeadline, setNewDeadline] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState('17:00');
 
     const finalNewDeadline = useMemo(() => {
@@ -2058,7 +2078,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
         const [hours, minutes] = newDeadlineTime.split(':').map(Number);
         return setMinutes(setHours(newDeadline, hours), minutes);
     }, [newDeadline, newDeadlineTime]);
-    
+
     const handleSubmit = async () => {
         if (!user || !finalNewDeadline) return;
         if (isBefore(finalNewDeadline, new Date())) {
@@ -2084,7 +2104,7 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
             onClose();
 
         } catch (error) {
-             toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.',});
+            toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.', });
         } finally {
             setSubmitting(false);
         }
@@ -2109,13 +2129,13 @@ const ExtendDeadlineDialog = ({ isOpen, onClose, member, requisition, onSuccess 
                                         {newDeadline ? format(newDeadline, "PPP") : <span>Pick a date</span>}
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newDeadline} onSelect={setNewDeadline} initialFocus disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} /></PopoverContent>
+                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newDeadline} onSelect={setNewDeadline} initialFocus disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))} /></PopoverContent>
                             </Popover>
-                             <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)} />
+                            <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)} />
                         </div>
                     </div>
                 </div>
-                 <DialogFooter>
+                <DialogFooter>
                     <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
                     <Button onClick={handleSubmit} disabled={isSubmitting || !finalNewDeadline}>
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -2138,12 +2158,12 @@ const OverdueReportDialog = ({ isOpen, onClose, member }: { isOpen: boolean, onC
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
-                     <p>This is a placeholder for a detailed report about the overdue committee member for internal follow-up.</p>
-                     <div className="p-4 border rounded-md bg-muted/50">
+                    <p>This is a placeholder for a detailed report about the overdue committee member for internal follow-up.</p>
+                    <div className="p-4 border rounded-md bg-muted/50">
                         <p><span className="font-semibold">Member Name:</span> {member.name}</p>
                         <p><span className="font-semibold">Email:</span> {member.email}</p>
                         <p><span className="font-semibold">Assigned Role:</span> {member.role}</p>
-                     </div>
+                    </div>
                 </div>
                 <DialogFooter>
                     <Button onClick={onClose}>Close</Button>
@@ -2170,15 +2190,15 @@ const CommitteeActions = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submittedOverride, setSubmittedOverride] = useState(false);
     const { toast } = useToast();
-    
+
     const userScoredQuotesCount = quotations.filter(q => (q.scores?.some(s => s.scorerId === user.id) || (q as any).complianceSets?.some((c: any) => c.scorerId === user.id))).length;
     const allQuotesScored = quotations.length > 0 && userScoredQuotesCount === quotations.length;
-    
+
     // Corrected logic: Check the live assignment status from the user object
     const assignment = useMemo(() => {
         return user.committeeAssignments?.find(a => a.requisitionId === requisition.id);
     }, [user.committeeAssignments, requisition.id]);
-    
+
     const scoresAlreadyFinalized = assignment?.scoresSubmitted || false;
     const roleNames = (user.roles || []).map((r: any) => (typeof r === 'string' ? r : r?.name)).filter(Boolean);
     const isCommitteeMember = roleNames.includes('Committee_Member') || roleNames.some((r: string) => r.includes('Committee'));
@@ -2200,7 +2220,7 @@ const CommitteeActions = ({
 
             if (response.status === 409) {
                 setSubmittedOverride(true);
-                toast({ title: 'Compliance Submitted', description: 'Your final compliance checks were already submitted.'});
+                toast({ title: 'Compliance Submitted', description: 'Your final compliance checks were already submitted.' });
                 onFinalScoresSubmitted();
                 return;
             }
@@ -2209,11 +2229,11 @@ const CommitteeActions = ({
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to submit scores');
             }
-            toast({ title: 'Compliance Submitted', description: 'Your final compliance checks have been recorded.'});
+            toast({ title: 'Compliance Submitted', description: 'Your final compliance checks have been recorded.' });
             setSubmittedOverride(true);
             onFinalScoresSubmitted();
         } catch (error) {
-             toast({
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -2359,58 +2379,58 @@ const NotifyVendorDialog = ({
 
 
 export default function QuotationDetailsPage() {
-  const router = useRouter();
-  const params = useParams();
-  const { toast } = useToast();
+    const router = useRouter();
+    const params = useParams();
+    const { toast } = useToast();
     const { user, token, allUsers, role, rfqSenderSetting, committeeQuorum } = useAuth();
-  const id = params.id as string;
-  
-  const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isAddFormOpen, setAddFormOpen] = useState(false);
-  const [isCommitteeDialogOpen, setCommitteeDialogOpen] = useState(false);
-  const [isScoringFormOpen, setScoringFormOpen] = useState(false);
-  const [isFinalizing, setIsFinalizing] = useState(false);
-  const [isNotifying, setIsNotifying] = useState(false);
-  const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
-  const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
-  const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
-  const [lastPOCreated, setLastPOCreated] = useState<PurchaseOrder | null>(null);
-  const [isChangingAward, setIsChangingAward] = useState(false);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [isReportOpen, setReportOpen] = useState(false);
+    const id = params.id as string;
+
+    const [requisition, setRequisition] = useState<PurchaseRequisition | null>(null);
+    const [vendors, setVendors] = useState<Vendor[]>([]);
+    const [quotations, setQuotations] = useState<Quotation[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [isAddFormOpen, setAddFormOpen] = useState(false);
+    const [isCommitteeDialogOpen, setCommitteeDialogOpen] = useState(false);
+    const [isScoringFormOpen, setScoringFormOpen] = useState(false);
+    const [isFinalizing, setIsFinalizing] = useState(false);
+    const [isNotifying, setIsNotifying] = useState(false);
+    const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
+    const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
+    const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
+    const [lastPOCreated, setLastPOCreated] = useState<PurchaseOrder | null>(null);
+    const [isChangingAward, setIsChangingAward] = useState(false);
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+    const [isReportOpen, setReportOpen] = useState(false);
     const [scoresSubmittedOverride, setScoresSubmittedOverride] = useState(false);
-  const [actionDialog, setActionDialog] = useState<{isOpen: boolean, type: 'update' | 'cancel' | 'restart'}>({isOpen: false, type: 'restart'});
+    const [actionDialog, setActionDialog] = useState<{ isOpen: boolean, type: 'update' | 'cancel' | 'restart' }>({ isOpen: false, type: 'restart' });
 
-  const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
-  const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
-  
-  const isDeadlinePassed = useMemo(() => {
-    if (!requisition) return false;
-    return requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
-  }, [requisition]);
+    const isAwarded = useMemo(() => quotations.some(q => ['Awarded', 'Accepted', 'Declined', 'Failed', 'Partially_Awarded', 'Standby'].includes(q.status)), [quotations]);
+    const isAccepted = useMemo(() => quotations.some(q => q.status === 'Accepted' || q.status === 'Partially_Awarded'), [quotations]);
 
-  const isScoringDeadlinePassed = useMemo(() => {
-    if (!requisition || !requisition.scoringDeadline) return false;
-    return isPast(new Date(requisition.scoringDeadline));
-  }, [requisition]);
+    const isDeadlinePassed = useMemo(() => {
+        if (!requisition) return false;
+        return requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+    }, [requisition]);
 
-  const isScoringComplete = useMemo(() => {
-    if (!requisition) return false;
-    const allMemberIds = [
-        ...(requisition.financialCommitteeMemberIds || []),
-        ...(requisition.technicalCommitteeMemberIds || [])
-    ];
-    if (allMemberIds.length === 0) return false;
-    if (quotations.length === 0) return false;
+    const isScoringDeadlinePassed = useMemo(() => {
+        if (!requisition || !requisition.scoringDeadline) return false;
+        return isPast(new Date(requisition.scoringDeadline));
+    }, [requisition]);
 
-    // Check if every assigned member has finalized their scores.
-    return allMemberIds.every(memberId => {
-                return (requisition as any).committeeAssignments?.some((a: any) => a.userId === memberId && a.scoresSubmitted) || false;
-    });
-  }, [requisition, quotations, allUsers]);
+    const isScoringComplete = useMemo(() => {
+        if (!requisition) return false;
+        const allMemberIds = [
+            ...(requisition.financialCommitteeMemberIds || []),
+            ...(requisition.technicalCommitteeMemberIds || [])
+        ];
+        if (allMemberIds.length === 0) return false;
+        if (quotations.length === 0) return false;
+
+        // Check if every assigned member has finalized their scores.
+        return allMemberIds.every(memberId => {
+            return (requisition as any).committeeAssignments?.some((a: any) => a.userId === memberId && a.scoresSubmitted) || false;
+        });
+    }, [requisition, quotations, allUsers]);
 
     const isAuthorized = useMemo(() => {
         if (!user || !role) return false;
@@ -2469,7 +2489,7 @@ export default function QuotationDetailsPage() {
             } else {
                 toast({ variant: 'destructive', title: 'Error', description: 'Requisition not found.' });
             }
-            
+
             setVendors(venData || []);
 
         } catch (error) {
@@ -2480,38 +2500,38 @@ export default function QuotationDetailsPage() {
     };
 
 
-  useEffect(() => {
-    if (id && user) { // ensure user is loaded
+    useEffect(() => {
+        if (id && user) { // ensure user is loaded
+            fetchRequisitionAndQuotes();
+        }
+    }, [id, user]);
+
+    const handleRfqSent = () => {
         fetchRequisitionAndQuotes();
     }
-  }, [id, user]);
 
-  const handleRfqSent = () => {
-    fetchRequisitionAndQuotes();
-  }
+    const handleQuoteAdded = () => {
+        setAddFormOpen(false);
+        fetchRequisitionAndQuotes();
+    }
 
-  const handleQuoteAdded = () => {
-    setAddFormOpen(false);
-    fetchRequisitionAndQuotes();
-  }
-  
-  const handleContractFinalized = () => {
-    fetchRequisitionAndQuotes();
-  }
-  
-  const handlePOCreated = (po: PurchaseOrder) => {
-    fetchRequisitionAndQuotes();
-    setLastPOCreated(po);
-  }
-  
+    const handleContractFinalized = () => {
+        fetchRequisitionAndQuotes();
+    }
+
+    const handlePOCreated = (po: PurchaseOrder) => {
+        fetchRequisitionAndQuotes();
+        setLastPOCreated(po);
+    }
+
     const handleFinalScoresSubmitted = () => {
         setScoresSubmittedOverride(true);
         fetchRequisitionAndQuotes();
     }
-  
-   const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
+
+    const handleFinalizeScores = async (awardStrategy: 'all' | 'item', awards: any, awardResponseDeadline?: Date) => {
         if (!user || !requisition || !quotations) return;
-        
+
         let totalAwardValue = 0;
         const awardedQuoteItems: { [itemId: string]: { price: number, quantity: number } } = {};
 
@@ -2533,7 +2553,7 @@ export default function QuotationDetailsPage() {
 
         setIsFinalizing(true);
         try {
-             const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
+            const response = await fetch(`/api/requisitions/${requisition.id}/finalize-scores`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: user.id, awards, awardStrategy, awardResponseDeadline, totalAwardValue }),
@@ -2544,8 +2564,8 @@ export default function QuotationDetailsPage() {
             }
             toast({ title: 'Success', description: 'Scores have been finalized and awards are being routed for final review.' });
             fetchRequisitionAndQuotes();
-        } catch(error) {
-             toast({
+        } catch (error) {
+            toast({
                 variant: 'destructive',
                 title: 'Error',
                 description: error instanceof Error ? error.message : 'An unknown error occurred.',
@@ -2556,451 +2576,451 @@ export default function QuotationDetailsPage() {
     }
 
 
-  const handleAwardChange = async () => {
-    if (!user || !id || !requisition) return;
-    
-    setIsChangingAward(true);
-    try {
-        const response = await fetch(`/api/requisitions/${id}/handle-award-change`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id }),
-        });
+    const handleAwardChange = async () => {
+        if (!user || !id || !requisition) return;
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Failed to handle award change.' }));
-            throw new Error(errorData.error);
+        setIsChangingAward(true);
+        try {
+            const response = await fetch(`/api/requisitions/${id}/handle-award-change`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Failed to handle award change.' }));
+                throw new Error(errorData.error);
+            }
+
+            toast({
+                title: `Action Successful`,
+                description: `The award status has been updated.`
+            });
+            fetchRequisitionAndQuotes();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsChangingAward(false);
         }
-
-        toast({
-            title: `Action Successful`,
-            description: `The award status has been updated.`
-        });
-        fetchRequisitionAndQuotes();
-    } catch (error) {
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: error instanceof Error ? error.message : 'An unknown error occurred.',
-        });
-    } finally {
-        setIsChangingAward(false);
     }
-  }
 
-  const handleNotifyVendor = async (deadline?: Date) => {
-    if (!user || !requisition) return;
-    setIsNotifying(true);
-    try {
-      const response = await fetch(`/api/requisitions/${requisition.id}/notify-vendor`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, awardResponseDeadline: deadline })
-      });
+    const handleNotifyVendor = async (deadline?: Date) => {
+        if (!user || !requisition) return;
+        setIsNotifying(true);
+        try {
+            const response = await fetch(`/api/requisitions/${requisition.id}/notify-vendor`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, awardResponseDeadline: deadline })
+            });
 
-      if (!response.ok) {
+            if (!response.ok) {
                 const errorData = await response.json().catch(() => ({} as any));
                 throw new Error(errorData.error || "Failed to notify vendor.");
-      }
+            }
 
             const data = await response.json().catch(() => ({} as any));
             const serverMessage = (data as any)?.message as string | undefined;
             const isComingSoon = typeof serverMessage === 'string' && serverMessage.toLowerCase().includes('coming soon');
 
-      toast({
+            toast({
                 title: isComingSoon ? 'Notification coming soon' : 'Vendor Notified',
                 description: isComingSoon
                     ? 'Manual quotation award will proceed without vendor portal response.'
                     : (serverMessage || 'The winning vendor has been notified and the award is pending their response.')
-      });
-      fetchRequisitionAndQuotes();
-    } catch (error) {
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: error instanceof Error ? error.message : 'An unknown error occurred.',
-        });
-    } finally {
-        setIsNotifying(false);
+            });
+            fetchRequisitionAndQuotes();
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Error',
+                description: error instanceof Error ? error.message : 'An unknown error occurred.',
+            });
+        } finally {
+            setIsNotifying(false);
+        }
     }
-  }
 
-  const handleScoreButtonClick = (quote: Quotation, hidePrices: boolean) => {
-    setSelectedQuoteForScoring(quote);
-    setHidePricesForScoring(hidePrices);
-    setScoringFormOpen(true);
-  }
-  
-  const handleScoreSubmitted = () => {
-      setScoringFormOpen(false);
-      setSelectedQuoteForScoring(null);
-      fetchRequisitionAndQuotes();
-  }
+    const handleScoreButtonClick = (quote: Quotation, hidePrices: boolean) => {
+        setSelectedQuoteForScoring(quote);
+        setHidePricesForScoring(hidePrices);
+        setScoringFormOpen(true);
+    }
 
-  const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
-      if (!requisition) return 'rfq';
-      const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
+    const handleScoreSubmitted = () => {
+        setScoringFormOpen(false);
+        setSelectedQuoteForScoring(null);
+        fetchRequisitionAndQuotes();
+    }
 
-      if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
-      if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
-      if (requisition.status === 'Accepting_Quotes' && deadlinePassed) return 'committee';
+    const getCurrentStep = (): 'rfq' | 'committee' | 'award' | 'finalize' | 'completed' => {
+        if (!requisition) return 'rfq';
+        const deadlinePassed = requisition.deadline ? isPast(new Date(requisition.deadline)) : false;
 
-      const inScoringProcess = requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined';
-      if (inScoringProcess) {
-          return isScoringComplete ? 'award' : 'committee';
-      }
-      
-      const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded';
-      if (inReviewProcess) return 'award';
+        if (requisition.status === 'PreApproved' && !isAwarded) return 'rfq';
+        if (requisition.status === 'Accepting_Quotes' && !deadlinePassed) return 'rfq';
+        if (requisition.status === 'Accepting_Quotes' && deadlinePassed) return 'committee';
 
-      if (isAccepted) {
-        return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
-      }
-      
-      return 'rfq'; // Default fallback
-  };
-  const currentStep = getCurrentStep();
-  
-  const formatEvaluationCriteria = (criteria?: EvaluationCriteria) => {
-      if (!criteria) return "No specific criteria defined.";
+        const inScoringProcess = requisition.status === 'Scoring_In_Progress' || requisition.status === 'Scoring_Complete' || requisition.status === 'Award_Declined';
+        if (inScoringProcess) {
+            return isScoringComplete ? 'award' : 'committee';
+        }
 
-      const formatSection = (title: string, weight: number, items: any[]) => {
-          if (!items || items.length === 0) return `${title} (Overall Weight: ${weight}%):\n- No criteria defined.`;
-          const itemDetails = items.map(item => `- ${item.name} (${item.weight}%)`).join('\n');
-          return `${title} (Overall Weight: ${weight}%):\n${itemDetails}`;
-      };
+        const inReviewProcess = requisition.status.startsWith('Pending_') || requisition.status === 'PostApproved' || requisition.status === 'Awarded';
+        if (inReviewProcess) return 'award';
 
-      const financialPart = formatSection(
-          'Financial Criteria',
-          criteria.financialWeight,
-          criteria.financialCriteria
-      );
+        if (isAccepted) {
+            return requisition.status === 'PO_Created' ? 'completed' : 'finalize';
+        }
 
-      const technicalPart = formatSection(
-          'Technical Criteria',
-          criteria.technicalWeight,
-          criteria.technicalCriteria
-      );
+        return 'rfq'; // Default fallback
+    };
+    const currentStep = getCurrentStep();
 
-      return `${financialPart}\n\n${technicalPart}`;
-  };
+    const formatEvaluationCriteria = (criteria?: EvaluationCriteria) => {
+        if (!criteria) return "No specific criteria defined.";
 
-  if (loading || !user) {
-     return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  }
-  
-  if (!requisition) {
-     return <div className="text-center p-8">Requisition not found.</div>;
-  }
-  
-  const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
-  const isReadyForNotification = requisition.status === 'PostApproved';
-  const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
-  const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
-  const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
+        const formatSection = (title: string, weight: number, items: any[]) => {
+            if (!items || items.length === 0) return `${title} (Overall Weight: ${weight}%):\n- No criteria defined.`;
+            const itemDetails = items.map(item => `- ${item.name} (${item.weight}%)`).join('\n');
+            return `${title} (Overall Weight: ${weight}%):\n${itemDetails}`;
+        };
+
+        const financialPart = formatSection(
+            'Financial Criteria',
+            criteria.financialWeight,
+            criteria.financialCriteria
+        );
+
+        const technicalPart = formatSection(
+            'Technical Criteria',
+            criteria.technicalWeight,
+            criteria.technicalCriteria
+        );
+
+        return `${financialPart}\n\n${technicalPart}`;
+    };
+
+    if (loading || !user) {
+        return <div className="flex items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+    }
+
+    if (!requisition) {
+        return <div className="text-center p-8">Requisition not found.</div>;
+    }
+
+    const canManageCommittees = (role === 'Procurement_Officer' || role === 'Admin' || role === 'Committee') && isAuthorized;
+    const isReadyForNotification = requisition.status === 'PostApproved';
+    const noBidsAndDeadlinePassed = isDeadlinePassed && quotations.length === 0 && requisition.status === 'Accepting_Quotes';
+    const quorumNotMetAndDeadlinePassed = isDeadlinePassed && quotations.length > 0 && !isAwarded && quotations.length < committeeQuorum;
+    const readyForCommitteeAssignment = isDeadlinePassed && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed;
 
 
-  return (
-    <div className="space-y-6">
-        <Button variant="outline" onClick={() => router.push('/quotations')}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to All Requisitions
-        </Button>
-        
-        <Card className="p-4 sm:p-6">
-            <WorkflowStepper step={currentStep} />
-        </Card>
-        
-        {requisition.evaluationCriteria && !((user && (user.roles as string[]).some(r => r === 'Vendor')) || false) && (
-            <Card>
-                 <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <CardTitle className="flex items-center gap-2"><ClipboardList /> Evaluation Criteria</CardTitle>
-                        <CardDescription>The following criteria were set by the requester to guide quote evaluation.</CardDescription>
-                    </div>
-                    <div className="flex gap-2 w-full sm:w-auto">
-                        <Button variant="outline" onClick={() => setIsDetailsOpen(true)} className="w-full sm:w-auto">
-                            <Eye className="mr-2 h-4 w-4" />
-                            View Requisition Details
-                        </Button>
-                        <Button variant="outline" onClick={() => router.push(`/compliance/${requisition.id}`)} className="w-full sm:w-auto">
-                            <FileSignature className="mr-2 h-4 w-4" />
-                            View Spec Compliance Report
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    <p className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-md whitespace-pre-wrap">{formatEvaluationCriteria(requisition.evaluationCriteria)}</p>
-                </CardContent>
+    return (
+        <div className="space-y-6">
+            <Button variant="outline" onClick={() => router.push('/quotations')}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to All Requisitions
+            </Button>
+
+            <Card className="p-4 sm:p-6">
+                <WorkflowStepper step={currentStep} />
             </Card>
-        )}
-        
-        {noBidsAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
-            <Card className="border-amber-500">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> RFQ Closed: No Bids Received</CardTitle>
-                    <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardDescription>
-                </CardHeader>
-                <CardFooter className="gap-2">
-                    <Button onClick={() => setActionDialog({isOpen: true, type: 'restart'})}>
-                        <RefreshCw className="mr-2 h-4 w-4" /> Restart RFQ
-                    </Button>
-                    <Button variant="destructive" onClick={() => setActionDialog({isOpen: true, type: 'cancel'})}>
-                        <XCircle className="mr-2 h-4 w-4" /> Cancel RFQ
-                    </Button>
-                </CardFooter>
-            </Card>
-        )}
-        
-        {quorumNotMetAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
-            <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
-        )}
 
-        {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && isAuthorized && (
-            <div className="grid md:grid-cols-2 gap-6 items-start">
-                <RFQDistribution 
-                    requisition={requisition} 
-                    vendors={vendors} 
-                    quotations={quotations}
-                    onRfqSent={fetchRequisitionAndQuotes}
-                    isAuthorized={isAuthorized}
-                />
-                <Card className="border-dashed h-full">
-                    <CardHeader>
-                        <CardTitle>Evaluation Committee</CardTitle>
-                        <CardDescription>Committee assignment will be available after the quotation deadline has passed.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-col items-center justify-center text-center text-muted-foreground h-4/5">
-                        <Users className="h-12 w-12 mb-4" />
-                        <p>Waiting for vendor quotes...</p>
-                    </CardContent>
-                </Card>
-            </div>
-        )}
-        
-        <ManageRFQ 
-            requisition={requisition}
-            vendors={vendors}
-            quotations={quotations}
-            onSuccess={fetchRequisitionAndQuotes}
-            isAuthorized={isAuthorized}
-        />
-        
-        {currentStep === 'committee' && canManageCommittees && (
-            readyForCommitteeAssignment ? (
-                <EvaluationCommitteeManagement
-                    requisition={requisition}
-                    onCommitteeUpdated={fetchRequisitionAndQuotes}
-                    open={isCommitteeDialogOpen}
-                    onOpenChange={setCommitteeDialogOpen}
-                    isAuthorized={isAuthorized}
-                />
-            ) : (
-                <Card className="border-dashed">
-                    <CardHeader>
-                        <CardTitle>Evaluation Committee</CardTitle>
-                        <CardDescription>Assign scorers to evaluate vendor quotations.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="text-center py-10">
-                        <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                        <p className="font-semibold">Quorum Not Met</p>
-                        <p className="text-sm text-muted-foreground">
-                            Only {quotations.length} of the required {committeeQuorum} quotes have been submitted.
-                            <br />
-                            Committee assignment is not yet possible.
-                        </p>
-                    </CardContent>
-                </Card>
-            )
-        )}
-
-
-        {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
-            <>
-                {canManageCommittees && currentStep !== 'committee' && readyForCommitteeAssignment && (
-                     <div className="hidden">
-                        <EvaluationCommitteeManagement
-                            requisition={requisition}
-                            onCommitteeUpdated={fetchRequisitionAndQuotes}
-                            open={isCommitteeDialogOpen}
-                            onOpenChange={setCommitteeDialogOpen}
-                            isAuthorized={isAuthorized}
-                        />
-                    </div>
-                )}
+            {requisition.evaluationCriteria && !((user && (user.roles as string[]).some(r => r === 'Vendor')) || false) && (
                 <Card>
                     <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div>
-                            <CardTitle>Quotations for {requisition.id}</CardTitle>
-                            <CardDescription>{requisition.title}</CardDescription>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
-                                {requisition.deadline && (
-                                    <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
-                                        <CalendarIcon className="h-4 w-4"/>
-                                        <span>Quote Deadline:</span>
-                                        <span className="font-semibold text-foreground">{format(new Date(requisition.deadline), 'PPpp')}</span>
-                                    </div>
-                                )}
-                                {requisition.scoringDeadline && (
-                                    <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
-                                        <Timer className="h-4 w-4"/>
-                                        <span>Scoring Deadline:</span>
-                                        <span className="font-semibold text-foreground">{format(new Date(requisition.scoringDeadline), 'PPpp')}</span>
-                                    </div>
-                                )}
-                            </div>
+                            <CardTitle className="flex items-center gap-2"><ClipboardList /> Evaluation Criteria</CardTitle>
+                            <CardDescription>The following criteria were set by the requester to guide quote evaluation.</CardDescription>
                         </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                            {isAwarded && isScoringComplete && isAuthorized && (
-                                <Button variant="secondary" onClick={() => setReportOpen(true)}>
-                                    <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
-                                </Button>
-                            )}
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <Button variant="outline" onClick={() => setIsDetailsOpen(true)} className="w-full sm:w-auto">
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Requisition Details
+                            </Button>
+                            <Button variant="outline" onClick={() => router.push(`/compliance/${requisition.id}`)} className="w-full sm:w-auto">
+                                <FileSignature className="mr-2 h-4 w-4" />
+                                View Spec Compliance Report
+                            </Button>
                         </div>
                     </CardHeader>
                     <CardContent>
-                    {loading ? (
-                        <div className="flex items-center justify-center h-24">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        </div>
-                    ) : (
-                        <QuoteComparison 
-                            quotes={quotations} 
-                            requisition={requisition}
-                            onScore={handleScoreButtonClick}
-                            user={user}
-                            isDeadlinePassed={isDeadlinePassed}
-                            isScoringDeadlinePassed={isScoringDeadlinePassed}
-                            isAwarded={isAwarded}
-                            scoresSubmittedOverride={scoresSubmittedOverride}
-                        />
-                    )}
+                        <p className="text-sm text-muted-foreground p-4 bg-muted/50 rounded-md whitespace-pre-wrap">{formatEvaluationCriteria(requisition.evaluationCriteria)}</p>
                     </CardContent>
-                    <Dialog open={isScoringFormOpen} onOpenChange={setScoringFormOpen}>
-                        {selectedQuoteForScoring && requisition && user && (
-                            <ScoringDialog 
-                                quote={selectedQuoteForScoring} 
-                                requisition={requisition} 
-                                user={user} 
-                                onScoreSubmitted={handleScoreSubmitted}
-                                isScoringDeadlinePassed={isScoringDeadlinePassed}
-                                hidePrices={hidePricesForScoring}
-                            />
-                        )}
-                    </Dialog>
-                    {isAccepted && (
-                        <CardFooter>
-                            <Alert variant="default" className="w-full border-green-600">
-                                <CheckCircle className="h-4 w-4 text-green-600" />
-                                <AlertTitle>Award Accepted</AlertTitle>
-                                <AlertDescription>
-                                    The vendor has accepted the award. The PO has been generated.
-                                </AlertDescription>
-                            </Alert>
-                        </CardFooter>
-                    )}
                 </Card>
-            </>
-        )}
-        
-           {(currentStep === 'committee' || currentStep === 'award') && role === 'Committee_Member' && (
-               <CommitteeActions 
-                 user={user}
-                 requisition={requisition}
-                 quotations={quotations}
-                 onFinalScoresSubmitted={handleFinalScoresSubmitted}
-              token={token}
-               />
-           )}
-        
-        {(((isAuthorized) || role === 'Committee' || role === 'Procurement_Officer' || role === 'Admin') &&
-            ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
-            requisition.status !== 'PreApproved' &&
-            requisition.status !== 'Scoring_Complete' && requisition.status !== 'Award_Declined'
-        ) && (
-            <ScoringProgressTracker
-                requisition={requisition}
-                quotations={quotations}
-                allUsers={allUsers}
-                onFinalize={handleFinalizeScores}
-                onCommitteeUpdate={setCommitteeDialogOpen}
-                isFinalizing={isFinalizing}
-            />
-        )}
-        
-          {isAuthorized && (
-             <div className="mt-6">
-                 <AwardStandbyButton
-                    requisition={requisition}
-                    quotations={quotations}
-                    onPromote={handleAwardChange}
-                    isChangingAward={isChangingAward}
-                 />
+            )}
 
-                 <div className="mt-2">
-                    <RestartRfqDialog
+            {noBidsAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
+                <Card className="border-amber-500">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle /> RFQ Closed: No Bids Received</CardTitle>
+                        <CardDescription>The deadline for this Request for Quotation has passed and no vendors submitted a bid.</CardDescription>
+                    </CardHeader>
+                    <CardFooter className="gap-2">
+                        <Button onClick={() => setActionDialog({ isOpen: true, type: 'restart' })}>
+                            <RefreshCw className="mr-2 h-4 w-4" /> Restart RFQ
+                        </Button>
+                        <Button variant="destructive" onClick={() => setActionDialog({ isOpen: true, type: 'cancel' })}>
+                            <XCircle className="mr-2 h-4 w-4" /> Cancel RFQ
+                        </Button>
+                    </CardFooter>
+                </Card>
+            )}
+
+            {quorumNotMetAndDeadlinePassed && (role === 'Procurement_Officer' || role === 'Admin') && (
+                <RFQReopenCard requisition={requisition} onRfqReopened={fetchRequisitionAndQuotes} />
+            )}
+
+            {currentStep === 'rfq' && !noBidsAndDeadlinePassed && !quorumNotMetAndDeadlinePassed && isAuthorized && (
+                <div className="grid md:grid-cols-2 gap-6 items-start">
+                    <RFQDistribution
                         requisition={requisition}
                         vendors={vendors}
-                        onRfqRestarted={fetchRequisitionAndQuotes}
+                        quotations={quotations}
+                        onRfqSent={fetchRequisitionAndQuotes}
+                        isAuthorized={isAuthorized}
                     />
-                 </div>
-             </div>
-        )}
+                    <Card className="border-dashed h-full">
+                        <CardHeader>
+                            <CardTitle>Evaluation Committee</CardTitle>
+                            <CardDescription>Committee assignment will be available after the quotation deadline has passed.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col items-center justify-center text-center text-muted-foreground h-4/5">
+                            <Users className="h-12 w-12 mb-4" />
+                            <p>Waiting for vendor quotes...</p>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
-        {isReadyForNotification && isAuthorized && (
-            <Card className="mt-6 border-amber-500">
-                 <CardHeader>
-                    <CardTitle>Action Required: Notify Vendor</CardTitle>
-                    <CardDescription>The award has passed all reviews. You may now notify the winning vendor.</CardDescription>
-                </CardHeader>
-                <CardFooter>
-                     <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
-                        <DialogTrigger asChild>
-                            <Button disabled={isNotifying}>
-                                {isNotifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Send Award Notification
-                            </Button>
-                        </DialogTrigger>
-                        <NotifyVendorDialog
-                            isOpen={isNotifyDialogOpen}
-                            onClose={() => setIsNotifyDialogOpen(false)}
-                            onConfirm={(deadline) => {
-                                handleNotifyVendor(deadline);
-                                setIsNotifyDialogOpen(false);
-                            }}
-                        />
-                    </Dialog>
-                </CardFooter>
-            </Card>
-        )}
-        
-        {isAccepted && requisition.status !== 'PO_Created' && role !== 'Committee_Member' && (
-            <ContractManagement requisition={requisition} onContractFinalized={handleContractFinalized} />
-        )}
-         {requisition && (
-            <RequisitionDetailsDialog 
-                reuisition={requisition} 
-                isOpen={isDetailsOpen} 
-                onClose={() => setIsDetailsOpen(false)} 
-            />
-        )}
-        {requisition && quotations && (
-            <CumulativeScoringReportDialog
+            <ManageRFQ
                 requisition={requisition}
+                vendors={vendors}
                 quotations={quotations}
-                isOpen={isReportOpen}
-                onClose={() => setReportOpen(false)}
+                onSuccess={fetchRequisitionAndQuotes}
+                isAuthorized={isAuthorized}
             />
-        )}
-        <RFQActionDialog 
-            action={actionDialog.type}
-            requisition={requisition}
-            isOpen={actionDialog.isOpen}
-            onClose={() => setActionDialog({isOpen: false, type: 'restart'})}
-            onSuccess={fetchRequisitionAndQuotes}
-        />
-    </div>
-  );
+
+            {currentStep === 'committee' && canManageCommittees && (
+                readyForCommitteeAssignment ? (
+                    <EvaluationCommitteeManagement
+                        requisition={requisition}
+                        onCommitteeUpdated={fetchRequisitionAndQuotes}
+                        open={isCommitteeDialogOpen}
+                        onOpenChange={setCommitteeDialogOpen}
+                        isAuthorized={isAuthorized}
+                    />
+                ) : (
+                    <Card className="border-dashed">
+                        <CardHeader>
+                            <CardTitle>Evaluation Committee</CardTitle>
+                            <CardDescription>Assign scorers to evaluate vendor quotations.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-center py-10">
+                            <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                            <p className="font-semibold">Quorum Not Met</p>
+                            <p className="text-sm text-muted-foreground">
+                                Only {quotations.length} of the required {committeeQuorum} quotes have been submitted.
+                                <br />
+                                Committee assignment is not yet possible.
+                            </p>
+                        </CardContent>
+                    </Card>
+                )
+            )}
+
+
+            {(currentStep === 'committee' || currentStep === 'award' || currentStep === 'finalize' || currentStep === 'completed') && (
+                <>
+                    {canManageCommittees && currentStep !== 'committee' && readyForCommitteeAssignment && (
+                        <div className="hidden">
+                            <EvaluationCommitteeManagement
+                                requisition={requisition}
+                                onCommitteeUpdated={fetchRequisitionAndQuotes}
+                                open={isCommitteeDialogOpen}
+                                onOpenChange={setCommitteeDialogOpen}
+                                isAuthorized={isAuthorized}
+                            />
+                        </div>
+                    )}
+                    <Card>
+                        <CardHeader className="flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            <div>
+                                <CardTitle>Quotations for {requisition.id}</CardTitle>
+                                <CardDescription>{requisition.title}</CardDescription>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs">
+                                    {requisition.deadline && (
+                                        <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                                            <CalendarIcon className="h-4 w-4" />
+                                            <span>Quote Deadline:</span>
+                                            <span className="font-semibold text-foreground">{format(new Date(requisition.deadline), 'PPpp')}</span>
+                                        </div>
+                                    )}
+                                    {requisition.scoringDeadline && (
+                                        <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
+                                            <Timer className="h-4 w-4" />
+                                            <span>Scoring Deadline:</span>
+                                            <span className="font-semibold text-foreground">{format(new Date(requisition.scoringDeadline), 'PPpp')}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                {isAwarded && isScoringComplete && isAuthorized && (
+                                    <Button variant="secondary" onClick={() => setReportOpen(true)}>
+                                        <FileBarChart2 className="mr-2 h-4 w-4" /> View Cumulative Report
+                                    </Button>
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {loading ? (
+                                <div className="flex items-center justify-center h-24">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                </div>
+                            ) : (
+                                <QuoteComparison
+                                    quotes={quotations}
+                                    requisition={requisition}
+                                    onScore={handleScoreButtonClick}
+                                    user={user}
+                                    isDeadlinePassed={isDeadlinePassed}
+                                    isScoringDeadlinePassed={isScoringDeadlinePassed}
+                                    isAwarded={isAwarded}
+                                    scoresSubmittedOverride={scoresSubmittedOverride}
+                                />
+                            )}
+                        </CardContent>
+                        <Dialog open={isScoringFormOpen} onOpenChange={setScoringFormOpen}>
+                            {selectedQuoteForScoring && requisition && user && (
+                                <ScoringDialog
+                                    quote={selectedQuoteForScoring}
+                                    requisition={requisition}
+                                    user={user}
+                                    onScoreSubmitted={handleScoreSubmitted}
+                                    isScoringDeadlinePassed={isScoringDeadlinePassed}
+                                    hidePrices={hidePricesForScoring}
+                                />
+                            )}
+                        </Dialog>
+                        {isAccepted && (
+                            <CardFooter>
+                                <Alert variant="default" className="w-full border-green-600">
+                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                    <AlertTitle>Award Accepted</AlertTitle>
+                                    <AlertDescription>
+                                        The vendor has accepted the award. The PO has been generated.
+                                    </AlertDescription>
+                                </Alert>
+                            </CardFooter>
+                        )}
+                    </Card>
+                </>
+            )}
+
+            {(currentStep === 'committee' || currentStep === 'award') && role === 'Committee_Member' && (
+                <CommitteeActions
+                    user={user}
+                    requisition={requisition}
+                    quotations={quotations}
+                    onFinalScoresSubmitted={handleFinalScoresSubmitted}
+                    token={token}
+                />
+            )}
+
+            {(((isAuthorized) || role === 'Committee' || role === 'Procurement_Officer' || role === 'Admin') &&
+                ((requisition.financialCommitteeMemberIds?.length || 0) > 0 || (requisition.technicalCommitteeMemberIds?.length || 0) > 0) &&
+                requisition.status !== 'PreApproved' &&
+                requisition.status !== 'Scoring_Complete' && requisition.status !== 'Award_Declined'
+            ) && (
+                    <ScoringProgressTracker
+                        requisition={requisition}
+                        quotations={quotations}
+                        allUsers={allUsers}
+                        onFinalize={handleFinalizeScores}
+                        onCommitteeUpdate={setCommitteeDialogOpen}
+                        isFinalizing={isFinalizing}
+                    />
+                )}
+
+            {isAuthorized && (
+                <div className="mt-6">
+                    <AwardStandbyButton
+                        requisition={requisition}
+                        quotations={quotations}
+                        onPromote={handleAwardChange}
+                        isChangingAward={isChangingAward}
+                    />
+
+                    <div className="mt-2">
+                        <RestartRfqDialog
+                            requisition={requisition}
+                            vendors={vendors}
+                            onRfqRestarted={fetchRequisitionAndQuotes}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {isReadyForNotification && isAuthorized && (
+                <Card className="mt-6 border-amber-500">
+                    <CardHeader>
+                        <CardTitle>Action Required: Notify Vendor</CardTitle>
+                        <CardDescription>The award has passed all reviews. You may now notify the winning vendor.</CardDescription>
+                    </CardHeader>
+                    <CardFooter>
+                        <Dialog open={isNotifyDialogOpen} onOpenChange={setIsNotifyDialogOpen}>
+                            <DialogTrigger asChild>
+                                <Button disabled={isNotifying}>
+                                    {isNotifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Send Award Notification
+                                </Button>
+                            </DialogTrigger>
+                            <NotifyVendorDialog
+                                isOpen={isNotifyDialogOpen}
+                                onClose={() => setIsNotifyDialogOpen(false)}
+                                onConfirm={(deadline) => {
+                                    handleNotifyVendor(deadline);
+                                    setIsNotifyDialogOpen(false);
+                                }}
+                            />
+                        </Dialog>
+                    </CardFooter>
+                </Card>
+            )}
+
+            {isAccepted && requisition.status !== 'PO_Created' && role !== 'Committee_Member' && (
+                <ContractManagement requisition={requisition} onContractFinalized={handleContractFinalized} />
+            )}
+            {requisition && (
+                <RequisitionDetailsDialog
+                    reuisition={requisition}
+                    isOpen={isDetailsOpen}
+                    onClose={() => setIsDetailsOpen(false)}
+                />
+            )}
+            {requisition && quotations && (
+                <CumulativeScoringReportDialog
+                    requisition={requisition}
+                    quotations={quotations}
+                    isOpen={isReportOpen}
+                    onClose={() => setReportOpen(false)}
+                />
+            )}
+            <RFQActionDialog
+                action={actionDialog.type}
+                requisition={requisition}
+                isOpen={actionDialog.isOpen}
+                onClose={() => setActionDialog({ isOpen: false, type: 'restart' })}
+                onSuccess={fetchRequisitionAndQuotes}
+            />
+        </div>
+    );
 }
 
 const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRequisition; onRfqReopened: () => void; }) => {
@@ -3009,7 +3029,7 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newDeadlineDate, setNewDeadlineDate] = useState<Date | undefined>();
     const [newDeadlineTime, setNewDeadlineTime] = useState<string>('17:00');
-    
+
     const finalNewDeadline = useMemo(() => {
         if (!newDeadlineDate) return undefined;
         const [hours, minutes] = newDeadlineTime.split(':').map(Number);
@@ -3044,43 +3064,43 @@ const RFQReopenCard = ({ requisition, onRfqReopened }: { requisition: PurchaseRe
     };
 
     return (
-         <Card className="border-amber-500">
+        <Card className="border-amber-500">
             <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle/> Quorum Not Met</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-amber-600"><AlertTriangle /> Quorum Not Met</CardTitle>
                 <CardDescription>
                     The submission deadline has passed, but not enough quotes were submitted. You can re-open the RFQ to all other verified vendors.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                 <div className="space-y-2">
+                <div className="space-y-2">
                     <Label>New Quotation Submission Deadline</Label>
                     <div className="flex gap-2">
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal",!newDeadlineDate && "text-muted-foreground")}>
+                                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !newDeadlineDate && "text-muted-foreground")}>
                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                     {newDeadlineDate ? format(newDeadlineDate, "PPP") : <span>Pick a new date</span>}
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" selected={newDeadlineDate} onSelect={setNewDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} initialFocus/>
+                                <Calendar mode="single" selected={newDeadlineDate} onSelect={setNewDeadlineDate} disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))} initialFocus />
                             </PopoverContent>
                         </Popover>
-                        <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)}/>
+                        <Input type="time" className="w-32" value={newDeadlineTime} onChange={(e) => setNewDeadlineTime(e.target.value)} />
                     </div>
                 </div>
             </CardContent>
             <CardFooter>
                 <Button onClick={handleReopen} disabled={isSubmitting || !finalNewDeadline}>
-                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} 
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                     Re-open RFQ
                 </Button>
             </CardFooter>
         </Card>
     );
 };
-    
 
-    
+
+
 
 

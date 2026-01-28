@@ -89,6 +89,7 @@ model PurchaseRequisition {
   awardedQuoteItemIds String[]
   cpoAmount           Float?
   rfqSettings         Json?
+  procurementMethod   String?
   assignedRfqSenderIds String[] @default([])
   committeeName       String?
   committeePurpose    String?
