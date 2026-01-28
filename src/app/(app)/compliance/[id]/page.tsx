@@ -102,6 +102,15 @@ const CompliancePage = () => {
     return quotations.every(q => (q.complianceSets || []).some((c: any) => c.scorerId === uid));
   }, [user, quotations]);
 
+  const deadlinePassed = useMemo(() => {
+    if (!requisition || !requisition.scoringDeadline) return false;
+    try {
+      return new Date() > new Date(requisition.scoringDeadline);
+    } catch (e) {
+      return false;
+    }
+  }, [requisition]);
+
   const openForQuote = (quote: any) => {
     // initialize form state
     const checksObj: any = {};
@@ -120,6 +129,10 @@ const CompliancePage = () => {
   const submitCompliance = async (quoteId: string) => {
     if (!user || !token) {
       toast({ variant: 'destructive', title: 'Not authenticated', description: 'You must be signed in to submit compliance checks.' });
+      return;
+    }
+    if (deadlinePassed) {
+      toast({ variant: 'destructive', title: 'Deadline passed', description: 'Compliance deadline has ended. You can no longer submit checks.' });
       return;
     }
     setSubmittingFinalize(true);
@@ -209,7 +222,7 @@ const CompliancePage = () => {
             {hasFinalizedChecks ? (
               <Button disabled>Submitted</Button>
             ) : (
-              <Button disabled={!hasSubmittedAll || submittingFinalize} onClick={finalizeChecks}>
+              <Button disabled={!hasSubmittedAll || submittingFinalize || deadlinePassed} onClick={finalizeChecks}>
                 {submittingFinalize && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Finalize My Checks
               </Button>
@@ -329,7 +342,7 @@ const CompliancePage = () => {
               </div>
             </CardContent>
             <div className="p-4 border-t flex items-center justify-end">
-              <Button onClick={() => openForQuote(q)}>{(q.complianceSets || []).some((c: any) => c.scorerId === user?.id) ? 'View / Already Checked' : 'Open Compliance'}</Button>
+              <Button onClick={() => openForQuote(q)} disabled={deadlinePassed}>{(q.complianceSets || []).some((c: any) => c.scorerId === user?.id) ? 'View / Already Checked' : (deadlinePassed ? 'Deadline Passed' : 'Open Compliance')}</Button>
             </div>
           </Card>
         ))}

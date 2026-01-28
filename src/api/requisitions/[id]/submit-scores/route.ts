@@ -11,15 +11,28 @@ export async function POST(
 ) {
   const actor = await getActorFromToken(request);
   if (!actor) {
-      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
   }
-  
+
   const requisitionId = params.id;
   try {
     if (!(actor.roles as string[]).some(r => r.includes('Committee'))) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
-    
+
+    // Prevent finalization if scoring/compliance deadline has passed
+    const reqForCheck = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
+    if (!reqForCheck) {
+      return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
+    }
+    if (reqForCheck.scoringDeadline) {
+      const now = new Date();
+      const deadline = new Date(reqForCheck.scoringDeadline);
+      if (now > deadline) {
+        return NextResponse.json({ error: 'Scoring/compliance deadline has passed. You can no longer finalize checks.' }, { status: 403 });
+      }
+    }
+
     await prisma.committeeAssignment.upsert({
       where: {
         userId_requisitionId: {
@@ -42,42 +55,42 @@ export async function POST(
     });
 
     if (requisition) {
-        const assignedMemberIds = new Set([
-            ...(requisition.financialCommitteeMemberIds || []).map(m => m.id),
-            ...(requisition.technicalCommitteeMemberIds || []).map(m => m.id)
-        ]);
+      const assignedMemberIds = new Set([
+        ...(requisition.financialCommitteeMemberIds || []).map(m => m.id),
+        ...(requisition.technicalCommitteeMemberIds || []).map(m => m.id)
+      ]);
 
-        if (assignedMemberIds.size > 0) { // Only change status if a committee was actually assigned
-            const submittedMemberIds = new Set(requisition.committeeAssignments.filter(a => a.scoresSubmitted).map(a => a.userId));
-            const allHaveScored = [...assignedMemberIds].every(id => submittedMemberIds.has(id));
+      if (assignedMemberIds.size > 0) { // Only change status if a committee was actually assigned
+        const submittedMemberIds = new Set(requisition.committeeAssignments.filter(a => a.scoresSubmitted).map(a => a.userId));
+        const allHaveScored = [...assignedMemberIds].every(id => submittedMemberIds.has(id));
 
-            if (allHaveScored) {
-                await prisma.purchaseRequisition.update({
-                    where: { id: requisitionId },
-                    data: { status: 'Scoring_Complete' }
-                });
-            }
+        if (allHaveScored) {
+          await prisma.purchaseRequisition.update({
+            where: { id: requisitionId },
+            data: { status: 'Scoring_Complete' }
+          });
         }
+      }
     }
 
 
     await prisma.auditLog.create({
-        data: {
-            transactionId: requisitionId,
-            timestamp: new Date(),
-            user: { connect: { id: actor.id } },
-            action: 'SUBMIT_SCORES',
-            entity: 'Requisition',
-            entityId: requisitionId,
-            details: `Finalized and submitted all scores for requisition.`,
-        }
+      data: {
+        transactionId: requisitionId,
+        timestamp: new Date(),
+        user: { connect: { id: actor.id } },
+        action: 'SUBMIT_SCORES',
+        entity: 'Requisition',
+        entityId: requisitionId,
+        details: `Finalized and submitted all scores for requisition.`,
+      }
     });
 
     return NextResponse.json({ message: 'All scores have been successfully submitted.' });
   } catch (error) {
     console.error('Failed to submit final scores:', error);
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
