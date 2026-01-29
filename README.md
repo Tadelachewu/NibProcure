@@ -170,7 +170,7 @@ docker exec -it <container-name> sh -c "npm run db:migrate && npm run db:seed"
  - **Flexible Award & RFQ Workflows**: The system now supports a "compliance-first" evaluation model, allowing committees to perform simple comply/non-comply checks. It also gracefully handles mixed-award scenarios (manual and electronic quotes) and allows procurement officers to restart the RFQ process for specific items that failed to be awarded.
  - **Improved Financial Controls**: The invoicing process is now more tightly integrated with goods receipt, enforcing three-way matching prerequisites in the UI. A new "Pending Payments" view provides better visibility into POs that are awaiting invoices.
  - **UI & Usability Enhancements**: The dashboard has been updated with role-specific controls and clearer status indicators. Navigation has been streamlined to better guide users through the procurement lifecycle.
- - **Performance and Reliability**: Key backend operations, such as cryptography and email notifications, have been optimized to be non-blocking, improving overall application responsiveness.
+ - **Performance and Reliability**: Key backend operations, such as cryptography and email notifications, have been non-blocking, improving overall application responsiveness.
 
 Developers: after checking out `mydock6` run migrations and seed before testing these flows:
 
@@ -192,6 +192,8 @@ npm run dev
 ## The Procurement Workflow Explained
 
 This scenario illustrates the end-to-end journey of a procurement request, involving multiple user roles and system processes.
+
+For a more detailed breakdown of the application's logic and state transitions, please see **[Application Control Flows](docs/control-flows.md)**.
 
 ### 1. **Needs Recognition (Requester)**
 - **Actor**: Alice, a designer in the "Design" department.
