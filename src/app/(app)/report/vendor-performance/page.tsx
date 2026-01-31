@@ -124,6 +124,7 @@ export default function VendorPerformancePage() {
                                         <th className="px-2 py-2">Avg Quotation Score</th>
                                         <th className="px-2 py-2">On-Time %</th>
                                         <th className="px-2 py-2">Performance Score</th>
+                                        <th className="px-2 py-2">Blacklisted</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -139,6 +140,7 @@ export default function VendorPerformancePage() {
                                             <td className="px-2 py-2">{v.averageQuotationScore != null ? Number(v.averageQuotationScore).toFixed(2) : '—'}</td>
                                             <td className="px-2 py-2">{v.onTimeDeliveryPercent != null ? Number(v.onTimeDeliveryPercent).toFixed(1) + '%' : '—'}</td>
                                             <td className="px-2 py-2">{v.performanceScore != null ? Number(v.performanceScore).toFixed(2) : '—'}</td>
+                                            <td className="px-2 py-2">{v.blacklist && (v.blacklist.blacklisted === true || v.blacklist.status === 'blacklisted') ? 'Yes' : 'No'}</td>
                                         </tr>
                                     ))}
                                 </tbody>

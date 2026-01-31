@@ -126,7 +126,7 @@ export default function RFQDistribution({ requisition, vendors, quotations = [],
   };
 
   const filteredVendors = useMemo(() => {
-    const verifiedVendors = Array.isArray(vendors) ? vendors.filter(v => v.kycStatus === 'Verified') : [];
+    const verifiedVendors = Array.isArray(vendors) ? vendors.filter(v => v.kycStatus === 'Verified' && !(v.blacklist && (v.blacklist.blacklisted === true || v.blacklist.status === 'blacklisted'))) : [];
     if (!vendorSearch) return verifiedVendors;
     const lower = vendorSearch.toLowerCase();
     return verifiedVendors.filter(v => v.name.toLowerCase().includes(lower) || v.email.toLowerCase().includes(lower) || v.contactPerson.toLowerCase().includes(lower));

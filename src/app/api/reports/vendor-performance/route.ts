@@ -31,6 +31,19 @@ export async function GET(request: Request) {
 
         const results: any[] = [];
 
+        // load blacklist settings for vendors
+        const vendorIds = vendors.map(v => v.id);
+        const blacklistKeys = vendorIds.map(id => `vendor:blacklist:${id}`);
+        const blacklistSettings = await prisma.setting.findMany({ where: { key: { in: blacklistKeys } } });
+        const blacklistMap: Record<string, any> = {};
+        for (const s of blacklistSettings) {
+            try {
+                const parts = s.key.split(':');
+                const vendorId = parts.slice(2).join(':');
+                blacklistMap[vendorId] = s.value;
+            } catch (e) { }
+        }
+
         for (const v of vendors) {
             const poRows = await prisma.purchaseOrder.findMany({ where: { vendorId: v.id, createdAt: { gte: start, lte: end } }, select: { totalAmount: true, status: true, createdAt: true } });
             const poCount = poRows.length;
@@ -60,6 +73,7 @@ export async function GET(request: Request) {
                 averageQuotationScore: avgQuotationScore,
                 onTimeDeliveryPercent: onTimePercent,
                 performanceScore,
+                blacklist: blacklistMap[v.id] || null,
             });
         }
 
@@ -69,7 +83,7 @@ export async function GET(request: Request) {
 
         if (format === 'csv') {
             const rows: string[][] = [
-                ['Vendor ID', 'Vendor Name', 'Total Spend', 'PO Count', 'Average PO Value', 'Quotation Count', 'Average Quotation Score', 'On-Time Delivery %', 'Performance Score', 'Vendor Rank']
+                ['Vendor ID', 'Vendor Name', 'Total Spend', 'PO Count', 'Average PO Value', 'Quotation Count', 'Average Quotation Score', 'On-Time Delivery %', 'Performance Score', 'Blacklisted', 'Vendor Rank']
             ];
             for (const r of results) {
                 rows.push([
@@ -82,6 +96,7 @@ export async function GET(request: Request) {
                     r.averageQuotationScore == null ? '' : String(r.averageQuotationScore),
                     r.onTimeDeliveryPercent == null ? '' : String(r.onTimeDeliveryPercent.toFixed(2)),
                     r.performanceScore == null ? '' : String(r.performanceScore.toFixed(2)),
+                    r.blacklist && (r.blacklist.blacklisted === true || r.blacklist.status === 'blacklisted') ? 'Yes' : 'No',
                     String(r.vendorRank)
                 ]);
             }

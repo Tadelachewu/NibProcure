@@ -34,6 +34,7 @@ import {
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/auth-context';
 import { Loader2, PlusCircle, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, ShieldCheck, ShieldAlert, ShieldQuestion, Building2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -64,24 +65,25 @@ const KycStatusBadge = ({ status, reason }: { status: KycStatus, reason?: string
 
   if (status === 'Rejected' && reason) {
     return (
-        <TooltipProvider>
-            <Tooltip>
-                <TooltipTrigger>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger>
             <Badge variant={variant} className={className}>{icon} {text}</Badge>
-                </TooltipTrigger>
-                <TooltipContent>
-                    <p>Reason: {reason}</p>
-                </TooltipContent>
-            </Tooltip>
-        </TooltipProvider>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Reason: {reason}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     )
   }
 
-    return <Badge variant={variant} className={className}>{icon} {text}</Badge>;
+  return <Badge variant={variant} className={className}>{icon} {text}</Badge>;
 }
 
 export function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const { user, token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setFormOpen] = useState(false);
   const [isSubmitting, setSubmitting] = useState(false);
@@ -102,7 +104,7 @@ export function VendorsPage() {
   const fetchVendors = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/vendors');
+      const response = await fetch('/api/vendors', { headers: { Authorization: token ? `Bearer ${token}` : '' } });
       if (!response.ok) throw new Error('Failed to fetch vendors');
       const data = await response.json();
       setVendors(data);
@@ -116,6 +118,33 @@ export function VendorsPage() {
       setLoading(false);
     }
   }, [toast]);
+
+  const canManageVendors = (user && (user.roles || []).includes('Admin')) || (user && (user.roles || []).includes('Procurement_Officer'));
+
+  async function handleBlacklist(id: string) {
+    const reason = window.prompt('Enter reason for blacklisting this vendor:');
+    if (!reason) return;
+    try {
+      const res = await fetch(`/api/vendors/${id}/blacklist`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' }, body: JSON.stringify({ reason }) });
+      if (!res.ok) throw new Error('Failed to blacklist vendor');
+      toast({ title: 'Vendor blacklisted', description: 'Vendor has been blacklisted.' });
+      await fetchVendors();
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: err instanceof Error ? err.message : 'Failed to blacklist' });
+    }
+  }
+
+  async function handleUnblacklist(id: string) {
+    if (!window.confirm('Remove vendor from blacklist?')) return;
+    try {
+      const res = await fetch(`/api/vendors/${id}/blacklist`, { method: 'DELETE', headers: { Authorization: token ? `Bearer ${token}` : '' } });
+      if (!res.ok) throw new Error('Failed to remove vendor from blacklist');
+      toast({ title: 'Vendor removed from blacklist', description: 'Vendor may now participate in procurement.' });
+      await fetchVendors();
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: err instanceof Error ? err.message : 'Failed to unblacklist' });
+    }
+  }
 
   useEffect(() => {
     fetchVendors();
@@ -276,6 +305,8 @@ export function VendorsPage() {
                 <TableHead>Contact Person</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>KYC Status</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -288,6 +319,24 @@ export function VendorsPage() {
                     <TableCell>{vendor.email}</TableCell>
                     <TableCell>
                       <KycStatusBadge status={vendor.kycStatus} reason={vendor.rejectionReason} />
+                    </TableCell>
+                    <TableCell>
+                      {vendor.blacklist && (vendor.blacklist.blacklisted === true || vendor.blacklist.status === 'blacklisted') ? (
+                        <Badge variant="destructive">Blacklisted</Badge>
+                      ) : (
+                        <Badge variant="secondary">Active</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {canManageVendors ? (
+                        vendor.blacklist && (vendor.blacklist.blacklisted === true || vendor.blacklist.status === 'blacklisted') ? (
+                          <Button size="sm" variant="outline" onClick={() => handleUnblacklist(vendor.id)}>Unblacklist</Button>
+                        ) : (
+                          <Button size="sm" variant="destructive" onClick={() => handleBlacklist(vendor.id)}>Blacklist</Button>
+                        )
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
@@ -315,7 +364,7 @@ export function VendorsPage() {
         </div>
         <div className="flex items-center justify-between mt-4">
           <div className="text-sm text-muted-foreground">
-             Page {currentPage} of {totalPages} ({vendors.length} total vendors)
+            Page {currentPage} of {totalPages} ({vendors.length} total vendors)
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
