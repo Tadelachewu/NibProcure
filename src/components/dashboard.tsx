@@ -220,7 +220,30 @@ function ProcurementOfficerDashboard() {
     const stats = useMemo(() => {
         const readyForRfq = data.requisitions.filter(r => r.status === 'PreApproved').length;
         const acceptingQuotes = data.requisitions.filter(r => r.status === 'Accepting_Quotes').length;
-        const inCommitteeScoring = data.requisitions.filter(r => r.status === 'Scoring_In_Progress').length;
+        const inCommitteeScoring = data.requisitions.reduce((count, r) => {
+            if (r.status === 'Scoring_In_Progress') return count + 1;
+            const quoteCount = (r.quotations || []).length || 0;
+            const deadlinePassed = r.deadline ? isPast(new Date(r.deadline)) : false;
+            const scoringDeadlinePassed = r.scoringDeadline ? isPast(new Date(r.scoringDeadline)) : false;
+            const hasCommittee = !!r.committeeName;
+            const financialIds = (r.financialCommitteeMemberIds || []);
+            const technicalIds = (r.technicalCommitteeMemberIds || []);
+            const allHaveScored = (financialIds.length + technicalIds.length) > 0 &&
+                [...financialIds, ...technicalIds].every((id: any) => (r.committeeAssignments || []).some((a: any) => a.userId === id && a.scoresSubmitted));
+
+            if (!deadlinePassed) return count;
+
+            if (!hasCommittee) return count; // Ready for assignment, don't count as in-scoring
+
+            // If a scoring deadline passed and all have scored, it's complete; otherwise it's in-progress/overdue
+            if (scoringDeadlinePassed) {
+                if (!allHaveScored) return count + 1;
+                return count;
+            }
+
+            // Deadline passed and scoring deadline not yet passed -> considered in progress
+            return count + 1;
+        }, 0);
         const readyToAward = data.requisitions.filter(r => r.status === 'Scoring_Complete').length;
         const pendingFinalReview = data.requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
         const awardDeclined = data.requisitions.filter(r => r.status === 'Award_Declined').length;
