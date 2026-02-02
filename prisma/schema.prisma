@@ -31,15 +31,17 @@ model User {
   createdRequisitions     PurchaseRequisition[] @relation("Requester")
   approvedRequisitions    PurchaseRequisition[] @relation("Approver")
   currentApprovals        PurchaseRequisition[] @relation("CurrentApprover")
-  financialCommitteeMemberFor RequisitionItem[] @relation("FinancialCommittee")
-  technicalCommitteeMemberFor RequisitionItem[] @relation("TechnicalCommittee")
+  financialCommitteeMemberships PurchaseRequisition[] @relation("financialCommitteeMembers")
+  technicalCommitteeMemberships PurchaseRequisition[] @relation("technicalCommitteeMembers")
   committeeAssignments    CommitteeAssignment[]
+  committeeComplianceSets CommitteeComplianceSet[]
   auditLogs               AuditLog[]
   reviews                 Review[]
   authoredMinutes         Minute[] @relation("MinuteAuthor")
   attendedMinutes         Minute[] @relation("MinuteAttendees")
   signatures              Signature[]
   sentContracts           Contract[]
+  receivedGoodsReceipts   GoodsReceiptNote[]
   committeeScoreSets      CommitteeScoreSet[]
   supportTickets          SupportTicket[] @relation("requester")
   handledSupportTickets   SupportTicket[] @relation("admin")
@@ -72,6 +74,7 @@ model PurchaseRequisition {
   updatedAt            DateTime    @updatedAt
   approverId           String?
   approver             User?       @relation("Approver", fields: [approverId], references: [id])
+  approverComment      String?
   currentApproverId    String?
   currentApprover      User?       @relation("CurrentApprover", fields: [currentApproverId], references: [id])
   deadline             DateTime?
@@ -85,8 +88,9 @@ model PurchaseRequisition {
   purchaseOrders       PurchaseOrder[]
   contracts            Contract[]
   minutes              Minute[]
+  standbyAssignments   StandbyAssignment[]
   parentRequisitionId  String?
-  parentRequisition    PurchaseRequisition? @relation("RequisitionChildren", fields: [parentRequisitionId], references: [id"])
+  parentRequisition    PurchaseRequisition? @relation("RequisitionChildren", fields: [parentRequisitionId], references: [id])
   childRequisitions    PurchaseRequisition[] @relation("RequisitionChildren")
   allowedVendorIds     String[]
   awardedQuoteItemIds  String[]
@@ -509,4 +513,16 @@ model EmailJob {
     sentAt    DateTime?
     status    String   @default("PENDING") // PENDING, SENT, FAILED
     error     String?
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  transactionId String?
+  entity        String?
+  entityId      String?
+  action        String?
+  details       String?
+  timestamp     DateTime @default(now())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
 }
