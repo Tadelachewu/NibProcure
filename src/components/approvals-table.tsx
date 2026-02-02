@@ -47,6 +47,7 @@ import { Label } from './ui/label';
 import { RequisitionDetailsDialog } from './requisition-details-dialog';
 import { Badge } from './ui/badge';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
+import { Checkbox } from './ui/checkbox';
 
 
 const PAGE_SIZE = 10;
@@ -66,6 +67,7 @@ export function ApprovalsTable() {
   const [assignedIds, setAssignedIds] = useState<string[]>([]);
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
+  const [isOpenTender, setIsOpenTender] = useState(false);
 
   useEffect(() => {
     if (isActionDialogOpen && selectedRequisition) {
@@ -123,6 +125,7 @@ export function ApprovalsTable() {
   const handleAction = (req: PurchaseRequisition, type: 'approve' | 'reject') => {
     setSelectedRequisition(req);
     setActionType(type);
+    setIsOpenTender(req.isOpenTender || false);
     // Prepopulate assigned IDs when opening approve dialog
     if (type === 'approve' && req.assignedRfqSenderIds) {
       setAssignedIds(req.assignedRfqSenderIds || []);
@@ -185,8 +188,11 @@ export function ApprovalsTable() {
         comment,
       };
       // Include assigned RFQ sender IDs when transitioning to PreApproved and global setting requires assignment
-      if (newStatus === 'PreApproved' && detectAssignedMode()) {
-        payload.assignedRfqSenderIds = assignedIds;
+      if (newStatus === 'PreApproved') {
+        payload.isOpenTender = isOpenTender;
+        if (detectAssignedMode()) {
+            payload.assignedRfqSenderIds = assignedIds;
+        }
       }
 
       const response = await fetch(`/api/requisitions`, {
@@ -435,6 +441,23 @@ export function ApprovalsTable() {
                   ))}
                 </div>
                 <p className="text-sm text-muted-foreground">Selected users will be allowed to send RFQs for this requisition.</p>
+              </div>
+            )}
+             {actionType === 'approve' && selectedRequisition?.status === 'Pending_Managerial_Approval' && (
+              <div className="pt-4 space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="open-tender"
+                    checked={isOpenTender}
+                    onCheckedChange={(checked) => setIsOpenTender(!!checked)}
+                  />
+                  <Label htmlFor="open-tender" className="font-semibold">
+                    Make this an Open Tender
+                  </Label>
+                </div>
+                <p className="text-sm text-muted-foreground pl-6">
+                  If checked, this requisition will be publicly listed on the vendor portal for any verified vendor to bid on.
+                </p>
               </div>
             )}
           </div>

@@ -29,7 +29,7 @@ export default function PublicPortalPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        status: 'PreApproved',
+        isOpenTender: 'true',
         page: page.toString(),
         limit: PAGE_SIZE.toString(),
       });

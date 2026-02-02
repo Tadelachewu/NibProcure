@@ -208,6 +208,7 @@ export type PurchaseRequisition = {
   assignedRfqSenderIds?: string[];
   minutes?: Minute[];
   auditTrail?: AuditLog[];
+  isOpenTender?: boolean;
 };
 
 export type AuditLog = {

@@ -36,7 +36,7 @@ export default function PublicRequisitionDetailsPage() {
           throw new Error('Failed to fetch requisition data.');
         }
         const data: PurchaseRequisition = await response.json();
-        if (data.status.replace(/_/g, ' ') !== 'PreApproved') {
+        if (data.status.replace(/_/g, ' ') !== 'PreApproved' || !data.isOpenTender) {
             throw new Error('This tender is not currently open for bidding.');
         }
         setRequisition(data);
