@@ -21,6 +21,7 @@ export async function GET(request: Request) {
   const approverId = searchParams.get('approverId');
   const forQuoting = searchParams.get('forQuoting');
   const forAwardReview = searchParams.get('forReview');
+  const isOpenTender = searchParams.get('isOpenTender') === 'true';
 
   // --- START: Server-side pagination and search ---
   const page = parseInt(searchParams.get('page') || '1', 10);
@@ -51,7 +52,10 @@ export async function GET(request: Request) {
     }
     // --- END: Search logic ---
 
-    if (forAwardReview === 'true' && userPayload) {
+    if (isOpenTender) {
+      whereClause.isOpenTender = true;
+      whereClause.status = 'PreApproved';
+    } else if (forAwardReview === 'true' && userPayload) {
         const userRoles = userPayload.roles as any[];
         const userId = userPayload.id;
         
@@ -270,7 +274,7 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    const { id, status, userId, comment } = body;
+    const { id, status, userId, comment, isOpenTender, announcementEndDate } = body;
     console.log(`[PATCH /api/requisitions] Received request for ID ${id} with status ${status} by user ${userId}`);
     
     const newStatus = status ? status.replace(/ /g, '_') : null;
@@ -407,6 +411,14 @@ export async function PATCH(
       dataToUpdate.status = 'PreApproved';
       dataToUpdate.currentApprover = { disconnect: true };
       dataToUpdate.approverComment = comment;
+      if (typeof isOpenTender === 'boolean') {
+          dataToUpdate.isOpenTender = isOpenTender;
+          if (isOpenTender && announcementEndDate) {
+              dataToUpdate.announcementEndDate = new Date(announcementEndDate);
+          } else {
+              dataToUpdate.announcementEndDate = null;
+          }
+      }
       auditAction = 'APPROVE_REQUISITION';
       auditDetails = `Managerial approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;
 

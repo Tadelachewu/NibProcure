@@ -31,6 +31,7 @@ import {
   Loader2,
   X,
   MessageSquare,
+  CalendarIcon,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -48,6 +49,9 @@ import { RequisitionDetailsDialog } from './requisition-details-dialog';
 import { Badge } from './ui/badge';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { Checkbox } from './ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Calendar } from './ui/calendar';
+import { cn } from '@/lib/utils';
 
 
 const PAGE_SIZE = 10;
@@ -60,7 +64,6 @@ export function ApprovalsTable() {
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
   const [selectedRequisition, setSelectedRequisition] = useState<PurchaseRequisition | null>(null);
   const [comment, setComment] = useState('');
   const [isActionDialogOpen, setActionDialogOpen] = useState(false);
@@ -68,6 +71,7 @@ export function ApprovalsTable() {
   const [isDetailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [isOpenTender, setIsOpenTender] = useState(false);
+  const [announcementEndDate, setAnnouncementEndDate] = useState<Date | undefined>();
 
   useEffect(() => {
     if (isActionDialogOpen && selectedRequisition) {
@@ -101,7 +105,6 @@ export function ApprovalsTable() {
       }
       const data = await response.json();
       setRequisitions(data.requisitions || []);
-      setTotalCount(data.totalCount || 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'An unknown error occurred');
     } finally {
@@ -126,6 +129,7 @@ export function ApprovalsTable() {
     setSelectedRequisition(req);
     setActionType(type);
     setIsOpenTender(req.isOpenTender || false);
+    setAnnouncementEndDate(req.announcementEndDate ? new Date(req.announcementEndDate) : undefined);
     // Prepopulate assigned IDs when opening approve dialog
     if (type === 'approve' && req.assignedRfqSenderIds) {
       setAssignedIds(req.assignedRfqSenderIds || []);
@@ -170,6 +174,11 @@ export function ApprovalsTable() {
       return;
     }
 
+    if (newStatus === 'PreApproved' && isOpenTender && !announcementEndDate) {
+        toast({ variant: 'destructive', title: 'Missing Date', description: 'Please provide an announcement end date for the open tender.' });
+        return;
+    }
+
     // If the system requires per-requisition RFQ sender assignment, enforce at least 1 selection
     if (newStatus === 'PreApproved' && detectAssignedMode() && assignedIds.length === 0) {
       toast({
@@ -187,9 +196,11 @@ export function ApprovalsTable() {
         userId: user.id,
         comment,
       };
-      // Include assigned RFQ sender IDs when transitioning to PreApproved and global setting requires assignment
       if (newStatus === 'PreApproved') {
         payload.isOpenTender = isOpenTender;
+        if (isOpenTender) {
+            payload.announcementEndDate = announcementEndDate;
+        }
         if (detectAssignedMode()) {
             payload.assignedRfqSenderIds = assignedIds;
         }
@@ -222,8 +233,11 @@ export function ApprovalsTable() {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const paginatedRequisitions = requisitions; // server already paginates
+  const totalPages = Math.max(1, Math.ceil(requisitions.length / PAGE_SIZE));
+  const paginatedRequisitions = requisitions.slice(
+      (currentPage - 1) * PAGE_SIZE,
+      currentPage * PAGE_SIZE
+  );
 
   const getUrgencyVariant = (urgency: Urgency) => {
     switch (urgency) {
@@ -363,48 +377,20 @@ export function ApprovalsTable() {
             </TableBody>
           </Table>
         </div>
-        <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-muted-foreground">
-            Showing {Math.min(1 + (currentPage - 1) * PAGE_SIZE, totalCount)} to {Math.min(currentPage * PAGE_SIZE, totalCount)} of {totalCount} requisitions.
-          </div>
-                <div className="flex items-center gap-2">
-                    <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(1)}
-            disabled={currentPage === 1}
-                    >
-                    <ChevronsLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCurrentPage(p => p - 1)}
-            disabled={currentPage === 1}
-                    >
-                    <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-sm">
-                    Page {currentPage > 0 ? currentPage : 1} of {totalPages > 0 ? totalPages : 1}
-                    </span>
-                    <Button
-                    variant="outline"
-                    size="icon"
-            onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
-            disabled={currentPage === totalPages}
-                    >
-                    <ChevronRight className="h-4 w-4" />
-                    </Button>
-                    <Button
-                    variant="outline"
-                    size="icon"
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={currentPage === totalPages}
-                    >
-                    <ChevronsRight className="h-4 w-4" />
-                    </Button>
-                </div>
-        </div>
+        {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-muted-foreground">
+                Showing {Math.min(1 + (currentPage - 1) * PAGE_SIZE, requisitions.length)} to {Math.min(currentPage * PAGE_SIZE, requisitions.length)} of {requisitions.length} requisitions.
+            </div>
+            <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft className="h-4 w-4" /></Button>
+                <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
+                <span className="text-sm">Page {currentPage > 0 ? currentPage : 1} of {totalPages > 0 ? totalPages : 1}</span>
+                <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronsRight className="h-4 w-4" /></Button>
+            </div>
+            </div>
+        )}
       </CardContent>
        <Dialog open={isActionDialogOpen} onOpenChange={setActionDialogOpen}>
         <DialogContent>
@@ -426,39 +412,63 @@ export function ApprovalsTable() {
                 placeholder="Type your justification here..."
               />
             </div>
-            {/* If manager is approving to PreApproved and system requires assignment, allow selection */}
-            {actionType === 'approve' && selectedRequisition?.status === 'Pending_Managerial_Approval' && rfqSenderSetting?.type === 'assigned' && (
-              <div className="grid gap-2">
-                <Label>Assign RFQ Senders</Label>
-                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto border rounded p-2">
-                  {allUsers.filter(u => (u.roles as any[]).some(r => ['Procurement_Officer','Admin'].includes((r as any).name))).map(u => (
-                    <label key={u.id} className="inline-flex items-center gap-2">
-                      <input type="checkbox" checked={assignedIds.includes(u.id)} onChange={() => {
-                        setAssignedIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id]);
-                      }} />
-                      <span>{u.name} ({u.email})</span>
-                    </label>
-                  ))}
+            {actionType === 'approve' && selectedRequisition?.status === 'Pending_Managerial_Approval' && (
+              <>
+                <div className="pt-4 space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="open-tender"
+                      checked={isOpenTender}
+                      onCheckedChange={(checked) => setIsOpenTender(!!checked)}
+                    />
+                    <Label htmlFor="open-tender" className="font-semibold">
+                      Make this an Open Tender
+                    </Label>
+                  </div>
+                  <p className="text-sm text-muted-foreground pl-6">
+                    If checked, this requisition will be publicly listed on the vendor portal.
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground">Selected users will be allowed to send RFQs for this requisition.</p>
-              </div>
-            )}
-             {actionType === 'approve' && selectedRequisition?.status === 'Pending_Managerial_Approval' && (
-              <div className="pt-4 space-y-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="open-tender"
-                    checked={isOpenTender}
-                    onCheckedChange={(checked) => setIsOpenTender(!!checked)}
-                  />
-                  <Label htmlFor="open-tender" className="font-semibold">
-                    Make this an Open Tender
-                  </Label>
-                </div>
-                <p className="text-sm text-muted-foreground pl-6">
-                  If checked, this requisition will be publicly listed on the vendor portal for any verified vendor to bid on.
-                </p>
-              </div>
+                {isOpenTender && (
+                  <div className="pl-6 space-y-2">
+                      <Label>Public Announcement End Date</Label>
+                      <Popover>
+                          <PopoverTrigger asChild>
+                              <Button variant="outline" className="w-full justify-start text-left font-normal">
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {announcementEndDate ? format(announcementEndDate, 'PPP') : <span>Pick an end date</span>}
+                              </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                  mode="single"
+                                  selected={announcementEndDate}
+                                  onSelect={setAnnouncementEndDate}
+                                  disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))}
+                                  initialFocus
+                              />
+                          </PopoverContent>
+                      </Popover>
+                      <p className="text-xs text-muted-foreground">The date this tender will no longer be publicly visible.</p>
+                  </div>
+                )}
+                {detectAssignedMode() && (
+                  <div className="grid gap-2">
+                    <Label>Assign RFQ Senders</Label>
+                    <div className="flex flex-col gap-2 max-h-48 overflow-y-auto border rounded p-2">
+                      {allUsers.filter(u => (u.roles as any[]).some(r => ['Procurement_Officer','Admin'].includes((r as any).name))).map(u => (
+                        <label key={u.id} className="inline-flex items-center gap-2">
+                          <input type="checkbox" checked={assignedIds.includes(u.id)} onChange={() => {
+                            setAssignedIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id]);
+                          }} />
+                          <span>{u.name} ({u.email})</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-sm text-muted-foreground">Selected users will be allowed to send RFQs for this requisition.</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
           <DialogFooter>
@@ -467,10 +477,11 @@ export function ApprovalsTable() {
                 onClick={submitAction} 
                 variant={actionType === 'approve' ? 'default' : 'destructive'}
                 disabled={
-                  actionType === 'approve' &&
+                  (actionType === 'approve' &&
                   selectedRequisition?.status === 'Pending_Managerial_Approval' &&
                   detectAssignedMode() &&
-                  assignedIds.length === 0
+                  assignedIds.length === 0) ||
+                  (actionType === 'approve' && isOpenTender && !announcementEndDate)
                 }
             >
                 Submit {actionType === 'approve' ? 'Approval' : 'Rejection'}

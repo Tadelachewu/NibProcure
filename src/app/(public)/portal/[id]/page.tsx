@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PurchaseRequisition } from '@/lib/types';
-import { Loader2, ArrowLeft, Calendar, FileText, Building, User, Info, MessageSquare } from 'lucide-react';
+import { Loader2, ArrowLeft, Calendar, FileText, Building, User, Info, MessageSquare, Timer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -98,6 +98,12 @@ export default function PublicRequisitionDetailsPage() {
                     <div className="text-left md:text-right">
                         <p className="text-sm text-muted-foreground">Posted On</p>
                         <p className="font-semibold">{format(new Date(requisition.createdAt), 'PPP')}</p>
+                         {requisition.announcementEndDate && (
+                            <>
+                                <p className="text-sm text-muted-foreground mt-2">Closes On</p>
+                                <p className="font-semibold text-destructive">{format(new Date(requisition.announcementEndDate), 'PPP')}</p>
+                            </>
+                        )}
                     </div>
                 </div>
             </CardHeader>

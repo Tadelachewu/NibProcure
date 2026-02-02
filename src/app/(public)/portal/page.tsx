@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { PurchaseRequisition } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowRight, Building, Calendar, FileText, Search, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from 'lucide-react';
+import { Loader2, ArrowRight, Building, Calendar, FileText, Search, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Timer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { Input } from '@/components/ui/input';
@@ -114,8 +114,14 @@ export default function PublicPortalPage() {
                       </div>
                        <div className="flex items-center gap-2 text-muted-foreground">
                           <Calendar className="h-4 w-4" />
-                          <span>Posted on: {format(new Date(req.createdAt), 'PPP')}</span>
+                          <span>Posted on: {format(new Date(req.createdAt), 'PP')}</span>
                       </div>
+                      {req.announcementEndDate && (
+                          <div className="flex items-center gap-2 text-destructive font-semibold">
+                              <Timer className="h-4 w-4" />
+                              <span>Closes on: {format(new Date(req.announcementEndDate), 'PP')}</span>
+                          </div>
+                        )}
                     </CardContent>
                     <CardFooter>
                       <Button className="w-full" onClick={() => router.push(`/portal/${req.id}`)}>

@@ -209,6 +209,7 @@ export type PurchaseRequisition = {
   minutes?: Minute[];
   auditTrail?: AuditLog[];
   isOpenTender?: boolean;
+  announcementEndDate?: Date;
 };
 
 export type AuditLog = {
