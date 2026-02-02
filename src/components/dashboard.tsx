@@ -245,7 +245,17 @@ function ProcurementOfficerDashboard() {
             return count + 1;
         }, 0);
         const readyToAward = data.requisitions.filter(r => r.status === 'Scoring_Complete').length;
-        const pendingFinalReview = data.requisitions.filter(r => r.status.startsWith('Pending_') && r.status !== 'Pending_Approval').length;
+        // Only count pending statuses that belong to the award-review phase.
+        const preAwardStatuses = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval'];
+        const awardReviewMarkers = ['Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review', 'Pending_Review'];
+        const pendingFinalReview = data.requisitions.filter(r => {
+            if (!r.status) return false;
+            // Explicit award-review markers
+            if (awardReviewMarkers.includes(r.status)) return true;
+            // Any Pending_... status that is not a pre-award status
+            if (r.status.startsWith('Pending_') && !preAwardStatuses.includes(r.status)) return true;
+            return false;
+        }).length;
         const awardDeclined = data.requisitions.filter(r => r.status === 'Award_Declined').length;
 
         const paidInvoicesValue = data.invoices

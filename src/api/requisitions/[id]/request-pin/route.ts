@@ -25,19 +25,21 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const hash = await bcrypt.hash(pin, 10);
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
 
-    await prisma.pin.create({ data: {
-      requisition: { connect: { id } },
-      roleName: matching,
-      pinHash: hash,
-      generatedById: actor.id,
-      recipient: { connect: { id: actor.id } },
-      expiresAt,
-    }});
+    await prisma.pin.create({
+      data: {
+        requisition: { connect: { id } },
+        roleName: matching,
+        pinHash: hash,
+        generatedById: actor.id,
+        recipient: { connect: { id: actor.id } },
+        expiresAt,
+      }
+    });
 
     // Email actor their pin if they have email
     if (actor.email) {
       try {
-        await sendEmail({ to: actor.email, subject: `[NibProcure] Your verification PIN for ${requisition.id}`, html: `<p>Hello ${actor.name},</p><p>Your verification PIN for requisition <strong>${requisition.title}</strong> (${requisition.id}) is <strong>${pin}</strong>. It expires at ${expiresAt.toLocaleString()}.</p>` });
+        await sendEmail({ to: actor.email, subject: `[NibProcure] Your verification PIN for ${requisition.title}`, html: `<p>Hello ${actor.name},</p><p>Your verification PIN for requisition <strong>${requisition.title}</strong> (${requisition.id}) is <strong>${pin}</strong>. It expires at ${expiresAt.toLocaleString()}.</p>` });
       } catch (e) {
         console.warn('Failed to send pin email', e);
       }
