@@ -3158,6 +3158,26 @@ export default function QuotationDetailsPage() {
     const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
     const [selectedQuoteForScoring, setSelectedQuoteForScoring] = useState<Quotation | null>(null);
     const [selectedQuoteForDetails, setSelectedQuoteForDetails] = useState<Quotation | null>(null);
+
+    // Trigger server-side deadline job once on page load so expired awarded items are processed.
+    useEffect(() => {
+        let mounted = true;
+        (async () => {
+            try {
+                const resp = await fetch('/api/cron/trigger-deadline', { method: 'POST' });
+                if (!resp.ok) {
+                    console.warn('[QUOTATION PAGE] Cron trigger returned', resp.status);
+                } else {
+                    const json = await resp.json();
+                    if (json.ran) console.log('[QUOTATION PAGE] Deadline cron triggered on page load');
+                }
+            } catch (err) {
+                if (!mounted) return;
+                console.warn('[QUOTATION PAGE] Failed to trigger deadline cron on load', err);
+            }
+        })();
+        return () => { mounted = false; };
+    }, []);
     const [hidePricesForScoring, setHidePricesForScoring] = useState(false);
     const [isChangingAward, setIsChangingAward] = useState(false);
     const [isDetailsOpen, setIsDetailsOpen] = useState(false);

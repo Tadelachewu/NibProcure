@@ -135,6 +135,14 @@ const EvaluationCommitteeManagement = ({ requisition, onCommitteeUpdated, open, 
         return setMinutes(setHours(deadlineDate, hours), minutes);
     }, [deadlineDate, deadlineTime]);
 
+    //tade
+
+  //useEffect(() => {
+    //fetch('/api/cron/start');
+  //}, []);
+
+ //tade
+
     useEffect(() => {
         form.reset({
             committeeName: requisition.committeeName || "",
