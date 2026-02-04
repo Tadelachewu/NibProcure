@@ -1,16 +1,16 @@
 
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PurchaseRequisition, Quotation, QuotationStatus, Vendor, KycStatus, PerItemAwardDetail, RequisitionItem, QuoteItem, PurchaseOrder } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+    CardFooter,
 } from "@/components/ui/card"
 import { Badge } from '@/components/ui/badge';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
@@ -29,46 +29,46 @@ const ACTIVE_PAGE_SIZE = 6;
 type RequisitionCardStatus = 'Awarded' | 'Partially Awarded' | 'Submitted' | 'Not Awarded' | 'Action Required' | 'Accepted' | 'Invoice Submitted' | 'Standby' | 'Processing' | 'Closed' | 'Declined' | 'Delivery Issue' | 'Failed_to_Award' | 'Paid';
 
 const VendorStatusBadge = ({ status, reason }: { status: RequisitionCardStatus, reason?: string }) => {
-  const statusInfo: Record<RequisitionCardStatus, {text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline', className: string}> = {
-    'Awarded': { text: 'Awarded to You', variant: 'default', className: 'bg-green-600 hover:bg-green-700' },
-    'Partially Awarded': { text: 'Partially Awarded', variant: 'default', className: 'bg-green-600 hover:bg-green-700' },
-    'Accepted': { text: 'You Accepted', variant: 'default', className: 'bg-blue-600 hover:bg-blue-700' },
-    'Invoice Submitted': { text: 'Invoice Submitted', variant: 'default', className: 'bg-purple-600 hover:bg-purple-700' },
-    'Paid': { text: 'Paid', variant: 'default', className: 'bg-emerald-600 hover:bg-emerald-700' },
-    'Declined': { text: 'You Declined', variant: 'destructive', className: '' },
-    'Delivery Issue': { text: 'Delivery Issue', variant: 'destructive', className: '' },
-    'Submitted': { text: 'Submitted', variant: 'secondary', className: '' },
-    'Processing': { text: 'Processing', variant: 'secondary', className: '' },
-    'Closed': { text: 'Closed', variant: 'outline', className: '' },
-    'Not Awarded': { text: 'Not Awarded', variant: 'destructive', className: 'bg-gray-500 hover:bg-gray-600' },
-    'Failed_to_Award': { text: 'Not Awarded', variant: 'destructive', className: 'bg-gray-500 hover:bg-gray-600' },
-    'Action Required': { text: 'Action Required', variant: 'default', className: '' },
-    'Standby': { text: 'On Standby', variant: 'outline', className: 'border-amber-500 text-amber-600' },
-  };
+    const statusInfo: Record<RequisitionCardStatus, { text: string, variant: 'default' | 'secondary' | 'destructive' | 'outline', className: string }> = {
+        'Awarded': { text: 'Awarded to You', variant: 'default', className: 'bg-green-600 hover:bg-green-700' },
+        'Partially Awarded': { text: 'Partially Awarded', variant: 'default', className: 'bg-green-600 hover:bg-green-700' },
+        'Accepted': { text: 'You Accepted', variant: 'default', className: 'bg-blue-600 hover:bg-blue-700' },
+        'Invoice Submitted': { text: 'Invoice Submitted', variant: 'default', className: 'bg-purple-600 hover:bg-purple-700' },
+        'Paid': { text: 'Paid', variant: 'default', className: 'bg-emerald-600 hover:bg-emerald-700' },
+        'Declined': { text: 'You Declined', variant: 'destructive', className: '' },
+        'Delivery Issue': { text: 'Delivery Issue', variant: 'destructive', className: '' },
+        'Submitted': { text: 'Submitted', variant: 'secondary', className: '' },
+        'Processing': { text: 'Processing', variant: 'secondary', className: '' },
+        'Closed': { text: 'Closed', variant: 'outline', className: '' },
+        'Not Awarded': { text: 'Not Awarded', variant: 'destructive', className: 'bg-gray-500 hover:bg-gray-600' },
+        'Failed_to_Award': { text: 'Not Awarded', variant: 'destructive', className: 'bg-gray-500 hover:bg-gray-600' },
+        'Action Required': { text: 'Action Required', variant: 'default', className: '' },
+        'Standby': { text: 'On Standby', variant: 'outline', className: 'border-amber-500 text-amber-600' },
+    };
 
-  const { text, variant, className } = statusInfo[status] || { text: 'Unknown', variant: 'outline', className: '' };
+    const { text, variant, className } = statusInfo[status] || { text: 'Unknown', variant: 'outline', className: '' };
 
-  const badge = <Badge variant={variant} className={cn('absolute top-4 right-4', className)}>{text}</Badge>;
+    const badge = <Badge variant={variant} className={cn('absolute top-4 right-4', className)}>{text}</Badge>;
 
-  if (reason) {
-    return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="relative">
-              {badge}
-              <AlertCircle className="absolute top-5 right-5 h-4 w-4 text-destructive-foreground opacity-80" />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Reason: {reason}</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  }
+    if (reason) {
+        return (
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div className="relative">
+                            {badge}
+                            <AlertCircle className="absolute top-5 right-5 h-4 w-4 text-destructive-foreground opacity-80" />
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Reason: {reason}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        );
+    }
 
-  return badge;
+    return badge;
 };
 
 
@@ -78,6 +78,7 @@ export default function VendorDashboardPage() {
     const { toast } = useToast();
     const [allRequisitions, setAllRequisitions] = useState<PurchaseRequisition[]>([]);
     const [vendor, setVendor] = useState<Vendor | null>(null);
+    const processedExpiredRef = useRef<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [openCurrentPage, setOpenCurrentPage] = useState(1);
@@ -85,6 +86,21 @@ export default function VendorDashboardPage() {
     const [allPOs, setAllPOs] = useState<PurchaseOrder[]>([]);
 
     const fetchAllData = useCallback(async () => {
+        // Trigger server-side cron job to handle any expired award-response deadlines.
+        // The server will debounce frequent calls; we ignore failures here but will refresh data below.
+        try {
+            const cronResp = await fetch('/api/cron/trigger-deadline', { method: 'POST' });
+            if (cronResp.ok) {
+                const cronJson = await cronResp.json();
+                if (cronJson.ran) {
+                    // Let the rest of the flow fetch fresh requisitions below.
+                    console.log('[VENDOR DASH] Triggered deadline cron job on load');
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to trigger deadline cron on vendor dashboard load', e);
+        }
+
         if (!token || !user?.vendorId) {
             setLoading(false);
             return;
@@ -99,49 +115,63 @@ export default function VendorDashboardPage() {
                 fetch('/api/purchase-orders', { headers: { 'Authorization': `Bearer ${token}` } })
             ]);
 
-            if(!vendorRes.ok) throw new Error('Could not fetch vendor details.');
+            if (!vendorRes.ok) throw new Error('Could not fetch vendor details.');
             const allVendors: Vendor[] = await vendorRes.json();
             const currentVendor = allVendors.find(v => v.id === user.vendorId);
             setVendor(currentVendor || null);
-            
+
             if (!reqRes.ok) {
                 if (reqRes.status === 403) throw new Error('You do not have permission to view these resources.');
                 throw new Error('Failed to fetch requisitions.');
             }
             const reqData = await reqRes.json();
             const requisitionsData: PurchaseRequisition[] = reqData.requisitions || [];
-            
-            if(!poRes.ok) throw new Error('Could not fetch purchase orders.');
+
+            if (!poRes.ok) throw new Error('Could not fetch purchase orders.');
             const poData: PurchaseOrder[] = await poRes.json();
             setAllPOs(poData);
 
             let needsRefetch = false;
+            const processedExpired = processedExpiredRef.current;
             for (const req of requisitionsData) {
                 if (req.awardResponseDeadline && isPast(new Date(req.awardResponseDeadline))) {
                     const awardStrategy = (req.rfqSettings as any)?.awardStrategy;
-                    
+
                     if (awardStrategy === 'item') {
                         for (const item of req.items) {
                             const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
                             const awardedDetail = perItemDetails.find(d => d.vendorId === user.vendorId && d.status === 'Awarded');
                             if (awardedDetail) {
-                                needsRefetch = true;
-                                await fetch(`/api/quotations/${awardedDetail.quotationId}/respond`, {
+                                // Only attempt once per requisition per session to avoid repeated prompts
+                                if (processedExpired.has(req.id)) continue;
+                                const resp = await fetch(`/api/quotations/${awardedDetail.quotationId}/respond`, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                                     body: JSON.stringify({ userId: user.id, action: 'reject', quoteItemId: awardedDetail.quoteItemId, rejectionReason: 'deadline is passed' })
                                 });
+                                if (resp.ok) {
+                                    needsRefetch = true;
+                                    processedExpired.add(req.id);
+                                } else {
+                                    console.warn('Failed to auto-decline per-item award for req', req.id, await resp.text());
+                                }
                             }
                         }
                     } else { // Single award
                         const awardedQuote = req.quotations?.find(q => q.vendorId === user.vendorId && q.status === 'Awarded');
                         if (awardedQuote) {
-                            needsRefetch = true;
-                            await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
+                            if (processedExpired.has(req.id)) continue;
+                            const resp = await fetch(`/api/quotations/${awardedQuote.id}/respond`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                                 body: JSON.stringify({ userId: user.id, action: 'reject', rejectionReason: 'deadline is passed' })
                             });
+                            if (resp.ok) {
+                                needsRefetch = true;
+                                processedExpired.add(req.id);
+                            } else {
+                                console.warn('Failed to auto-decline whole award for req', req.id, await resp.text());
+                            }
                         }
                     }
                 }
@@ -153,7 +183,16 @@ export default function VendorDashboardPage() {
                     title: 'Deadline Expired',
                     description: `An award was automatically declined because the response deadline passed.`
                 });
-                fetchAllData(); // Re-trigger the fetch to get the updated state
+                // Fetch fresh requisitions once to reflect updated state
+                try {
+                    const refreshed = await fetch('/api/requisitions?forVendor=true', { headers: { 'Authorization': `Bearer ${token}` } });
+                    if (refreshed.ok) {
+                        const refreshedData = await refreshed.json();
+                        setAllRequisitions(refreshedData.requisitions || []);
+                    }
+                } catch (e) {
+                    console.warn('Failed to refetch requisitions after auto-decline', e);
+                }
                 return;
             }
 
@@ -175,7 +214,7 @@ export default function VendorDashboardPage() {
 
         const vendorQuote = req.quotations?.find(q => q.vendorId === user.vendorId);
         const isPerItemAward = (req.rfqSettings as any)?.awardStrategy === 'item';
-        
+
         const posForVendor = allPOs.filter(po => po.requisitionId === req.id && po.vendor.id === user.vendorId) || [];
         const isAnyPaid = posForVendor.some(po => po.invoices?.some(inv => inv.status === 'Paid'));
 
@@ -187,9 +226,9 @@ export default function VendorDashboardPage() {
             const firstDisputedItem = firstDisputedReceipt?.items.find(i => i.condition !== 'Good');
             return { status: 'Delivery Issue', reason: firstDisputedItem?.notes || 'An item was marked as damaged or incorrect.' };
         }
-        
+
         if (isPerItemAward) {
-            const vendorItemDetails = req.items.flatMap(item => 
+            const vendorItemDetails = req.items.flatMap(item =>
                 (item.perItemAwardDetails as PerItemAwardDetail[] || []).filter(d => d.vendorId === user.vendorId)
             );
 
@@ -219,7 +258,7 @@ export default function VendorDashboardPage() {
                 return { status: 'Standby' };
             }
         }
-        
+
         if (vendorQuote) {
             if (req.status === 'Closed' || req.status === 'Fulfilled') {
                 return vendorQuote.status === 'Accepted' ? { status: 'Closed' } : { status: 'Not Awarded' };
@@ -236,11 +275,11 @@ export default function VendorDashboardPage() {
                 return { status: 'Submitted' };
             }
         }
-        
+
         if (req.status === 'Accepting_Quotes') {
             return { status: 'Action Required' };
         }
-        
+
         return { status: 'Processing' };
     }, [user, allPOs]);
 
@@ -251,14 +290,14 @@ export default function VendorDashboardPage() {
 
         allRequisitions.forEach(req => {
             const vendorQuote = req.quotations?.find(q => q.vendorId === user?.vendorId);
-            
-            const hasReopenedItemForVendor = req.items.some(item => 
+
+            const hasReopenedItemForVendor = req.items.some(item =>
                 item.reopenDeadline && isPast(new Date(item.reopenDeadline)) === false &&
                 item.reopenVendorIds?.includes(user?.vendorId || '')
             );
 
-            const isRelated = vendorQuote || 
-                              req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
+            const isRelated = vendorQuote ||
+                req.items.some(item => (item.perItemAwardDetails as any[])?.some(d => d.vendorId === user?.vendorId));
 
             if (isRelated) {
                 active.push(req);
@@ -266,10 +305,10 @@ export default function VendorDashboardPage() {
                 open.push(req);
             }
         });
-        
-        return { 
-            activeRequisitions: active.sort((a,b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
-            openForQuoting: open.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+
+        return {
+            activeRequisitions: active.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+            openForQuoting: open.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
         };
 
     }, [allRequisitions, user]);
@@ -312,7 +351,7 @@ export default function VendorDashboardPage() {
                     )}
 
                     {vendor?.kycStatus === 'Pending' && (
-                         <Alert>
+                        <Alert>
                             <AlertTitle className="font-bold">Account Pending Verification</AlertTitle>
                             <AlertDescription>
                                 Your account is currently under review. You will be able to view and bid on requisitions once your account is verified.
@@ -322,7 +361,7 @@ export default function VendorDashboardPage() {
 
                     {vendor?.kycStatus === 'Verified' && (
                         <>
-                             <div className="space-y-4">
+                            <div className="space-y-4">
                                 <div className="space-y-1">
                                     <h2 className="text-3xl font-bold">Open for Quotation</h2>
                                     <p className="text-muted-foreground">
@@ -331,35 +370,35 @@ export default function VendorDashboardPage() {
                                 </div>
                                 {paginatedOpenData.length > 0 ? (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {paginatedOpenData.map((req) => (
-                                        <Card key={req.id} className="flex flex-col hover:shadow-md transition-shadow relative">
-                                            <CardHeader>
-                                                <CardTitle>{req.title}</CardTitle>
-                                                <CardDescription>From {req.department} Department</CardDescription>
-                                            </CardHeader>
-                                            <CardContent className="flex-grow">
-                                                <div className="text-sm text-muted-foreground space-y-2">
-                                                    <div>
-                                                        <span className="font-semibold text-foreground">Posted:</span> {formatDistanceToNow(new Date(req.updatedAt), { addSuffix: true })}
-                                                    </div>
-                                                    {req.deadline && (
-                                                        <div className="flex items-center gap-1.5 font-semibold text-destructive">
-                                                            <Timer className="h-4 w-4" />
-                                                            <span>Deadline: {format(new Date(req.deadline), 'PPpp')}</span>
+                                        {paginatedOpenData.map((req) => (
+                                            <Card key={req.id} className="flex flex-col hover:shadow-md transition-shadow relative">
+                                                <CardHeader>
+                                                    <CardTitle>{req.title}</CardTitle>
+                                                    <CardDescription>From {req.department} Department</CardDescription>
+                                                </CardHeader>
+                                                <CardContent className="flex-grow">
+                                                    <div className="text-sm text-muted-foreground space-y-2">
+                                                        <div>
+                                                            <span className="font-semibold text-foreground">Posted:</span> {formatDistanceToNow(new Date(req.updatedAt), { addSuffix: true })}
                                                         </div>
-                                                    )}
-                                                </div>
-                                            </CardContent>
-                                            <CardFooter>
-                                                <Button asChild className="w-full">
-                                                    <Link href={`/vendor/requisitions/${req.id}`}>
-                                                        View & Quote <ArrowRight className="ml-2 h-4 w-4" />
-                                                    </Link>
-                                                </Button>
-                                            </CardFooter>
-                                        </Card>
+                                                        {req.deadline && (
+                                                            <div className="flex items-center gap-1.5 font-semibold text-destructive">
+                                                                <Timer className="h-4 w-4" />
+                                                                <span>Deadline: {format(new Date(req.deadline), 'PPpp')}</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </CardContent>
+                                                <CardFooter>
+                                                    <Button asChild className="w-full">
+                                                        <Link href={`/vendor/requisitions/${req.id}`}>
+                                                            View & Quote <ArrowRight className="ml-2 h-4 w-4" />
+                                                        </Link>
+                                                    </Button>
+                                                </CardFooter>
+                                            </Card>
                                         )
-                                    )}
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-center justify-center h-32 border-2 border-dashed rounded-lg bg-muted/30">
@@ -419,7 +458,7 @@ export default function VendorDashboardPage() {
                                                                 </div>
                                                             )}
                                                             {status === 'Paid' && paymentEvidenceUrl && (
-                                                                 <a href={paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
+                                                                <a href={paymentEvidenceUrl} target="_blank" rel="noopener noreferrer">
                                                                     <Button variant="outline" size="sm" className="w-full">
                                                                         <FileText className="mr-2 h-4 w-4" /> View Payment Evidence
                                                                     </Button>

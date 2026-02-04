@@ -53,12 +53,13 @@ export async function executeAwardDeadlineJob() {
         const deadline = new Date(req.awardResponseDeadline);
 
         // Build per-item award map: vendorId -> [requisitionItemId]
+        // Only consider items that are explicitly 'Awarded' (cron must not touch Standby or Pending_Award entries)
         const perItemVendorMap: Record<string, string[]> = {};
         for (const item of req.items || []) {
           const details = (item.perItemAwardDetails as any) || [];
           for (const d of details) {
             if (!d || !d.vendorId) continue;
-            if (d.status === 'Awarded' || d.status === 'Pending_AWARD') {
+            if (d.status === 'Awarded') {
               perItemVendorMap[d.vendorId] = perItemVendorMap[d.vendorId] || [];
               perItemVendorMap[d.vendorId].push(item.id);
             }
@@ -146,9 +147,20 @@ export async function executeAwardDeadlineJob() {
           }
 
           try {
-            await prisma.purchaseRequisition.update({ where: { id: req.id }, data: { deadlineReminderSentAt: new Date() } });
+            // Record that we sent reminders by creating an audit log entry instead of updating a non-existent field
+            await prisma.auditLog.create({
+              data: {
+                timestamp: new Date(),
+                user: { connect: { id: systemActor?.id } },
+                action: 'DEADLINE_REMINDER_SENT',
+                entity: 'Requisition',
+                entityId: req.id,
+                details: `Reminder sent to ${vendorsNeedingAction.map(v => v.vendorId).join(', ')}`,
+                transactionId: req.transactionId,
+              }
+            });
           } catch (err) {
-            console.error(`[CRON] Failed to mark deadlineReminderSentAt for req ${req.id}:`, err);
+            console.error(`[CRON] Failed to create deadline reminder audit for req ${req.id}:`, err);
           }
         }
       } catch (err) {

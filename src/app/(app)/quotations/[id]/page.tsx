@@ -3172,6 +3172,17 @@ export default function QuotationDetailsPage() {
     const [deadlineCheckPerformed, setDeadlineCheckPerformed] = useState(false);
     const [isManualQuoteOpen, setIsManualQuoteOpen] = useState(false);
 
+    // Trigger the award-deadline job when this page is opened, but avoid repeated runs.
+    useEffect(() => {
+        if (!deadlineCheckPerformed) {
+            setDeadlineCheckPerformed(true);
+            void fetch('/api/cron/trigger-deadline').catch((err) => {
+                // non-fatal: log locally
+                console.debug('[UI] trigger-deadline call failed:', err);
+            });
+        }
+    }, [deadlineCheckPerformed]);
+
 
     const isAuthorized = useMemo(() => {
         if (!user || !role) return false;

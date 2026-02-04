@@ -8,7 +8,7 @@ import { decodeJwt, getActorFromToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 import { sendEmail } from '@/services/email-service';
 import { isPast } from 'date-fns';
-import { getNextApprovalStep, getPreviousApprovalStep } from '@/services/award-service';
+import { getNextApprovalStep, getPreviousApprovalStep, resetAwardToScoring } from '@/services/award-service';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -588,9 +588,26 @@ export async function PATCH(
       console.log(`[PATCH /api/requisitions] Award action transaction started for Req ID: ${id}`);
       updatedRequisition = await prisma.$transaction(async (tx) => {
 
+        // Read fresh requisition state inside the transaction to avoid races
+        const currentRequisition = await tx.purchaseRequisition.findUnique({
+          where: { id },
+          include: {
+            department: true,
+            requester: true,
+            items: true,
+            quotations: { include: { items: true, scores: { include: { itemScores: true } } } },
+            minutes: { orderBy: { createdAt: 'desc' }, take: 1 },
+            financialCommitteeMembers: { select: { id: true } },
+            technicalCommitteeMembers: { select: { id: true } },
+          }
+        });
+
+        if (!currentRequisition) throw new Error('Requisition not found inside transaction');
+
+        // Create review record
         await tx.review.create({
           data: {
-            requisitionId: requisition.id,
+            requisitionId: currentRequisition.id,
             reviewerId: user.id,
             decision: newStatus as 'Approved' | 'Rejected',
             comment: comment,
@@ -598,14 +615,18 @@ export async function PATCH(
         });
 
         if (newStatus === 'Rejected') {
-          const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails } = await getPreviousApprovalStep(tx, requisition, user, comment);
+          const { previousStatus, previousApproverId, auditDetails: serviceAuditDetails, resetToScoring } = await getPreviousApprovalStep(tx, currentRequisition, user, comment) as any;
+          // If this rejection requires a full reset to scoring, perform it inside the same transaction
+          if (resetToScoring) {
+            await resetAwardToScoring(tx, currentRequisition.id, user.id, comment);
+          }
           dataToUpdate.status = previousStatus;
           dataToUpdate.currentApprover = previousApproverId ? { connect: { id: previousApproverId } } : { disconnect: true };
           dataToUpdate.approverComment = comment;
           auditDetails = serviceAuditDetails;
           auditAction = 'REJECT_AWARD_STEP';
         } else { // Approved
-          const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, requisition, user);
+          const { nextStatus, nextApproverId, auditDetails: serviceAuditDetails } = await getNextApprovalStep(tx, currentRequisition, user);
           dataToUpdate.status = nextStatus;
           dataToUpdate.currentApprover = nextApproverId ? { connect: { id: nextApproverId } } : { disconnect: true };
           dataToUpdate.approverComment = comment;
@@ -622,7 +643,7 @@ export async function PATCH(
           },
         });
 
-        const latestMinute = requisition.minutes[0];
+        const latestMinute = currentRequisition.minutes[0];
         if (latestMinute && latestMinute.documentUrl) {
           const signatureRecord = await tx.signature.create({
             data: {
