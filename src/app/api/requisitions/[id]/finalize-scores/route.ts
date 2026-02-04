@@ -170,12 +170,12 @@ export async function POST(
                 const winningQuoteItemIds = Object.values(awards).map((award: any) => award.rankedBids[0].quoteItemId);
                 
                 const winningQuoteItems = await tx.quoteItem.findMany({
-                    where: { id: { in: winningQuoteItemIds } },
-                    include: { requisitionItem: true }
+                    where: { id: { in: winningQuoteItemIds } }
                 });
 
                 totalAwardValue = winningQuoteItems.reduce((sum, item) => {
-                    return sum + (item.unitPrice * (item.requisitionItem?.quantity || 0));
+                    const requisitionItem = requisition.items.find(ri => ri.id === item.requisitionItemId);
+                    return sum + (item.unitPrice * (requisitionItem?.quantity || 0));
                 }, 0);
             }
             // --- END CALCULATION ---
