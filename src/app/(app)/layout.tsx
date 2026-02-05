@@ -30,6 +30,7 @@ import { navItems } from '@/lib/roles';
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { useToast } from '@/hooks/use-toast';
 import { RoleSwitcher } from '@/components/role-switcher';
+import { WorkflowListener } from '@/components/WorkflowListener';
 
 const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 
@@ -166,6 +167,7 @@ export default function AppLayout({
 
   return (
     <SidebarProvider>
+      <WorkflowListener />
       <Sidebar variant="inset" collapsible="icon">
         <SidebarHeader>
           <div className="flex items-center gap-2">
