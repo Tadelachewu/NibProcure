@@ -36,8 +36,8 @@ function calculateItemScoreForVendor(
 
 
 export async function POST(
-  request: Request,
-  { params }: { params: { id:string } }
+    request: Request,
+    { params }: { params: { id: string } }
 ) {
     const actor = await getActorFromToken(request);
     if (!actor) {
@@ -54,23 +54,23 @@ export async function POST(
         if (!minuteDocumentUrl) {
             return NextResponse.json({ error: "The official minute document is required to proceed." }, { status: 400 });
         }
-        
+
         const isAuthorized = await isActorAuthorizedForRequisition(actor, requisitionId as string);
         if (!isAuthorized) {
             console.error(`[FINALIZE-SCORES] User ${actor.id} is not authorized to finalize scores for requisition ${requisitionId}.`);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
-        
+
         console.log('[FINALIZE-SCORES] Starting transaction...');
         const result = await prisma.$transaction(async (tx) => {
-            
-            const requisition = await tx.purchaseRequisition.findUnique({ 
-                where: { id: requisitionId }, 
-                include: { 
-                    items: true, 
+
+            const requisition = await tx.purchaseRequisition.findUnique({
+                where: { id: requisitionId },
+                include: {
+                    items: true,
                     evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } },
                     quotations: { include: { scores: { include: { itemScores: true } }, items: true } }
-                } 
+                }
             });
             if (!requisition || !requisition.evaluationCriteria) {
                 throw new Error("Requisition or its evaluation criteria not found.");
@@ -149,7 +149,7 @@ export async function POST(
                     }
                 }
             }
-            
+
             // --- SERVER-SIDE VALUE CALCULATION ---
             let totalAwardValue = 0;
             if (awardStrategy === 'all') {
@@ -168,7 +168,7 @@ export async function POST(
 
             } else if (awardStrategy === 'item') {
                 const winningQuoteItemIds = Object.values(awards).map((award: any) => award.rankedBids[0].quoteItemId);
-                
+
                 const winningQuoteItems = await tx.quoteItem.findMany({
                     where: { id: { in: winningQuoteItemIds } }
                 });
@@ -179,7 +179,7 @@ export async function POST(
                 }, 0);
             }
             // --- END CALCULATION ---
-            
+
 
             const dynamicAwardValue = totalAwardValue;
 
@@ -204,13 +204,13 @@ export async function POST(
                 }
 
                 // Choose winner: prefer requested winner if compliant, otherwise lowest totalPrice among compliant vendors
-                let winningQuote = compliantQuotes.find(q => q.vendorId === requestedWinnerVendorId) || compliantQuotes.sort((a,b) => (a.totalPrice || 0) - (b.totalPrice || 0))[0];
+                let winningQuote = compliantQuotes.find(q => q.vendorId === requestedWinnerVendorId) || compliantQuotes.sort((a, b) => (a.totalPrice || 0) - (b.totalPrice || 0))[0];
 
                 // Mark winning quote
                 await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
 
                 // Other compliant quotes become standby/rejected by price; non-compliant quotes are rejected
-                const compliantOthers = compliantQuotes.filter(q => q.id !== winningQuote.id).sort((a,b) => (a.totalPrice || 0) - (b.totalPrice || 0));
+                const compliantOthers = compliantQuotes.filter(q => q.id !== winningQuote.id).sort((a, b) => (a.totalPrice || 0) - (b.totalPrice || 0));
                 for (let i = 0; i < compliantOthers.length; i++) {
                     const quote = compliantOthers[i];
                     const rank = i < 2 ? (i + 2) as 2 | 3 : null;
@@ -343,13 +343,13 @@ export async function POST(
                 }
             });
             console.log('[FINALIZE-SCORES] Audit log created.');
-            
+
             return updatedRequisition;
         }, {
             maxWait: 15000,
             timeout: 30000,
         });
-        
+
         console.log('[FINALIZE-SCORES] Transaction complete. Sending response.');
         return NextResponse.json({ message: 'Award process finalized and routed for review.', requisition: result });
 
