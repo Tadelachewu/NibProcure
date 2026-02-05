@@ -5,13 +5,14 @@ import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 import bcrypt from 'bcryptjs';
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
+    const params = await context.params;
     const { id } = params;
     const body = await request.json();
-      const { roleName, pin, confirmOnly } = body;
-      if (!roleName || !pin) return NextResponse.json({ error: 'Missing roleName or pin' }, { status: 400 });
+    const { roleName, pin, confirmOnly } = body;
+    if (!roleName || !pin) return NextResponse.json({ error: 'Missing roleName or pin' }, { status: 400 });
 
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
     if (!requisition) return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
@@ -41,7 +42,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (!match) return NextResponse.json({ error: 'Invalid PIN' }, { status: 400 });
 
     // determine configured threshold and current verified count for directors
-    const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
+    const DIRECTOR_ROLES = ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management'];
     const DEPT_HEAD_ROLE = 'Department_Head';
 
     const threshold = Number(currentSettings?.unsealThreshold ?? DIRECTOR_ROLES.length);

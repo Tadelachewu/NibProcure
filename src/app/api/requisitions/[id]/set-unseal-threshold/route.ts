@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -15,6 +15,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const params = await context.params;
     const { id } = params;
     const body = await request.json();
     const { threshold } = body;
@@ -32,7 +33,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     await prisma.purchaseRequisition.update({ where: { id }, data: { rfqSettings: updated as any } });
 
     // If current verified count already meets threshold, unmask immediately
-    const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
+    const DIRECTOR_ROLES = ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management'];
     const verifiedPins = await prisma.pin.findMany({
       where: { requisitionId: id, roleName: { in: DIRECTOR_ROLES }, used: true, usedById: { not: null } },
       select: { usedById: true },

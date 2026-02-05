@@ -27,9 +27,11 @@ function contentTypeForFile(filePath: string): string {
   }
 }
 
-export async function GET(_request: NextRequest, { params }: { params: { path: string[] } }) {
-  const parts = params?.path || [];
-  if (parts.length === 0) {
+export async function GET(_request: NextRequest, context: { params: any }) {
+  const params = await context.params;
+  const parts = params?.path as string[] | undefined || [];
+  if (!Array.isArray(parts) || parts.length === 0) {
+    console.error('GET /app/uploads/[...path] missing or invalid path', { method: (_request as any).method, url: (_request as any).url, params });
     return new NextResponse('Not Found', { status: 404 });
   }
 

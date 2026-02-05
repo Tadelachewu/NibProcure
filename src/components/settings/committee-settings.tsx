@@ -14,16 +14,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { ScrollArea } from '../ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogClose,
-  DialogTrigger,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogClose,
+    DialogTrigger,
 } from '@/components/ui/dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import Swal from 'sweetalert2';
+import 'sweetalert2/dist/sweetalert2.min.css';
 
 interface CommitteeConfig {
     [key: string]: {
@@ -50,9 +52,9 @@ export function CommitteeSettings() {
         if (savedData) {
             try {
                 const parsed = JSON.parse(savedData);
-                if(Object.keys(parsed).length > 0) {
+                if (Object.keys(parsed).length > 0) {
                     setLocalConfig(parsed);
-                    toast({ title: 'Draft Restored', description: 'Your unsaved changes to committee settings have been restored.'});
+                    toast({ title: 'Draft Restored', description: 'Your unsaved changes to committee settings have been restored.' });
                 } else {
                     setLocalConfig(committeeConfig);
                 }
@@ -63,7 +65,7 @@ export function CommitteeSettings() {
         } else {
             setLocalConfig(committeeConfig);
         }
-        
+
         const initialSearchs: Record<string, string> = {};
         const initialFilters: Record<string, string> = {};
         Object.keys(committeeConfig).forEach(key => {
@@ -75,7 +77,7 @@ export function CommitteeSettings() {
     }, [committeeConfig, toast]);
 
     useEffect(() => {
-        if(Object.keys(localConfig).length > 0) {
+        if (Object.keys(localConfig).length > 0) {
             localStorage.setItem(storageKey, JSON.stringify(localConfig));
         }
     }, [localConfig]);
@@ -97,36 +99,36 @@ export function CommitteeSettings() {
 
     const handleSave = async () => {
         setIsSaving(true);
-        
+
         // --- Validation Logic ---
-        const sortedCommitteeKeys = Object.keys(localConfig).sort((a,b) => localConfig[a].min - localConfig[b].min);
-        for(let i=0; i < sortedCommitteeKeys.length; i++) {
+        const sortedCommitteeKeys = Object.keys(localConfig).sort((a, b) => localConfig[a].min - localConfig[b].min);
+        for (let i = 0; i < sortedCommitteeKeys.length; i++) {
             const key = sortedCommitteeKeys[i];
             const committee = localConfig[key];
 
             // Basic range validation
             if (committee.max !== null && committee.min > committee.max) {
-                 toast({ variant: 'destructive', title: 'Invalid Range', description: `In Committee ${key}, the minimum value cannot be greater than the maximum.`});
-                 setIsSaving(false);
-                 return;
+                toast({ variant: 'destructive', title: 'Invalid Range', description: `In Committee ${key}, the minimum value cannot be greater than the maximum.` });
+                setIsSaving(false);
+                return;
             }
-            
+
             // Check for overlaps and gaps with the previous tier
             if (i > 0) {
-                const prevKey = sortedCommitteeKeys[i-1];
+                const prevKey = sortedCommitteeKeys[i - 1];
                 const prevCommittee = localConfig[prevKey];
                 if (prevCommittee.max === null) {
-                    toast({ variant: 'destructive', title: 'Invalid Configuration', description: `Committee ${prevKey} has no maximum value but is not the last committee.`});
+                    toast({ variant: 'destructive', title: 'Invalid Configuration', description: `Committee ${prevKey} has no maximum value but is not the last committee.` });
                     setIsSaving(false);
                     return;
                 }
                 if (committee.min <= prevCommittee.max) {
-                    toast({ variant: 'destructive', title: 'Overlapping Ranges', description: `Committee ${key}'s range (starts at ${committee.min.toLocaleString()}) overlaps with Committee ${prevKey}'s range (ends at ${prevCommittee.max.toLocaleString()}).`});
+                    toast({ variant: 'destructive', title: 'Overlapping Ranges', description: `Committee ${key}'s range (starts at ${committee.min.toLocaleString()}) overlaps with Committee ${prevKey}'s range (ends at ${prevCommittee.max.toLocaleString()}).` });
                     setIsSaving(false);
                     return;
                 }
-                 if (committee.min !== prevCommittee.max + 1) {
-                    toast({ variant: 'destructive', title: 'Gap Detected', description: `There is a gap between Committee ${prevKey}'s range (ends at ${prevCommittee.max.toLocaleString()}) and Committee ${key}'s range (starts at ${committee.min.toLocaleString()}). Ranges must be continuous.`});
+                if (committee.min !== prevCommittee.max + 1) {
+                    toast({ variant: 'destructive', title: 'Gap Detected', description: `There is a gap between Committee ${prevKey}'s range (ends at ${prevCommittee.max.toLocaleString()}) and Committee ${key}'s range (starts at ${committee.min.toLocaleString()}). Ranges must be continuous.` });
                     setIsSaving(false);
                     return;
                 }
@@ -156,7 +158,7 @@ export function CommitteeSettings() {
 
     const handleRoleChange = async (userToUpdate: User, committeeRoleName: UserRole, action: 'add' | 'remove') => {
         if (!actor) return;
-        
+
         const currentRoles = (userToUpdate.roles as any[]).map(r => r.name) as UserRole[];
         let newRoles: UserRole[];
 
@@ -168,31 +170,30 @@ export function CommitteeSettings() {
             }
         } else { // remove
             // Prevent removing the last role if it's the committee role
-            if(currentRoles.length === 1 && currentRoles[0] === committeeRoleName) {
+            if (currentRoles.length === 1 && currentRoles[0] === committeeRoleName) {
                 toast({ variant: 'destructive', title: 'Action Prevented', description: 'Cannot remove the only role a user has. Assign a new primary role first.' });
                 return;
             }
             newRoles = currentRoles.filter(r => r !== committeeRoleName);
         }
-    
+
         try {
             const response = await fetch('/api/users', {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({
                     id: userToUpdate.id,
                     name: userToUpdate.name,
                     email: userToUpdate.email,
                     departmentId: userToUpdate.departmentId,
-                    roles: newRoles, // Pass the array of role names
-                    actorUserId: actor.id 
+                    roles: newRoles // Pass the array of role names
                 })
             });
             if (!response.ok) {
-                 const errorData = await response.json();
+                const errorData = await response.json();
                 throw new Error(errorData.error || "Failed to update role");
             }
-            
+
             toast({
                 title: `User Role Updated`,
                 description: `${userToUpdate.name} was ${action === 'add' ? 'added to' : 'removed from'} ${committeeRoleName.replace(/_/g, ' ')}.`,
@@ -204,16 +205,16 @@ export function CommitteeSettings() {
             toast({ variant: 'destructive', title: 'Error', description: 'Failed to update user role.' });
         }
     }
-    
+
     const handleAddCommittee = async () => {
         if (!newCommitteeName.trim()) {
-            toast({variant: 'destructive', title: 'Error', description: 'Committee name is required.'});
+            toast({ variant: 'destructive', title: 'Error', description: 'Committee name is required.' });
             return;
         }
         if (!actor || !token) return;
         const committeeKey = newCommitteeName.toUpperCase();
-        if(committeeConfig[committeeKey]) {
-             toast({variant: 'destructive', title: 'Error', description: `Committee ${committeeKey} already exists.`});
+        if (committeeConfig[committeeKey]) {
+            toast({ variant: 'destructive', title: 'Error', description: `Committee ${committeeKey} already exists.` });
             return;
         }
 
@@ -222,23 +223,25 @@ export function CommitteeSettings() {
             const response = await fetch('/api/roles', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ name: `Committee ${committeeKey} Member`, description: `Member of the ${committeeKey} review committee.`, actorUserId: actor.id })
+                body: JSON.stringify({ name: `Committee ${committeeKey} Member`, description: `Member of the ${committeeKey} review committee.` })
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
                 throw new Error(errorData.error || 'Failed to create new committee role.');
             }
-            
+
             const newConfig = { ...localConfig, [committeeKey]: { min: 0, max: 0 } };
             await updateCommitteeConfig(newConfig);
+            // Ensure local UI reflects the newly created committee immediately
+            setLocalConfig(newConfig);
 
-            toast({title: 'Committee Role Created', description: `Successfully created the ${committeeKey} committee. Please configure its financial range.`, variant: 'success'});
+            toast({ title: 'Committee Role Created', description: `Successfully created the ${committeeKey} committee. Please configure its financial range.`, variant: 'success' });
             setNewCommitteeName('');
             setAddCommitteeOpen(false);
             await fetchAllSettings(); // Re-fetch settings to update roles across the app
         } catch (error) {
-            toast({variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.'});
+            toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : 'An unknown error occurred.' });
         } finally {
             setIsSaving(false);
         }
@@ -247,7 +250,7 @@ export function CommitteeSettings() {
     const renderCommitteeSection = (committeeKey: string) => {
         const committee = localConfig[committeeKey];
         if (!committee) return null;
-        
+
         const roleName: UserRole = `Committee_${committeeKey}_Member`;
         const members = allUsers.filter(u => Array.isArray(u.roles) && (u.roles as any[]).some(r => r.name === roleName));
         const nonMembers = allUsers.filter(u => Array.isArray(u.roles) && !(u.roles as any[]).some(r => r.name === roleName || r.name === 'Admin' || r.name === 'Vendor'))
@@ -261,14 +264,17 @@ export function CommitteeSettings() {
                 </AccordionTrigger>
                 <AccordionContent>
                     <CardContent className="space-y-4 pt-4">
+                        <div className="flex justify-end">
+                            <Button size="sm" variant="destructive" onClick={() => handleDeleteCommittee(committeeKey)}>Delete Committee</Button>
+                        </div>
                         <div className="grid md:grid-cols-2 gap-4">
                             <div>
                                 <Label>Min Amount (ETB)</Label>
-                                <Input type="number" value={committee.min || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committeeKey]: {...prev[committeeKey], min: Number(e.target.value)}}))} />
+                                <Input type="number" value={committee.min || ''} onChange={(e) => setLocalConfig(prev => ({ ...prev, [committeeKey]: { ...prev[committeeKey], min: Number(e.target.value) } }))} />
                             </div>
                             <div>
                                 <Label>Max Amount (ETB)</Label>
-                                <Input type="number" placeholder="No Limit" value={committee.max || ''} onChange={(e) => setLocalConfig(prev => ({...prev, [committeeKey]: {...prev[committeeKey], max: e.target.value === '' ? null : Number(e.target.value)}}))} />
+                                <Input type="number" placeholder="No Limit" value={committee.max || ''} onChange={(e) => setLocalConfig(prev => ({ ...prev, [committeeKey]: { ...prev[committeeKey], max: e.target.value === '' ? null : Number(e.target.value) } }))} />
                             </div>
                         </div>
                         <div className="grid md:grid-cols-2 gap-6 pt-4">
@@ -294,9 +300,9 @@ export function CommitteeSettings() {
                                 <div className="flex gap-2">
                                     <div className="relative flex-1">
                                         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                                        <Input placeholder="Search users..." className="pl-8" value={searchTerms[committeeKey] || ''} onChange={(e) => setSearchTerms(prev => ({...prev, [committeeKey]: e.target.value}))}/>
+                                        <Input placeholder="Search users..." className="pl-8" value={searchTerms[committeeKey] || ''} onChange={(e) => setSearchTerms(prev => ({ ...prev, [committeeKey]: e.target.value }))} />
                                     </div>
-                                    <Select value={departmentFilters[committeeKey] || 'all'} onValueChange={(val) => setDepartmentFilters(prev => ({...prev, [committeeKey]: val}))}>
+                                    <Select value={departmentFilters[committeeKey] || 'all'} onValueChange={(val) => setDepartmentFilters(prev => ({ ...prev, [committeeKey]: val }))}>
                                         <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Departments</SelectItem>
@@ -326,9 +332,65 @@ export function CommitteeSettings() {
         )
     }
 
+    const handleDeleteCommittee = async (committeeKey: string) => {
+        if (!actor || !token) return;
+        const confirmResult = await Swal.fire({
+            title: `Delete committee ${committeeKey}?`,
+            text: 'This will remove the role and its configuration. This action cannot be undone.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Yes, delete it',
+            cancelButtonText: 'Cancel'
+        });
+        if (!confirmResult.isConfirmed) return;
+        setIsSaving(true);
+        try {
+            // find role id
+            const rolesRes = await fetch('/api/roles');
+            if (!rolesRes.ok) throw new Error('Failed to fetch roles');
+            const rolesList = await rolesRes.json();
+            const roleName = `Committee_${committeeKey}_Member`;
+            const roleObj = rolesList.find((r: any) => r.name === roleName || r.name === roleName.replace(/ /g, '_'));
+            if (!roleObj) {
+                // Still remove from config
+                const { [committeeKey]: _removed, ...rest } = localConfig;
+                const newConfig = { ...rest };
+                await updateCommitteeConfig(newConfig);
+                // Update local UI immediately
+                setLocalConfig(newConfig);
+                await Swal.fire({ icon: 'success', title: 'Committee Removed', text: `Removed ${committeeKey} from configuration.` });
+                await fetchAllSettings();
+                return;
+            }
+
+            const delRes = await fetch('/api/roles', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ id: roleObj.id })
+            });
+            if (!delRes.ok) {
+                const d = await delRes.json();
+                throw new Error(d.error || 'Failed to delete role');
+            }
+
+            const { [committeeKey]: _removed, ...rest } = localConfig;
+            const newConfig = { ...rest };
+            await updateCommitteeConfig(newConfig);
+            // Update local UI immediately so no page refresh is required
+            setLocalConfig(newConfig);
+            await Swal.fire({ icon: 'success', title: 'Committee Deleted', text: `Committee ${committeeKey} removed.` });
+            await fetchAllSettings();
+        } catch (e: any) {
+            console.error(e);
+            await Swal.fire({ icon: 'error', title: 'Error', text: e?.message || 'Failed to delete committee' });
+        } finally {
+            setIsSaving(false);
+        }
+    }
+
     return (
         <Card>
-             <CardHeader>
+            <CardHeader>
                 <CardTitle>Review Committee Settings</CardTitle>
                 <CardDescription>
                     Configure value ranges for high-level review committees and manage their membership.
@@ -340,7 +402,7 @@ export function CommitteeSettings() {
                 </Accordion>
             </CardContent>
             <CardFooter className="flex justify-between items-center">
-                 <Button onClick={handleSave} disabled={isSaving}>
+                <Button onClick={handleSave} disabled={isSaving}>
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save All Changes
                 </Button>
@@ -358,7 +420,7 @@ export function CommitteeSettings() {
                         </DialogHeader>
                         <div className="py-4">
                             <Label htmlFor="committee-name">Committee Name (e.g., "C", "D")</Label>
-                            <Input 
+                            <Input
                                 id="committee-name"
                                 value={newCommitteeName}
                                 onChange={e => setNewCommitteeName(e.target.value)}
@@ -368,7 +430,7 @@ export function CommitteeSettings() {
                         <DialogFooter>
                             <DialogClose asChild><Button variant="ghost">Cancel</Button></DialogClose>
                             <Button onClick={handleAddCommittee} disabled={isSaving}>
-                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                 Create Committee Role
                             </Button>
                         </DialogFooter>

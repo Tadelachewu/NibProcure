@@ -10,14 +10,15 @@ import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: any }
 ) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
+    const params = await context.params;
     const requisitionId = params.id;
     const body = await request.json();
     const { newDeadline } = body;
@@ -31,23 +32,23 @@ export async function POST(
     if (!newDeadline) {
       return NextResponse.json({ error: 'A new deadline is required.' }, { status: 400 });
     }
-    
-    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId }, include: { quotations: true }});
+
+    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId }, include: { quotations: true } });
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
-    
+
     const existingVendorIds = new Set(requisition.quotations.map(q => q.vendorId));
 
     const allVerifiedVendors = await prisma.vendor.findMany({
-        where: { kycStatus: 'Verified' },
-        select: { id: true, name: true, email: true }
+      where: { kycStatus: 'Verified' },
+      select: { id: true, name: true, email: true }
     });
 
     const newVendorsToNotify = allVerifiedVendors.filter(v => !existingVendorIds.has(v.id));
-    
+
     if (newVendorsToNotify.length === 0) {
-        return NextResponse.json({ error: 'No new vendors available to re-open the RFQ to.' }, { status: 400 });
+      return NextResponse.json({ error: 'No new vendors available to re-open the RFQ to.' }, { status: 400 });
     }
 
     // Set allowedVendorIds to [] to signify it's open to all verified vendors
@@ -61,8 +62,8 @@ export async function POST(
     });
 
     for (const vendor of newVendorsToNotify) {
-        if (vendor.email) {
-            const emailHtml = `
+      if (vendor.email) {
+        const emailHtml = `
                 <h1>Request for Quotation Re-Opened</h1>
                 <p>Hello ${vendor.name},</p>
                 <p>A Request for Quotation (RFQ) has been re-opened for new submissions.</p>
@@ -76,13 +77,13 @@ export async function POST(
                 <p>Thank you,</p>
                 <p>Nib InternationalBank Procurement</p>
             `;
-            
-            await sendEmail({
-                to: vendor.email,
-                subject: `RFQ Re-Opened: ${requisition.title}`,
-                html: emailHtml
-            });
-        }
+
+        await sendEmail({
+          to: vendor.email,
+          subject: `RFQ Re-Opened: ${requisition.title}`,
+          html: emailHtml
+        });
+      }
     }
 
     await prisma.auditLog.create({
@@ -101,7 +102,7 @@ export async function POST(
   } catch (error) {
     console.error('Failed to re-open RFQ:', error);
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }

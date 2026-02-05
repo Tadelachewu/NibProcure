@@ -6,7 +6,7 @@ import { getActorFromToken } from '@/lib/auth';
 import { sendEmail } from '@/services/email-service';
 import bcrypt from 'bcryptjs';
 
-const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
+const DIRECTOR_ROLES = ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management'];
 
 function generateNumericPin(length = 6) {
   let pin = '';
@@ -14,7 +14,7 @@ function generateNumericPin(length = 6) {
   return pin;
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
     const userRoles = (actor.roles || []) as string[];
@@ -22,6 +22,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: 'Unauthorized to generate pins' }, { status: 403 });
     }
 
+    const params = await context.params;
     const { id } = params;
 
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });

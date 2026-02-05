@@ -7,17 +7,18 @@ import { UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { getActorFromToken } from '@/lib/auth';
 
-export async function POST(
-    request: Request,
-    { params }: { params: { id: string } }
-) {
+export async function POST(request: Request, context: { params: any }) {
     try {
         const actor = await getActorFromToken(request);
         if (!actor) {
             return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
         }
-
-        const { id } = await params;
+        const params = await context.params;
+        const id = params?.id as string | undefined;
+        if (!id || typeof id !== 'string') {
+            console.error('POST /api/requisitions/[id]/send-rfq missing or invalid id', { method: request.method, url: (request as any).url, params });
+            return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+        }
         const body = await request.json();
         const { vendorIds, deadline, cpoAmount, rfqSettings, procurementMethod } = body;
 

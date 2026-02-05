@@ -8,22 +8,24 @@ import { sendEmail } from '@/services/email-service';
 import { format, differenceInMinutes } from 'date-fns';
 import { getActorFromToken } from '@/lib/auth';
 
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: Request, context: { params: any }) {
     const actor = await getActorFromToken(request);
     if (!actor) {
         return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
 
-    const requisitionId = params.id;
+    const params = await context.params;
+    const requisitionId = params?.id as string | undefined;
+    if (!requisitionId || typeof requisitionId !== 'string') {
+        console.error('POST /api/requisitions/[id]/notify-vendor missing or invalid id', { method: request.method, url: (request as any).url, params });
+        return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
     console.log(`[NOTIFY-VENDOR] Received request for requisition: ${requisitionId}`);
     try {
         const body = await request.json();
         const { awardResponseDeadline } = body;
         console.log(`[NOTIFY-VENDOR] Action by User ID: ${actor.id}, Award Response Deadline: ${awardResponseDeadline}`);
-        
+
         const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
         let isAuthorized = false;
         const userRoles = actor.roles as UserRole[];
@@ -44,15 +46,15 @@ export async function POST(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
-        const requisition = await prisma.purchaseRequisition.findUnique({ 
+        const requisition = await prisma.purchaseRequisition.findUnique({
             where: { id: requisitionId },
             include: { items: true }
         });
         if (!requisition) {
-        console.error(`[NOTIFY-VENDOR] Requisition ${requisitionId} not found.`);
-        return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
+            console.error(`[NOTIFY-VENDOR] Requisition ${requisitionId} not found.`);
+            return NextResponse.json({ error: 'Requisition not found.' }, { status: 404 });
         }
-        
+
         if (requisition.status !== 'PostApproved') {
             console.error(`[NOTIFY-VENDOR] Requisition ${requisitionId} is not in PostApproved state. Current state: ${requisition.status}`);
             return NextResponse.json({ error: 'This requisition is not ready for vendor notification.' }, { status: 400 });
@@ -71,7 +73,7 @@ export async function POST(
                 for (const item of requisition.items) {
                     const perItemDetails = (item.perItemAwardDetails as PerItemAwardDetail[] | null) || [];
                     let hasUpdate = false;
-                    
+
                     const updatedDetails = perItemDetails.map(detail => {
                         if (detail.status === 'Pending_Award') {
                             hasUpdate = true;
@@ -88,17 +90,17 @@ export async function POST(
                         });
                     }
                 }
-                
+
                 if (winningVendorIds.size === 0) {
                     throw new Error("No vendors found in 'Pending Award' status across all items. The requisition might be in an inconsistent state.");
                 }
                 console.log(`[NOTIFY-VENDOR] Found ${winningVendorIds.size} winning vendors to notify.`);
 
-                const allWinningVendors = await tx.vendor.findMany({ 
+                const allWinningVendors = await tx.vendor.findMany({
                     where: { id: { in: Array.from(winningVendorIds) } }
                 });
                 const vendorMap = new Map(allWinningVendors.map(v => [v.id, v]));
-                
+
                 for (const itemUpdate of itemsToUpdate) {
                     await tx.requisitionItem.update({
                         where: { id: itemUpdate.id },
@@ -108,11 +110,11 @@ export async function POST(
                 console.log(`[NOTIFY-VENDOR] Updated ${itemsToUpdate.length} requisition items with 'Awarded' status.`);
 
                 finalUpdatedRequisition = await tx.purchaseRequisition.update({
-                where: { id: requisitionId },
-                data: {
-                    status: 'Awarded',
-                    awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
-                }
+                    where: { id: requisitionId },
+                    data: {
+                        status: 'Awarded',
+                        awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
+                    }
                 });
 
                 for (const vendorId of winningVendorIds) {
@@ -136,7 +138,7 @@ export async function POST(
                         });
                     }
                 }
-            
+
             } else {
                 console.log('[NOTIFY-VENDOR] Handling single-vendor award strategy.');
                 const winningQuote = await tx.quotation.findFirst({
@@ -153,7 +155,7 @@ export async function POST(
                     throw new Error("No winning quote in 'Pending Award' status found to notify. The requisition might be in an inconsistent state.");
                 }
                 console.log(`[NOTIFY-VENDOR] Found winning vendor: ${winningQuote.vendor.name}`);
-                
+
                 finalUpdatedRequisition = await tx.purchaseRequisition.update({
                     where: { id: requisitionId },
                     data: {
@@ -161,12 +163,12 @@ export async function POST(
                         awardResponseDeadline: awardResponseDeadline ? new Date(awardResponseDeadline) : requisition.awardResponseDeadline,
                     }
                 });
-                
+
                 await tx.quotation.update({
                     where: { id: winningQuote.id },
                     data: { status: 'Awarded' }
                 });
-                
+
                 console.log(`[NOTIFY-VENDOR] Sending email to ${winningQuote.vendor.name} (${winningQuote.vendor.email})`);
                 const emailHtml = `
                     <h1>Congratulations, ${winningQuote.vendor.name}!</h1>
@@ -184,7 +186,7 @@ export async function POST(
                     html: emailHtml
                 });
             }
-            
+
             await tx.auditLog.create({
                 data: {
                     transactionId: requisition.transactionId,
@@ -204,11 +206,11 @@ export async function POST(
         console.log('[NOTIFY-VENDOR] Transaction complete.');
         return NextResponse.json({ message: 'Vendor(s) notified successfully.', requisition: transactionResult });
 
-  } catch (error) {
-    console.error("[NOTIFY-VENDOR] Failed to notify vendor:", error);
-    if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+    } catch (error) {
+        console.error("[NOTIFY-VENDOR] Failed to notify vendor:", error);
+        if (error instanceof Error) {
+            return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+        }
+        return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
-  }
 }

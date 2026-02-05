@@ -9,7 +9,7 @@ import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 
 export async function POST(
     request: Request,
-    { params }: { params: { id: string } }
+    context: { params: any }
 ) {
     try {
         const actor = await getActorFromToken(request);
@@ -17,7 +17,8 @@ export async function POST(
             return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
         }
 
-        const { id } = await params;
+        const params = await context.params;
+        const { id } = params;
         const body = await request.json();
         const { vendorIds, deadline, cpoAmount, rfqSettings } = body;
 

@@ -7,11 +7,13 @@ import { PerItemAwardDetail, User, UserRole } from '@/lib/types';
 import { handleAwardRejection } from '@/services/award-service';
 
 
-export async function POST(
-    request: Request,
-    { params }: { params: { id: string } }
-) {
-    const quoteId = params.id;
+export async function POST(request: Request, context: { params: any }) {
+    const params = await context.params;
+    const quoteId = params?.id as string | undefined;
+    if (!quoteId || typeof quoteId !== 'string') {
+        console.error('POST /api/quotations/[id]/respond missing or invalid id', { method: request.method, url: (request as any).url, params });
+        return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
     console.log(`[RESPOND-AWARD] Received request for Quote ID: ${quoteId}`);
     try {
         const body = await request.json();

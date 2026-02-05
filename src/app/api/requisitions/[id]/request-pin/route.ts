@@ -12,13 +12,14 @@ function generateNumericPin(length = 6) {
   return pin;
 }
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
+    const params = await context.params;
     const { id } = params;
 
     // Allow directors to request their director PINs, and allow the requisition's requester (department head)
-    const DIRECTOR_ROLES = ['Finance_Director','Facility_Director','Director_Supply_Chain_and_Property_Management'];
+    const DIRECTOR_ROLES = ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management'];
     const hasDirector = (actor.roles || []).some((r: any) => DIRECTOR_ROLES.includes(typeof r === 'string' ? r : r.name));
 
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });

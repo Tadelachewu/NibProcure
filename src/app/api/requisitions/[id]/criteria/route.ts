@@ -6,12 +6,15 @@ import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 import { UserRole } from '@/lib/types';
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, context: { params: any }) {
     try {
         const actor = await getActorFromToken(request);
         if (!actor) {
             return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
         }
+        // `params` can be a Promise in some Next.js runtimes (Turbopack/edge).
+        // Await it to ensure we have the resolved params object before accessing properties.
+        const params = await context.params;
 
         const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
         let isAuthorized = false;
@@ -38,7 +41,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
             return NextResponse.json({ error: 'Unauthorized to edit criteria.' }, { status: 403 });
         }
 
-        const requisitionId = params.id;
+        const requisitionId = params?.id as string;
         const body = await request.json();
         const { financialWeight, technicalWeight, financialCriteria, technicalCriteria } = body;
 
@@ -46,11 +49,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         if (!requisition) {
             return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
         }
-        
+
         if (requisition.status !== 'PreApproved') {
             return NextResponse.json({ error: 'Evaluation criteria can only be edited before the RFQ is sent.' }, { status: 400 });
         }
-        
+
         // Note: weight-based validations were removed to support a compliance-only flow
         // (criteria weights and financial/technical splits are kept for compatibility
         // but are no longer strictly validated on the server).
@@ -59,9 +62,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         const transactionResult = await prisma.$transaction(async (tx) => {
             const oldCriteria = await tx.evaluationCriteria.findUnique({ where: { requisitionId } });
             if (oldCriteria) {
-                await tx.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
-                await tx.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id }});
-                await tx.evaluationCriteria.delete({ where: { id: oldCriteria.id }});
+                await tx.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+                await tx.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+                await tx.evaluationCriteria.delete({ where: { id: oldCriteria.id } });
             }
 
             const newCriteria = await tx.evaluationCriteria.create({

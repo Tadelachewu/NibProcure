@@ -4,16 +4,22 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { id } = params;
+    const params = await context.params;
+    const id = params?.id as string | undefined;
+    if (!id || typeof id !== 'string') {
+      console.error('GET /api/requisitions/[id]/pins missing or invalid id', { method: request.method, url: (request as any).url, params });
+      return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
+
     const pins = await prisma.pin.findMany({ where: { requisitionId: id }, select: { id: true, roleName: true, used: true, expiresAt: true, generatedAt: true } });
 
     // If actor is Admin or Procurement_Officer allow full view, otherwise only return the actor's role pin
-    const actorRoles = (actor.roles || []).map((r:any) => (typeof r === 'string' ? r : r.name));
+    const actorRoles = (actor.roles || []).map((r: any) => (typeof r === 'string' ? r : r.name));
     const isAdmin = actorRoles.includes('Admin') || actorRoles.includes('Procurement_Officer');
 
     if (isAdmin) {

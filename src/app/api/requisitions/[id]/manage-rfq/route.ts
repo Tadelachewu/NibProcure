@@ -11,15 +11,16 @@ type RFQAction = 'update' | 'cancel' | 'restart';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: any }
 ) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
 
-    const requisitionId = params.id;
+    const params = await context.params;
+    const requisitionId = params?.id as string;
     const body = await request.json();
     const { action, reason, newDeadline } = body as {
       action: RFQAction;
@@ -32,14 +33,14 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized to manage this RFQ for this requisition.' }, { status: 403 });
     }
 
-    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId }});
+    const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
 
     const validStatusesForAction: string[] = ['Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete'];
     if (!validStatusesForAction.includes(requisition.status) && action !== 'restart') {
-        return NextResponse.json({ error: 'This action is only available for requisitions with an active RFQ.' }, { status: 400 });
+      return NextResponse.json({ error: 'This action is only available for requisitions with an active RFQ.' }, { status: 400 });
     }
 
     let updatedRequisition;
@@ -52,18 +53,18 @@ export async function POST(
           return NextResponse.json({ error: 'A new deadline is required for an update.' }, { status: 400 });
         }
         updatedRequisition = await prisma.purchaseRequisition.update({
-            where: { id: requisitionId },
-            data: { deadline: new Date(newDeadline) }
+          where: { id: requisitionId },
+          data: { deadline: new Date(newDeadline) }
         });
         auditAction = 'UPDATE_RFQ_DEADLINE';
         auditDetails = `Updated RFQ deadline for requisition ${requisitionId} to ${new Date(newDeadline).toLocaleDateString()}. Reason: ${reason}`;
         break;
       case 'cancel':
       case 'restart':
-        await prisma.quotation.deleteMany({ where: { requisitionId }});
+        await prisma.quotation.deleteMany({ where: { requisitionId } });
         updatedRequisition = await prisma.purchaseRequisition.update({
-            where: { id: requisitionId },
-            data: { status: 'PreApproved', deadline: null }
+          where: { id: requisitionId },
+          data: { status: 'PreApproved', deadline: null }
         });
         auditAction = action === 'cancel' ? 'CANCEL_RFQ' : 'RESTART_RFQ';
         auditDetails = `${action === 'cancel' ? 'Cancelled' : 'Restarted'} RFQ for requisition ${requisitionId}. Reason: ${reason}`;
@@ -73,15 +74,15 @@ export async function POST(
     }
 
     await prisma.auditLog.create({
-        data: {
-            transactionId: requisition.transactionId,
-            timestamp: new Date(),
-            user: { connect: { id: actor.id } },
-            action: auditAction,
-            entity: 'Requisition',
-            entityId: requisitionId,
-            details: auditDetails,
-        }
+      data: {
+        transactionId: requisition.transactionId,
+        timestamp: new Date(),
+        user: { connect: { id: actor.id } },
+        action: auditAction,
+        entity: 'Requisition',
+        entityId: requisitionId,
+        details: auditDetails,
+      }
     });
 
     return NextResponse.json({ message: 'RFQ successfully modified.', requisition: updatedRequisition });

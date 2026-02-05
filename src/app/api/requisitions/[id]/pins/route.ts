@@ -5,11 +5,12 @@ import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 import { isAdmin, isActorAuthorizedForRequisition } from '@/lib/auth';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const params = await context.params;
     const { id } = params;
 
     const admin = isAdmin(actor);
@@ -36,9 +37,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
 
     const usedByUsers = usedByIds.length
       ? await prisma.user.findMany({
-          where: { id: { in: usedByIds } },
-          select: { id: true, name: true, email: true },
-        })
+        where: { id: { in: usedByIds } },
+        select: { id: true, name: true, email: true },
+      })
       : [];
     const usedByById = new Map(usedByUsers.map((u) => [u.id, u]));
 

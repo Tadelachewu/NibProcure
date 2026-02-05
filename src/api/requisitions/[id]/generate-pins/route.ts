@@ -8,7 +8,7 @@ import { sendEmail } from '@/services/email-service';
 
 const DIRECTOR_ROLES = ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management'];
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -22,7 +22,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (rfqSenderSetting?.value && typeof rfqSenderSetting.value === 'object' && rfqSenderSetting.value.type === 'specific' && Array.isArray(rfqSenderSetting.value.userIds) && rfqSenderSetting.value.userIds.includes(actor.id)) isAuthorized = true;
     if (!isAuthorized) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
-    const { id } = params;
+    const params = await context.params;
+    const id = params?.id as string | undefined;
+    if (!id || typeof id !== 'string') {
+      console.error('POST /api/requisitions/[id]/generate-pins missing or invalid id', { method: request.method, url: (request as any).url, params });
+      return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
+
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
     if (!requisition) return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
 

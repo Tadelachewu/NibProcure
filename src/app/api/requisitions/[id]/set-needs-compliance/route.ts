@@ -4,12 +4,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const requisitionId = params.id;
+    const params = await context.params;
+    const requisitionId = params?.id;
     const body = await request.json();
     const { needsCompliance } = body;
 

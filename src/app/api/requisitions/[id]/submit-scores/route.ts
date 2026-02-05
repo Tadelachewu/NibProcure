@@ -5,8 +5,9 @@ import { getActorFromToken } from '@/lib/auth';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: any }
 ) {
+  const params = await context.params;
   const requisitionId = params.id;
   try {
     // Authenticate via JWT (do not trust userId from request body)
@@ -57,7 +58,7 @@ export async function POST(
     if (!isAssigned) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
-    
+
     await prisma.committeeAssignment.upsert({
       where: {
         userId_requisitionId: {
@@ -80,40 +81,40 @@ export async function POST(
     });
 
     if (requisition) {
-        const assignedMemberIds = new Set([
-            ...(requisition.financialCommitteeMembers || []).map(m => m.id),
-            ...(requisition.technicalCommitteeMembers || []).map(m => m.id)
-        ]);
+      const assignedMemberIds = new Set([
+        ...(requisition.financialCommitteeMembers || []).map(m => m.id),
+        ...(requisition.technicalCommitteeMembers || []).map(m => m.id)
+      ]);
 
-        const submittedMemberIds = new Set(requisition.committeeAssignments.filter(a => a.scoresSubmitted).map(a => a.userId));
-        const allHaveScored = [...assignedMemberIds].every(id => submittedMemberIds.has(id));
+      const submittedMemberIds = new Set(requisition.committeeAssignments.filter(a => a.scoresSubmitted).map(a => a.userId));
+      const allHaveScored = [...assignedMemberIds].every(id => submittedMemberIds.has(id));
 
-        if (allHaveScored) {
-            await prisma.purchaseRequisition.update({
-                where: { id: requisitionId },
-                data: { status: 'Scoring_Complete' }
-            });
-        }
+      if (allHaveScored) {
+        await prisma.purchaseRequisition.update({
+          where: { id: requisitionId },
+          data: { status: 'Scoring_Complete' }
+        });
+      }
     }
 
 
     await prisma.auditLog.create({
-        data: {
-            transactionId: requisitionId,
-            timestamp: new Date(),
+      data: {
+        transactionId: requisitionId,
+        timestamp: new Date(),
         user: { connect: { id: actor.id } },
-            action: 'SUBMIT_SCORES',
-            entity: 'Requisition',
-            entityId: requisitionId,
-            details: `Finalized and submitted all scores for requisition.`,
-        }
+        action: 'SUBMIT_SCORES',
+        entity: 'Requisition',
+        entityId: requisitionId,
+        details: `Finalized and submitted all scores for requisition.`,
+      }
     });
 
     return NextResponse.json({ message: 'All scores have been successfully submitted.' });
   } catch (error) {
     console.error('Failed to submit final scores:', error);
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }

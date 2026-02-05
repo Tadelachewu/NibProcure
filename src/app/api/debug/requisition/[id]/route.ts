@@ -4,12 +4,13 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { id } = await params;
+    const params = await context.params;
+    const { id } = params;
 
     const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id }, select: { id: true, assignedRfqSenderIds: true, status: true, requesterId: true } });

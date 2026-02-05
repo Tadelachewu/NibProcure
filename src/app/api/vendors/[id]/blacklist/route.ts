@@ -5,13 +5,13 @@ import { prisma } from '@/lib/prisma';
 import { getActorFromToken, isAdmin } from '@/lib/auth';
 import { sendEmail } from '@/services/email-service';
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, context: { params: any }) {
     try {
         const actor = await getActorFromToken(request);
         if (!isAdmin(actor) && !((actor.roles || []).includes('Procurement_Officer'))) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
-
+        const params = await context.params;
         const { id } = params;
         const body = await request.json().catch(() => ({} as any));
         const reason = body.reason || 'No reason provided';
@@ -46,13 +46,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
     }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, context: { params: any }) {
     try {
         const actor = await getActorFromToken(request);
         if (!isAdmin(actor) && !((actor.roles || []).includes('Procurement_Officer'))) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
-
+        const params = await context.params;
         const { id } = params;
         const key = `vendor:blacklist:${id}`;
 

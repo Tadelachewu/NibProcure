@@ -8,17 +8,17 @@ import { getActorFromToken } from '@/lib/auth';
 
 function calculateFinalItemScore(itemScore: any, criteria: any): { finalScore: number, allScores: any[] } {
     let totalScore = 0;
-    
+
     const allScores = [
-        ...(itemScore.financialScores || []).map((s: any) => ({...s, type: 'FINANCIAL'})),
-        ...(itemScore.technicalScores || []).map((s: any) => ({...s, type: 'TECHNICAL'}))
+        ...(itemScore.financialScores || []).map((s: any) => ({ ...s, type: 'FINANCIAL' })),
+        ...(itemScore.technicalScores || []).map((s: any) => ({ ...s, type: 'TECHNICAL' }))
     ];
 
-    const allCriteria: {id: string, weight: number, type: 'FINANCIAL' | 'TECHNICAL'}[] = [
-        ...criteria.financialCriteria.map((c: any) => ({...c, type: 'FINANCIAL'})),
-        ...criteria.technicalCriteria.map((c: any) => ({...c, type: 'TECHNICAL'}))
+    const allCriteria: { id: string, weight: number, type: 'FINANCIAL' | 'TECHNICAL' }[] = [
+        ...criteria.financialCriteria.map((c: any) => ({ ...c, type: 'FINANCIAL' })),
+        ...criteria.technicalCriteria.map((c: any) => ({ ...c, type: 'TECHNICAL' }))
     ];
-    
+
     allScores.forEach((s: any) => {
         const criterion = allCriteria.find(c => c.id === s.criterionId);
         if (criterion) {
@@ -32,129 +32,130 @@ function calculateFinalItemScore(itemScore: any, criteria: any): { finalScore: n
 
 
 export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
+    request: Request,
+    context: { params: any }
 ) {
-  const quoteId = params.id;
-  try {
-    const actor = await getActorFromToken(request);
-    const body = await request.json();
-    const { scores } = body;
+    const params = await context.params;
+    const quoteId = params.id;
+    try {
+        const actor = await getActorFromToken(request);
+        const body = await request.json();
+        const { scores } = body;
 
-    const quoteToUpdate = await prisma.quotation.findUnique({ where: { id: quoteId } });
-    if (!quoteToUpdate) {
-        return NextResponse.json({ error: 'Quotation not found' }, { status: 404 });
-    }
-    
-    const requisition = await prisma.purchaseRequisition.findUnique({
-      where: { id: quoteToUpdate.requisitionId },
-      include: { evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } } }
-    });
-    if (!requisition || !requisition.evaluationCriteria) {
-        return NextResponse.json({ error: 'Associated requisition or its evaluation criteria not found.' }, { status: 404 });
-    }
-    
-    const transactionResult = await prisma.$transaction(async (tx) => {
-        const scoreSet = await tx.committeeScoreSet.upsert({
-            where: {
-                quotationId_scorerId: {
-                    quotationId: quoteId,
-                    scorerId: actor.id,
-                }
-            },
-            update: {
-                committeeComment: scores.committeeComment,
-            },
-            create: {
-                quotation: { connect: { id: quoteId } },
-                scorer: { connect: { id: actor.id } },
-                committeeComment: scores.committeeComment,
-                finalScore: 0, // Will be updated later
-            }
+        const quoteToUpdate = await prisma.quotation.findUnique({ where: { id: quoteId } });
+        if (!quoteToUpdate) {
+            return NextResponse.json({ error: 'Quotation not found' }, { status: 404 });
+        }
+
+        const requisition = await prisma.purchaseRequisition.findUnique({
+            where: { id: quoteToUpdate.requisitionId },
+            include: { evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } } }
         });
+        if (!requisition || !requisition.evaluationCriteria) {
+            return NextResponse.json({ error: 'Associated requisition or its evaluation criteria not found.' }, { status: 404 });
+        }
 
-        // Clear previous scores for this set to handle resubmission/updates
-        await tx.itemScore.deleteMany({ where: { scoreSetId: scoreSet.id }});
+        const transactionResult = await prisma.$transaction(async (tx) => {
+            const scoreSet = await tx.committeeScoreSet.upsert({
+                where: {
+                    quotationId_scorerId: {
+                        quotationId: quoteId,
+                        scorerId: actor.id,
+                    }
+                },
+                update: {
+                    committeeComment: scores.committeeComment,
+                },
+                create: {
+                    quotation: { connect: { id: quoteId } },
+                    scorer: { connect: { id: actor.id } },
+                    committeeComment: scores.committeeComment,
+                    finalScore: 0, // Will be updated later
+                }
+            });
 
-        let totalWeightedScore = 0;
-        const totalItems = scores.itemScores.length;
+            // Clear previous scores for this set to handle resubmission/updates
+            await tx.itemScore.deleteMany({ where: { scoreSetId: scoreSet.id } });
 
-        for (const itemScoreData of scores.itemScores) {
-            if (!itemScoreData.quoteItemId) {
-              throw new Error(`Critical error: quoteItemId is missing for an item score. This should not happen.`);
+            let totalWeightedScore = 0;
+            const totalItems = scores.itemScores.length;
+
+            for (const itemScoreData of scores.itemScores) {
+                if (!itemScoreData.quoteItemId) {
+                    throw new Error(`Critical error: quoteItemId is missing for an item score. This should not happen.`);
+                }
+                const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
+                totalWeightedScore += finalScore;
+
+                const createdItemScore = await tx.itemScore.create({
+                    data: {
+                        scoreSetId: scoreSet.id,
+                        quoteItemId: itemScoreData.quoteItemId,
+                        finalScore: finalScore,
+                    }
+                });
+
+                const scoresToCreate = allScores.map((s: any) => {
+                    const isFinancial = requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId);
+                    return {
+                        itemScoreId: createdItemScore.id,
+                        score: s.score,
+                        comment: s.comment || '', // Ensure comment is never undefined
+                        type: isFinancial ? 'FINANCIAL' : 'TECHNICAL',
+                        financialCriterionId: isFinancial ? s.criterionId : null,
+                        technicalCriterionId: !isFinancial ? s.criterionId : null,
+                    };
+                });
+
+                if (scoresToCreate.length > 0) {
+                    await tx.score.createMany({
+                        data: scoresToCreate
+                    });
+                }
             }
-            const { finalScore, allScores } = calculateFinalItemScore(itemScoreData, requisition.evaluationCriteria);
-            totalWeightedScore += finalScore;
-            
-            const createdItemScore = await tx.itemScore.create({
+
+            const finalAverageScoreForThisScorer = totalItems > 0 ? totalWeightedScore / totalItems : 0;
+
+            await tx.committeeScoreSet.update({
+                where: { id: scoreSet.id },
+                data: { finalScore: finalAverageScoreForThisScorer }
+            });
+
+            const allScoreSetsForQuote = await tx.committeeScoreSet.findMany({ where: { quotationId: quoteId } });
+            const overallAverage = allScoreSetsForQuote.length > 0
+                ? allScoreSetsForQuote.reduce((acc, s) => acc + s.finalScore, 0) / allScoreSetsForQuote.length
+                : 0;
+
+            await tx.quotation.update({ where: { id: quoteId }, data: { finalAverageScore: overallAverage } });
+
+            await tx.auditLog.create({
                 data: {
-                    scoreSetId: scoreSet.id,
-                    quoteItemId: itemScoreData.quoteItemId,
-                    finalScore: finalScore,
+                    timestamp: new Date(),
+                    user: { connect: { id: actor.id } },
+                    action: 'SCORE_QUOTE',
+                    entity: 'Quotation',
+                    entityId: quoteId,
+                    details: `Submitted scores for quote from ${quoteToUpdate.vendorName}. Final Score: ${finalAverageScoreForThisScorer.toFixed(2)}.`,
+                    transactionId: requisition.id,
                 }
             });
 
-            const scoresToCreate = allScores.map((s: any) => {
-                const isFinancial = requisition.evaluationCriteria?.financialCriteria.some(c => c.id === s.criterionId);
-                return {
-                  itemScoreId: createdItemScore.id,
-                  score: s.score,
-                  comment: s.comment || '', // Ensure comment is never undefined
-                  type: isFinancial ? 'FINANCIAL' : 'TECHNICAL',
-                  financialCriterionId: isFinancial ? s.criterionId : null,
-                  technicalCriterionId: !isFinancial ? s.criterionId : null,
-                };
-            });
-
-            if (scoresToCreate.length > 0) {
-              await tx.score.createMany({
-                data: scoresToCreate
-              });
-            }
-        }
-        
-        const finalAverageScoreForThisScorer = totalItems > 0 ? totalWeightedScore / totalItems : 0;
-    
-        await tx.committeeScoreSet.update({
-            where: { id: scoreSet.id },
-            data: { finalScore: finalAverageScoreForThisScorer }
+            return scoreSet;
         });
 
-        const allScoreSetsForQuote = await tx.committeeScoreSet.findMany({ where: { quotationId: quoteId } });
-        const overallAverage = allScoreSetsForQuote.length > 0 
-            ? allScoreSetsForQuote.reduce((acc, s) => acc + s.finalScore, 0) / allScoreSetsForQuote.length
-            : 0;
 
-        await tx.quotation.update({ where: { id: quoteId }, data: { finalAverageScore: overallAverage } });
-
-        await tx.auditLog.create({
-            data: {
-                timestamp: new Date(),
-                user: { connect: { id: actor.id } },
-                action: 'SCORE_QUOTE',
-                entity: 'Quotation',
-                entityId: quoteId,
-                details: `Submitted scores for quote from ${quoteToUpdate.vendorName}. Final Score: ${finalAverageScoreForThisScorer.toFixed(2)}.`,
-                transactionId: requisition.id,
-            }
-        });
-
-        return scoreSet;
-    });
-
-
-    return NextResponse.json(transactionResult);
-  } catch (error) {
-    console.error('Failed to submit scores:', error);
-    if (error instanceof Error && error.message === 'Unauthorized') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-    }
-    if (error instanceof Error) {
-        if ((error as any).code === 'P2002') {
-             return NextResponse.json({ error: 'A unique constraint violation occurred. This might be due to a duplicate score entry.'}, { status: 409 });
+        return NextResponse.json(transactionResult);
+    } catch (error) {
+        console.error('Failed to submit scores:', error);
+        if (error instanceof Error && error.message === 'Unauthorized') {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+        if (error instanceof Error) {
+            if ((error as any).code === 'P2002') {
+                return NextResponse.json({ error: 'A unique constraint violation occurred. This might be due to a duplicate score entry.' }, { status: 409 });
+            }
+            return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+        }
+        return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
-  }
 }

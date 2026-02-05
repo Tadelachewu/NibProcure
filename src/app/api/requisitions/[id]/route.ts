@@ -6,12 +6,14 @@ import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: Request, context: { params: any }) {
   try {
-    const { id } = await params;
+    const params = await context.params;
+    const id = params?.id as string | undefined;
+    if (!id || typeof id !== 'string') {
+      console.error('GET /app/api/requisitions/[id] missing or invalid id', { method: request.method, url: (request as any).url, params });
+      return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
     const requisition = await prisma.purchaseRequisition.findUnique({
       where: { id },
       include: {
@@ -27,15 +29,15 @@ export async function GET(
         technicalCommitteeMembers: { select: { id: true, name: true, email: true } },
         requester: true,
         quotations: { // Include quotations to show award details
-            include: {
-                items: true,
-            }
+          include: {
+            items: true,
+          }
         },
         purchaseOrders: { // Include POs to link to them
-            select: {
-                id: true,
-                vendor: { select: { name: true }}
-            }
+          select: {
+            id: true,
+            vendor: { select: { name: true } }
+          }
         }
       }
     });
@@ -43,37 +45,38 @@ export async function GET(
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
     }
-    
+
     // Formatting data to match client-side expectations
     const formatted = {
-        ...requisition,
-        requesterName: requisition.requester.name || 'Unknown',
-        financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
-        technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
+      ...requisition,
+      requesterName: requisition.requester.name || 'Unknown',
+      financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
+      technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
     };
 
     return NextResponse.json(formatted);
   } catch (error) {
-     console.error('Failed to fetch requisition:', error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+    console.error('Failed to fetch requisition:', error);
+    if (error instanceof Error) {
+      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+    const params = await context.params;
+    const id = params?.id as string | undefined;
+    if (!id || typeof id !== 'string') {
+      console.error('DELETE /app/api/requisitions/[id] missing or invalid id', { method: request.method, url: (request as any).url, params });
+      return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
     }
 
-    const { id } = params;
-    
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
 
     if (!requisition) {
@@ -90,36 +93,36 @@ export async function DELETE(
     if (requisition.status !== 'Draft' && requisition.status !== 'Rejected' && requisition.status !== 'Pending_Approval') {
       return NextResponse.json({ error: `Cannot delete a requisition with status "${requisition.status}".` }, { status: 403 });
     }
-    
+
     // Perform cascading deletes manually
     await prisma.requisitionItem.deleteMany({ where: { requisitionId: id } });
     await prisma.customQuestion.deleteMany({ where: { requisitionId: id } });
-    
-    const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id }});
+
+    const oldCriteria = await prisma.evaluationCriteria.findUnique({ where: { requisitionId: id } });
     if (oldCriteria) {
-        await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
-        await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
-        await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id }});
+      await prisma.financialCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+      await prisma.technicalCriterion.deleteMany({ where: { evaluationCriteriaId: oldCriteria.id } });
+      await prisma.evaluationCriteria.delete({ where: { id: oldCriteria.id } });
     }
 
     await prisma.purchaseRequisition.delete({ where: { id } });
 
     await prisma.auditLog.create({
-        data: {
-            user: { connect: { id: actor.id } },
-            timestamp: new Date(),
-            action: 'DELETE_REQUISITION',
-            entity: 'Requisition',
-            entityId: id,
-            details: `Deleted requisition: ${requisition.title}`
-        }
+      data: {
+        user: { connect: { id: actor.id } },
+        timestamp: new Date(),
+        action: 'DELETE_REQUISITION',
+        entity: 'Requisition',
+        entityId: id,
+        details: `Deleted requisition: ${requisition.title}`
+      }
     });
 
     return NextResponse.json({ message: 'Requisition deleted successfully.' });
   } catch (error) {
-     console.error('Failed to delete requisition:', error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+    console.error('Failed to delete requisition:', error);
+    if (error instanceof Error) {
+      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }

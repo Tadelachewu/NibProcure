@@ -8,12 +8,14 @@ import { getActorFromToken } from '@/lib/auth';
 import { headers } from 'next/headers';
 
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: Request, context: { params: any }) {
   try {
-    const { id } = params;
+    const params = await context.params;
+    const id = params?.id as string | undefined;
+    if (!id || typeof id !== 'string') {
+      console.error('GET /api/requisitions/[id] missing or invalid id', { method: request.method, url: (request as any).url, params });
+      return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
 
     // Detect caller (may be a vendor) to determine visibility rules
     let caller: (User & { roles: any[] }) | null = null;
@@ -113,12 +115,14 @@ export async function GET(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: Request, context: { params: any }) {
   try {
-    const { id } = params;
+    const params = await context.params;
+    const id = params?.id as string | undefined;
+    if (!id || typeof id !== 'string') {
+      console.error('DELETE /api/requisitions/[id] missing or invalid id', { method: request.method, url: (request as any).url, params });
+      return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
     const body = await request.json();
     const { userId } = body;
 

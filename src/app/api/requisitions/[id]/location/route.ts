@@ -15,11 +15,12 @@ function mapNextAction(status: string) {
     return { message: 'In progress', responsible: 'Procurement' };
 }
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, context: { params: any }) {
     try {
         const actor = await getActorFromToken(request);
 
-        const id = params.id;
+        const params = await context.params;
+        const id = params?.id;
         if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 });
 
         const requisition = await prisma.purchaseRequisition.findUnique({

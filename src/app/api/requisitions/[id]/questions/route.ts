@@ -6,26 +6,27 @@ import { prisma } from '@/lib/prisma';
 import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 import { UserRole } from '@/lib/types';
 
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, context: { params: any }) {
     try {
         const actor = await getActorFromToken(request);
         if (!actor) {
             return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
         }
 
+        const params = await context.params;
         const userRoles = actor.roles as UserRole[];
         let isAuthorized = false;
         if (userRoles.includes('Admin')) {
             isAuthorized = true;
         } else {
-            isAuthorized = await isActorAuthorizedForRequisition(actor, params.id);
+            isAuthorized = await isActorAuthorizedForRequisition(actor, params?.id);
         }
 
         if (!isAuthorized) {
             return NextResponse.json({ error: 'Unauthorized to edit questions.' }, { status: 403 });
         }
 
-        const requisitionId = params.id;
+        const requisitionId = params?.id as string;
         const body = await request.json();
         const { customQuestions } = body;
 

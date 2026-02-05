@@ -6,8 +6,9 @@ import { prisma } from '@/lib/prisma';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: any }
 ) {
+  const params = await context.params;
   const vendorId = params.id;
   try {
     const body = await request.json();
@@ -34,35 +35,35 @@ export async function POST(
     });
 
     const updateOrCreateDocument = async (docName: string, docPath: string) => {
-        const existingDoc = await prisma.kYC_Document.findFirst({
-            where: {
-                vendorId: vendorId,
-                name: docName,
-            }
-        });
-
-        if (existingDoc) {
-            await prisma.kYC_Document.update({
-                where: { id: existingDoc.id },
-                data: { url: docPath, submittedAt: new Date() },
-            });
-        } else {
-            await prisma.kYC_Document.create({
-                data: {
-                    vendorId,
-                    name: docName,
-                    url: docPath,
-                    submittedAt: new Date(),
-                },
-            });
+      const existingDoc = await prisma.kYC_Document.findFirst({
+        where: {
+          vendorId: vendorId,
+          name: docName,
         }
+      });
+
+      if (existingDoc) {
+        await prisma.kYC_Document.update({
+          where: { id: existingDoc.id },
+          data: { url: docPath, submittedAt: new Date() },
+        });
+      } else {
+        await prisma.kYC_Document.create({
+          data: {
+            vendorId,
+            name: docName,
+            url: docPath,
+            submittedAt: new Date(),
+          },
+        });
+      }
     };
 
     if (licensePath) {
-        await updateOrCreateDocument('Business License', licensePath);
+      await updateOrCreateDocument('Business License', licensePath);
     }
     if (taxIdPath) {
-        await updateOrCreateDocument('Tax ID Document', taxIdPath);
+      await updateOrCreateDocument('Tax ID Document', taxIdPath);
     }
 
     await prisma.auditLog.create({

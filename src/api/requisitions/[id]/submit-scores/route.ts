@@ -5,16 +5,18 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 
-export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: Request, context: { params: any }) {
   const actor = await getActorFromToken(request);
   if (!actor) {
     return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
   }
 
-  const requisitionId = params.id;
+  const params = await context.params;
+  const requisitionId = params?.id as string | undefined;
+  if (!requisitionId || typeof requisitionId !== 'string') {
+    console.error('POST /api/requisitions/[id]/submit-scores missing or invalid id', { method: request.method, url: (request as any).url, params });
+    return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+  }
   try {
     if (!(actor.roles as string[]).some(r => r.includes('Committee'))) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });

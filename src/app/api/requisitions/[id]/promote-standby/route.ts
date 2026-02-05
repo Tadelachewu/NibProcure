@@ -9,13 +9,13 @@ import { getActorFromToken, isActorAuthorizedForRequisition } from '@/lib/auth';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: any }
 ) {
   const actor = await getActorFromToken(request);
-    if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
-    }
-
+  if (!actor) {
+    return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+  }
+  const params = await context.params;
   const requisitionId = params.id;
   try {
     const isAuthorized = await isActorAuthorizedForRequisition(actor, requisitionId as string);

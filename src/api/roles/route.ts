@@ -1,5 +1,5 @@
 
-      
+
 'use server';
 
 import { NextResponse } from 'next/server';
@@ -33,38 +33,38 @@ export async function POST(request: Request) {
     if (!name) {
       return NextResponse.json({ error: 'Role name is required' }, { status: 400 });
     }
-    
+
     const formattedName = name.replace(/ /g, '_');
     const existingRole = await prisma.role.findFirst({ where: { name: { equals: formattedName, mode: 'insensitive' } } });
 
     if (existingRole) {
-        return NextResponse.json({ error: 'A role with this name already exists' }, { status: 409 });
+      return NextResponse.json({ error: 'A role with this name already exists' }, { status: 409 });
     }
 
     const result = await prisma.$transaction(async (tx) => {
-        const newRole = await tx.role.create({
-          data: {
-            name: formattedName,
-            description,
-          },
-        });
+      const newRole = await tx.role.create({
+        data: {
+          name: formattedName,
+          description,
+        },
+      });
 
-        // Add the new role to the rolePermissions setting
-        const permissionsSetting = await tx.setting.findUnique({
-            where: { key: 'rolePermissions' }
-        });
+      // Add the new role to the rolePermissions setting
+      const permissionsSetting = await tx.setting.findUnique({
+        where: { key: 'rolePermissions' }
+      });
 
-        if (permissionsSetting) {
-            const currentPermissions = permissionsSetting.value as any;
-            currentPermissions[formattedName] = []; // Add new role with no permissions
-            
-            await tx.setting.update({
-                where: { key: 'rolePermissions' },
-                data: { value: currentPermissions }
-            });
-        }
-        
-        return newRole;
+      if (permissionsSetting) {
+        const currentPermissions = permissionsSetting.value as any;
+        currentPermissions[formattedName] = []; // Add new role with no permissions
+
+        await tx.setting.update({
+          where: { key: 'rolePermissions' },
+          data: { value: currentPermissions }
+        });
+      }
+
+      return newRole;
     });
 
 
@@ -75,14 +75,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
 
 export async function PATCH(request: Request) {
-   try {
+  try {
     const actor = await getActorFromToken(request);
     if (!actor || !(actor.roles as string[]).includes('Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
@@ -94,101 +94,123 @@ export async function PATCH(request: Request) {
     if (!id || !name) {
       return NextResponse.json({ error: 'Role ID and name are required' }, { status: 400 });
     }
-    
+
     const formattedName = name.replace(/ /g, '_');
     const existingRole = await prisma.role.findFirst({ where: { name: { equals: formattedName, mode: 'insensitive' }, NOT: { id } } });
     if (existingRole) {
-        return NextResponse.json({ error: 'Another role with this name already exists' }, { status: 409 });
+      return NextResponse.json({ error: 'Another role with this name already exists' }, { status: 409 });
     }
-    
+
     const updatedRole = await prisma.role.update({
-        where: { id },
-        data: { name: formattedName, description }
+      where: { id },
+      data: { name: formattedName, description }
     });
 
     return NextResponse.json(updatedRole);
   } catch (error) {
-     console.error('Failed to update role:', error);
-     if (error instanceof Error && error.message === 'Unauthorized') {
+    console.error('Failed to update role:', error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+    if (error instanceof Error) {
+      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
-   try {
+  try {
     const actor = await getActorFromToken(request);
     if (!actor || !(actor.roles as string[]).includes('Admin')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
-    
+
     const body = await request.json();
     const { id } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Role ID is required' }, { status: 400 });
     }
-    
+
     const roleToDelete = await prisma.role.findUnique({ where: { id } });
     if (!roleToDelete) {
-        return NextResponse.json({ error: 'Role not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Role not found' }, { status: 404 });
     }
-    
+
     const coreRoles: string[] = [
-        'Admin', 
-        'Procurement_Officer', 
-        'Requester', 
-        'Approver', 
-        'Vendor',
-        'Finance',
-        'Receiving',
-        'Committee',
-        'Committee_A_Member',
-        'Committee_B_Member',
-        'Committee_Member',
-        'Manager_Procurement_Division',
-        'Director_Supply_Chain_and_Property_Management',
-        'VP_Resources_and_Facilities',
-        'President'
+      'Admin',
+      'Procurement_Officer',
+      'Requester',
+      'Approver',
+      'Vendor',
+      'Finance',
+      'Receiving',
+      'Committee',
+      'Committee_A_Member',
+      'Committee_B_Member',
+      'Committee_Member',
+      'Manager_Procurement_Division',
+      'Director_Supply_Chain_and_Property_Management',
+      'VP_Resources_and_Facilities',
+      'President'
     ].map(r => r.toUpperCase());
     if (coreRoles.includes(roleToDelete.name.toUpperCase())) {
-        return NextResponse.json({ error: `Cannot delete core system role: ${roleToDelete.name.replace(/_/g, ' ')}` }, { status: 403 });
+      return NextResponse.json({ error: `Cannot delete core system role: ${roleToDelete.name.replace(/_/g, ' ')}` }, { status: 403 });
     }
-    
-    await prisma.$transaction(async (tx) => {
-        // Remove from rolePermissions setting
-        const permissionsSetting = await tx.setting.findUnique({
-            where: { key: 'rolePermissions' }
-        });
 
-        if (permissionsSetting) {
-            const currentPermissions = permissionsSetting.value as any;
-            delete currentPermissions[roleToDelete.name];
-            await tx.setting.update({
-                where: { key: 'rolePermissions' },
-                data: { value: currentPermissions }
-            });
+    await prisma.$transaction(async (tx) => {
+      // Remove from rolePermissions setting
+      const permissionsSetting = await tx.setting.findUnique({
+        where: { key: 'rolePermissions' }
+      });
+
+      if (permissionsSetting) {
+        const currentPermissions = permissionsSetting.value as any;
+        delete currentPermissions[roleToDelete.name];
+        await tx.setting.update({
+          where: { key: 'rolePermissions' },
+          data: { value: currentPermissions }
+        });
+      }
+      // Disconnect this role from any users who have it
+      const usersWithRole = await tx.user.findMany({ where: { roles: { some: { id: roleToDelete.id } } }, select: { id: true } });
+      for (const u of usersWithRole) {
+        await tx.user.update({ where: { id: u.id }, data: { roles: { disconnect: { id: roleToDelete.id } } } });
+      }
+
+      // Remove any committeeConfig entry that corresponds to this role name (e.g., Committee_D_Member)
+      try {
+        const committeeConfigSetting = await tx.setting.findUnique({ where: { key: 'committeeConfig' } });
+        if (committeeConfigSetting) {
+          const conf = committeeConfigSetting.value as any || {};
+          const match = roleToDelete.name.match(/^Committee_([A-Z0-9]+)_Member$/i);
+          if (match) {
+            const key = match[1];
+            if (conf && conf[key]) {
+              delete conf[key];
+              await tx.setting.update({ where: { key: 'committeeConfig' }, data: { value: conf } });
+            }
+          }
         }
-        
-        await tx.role.delete({ where: { id } });
+      } catch (e) {
+        console.warn('Failed to clean committeeConfig setting:', e);
+      }
+
+      await tx.role.delete({ where: { id } });
     });
 
 
     return NextResponse.json({ message: 'Role deleted successfully' });
   } catch (error) {
-     console.error('Failed to delete role:', error);
-     if (error instanceof Error && error.message === 'Unauthorized') {
+    console.error('Failed to delete role:', error);
+    if (error instanceof Error && error.message === 'Unauthorized') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+    if (error instanceof Error) {
+      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }
 }
 
-    

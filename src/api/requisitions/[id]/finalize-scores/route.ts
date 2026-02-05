@@ -25,7 +25,7 @@ function calculateItemScoreForVendor(
     reqItem: { id: string },
     evaluationCriteria: EvaluationCriteria
 ): { championBid: QuoteItem | null, championScore: number } {
-    
+
     const proposalsForItem = quote.items.filter(item => item.requisitionItemId === reqItem.id);
     if (proposalsForItem.length === 0) {
         return { championBid: null, championScore: 0 };
@@ -34,45 +34,47 @@ function calculateItemScoreForVendor(
     let championBid: QuoteItem | null = null;
     let championScore = -1;
 
-        for (const proposal of proposalsForItem) {
-            // If any compliance set marks this quote item as non-comply, exclude this proposal
-            const itemCompliances = (quote as any).complianceSets?.flatMap((cs: any) => cs.itemCompliances || []) || [];
-            const anyNonCompliant = itemCompliances.some((ic: any) => ic.quoteItemId === proposal.id && ic.comply === false);
-            if (anyNonCompliant) continue;
+    for (const proposal of proposalsForItem) {
+        // If any compliance set marks this quote item as non-comply, exclude this proposal
+        const itemCompliances = (quote as any).complianceSets?.flatMap((cs: any) => cs.itemCompliances || []) || [];
+        const anyNonCompliant = itemCompliances.some((ic: any) => ic.quoteItemId === proposal.id && ic.comply === false);
+        if (anyNonCompliant) continue;
 
-            let totalItemScore = 0;
-            let scoreCount = 0;
-            
-            quote.scores?.forEach(scoreSet => {
-                const itemScore = scoreSet.itemScores.find((is: any) => is.quoteItemId === proposal.id);
-                if (itemScore) {
-                    totalItemScore += itemScore.finalScore;
-                    scoreCount++;
-                }
-            });
+        let totalItemScore = 0;
+        let scoreCount = 0;
 
-            const averageScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
-            
-            if (averageScore > championScore) {
-                championScore = averageScore;
-                championBid = proposal;
+        quote.scores?.forEach(scoreSet => {
+            const itemScore = scoreSet.itemScores.find((is: any) => is.quoteItemId === proposal.id);
+            if (itemScore) {
+                totalItemScore += itemScore.finalScore;
+                scoreCount++;
             }
+        });
+
+        const averageScore = scoreCount > 0 ? totalItemScore / scoreCount : 0;
+
+        if (averageScore > championScore) {
+            championScore = averageScore;
+            championBid = proposal;
         }
+    }
 
     return { championBid, championScore };
 }
 
 
-export async function POST(
-  request: Request,
-  { params }: { params: { id:string } }
-) {
+export async function POST(request: Request, context: { params: any }) {
     const actor = await getActorFromToken(request);
     if (!actor) {
         return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
     }
 
-    const requisitionId = params.id;
+    const params = await context.params;
+    const requisitionId = params?.id as string | undefined;
+    if (!requisitionId || typeof requisitionId !== 'string') {
+        console.error('POST /api/requisitions/[id]/finalize-scores missing or invalid id', { method: request.method, url: (request as any).url, params });
+        return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
     console.log(`[FINALIZE-SCORES] Received request for requisition: ${requisitionId}`);
     try {
         const body = await request.json();
@@ -82,7 +84,7 @@ export async function POST(
         if (!minuteDocumentUrl) {
             return NextResponse.json({ error: "The official minute document is required to proceed." }, { status: 400 });
         }
-        
+
         const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });
         let isAuthorized = false;
         const userRoles = actor.roles as UserRole[];
@@ -103,17 +105,17 @@ export async function POST(
             console.error(`[FINALIZE-SCORES] User ${actor.id} is not authorized.`);
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
-        
+
         console.log('[FINALIZE-SCORES] Starting transaction...');
         const result = await prisma.$transaction(async (tx) => {
-            
-            const requisition = await tx.purchaseRequisition.findUnique({ 
-                where: { id: requisitionId }, 
-                include: { 
-                    items: true, 
+
+            const requisition = await tx.purchaseRequisition.findUnique({
+                where: { id: requisitionId },
+                include: {
+                    items: true,
                     evaluationCriteria: { include: { financialCriteria: true, technicalCriteria: true } },
                     quotations: { include: { scores: { include: { itemScores: true } }, items: true, complianceSets: { include: { itemCompliances: true } } } }
-                } 
+                }
             });
             if (!requisition) {
                 throw new Error("Requisition not found.");
@@ -127,7 +129,7 @@ export async function POST(
             if (allQuotes.length === 0) {
                 throw new Error("No quotes found to process for this requisition.");
             }
-            
+
             // --- SERVER-SIDE VALUE CALCULATION ---
             const evaluationCriteria = requisition.evaluationCriteria || DEFAULT_EVALUATION_CRITERIA;
             let totalAwardValue = 0;
@@ -147,7 +149,7 @@ export async function POST(
 
             } else if (awardStrategy === 'item') {
                 const winningQuoteItemIds = Object.values(awards).map((award: any) => award.rankedBids[0].quoteItemId);
-                
+
                 const winningQuoteItems = await tx.quoteItem.findMany({
                     where: { id: { in: winningQuoteItemIds } },
                     include: { requisitionItem: true }
@@ -158,7 +160,7 @@ export async function POST(
                 }, 0);
             }
             // --- END CALCULATION ---
-            
+
 
             const dynamicAwardValue = totalAwardValue;
 
@@ -166,15 +168,15 @@ export async function POST(
                 console.log('[FINALIZE-SCORES] Calculating for "Award All to Single Vendor" strategy.');
                 const winningVendorId = Object.keys(awards)[0];
                 const winningQuote = allQuotes.find(q => q.vendorId === winningVendorId);
-                
+
                 if (!winningQuote) throw new Error("Winning vendor's quote not found.");
 
                 const otherQuotes = allQuotes.filter(q => q.vendorId !== winningVendorId);
-                
+
                 await tx.quotation.update({ where: { id: winningQuote.id }, data: { status: 'Pending_Award', rank: 1 } });
-                
-                const sortedOthers = otherQuotes.sort((a,b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
-                
+
+                const sortedOthers = otherQuotes.sort((a, b) => (b.finalAverageScore || 0) - (a.finalAverageScore || 0));
+
                 for (let i = 0; i < sortedOthers.length; i++) {
                     const quote = sortedOthers[i];
                     const rank = i < 2 ? (i + 2) as 2 | 3 : null;
@@ -187,8 +189,8 @@ export async function POST(
                     });
                 }
                 const championBids = requisition.items.map(reqItem => {
-                   const { championBid } = calculateItemScoreForVendor(winningQuote, reqItem, requisition.evaluationCriteria!);
-                   return championBid;
+                    const { championBid } = calculateItemScoreForVendor(winningQuote, reqItem, requisition.evaluationCriteria!);
+                    return championBid;
                 }).filter(Boolean) as QuoteItem[];
 
                 const itemIdsToAward = championBids.map(i => i.id);
@@ -199,7 +201,7 @@ export async function POST(
 
             } else if (awardStrategy === 'item') {
                 console.log('[FINALIZE-SCORES] Calculating for "Best Offer (Per Item)" strategy.');
-                
+
                 const allItemsWithAwards = requisition.items.map(item => {
                     const bids = awards[item.id]?.rankedBids;
                     if (!bids || bids.length === 0) {
@@ -271,13 +273,13 @@ export async function POST(
                 }
             });
             console.log('[FINALIZE-SCORES] Audit log created.');
-            
+
             return updatedRequisition;
         }, {
             maxWait: 15000,
             timeout: 30000,
         });
-        
+
         console.log('[FINALIZE-SCORES] Transaction complete. Sending response.');
         return NextResponse.json({ message: 'Award process finalized and routed for review.', requisition: result });
 

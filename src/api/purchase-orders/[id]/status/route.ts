@@ -6,17 +6,19 @@ import { prisma } from '@/lib/prisma';
 import { PurchaseOrderStatus } from '@/lib/types';
 import { getActorFromToken } from '@/lib/auth';
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor || !(actor.roles as string[]).includes('Procurement_Officer')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    const poId = params.id;
+    const params = await context.params;
+    const poId = params?.id as string | undefined;
+    if (!poId || typeof poId !== 'string') {
+      console.error('PATCH /api/purchase-orders/[id]/status missing or invalid id', { method: request.method, url: (request as any).url, params });
+      return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
     const body = await request.json();
     const { status } = body;
 
@@ -24,34 +26,34 @@ export async function PATCH(
     if (!validStatuses.includes(status.replace(/ /g, '_'))) {
       return NextResponse.json({ error: 'Invalid or unsupported status for manual update.' }, { status: 400 });
     }
-    
-    const poToUpdate = await prisma.purchaseOrder.findUnique({ where: { id: poId }});
+
+    const poToUpdate = await prisma.purchaseOrder.findUnique({ where: { id: poId } });
     if (!poToUpdate) {
-        return NextResponse.json({ error: 'Purchase Order not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Purchase Order not found' }, { status: 404 });
     }
 
     const oldStatus = poToUpdate.status;
     const updatedPO = await prisma.purchaseOrder.update({
-        where: { id: poId },
-        data: { status: status.replace(/ /g, '_') as any }
+      where: { id: poId },
+      data: { status: status.replace(/ /g, '_') as any }
     });
-    
+
     await prisma.auditLog.create({
-        data: {
-            user: { connect: { id: actor.id } },
-            timestamp: new Date(),
-            action: 'UPDATE_PO_STATUS',
-            entity: 'PurchaseOrder',
-            entityId: poId,
-            details: `Updated PO status from "${oldStatus}" to "${status}".`,
-        }
+      data: {
+        user: { connect: { id: actor.id } },
+        timestamp: new Date(),
+        action: 'UPDATE_PO_STATUS',
+        entity: 'PurchaseOrder',
+        entityId: poId,
+        details: `Updated PO status from "${oldStatus}" to "${status}".`,
+      }
     });
 
     return NextResponse.json(updatedPO);
   } catch (error) {
     console.error('Failed to update PO status:', error);
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 500 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }

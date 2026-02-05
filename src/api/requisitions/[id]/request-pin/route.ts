@@ -8,7 +8,7 @@ import { sendEmail } from '@/services/email-service';
 
 const DIRECTOR_ROLES = ['Finance_Director', 'Facility_Director', 'Director_Supply_Chain_and_Property_Management'];
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: Request, context: { params: any }) {
   try {
     const actor = await getActorFromToken(request);
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -17,7 +17,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const matching = actorRoles.find(r => DIRECTOR_ROLES.includes(r));
     if (!matching) return NextResponse.json({ error: 'Only directors can request their PIN' }, { status: 403 });
 
-    const { id } = params;
+    const params = await context.params;
+    const id = params?.id as string | undefined;
+    if (!id || typeof id !== 'string') {
+      console.error('POST /api/requisitions/[id]/request-pin missing or invalid id', { method: request.method, url: (request as any).url, params });
+      return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
     if (!requisition) return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
 

@@ -9,11 +9,13 @@ import { User } from '@/lib/types';
 // Payload: { checks: [{ quoteItemId, comply: boolean, comment?: string }], committeeComment, userId }
 
 
-export async function POST(
-    request: Request,
-    { params }: { params: { id: string } }
-) {
-    const quoteId = params.id;
+export async function POST(request: Request, context: { params: any }) {
+    const params = await context.params;
+    const quoteId = params?.id as string | undefined;
+    if (!quoteId || typeof quoteId !== 'string') {
+        console.error('POST /app/api/quotations/[id]/score missing or invalid id', { method: request.method, url: (request as any).url, params });
+        return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
     try {
         const body = await request.json();
         const { checks, committeeComment, userId } = body;

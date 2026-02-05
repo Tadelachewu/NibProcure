@@ -7,57 +7,61 @@ import { prisma } from '@/lib/prisma';
 import { addDays } from 'date-fns';
 import { getActorFromToken } from '@/lib/auth';
 
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const { id } = params;
-    const requisition = await prisma.purchaseRequisition.findUnique({
-      where: { id },
-      include: {
-        items: true,
-        customQuestions: true,
-        evaluationCriteria: {
-          include: {
-            financialCriteria: true,
-            technicalCriteria: true,
-          }
-        },
-        financialCommitteeMembers: { select: { id: true, name: true, email: true } },
-        technicalCommitteeMembers: { select: { id: true, name: true, email: true } },
-        requester: true,
-      }
-    });
+export async function GET(request: Request, context: { params: any }) {
+    try {
+        const params = await context.params;
+        const id = params?.id as string | undefined;
+        if (!id || typeof id !== 'string') {
+            console.error('GET /app/api/quotations/[id] missing or invalid id', { method: request.method, url: (request as any).url, params });
+            return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+        }
+        const requisition = await prisma.purchaseRequisition.findUnique({
+            where: { id },
+            include: {
+                items: true,
+                customQuestions: true,
+                evaluationCriteria: {
+                    include: {
+                        financialCriteria: true,
+                        technicalCriteria: true,
+                    }
+                },
+                financialCommitteeMembers: { select: { id: true, name: true, email: true } },
+                technicalCommitteeMembers: { select: { id: true, name: true, email: true } },
+                requester: true,
+            }
+        });
 
-    if (!requisition) {
-      return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
-    }
-    
-    // Formatting data to match client-side expectations
-    const formatted = {
-        ...requisition,
-        requesterName: requisition.requester.name || 'Unknown',
-        financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
-        technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
-    };
+        if (!requisition) {
+            return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
+        }
 
-    return NextResponse.json(formatted);
-  } catch (error) {
-     console.error('Failed to fetch requisition:', error);
-     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        // Formatting data to match client-side expectations
+        const formatted = {
+            ...requisition,
+            requesterName: requisition.requester.name || 'Unknown',
+            financialCommitteeMemberIds: requisition.financialCommitteeMembers.map(m => m.id),
+            technicalCommitteeMemberIds: requisition.technicalCommitteeMembers.map(m => m.id),
+        };
+
+        return NextResponse.json(formatted);
+    } catch (error) {
+        console.error('Failed to fetch requisition:', error);
+        if (error instanceof Error) {
+            return NextResponse.json({ error: 'Failed to process request', details: error.message }, { status: 400 });
+        }
+        return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
     }
-    return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
-  }
 }
 
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-    const quoteId = params.id;
+export async function PATCH(request: Request, context: { params: any }) {
+    const params = await context.params;
+    const quoteId = params?.id as string | undefined;
+    if (!quoteId || typeof quoteId !== 'string') {
+        console.error('PATCH /app/api/quotations/[id] missing or invalid id', { method: request.method, url: (request as any).url, params });
+        return NextResponse.json({ error: 'Missing or invalid id' }, { status: 400 });
+    }
     try {
         const actor = await getActorFromToken(request);
         if (!actor) {
@@ -66,10 +70,10 @@ export async function PATCH(
 
         const body = await request.json();
         const { items, notes, answers, cpoDocumentUrl, experienceDocumentUrl, bidDocumentUrl } = body;
-        
+
         const quote = await prisma.quotation.findUnique({
-             where: { id: quoteId },
-             include: { requisition: true }
+            where: { id: quoteId },
+            include: { requisition: true }
         });
 
         if (!quote) {
@@ -79,7 +83,7 @@ export async function PATCH(
         if (quote.vendorId !== actor.vendorId) {
             return NextResponse.json({ error: 'You are not authorized to edit this quotation.' }, { status: 403 });
         }
-        
+
         const isAwardProcessStarted = await prisma.quotation.count({
             where: {
                 requisitionId: quote.requisitionId,
@@ -90,7 +94,7 @@ export async function PATCH(
         if (isAwardProcessStarted) {
             return NextResponse.json({ error: 'Cannot edit quote after award process has started.' }, { status: 403 });
         }
-        
+
         let totalPrice = 0;
         let maxLeadTime = 0;
         items.forEach((item: any) => {
@@ -125,7 +129,7 @@ export async function PATCH(
                     }))
                 },
                 answers: {
-                     create: answers?.map((ans: any) => ({
+                    create: answers?.map((ans: any) => ({
                         questionId: ans.questionId,
                         answer: ans.answer,
                     }))
