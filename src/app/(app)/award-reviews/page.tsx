@@ -16,8 +16,8 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-} from './ui/card';
-import { Button } from './ui/button';
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { PurchaseRequisition, User } from '@/lib/types';
 import { format } from 'date-fns';
 import {
@@ -45,14 +45,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from './ui/dialog';
-import { Textarea } from './ui/textarea';
-import { Label } from './ui/label';
+} from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { ApprovalSummaryDialog } from '../approval-summary-dialog';
-import { Badge } from './ui/badge';
+import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from './ui/tooltip';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { workflowEventBus } from '@/lib/workflow-event-bus';
 
 
