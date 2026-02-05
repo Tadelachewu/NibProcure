@@ -216,6 +216,75 @@ async function deepCleanRequisition(tx: Prisma.TransactionClient, requisitionId:
     });
 }
 
+/**
+ * Reset an awarded requisition back to scoring state.
+ * Records a minute, clears award details, and writes an audit log.
+ */
+export async function resetAwardToScoring(
+    tx: Prisma.TransactionClient,
+    requisitionId: string,
+    actorId: string,
+    reason: string = 'Post-approval rejection',
+    minute?: { documentUrl?: string | null; justification?: string | null; attendeeIds?: string[]; decisionBody?: string }
+) {
+    const requisition = await tx.purchaseRequisition.findUnique({ where: { id: requisitionId }, include: { items: true } });
+    if (!requisition) throw new Error(`Requisition ${requisitionId} not found`);
+
+    const minuteData: any = {
+        requisition: { connect: { id: requisitionId } },
+        author: { connect: { id: actorId } },
+        decision: 'REJECTED',
+        decisionBody: minute?.decisionBody || 'Post-Approval Rejection',
+        justification: minute?.justification || reason,
+        type: minute?.documentUrl ? 'uploaded_document' : 'system',
+        documentUrl: minute?.documentUrl || null,
+    };
+
+    const createdMinute = await tx.minute.create({ data: minuteData });
+
+    if (minute?.attendeeIds && minute.attendeeIds.length > 0) {
+        for (const aid of minute.attendeeIds) {
+            await tx.signature.create({
+                data: {
+                    minute: { connect: { id: createdMinute.id } },
+                    signer: { connect: { id: aid } },
+                    signerName: null,
+                    signerRole: null,
+                    decision: 'REJECTED',
+                    comment: reason,
+                }
+            });
+        }
+    }
+
+    await tx.requisitionItem.updateMany({ where: { requisitionId }, data: { perItemAwardDetails: [] } });
+
+    const updated = await tx.purchaseRequisition.update({
+        where: { id: requisitionId },
+        data: {
+            status: 'Scoring_Complete',
+            currentApproverId: null,
+            approverComment: reason,
+            awardedQuoteItemIds: [],
+            awardResponseDeadline: null,
+        }
+    });
+
+    await tx.auditLog.create({
+        data: {
+            timestamp: new Date(),
+            user: { connect: { id: actorId } },
+            action: 'RESET_TO_SCORING',
+            entity: 'Requisition',
+            entityId: requisitionId,
+            details: `Requisition reset to scoring. Reason: ${reason}`,
+            transactionId: requisition.transactionId || requisitionId,
+        }
+    });
+
+    return updated;
+}
+
 
 export async function handleAwardRejection(
     tx: Prisma.TransactionClient,
