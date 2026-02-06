@@ -82,11 +82,13 @@ export async function POST(request: Request, context: { params: any }) {
                 nextSettings = { ...nextSettings, masked: false, directorPresenceVerified: true };
             }
 
+            // Store committee name/purpose inside rfqSettings (schema has no top-level fields)
+            if (committeeName) nextSettings.committeeName = committeeName;
+            if (committeePurpose) nextSettings.committeePurpose = committeePurpose;
+
             const updatedRequisition = await tx.purchaseRequisition.update({
                 where: { id },
                 data: {
-                    committeeName,
-                    committeePurpose,
                     scoringDeadline: scoringDeadline ? new Date(scoringDeadline) : undefined,
                     rfqSettings: nextSettings,
                     financialCommitteeMembers: {
