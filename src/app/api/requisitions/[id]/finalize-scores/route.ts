@@ -36,9 +36,12 @@ function calculateItemScoreForVendor(
 
 
 export async function POST(request: Request, context: { params: any }) {
-    const actor = await getActorFromToken(request);
-    if (!actor) {
-        return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    let actor;
+    try {
+        actor = await getActorFromToken(request);
+    } catch (e) {
+        console.warn('[FINALIZE-SCORES] Authorization failed while extracting actor from token:', e);
+        return NextResponse.json({ error: 'Unauthorized: missing or invalid token' }, { status: 401 });
     }
 
     const params = await context.params;
@@ -60,7 +63,7 @@ export async function POST(request: Request, context: { params: any }) {
         const isAuthorized = await isActorAuthorizedForRequisition(actor, requisitionId as string);
         if (!isAuthorized) {
             console.error(`[FINALIZE-SCORES] User ${actor.id} is not authorized to finalize scores for requisition ${requisitionId}.`);
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+            return NextResponse.json({ error: 'Forbidden: you must be an assigned RFQ sender or in the configured RFQ sender list to perform this action.' }, { status: 403 });
         }
 
         console.log('[FINALIZE-SCORES] Starting transaction...');
@@ -315,6 +318,7 @@ export async function POST(request: Request, context: { params: any }) {
                     rfqSettings: {
                         ...(requisition?.rfqSettings as any),
                         awardStrategy: awardStrategy,
+                        improvedIdeasEnabled: true,
                     }
                 }
             });

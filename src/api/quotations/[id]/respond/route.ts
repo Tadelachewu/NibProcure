@@ -148,6 +148,22 @@ export async function POST(request: Request, context: { params: any }) {
                     }
                 });
 
+                // Enable change/cancel award features in UI for this requisition
+                try {
+                    await tx.purchaseRequisition.update({
+                        where: { id: requisition.id },
+                        data: {
+                            rfqSettings: {
+                                ...(requisition.rfqSettings as any),
+                                improvedIdeasEnabled: true,
+                            }
+                        }
+                    });
+                    console.log(`[RESPOND-AWARD] Enabled improvedIdeas for Requisition: ${requisition.id}`);
+                } catch (e) {
+                    console.warn(`[RESPOND-AWARD] Failed to enable improvedIdeas for Requisition ${requisition.id}:`, e);
+                }
+
                 return { message: 'Award accepted. PO has been generated.' };
 
             } else if (action === 'reject') {

@@ -63,6 +63,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AwardCenterDialog } from '@/components/award-center-dialog';
 import { BestItemAwardDialog } from '@/components/best-item-award-dialog';
 import { AwardStandbyButton } from '@/components/award-standby-button';
+import { ChangeAwardDialog } from '@/components/change-award-dialog';
 import { RestartRfqDialog } from '@/components/restart-rfq-dialog';
 import { QuoteDetailsDialog } from '@/components/quote-details-dialog';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -3191,6 +3192,8 @@ export default function QuotationDetailsPage() {
     const [showNoCompliantDialog, setShowNoCompliantDialog] = useState(false);
     const [deadlineCheckPerformed, setDeadlineCheckPerformed] = useState(false);
     const [isManualQuoteOpen, setIsManualQuoteOpen] = useState(false);
+    const [isChangeOpen, setIsChangeOpen] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
 
     // Trigger the award-deadline job when this page is opened, but avoid repeated runs.
     useEffect(() => {
@@ -3659,6 +3662,59 @@ export default function QuotationDetailsPage() {
                             <Link href={`/requisitions/${id}/award-details`}><Calculator className="mr-2 h-4 w-4" /> View Calculation</Link>
                         </Button>
                     )}
+                    {requisition.rfqSettings?.improvedIdeasEnabled && (
+                        <>
+                            <Button variant="secondary" onClick={() => setIsChangeOpen(true)}>Change Award</Button>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="destructive">Cancel Award</Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-56 p-3">
+                                    <div className="space-y-2">
+                                        <div className="font-medium">Cancel Award To</div>
+                                        <div className="flex flex-col gap-2">
+                                            <Button onClick={async () => {
+                                                if (!user) return;
+                                                setIsCancelling(true);
+                                                try {
+                                                    const res = await fetch(`/api/requisitions/${id}/reset-award`, {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                        body: JSON.stringify({ userId: user.id, toStatus: 'ready_for_rfq' })
+                                                    });
+                                                    const j = await res.json();
+                                                    if (!res.ok) throw new Error(j.error || j.details || 'Failed');
+                                                    await fetchRequisitionAndQuotes();
+                                                } catch (err) {
+                                                    console.error(err);
+                                                } finally {
+                                                    setIsCancelling(false);
+                                                }
+                                            }}>Ready for RFQ</Button>
+                                            <Button onClick={async () => {
+                                                if (!user) return;
+                                                setIsCancelling(true);
+                                                try {
+                                                    const res = await fetch(`/api/requisitions/${id}/reset-award`, {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                                                        body: JSON.stringify({ userId: user.id, toStatus: 'ready_to_award' })
+                                                    });
+                                                    const j = await res.json();
+                                                    if (!res.ok) throw new Error(j.error || j.details || 'Failed');
+                                                    await fetchRequisitionAndQuotes();
+                                                } catch (err) {
+                                                    console.error(err);
+                                                } finally {
+                                                    setIsCancelling(false);
+                                                }
+                                            }}>Ready to Award</Button>
+                                        </div>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        </>
+                    )}
                     <Button variant="secondary" onClick={() => setReportOpen(true)}>
                         <FileBarChart2 className="mr-2 h-4 w-4" /> View Spec Compliance Report
                     </Button>
@@ -3947,6 +4003,10 @@ export default function QuotationDetailsPage() {
                             </AccordionContent>
                         </AccordionItem>
                     </Accordion>
+
+                    {isChangeOpen && requisition && quotations && (
+                        <ChangeAwardDialog isOpen={isChangeOpen} onClose={() => { setIsChangeOpen(false); fetchRequisitionAndQuotes(); }} requisition={requisition} quotations={quotations} />
+                    )}
 
                     {/* Compliance Progress Accordion (now at bottom) */}
                     {(readyForCommitteeAssignment && (requisition.rfqSettings?.needsCompliance) && (isAuthorized)) && (
