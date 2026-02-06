@@ -272,3 +272,11 @@ This scenario illustrates the end-to-end journey of a procurement request, invol
 └── package.json
 ```
 For a more detailed technical overview, please see `docs/architecture.md`.
+//production
+
+
+
+
+npm install
+npm run build
+node .next/standalone/server.js
