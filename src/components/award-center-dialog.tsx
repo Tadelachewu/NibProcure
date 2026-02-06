@@ -46,13 +46,12 @@ export const AwardCenterDialog = ({
         return setMinutes(setHours(awardResponseDeadlineDate, hours), minutes);
     }, [awardResponseDeadlineDate, awardResponseDeadlineTime]);
     
-    // For requisitions needing compliance, filter out non-compliant items and vendors
+    // For requisitions needing compliance, determine globally non-compliant quote items
     const needsCompliance = requisition.rfqSettings?.needsCompliance ?? true;
-    const nonCompliantItemIds = new Set(
-        requisition.items
-            .filter(item => Array.isArray(item.perItemAwardDetails) && item.perItemAwardDetails.length === 0)
-            .map(item => item.id)
-    );
+    const nonCompliantQuoteItemIds = useMemo(() => {
+        return new Set<string>(quotations.flatMap(q => (q as any).complianceSets || []).flatMap((s: any) => (s.itemCompliances || []).filter((ic: any) => ic.comply === false).map((ic: any) => ic.quoteItemId)));
+    }, [quotations]);
+
     const eligibleQuotes = useMemo(() => {
         const declinedVendorIds = new Set(
             quotations.filter(q => q.status === 'Declined').map(q => q.vendorId)
@@ -60,22 +59,22 @@ export const AwardCenterDialog = ({
         return quotations.filter(q => {
             if (declinedVendorIds.has(q.vendorId)) return false;
             if (!needsCompliance) return true;
-            // Vendor must have at least one compliant item
-            const compliantItems = q.items.filter(i => !nonCompliantItemIds.has(i.requisitionItemId));
+            // Vendor must have at least one compliant quote item
+            const compliantItems = q.items.filter(i => !nonCompliantQuoteItemIds.has(i.id));
             return compliantItems.length > 0;
         });
-    }, [quotations, needsCompliance, nonCompliantItemIds]);
+    }, [quotations, needsCompliance, nonCompliantQuoteItemIds]);
     
     const overallWinner = useMemo(() => {
         if (!eligibleQuotes || eligibleQuotes.length === 0) {
             return null;
         }
-        // For compliance, calculate total price only for compliant items
+        // For compliance, calculate total price only for compliant quote items
         const sortedQuotes = [...eligibleQuotes].map(q => {
             let totalPrice = 0;
             if (needsCompliance) {
                 for (const item of q.items) {
-                    if (!nonCompliantItemIds.has(item.requisitionItemId)) {
+                    if (!nonCompliantQuoteItemIds.has(item.id)) {
                         totalPrice += item.unitPrice * item.quantity;
                     }
                 }
@@ -85,7 +84,7 @@ export const AwardCenterDialog = ({
             return { ...q, totalPrice };
         }).sort((a, b) => (a.totalPrice || 0) - (b.totalPrice || 0));
         return sortedQuotes.length > 0 ? sortedQuotes[0] : null;
-    }, [eligibleQuotes, needsCompliance, nonCompliantItemIds]);
+    }, [eligibleQuotes, needsCompliance, nonCompliantQuoteItemIds]);
 
     const standbyVendors = useMemo(() => {
         if (!eligibleQuotes || eligibleQuotes.length < 2) return [];
@@ -93,7 +92,7 @@ export const AwardCenterDialog = ({
             let totalPrice = 0;
             if (needsCompliance) {
                 for (const item of q.items) {
-                    if (!nonCompliantItemIds.has(item.requisitionItemId)) {
+                    if (!nonCompliantQuoteItemIds.has(item.id)) {
                         totalPrice += item.unitPrice * item.quantity;
                     }
                 }
@@ -103,7 +102,7 @@ export const AwardCenterDialog = ({
             return { ...q, totalPrice };
         }).sort((a, b) => (a.totalPrice || 0) - (b.totalPrice || 0));
         return sortedQuotes.slice(1, 3);
-    }, [eligibleQuotes, needsCompliance, nonCompliantItemIds]);
+    }, [eligibleQuotes, needsCompliance, nonCompliantQuoteItemIds]);
 
     const handleConfirmAward = async () => {
         let minuteDocumentUrl: string | undefined = undefined;
