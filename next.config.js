@@ -6,9 +6,8 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // Note: `eslint` config in Next.js config is no longer supported (Next.js 16+).
+  // Linting should be handled via separate scripts (see package.json).
   images: {
     remotePatterns: [
       {
