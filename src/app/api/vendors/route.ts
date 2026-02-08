@@ -45,9 +45,20 @@ export async function POST(request: Request) {
     const cleanedEmail = (typeof email === 'string' ? email.trim() : '') || '';
     const userEmail = cleanedEmail !== '' ? cleanedEmail.toLowerCase() : `vendor+${Date.now()}${Math.random().toString(36).slice(2, 6)}@example.local`;
 
+    const existingVendor = await prisma.vendor.findUnique({ where: { email: userEmail } });
+    if (existingVendor) {
+      console.log(`Registration failed: Vendor with email ${userEmail} already exists.`);
+      return NextResponse.json({ error: 'A vendor with this email already exists.' }, { status: 400 });
+    }
+
     // Ensure there's a User record to satisfy the Vendor.user relation
     let user = await prisma.user.findUnique({ where: { email: userEmail } });
-    if (!user) {
+    if (user) {
+      if (user.vendorId) {
+        console.log(`Registration failed: User ${userEmail} is already associated with vendor ${user.vendorId}.`);
+        return NextResponse.json({ error: 'This user is already associated with a vendor account.' }, { status: 400 });
+      }
+    } else {
       // Create a lightweight user for the vendor
       const rawPassword = Math.random().toString(36).slice(2, 12);
       const hashedPassword = await bcrypt.hash(rawPassword, 10);
@@ -74,7 +85,7 @@ export async function POST(request: Request) {
         email: userEmail,
         phone,
         address,
-        user: { connect: { id: user.id } },
+        userId: user.id,
         kycStatus: 'Pending',
         kycDocuments: {
           create: [
@@ -94,6 +105,7 @@ export async function POST(request: Request) {
         action: 'CREATE_VENDOR',
         entity: 'Vendor',
         entityId: newVendor.id,
+        userId: user.id,
         details: `Added new vendor "${newVendor.name}" (pending verification).`,
       }
     });

@@ -43,7 +43,7 @@ export async function POST(request: Request) {
                     email: email,
                     phone: vendorDetails.phone,
                     address: vendorDetails.address,
-                    user: { connect: { id: newUser.id } },
+                    userId: newUser.id,
                     kycStatus: 'Pending',
                     kycDocuments: {
                         create: [
