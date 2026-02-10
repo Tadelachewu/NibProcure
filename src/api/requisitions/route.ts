@@ -448,6 +448,12 @@ export async function PATCH(
       dataToUpdate.approverComment = comment;
       if (typeof isOpenTender === 'boolean') {
         dataToUpdate.isOpenTender = isOpenTender;
+        if (isOpenTender) {
+          if (body.announcementEndDate) {
+            dataToUpdate.announcementEndDate = new Date(body.announcementEndDate);
+            dataToUpdate.procurementMethod = 'OpenTender';
+          }
+        }
       }
       auditAction = 'APPROVE_REQUISITION';
       auditDetails = `Managerial approval for requisition ${id} granted by ${user.name}. Ready for RFQ.`;

@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { isBefore } from 'date-fns';
 import { UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { getActorFromToken } from '@/lib/auth';
@@ -25,6 +26,20 @@ export async function POST(request: Request, context: { params: any }) {
         const requisition = await prisma.purchaseRequisition.findUnique({ where: { id } });
         if (!requisition) {
             return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
+        }
+
+        // If requisition was approved as Open Tender, enforce that the procurement method
+        // remains OpenTender and that the public announcement period has ended.
+        if (requisition.isOpenTender) {
+            if (procurementMethod !== 'OpenTender') {
+                return NextResponse.json({ error: 'This requisition was approved as Open Tender; procurement method must remain Open Tender.' }, { status: 400 });
+            }
+            if (!requisition.announcementEndDate) {
+                return NextResponse.json({ error: 'Missing public announcement end date on requisition.' }, { status: 400 });
+            }
+            if (isBefore(new Date(), new Date(requisition.announcementEndDate))) {
+                return NextResponse.json({ error: 'Public announcement period has not ended. Cannot send RFQ yet.' }, { status: 400 });
+            }
         }
 
         const rfqSenderSetting = await prisma.setting.findUnique({ where: { key: 'rfqSenderSetting' } });

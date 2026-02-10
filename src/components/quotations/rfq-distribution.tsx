@@ -40,7 +40,9 @@ export default function RFQDistribution({ requisition, vendors, quotations = [],
   const [allowQuoteEdits, setAllowQuoteEdits] = useState(requisition.rfqSettings?.allowQuoteEdits ?? true);
   const [experienceDocumentRequired, setExperienceDocumentRequired] = useState(requisition.rfqSettings?.experienceDocumentRequired ?? false);
   const [needsCompliance, setNeedsCompliance] = useState<boolean>(requisition.rfqSettings?.needsCompliance ?? true);
-  const [procurementMethod, setProcurementMethod] = useState<string>(requisition.procurementMethod ?? ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'));
+  const [procurementMethod, setProcurementMethod] = useState<string>(
+    requisition.procurementMethod ?? (requisition.isOpenTender ? 'OpenTender' : ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'))
+  );
 
   const { user } = useAuth();
   const { toast } = useToast();
@@ -59,7 +61,7 @@ export default function RFQDistribution({ requisition, vendors, quotations = [],
     setAllowQuoteEdits(requisition.rfqSettings?.allowQuoteEdits ?? true);
     setExperienceDocumentRequired(requisition.rfqSettings?.experienceDocumentRequired ?? false);
     setNeedsCompliance((requisition.rfqSettings as any)?.needsCompliance ?? true);
-    setProcurementMethod(requisition.procurementMethod ?? ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'));
+    setProcurementMethod(requisition.procurementMethod ?? (requisition.isOpenTender ? 'OpenTender' : ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ')));
   }, [requisition]);
 
   const deadline = useMemo(() => {
@@ -71,9 +73,28 @@ export default function RFQDistribution({ requisition, vendors, quotations = [],
   const handleSendRFQ = async () => {
     if (!user || !deadline) return;
 
-    if (procurementMethod !== 'RFQ') {
-      toast({ title: 'Coming Soon', description: `${procurementMethod} procurement method is coming soon. Only RFQ is supported currently.` });
+    if (procurementMethod !== 'RFQ' && procurementMethod !== 'OpenTender') {
+      toast({ title: 'Coming Soon', description: `${procurementMethod} procurement method is coming soon. Only RFQ and Open Tender are supported currently.` });
       return;
+    }
+
+    // If this requisition was approved as Open Tender, disallow changing method away from OpenTender
+    if (requisition.isOpenTender && procurementMethod !== 'OpenTender') {
+      toast({ variant: 'destructive', title: 'Invalid Procurement Method', description: 'This requisition was approved as Open Tender; procurement method must remain Open Tender.' });
+      return;
+    }
+
+    // If this is an Open Tender, ensure public announcement period has ended
+    if (procurementMethod === 'OpenTender') {
+      const ann = requisition.announcementEndDate ? new Date(requisition.announcementEndDate) : undefined;
+      if (!ann) {
+        toast({ variant: 'destructive', title: 'Missing Announcement Date', description: 'This requisition is marked as Open Tender but has no public announcement end date.' });
+        return;
+      }
+      if (isBefore(new Date(), ann)) {
+        toast({ variant: 'destructive', title: 'Public Announcement Active', description: 'The public announcement period has not ended. You cannot send RFQ until after the announcement end date/time.' });
+        return;
+      }
     }
 
     if (isBefore(deadline, new Date())) {
@@ -178,7 +199,7 @@ export default function RFQDistribution({ requisition, vendors, quotations = [],
             <select value={procurementMethod} onChange={(e) => setProcurementMethod(e.target.value)} disabled={!canTakeAction} className="w-full border rounded px-2 py-1">
               <option value="RFQ">RFQ (Request for Quotation)</option>
               <option value="RFP">RFP (Request for Proposal) — Coming Soon</option>
-              <option value="OpenTender">Open Tender — Coming Soon</option>
+              <option value="OpenTender">Open Tender</option>
               <option value="RestrictedTender">Restricted Tender — Coming Soon</option>
               <option value="DirectProcurement">Direct Procurement — Coming Soon</option>
               <option value="TwoStage">Two-Stage Bidding — Coming Soon</option>
