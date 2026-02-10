@@ -21,6 +21,7 @@ import { Button } from './ui/button';
 import { PurchaseRequisition, PerItemAwardDetail } from '@/lib/types';
 import { format, isPast } from 'date-fns';
 import { Badge } from './ui/badge';
+import { Input } from './ui/input';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FileX2, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
@@ -42,35 +43,58 @@ export function RequisitionsForQuotingTable() {
     try {
       setLoading(true);
       const response = await fetch(`/api/requisitions?forQuoting=true&page=${page}&limit=${PAGE_SIZE}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!response.ok) {
-          throw new Error('Failed to fetch requisitions');
+        throw new Error('Failed to fetch requisitions');
       }
       const data = await response.json();
       setRequisitions(data.requisitions || []);
       setTotalCount(data.totalCount || 0);
 
     } catch (e) {
-        setError(e instanceof Error ? e.message : 'An unknown error occurred');
+      setError(e instanceof Error ? e.message : 'An unknown error occurred');
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   }, [user, token]);
 
   useEffect(() => {
     if (user) {
-        fetchRequisitions(currentPage);
+      fetchRequisitions(currentPage);
     }
   }, [user, currentPage, fetchRequisitions]);
-  
+
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  // Filters
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [procurementFilter, setProcurementFilter] = useState('');
+
+  const filteredRequisitions = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    return requisitions.filter(r => {
+      if (s) {
+        const matches = [r.id, r.title, r.department].filter(Boolean).some(v => String(v).toLowerCase().includes(s));
+        if (!matches) return false;
+      }
+      if (statusFilter) {
+        if (r.status !== statusFilter) return false;
+      }
+      if (procurementFilter) {
+        const pm = r.procurementMethod ?? ((r.rfqSettings as any)?.method) ?? (r.isOpenTender ? 'OpenTender' : 'RFQ');
+        if (pm !== procurementFilter) return false;
+      }
+      return true;
+    });
+  }, [requisitions, search, statusFilter, procurementFilter]);
 
   const handleRowClick = (reqId: string) => {
     router.push(`/quotations/${reqId}`);
   }
 
- const getStatusBadge = (req: PurchaseRequisition) => {
+  const getStatusBadge = (req: PurchaseRequisition) => {
     const quoteCount = req.quotations?.length || 0;
     const deadlinePassed = req.deadline ? isPast(new Date(req.deadline)) : false;
     const scoringDeadlinePassed = req.scoringDeadline ? isPast(new Date(req.scoringDeadline)) : false;
@@ -78,31 +102,31 @@ export function RequisitionsForQuotingTable() {
 
     // --- Terminal Statuses (Highest Priority) ---
     if (req.status === 'Closed' || req.status === 'Fulfilled') {
-        return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
+      return <Badge variant="default" className="bg-green-700">Process Complete</Badge>;
     }
-    
+
     if (req.status === 'Partially_Closed') {
-        return <Badge variant="default" className="bg-sky-600">Partially Closed</Badge>;
+      return <Badge variant="default" className="bg-sky-600">Partially Closed</Badge>;
     }
 
     if (awardStrategy === 'item') {
-        const hasAcceptedItem = req.items.some(item => 
-            (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Accepted')
-        );
-        if (hasAcceptedItem && req.status !== 'Partially_Closed') {
-             return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
-        }
+      const hasAcceptedItem = req.items.some(item =>
+        (item.perItemAwardDetails as PerItemAwardDetail[] | undefined)?.some(d => d.status === 'Accepted')
+      );
+      if (hasAcceptedItem && req.status !== 'Partially_Closed') {
+        return <Badge variant="default" className="bg-blue-600">Partially Awarded</Badge>;
+      }
     }
-    
+
     if (awardStrategy === 'all' && req.status === 'PO_Created') {
-        return <Badge variant="default">PO Created</Badge>;
+      return <Badge variant="default">PO Created</Badge>;
     }
 
     if (req.status === 'Award_Declined') {
-        return <Badge variant="destructive" className="animate-pulse">Award Declined - Action Required</Badge>;
+      return <Badge variant="destructive" className="animate-pulse">Award Declined - Action Required</Badge>;
     }
     if (req.status === 'PostApproved') {
-        return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
+      return <Badge variant="default" className="bg-amber-500 text-white animate-pulse">Ready to Notify Vendor</Badge>;
     }
 
     if (req.status.startsWith('Pending_')) {
@@ -110,48 +134,48 @@ export function RequisitionsForQuotingTable() {
     }
 
     if (req.status === 'PreApproved') {
-        return <Badge variant="default" className="bg-blue-500 text-white">Ready for RFQ</Badge>;
+      return <Badge variant="default" className="bg-blue-500 text-white">Ready for RFQ</Badge>;
     }
-    
+
     if (req.status === 'Accepting_Quotes' && !deadlinePassed) {
-        return <Badge variant="outline">Accepting Quotes ({quoteCount} submitted)</Badge>;
+      return <Badge variant="outline">Accepting Quotes ({quoteCount} submitted)</Badge>;
     }
-    
+
     if (deadlinePassed) {
-        if (req.status === 'Accepting_Quotes') {
-             if (quoteCount === 0) {
-                return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> No Bids Received</Badge>;
-            }
-            if (quoteCount > 0 && quoteCount < committeeQuorum) {
-                return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3"/> Quorum Not Met</Badge>;
-            }
+      if (req.status === 'Accepting_Quotes') {
+        if (quoteCount === 0) {
+          return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> No Bids Received</Badge>;
         }
+        if (quoteCount > 0 && quoteCount < committeeQuorum) {
+          return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Quorum Not Met</Badge>;
+        }
+      }
 
-        if (req.status === 'Scoring_Complete') {
-            return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
-        }
-        
-        if (req.status === 'Awarded') {
-            return <Badge variant="default" className="bg-green-600">Awarded</Badge>;
-        }
-        
-        const hasCommittee = !!req.committeeName;
-        if (!hasCommittee) {
-             return <Badge variant="destructive">Ready for Committee Assignment</Badge>;
-        }
+      if (req.status === 'Scoring_Complete') {
+        return <Badge variant="default" className="bg-green-600">Ready to Award</Badge>;
+      }
 
-        if (scoringDeadlinePassed) {
-             const allHaveScored = (req.financialCommitteeMemberIds || []).length > 0 && 
-                                  [...(req.financialCommitteeMemberIds || []), ...(req.technicalCommitteeMemberIds || [])]
-                                  .every(id => req.committeeAssignments?.some(a => a.userId === id && a.scoresSubmitted));
-            if (!allHaveScored) {
-                 return <Badge variant="destructive" className="animate-pulse">Scoring Overdue</Badge>;
-            }
+      if (req.status === 'Awarded') {
+        return <Badge variant="default" className="bg-green-600">Awarded</Badge>;
+      }
+
+      const hasCommittee = !!req.committeeName;
+      if (!hasCommittee) {
+        return <Badge variant="destructive">Ready for Committee Assignment</Badge>;
+      }
+
+      if (scoringDeadlinePassed) {
+        const allHaveScored = (req.financialCommitteeMemberIds || []).length > 0 &&
+          [...(req.financialCommitteeMemberIds || []), ...(req.technicalCommitteeMemberIds || [])]
+            .every(id => req.committeeAssignments?.some(a => a.userId === id && a.scoresSubmitted));
+        if (!allHaveScored) {
+          return <Badge variant="destructive" className="animate-pulse">Scoring Overdue</Badge>;
         }
-        
-        return <Badge variant="secondary">Scoring in Progress</Badge>;
+      }
+
+      return <Badge variant="secondary">Scoring in Progress</Badge>;
     }
-    
+
     return <Badge variant="outline">{req.status.replace(/_/g, ' ')}</Badge>;
   }
 
@@ -163,37 +187,56 @@ export function RequisitionsForQuotingTable() {
       <CardHeader>
         <CardTitle>Requisitions in Quotation</CardTitle>
         <CardDescription>
-          {role === 'Committee_Member' 
+          {role === 'Committee_Member'
             ? 'Requisitions assigned to you for scoring.'
             : 'Manage requisitions that are ready for the RFQ process, are in scoring, or have been awarded.'
           }
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="border rounded-md">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">#</TableHead>
-                <TableHead>Req. ID</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {requisitions.length > 0 ? (
-                requisitions.map((req, index) => (
-                  <TableRow key={req.id} className="cursor-pointer" onClick={() => handleRowClick(req.id)}>
-                    <TableCell className="text-muted-foreground">{(currentPage - 1) * PAGE_SIZE + index + 1}</TableCell>
-                    <TableCell className="font-medium text-primary">{req.id}</TableCell>
-                    <TableCell>{req.title}</TableCell>
-                    <TableCell>{req.department}</TableCell>
-                    <TableCell>
-                      {getStatusBadge(req)}
-                    </TableCell>
-                    <TableCell className="text-right">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-2">
+            <Input placeholder="Search by ID, title, or department" value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
+            <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }} className="w-full border rounded px-2 py-1">
+              <option value="">All statuses</option>
+              {[...new Set(requisitions.map(r => r.status))].map(s => (
+                <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+              ))}
+            </select>
+            <select value={procurementFilter} onChange={(e) => { setProcurementFilter(e.target.value); setCurrentPage(1); }} className="w-full border rounded px-2 py-1">
+              <option value="">All procurement methods</option>
+              {[...new Set(requisitions.map(r => (r.procurementMethod ?? ((r.rfqSettings as any)?.method) ?? (r.isOpenTender ? 'OpenTender' : 'RFQ'))))].map(pm => (
+                <option key={pm} value={pm}>{pm === 'OpenTender' ? 'Open Tender' : pm}</option>
+              ))}
+            </select>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => { setSearch(''); setStatusFilter(''); setProcurementFilter(''); setCurrentPage(1); }}>Clear</Button>
+            </div>
+          </div>
+          <div className="border rounded-md">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">#</TableHead>
+                  <TableHead>Req. ID</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredRequisitions.length > 0 ? (
+                  filteredRequisitions.map((req, index) => (
+                    <TableRow key={req.id} className="cursor-pointer" onClick={() => handleRowClick(req.id)}>
+                      <TableCell className="text-muted-foreground">{(currentPage - 1) * PAGE_SIZE + index + 1}</TableCell>
+                      <TableCell className="font-medium text-primary">{req.id}</TableCell>
+                      <TableCell>{req.title}</TableCell>
+                      <TableCell>{req.department}</TableCell>
+                      <TableCell>
+                        {getStatusBadge(req)}
+                      </TableCell>
+                      <TableCell className="text-right">
                         {role === 'Committee_Member' ? (
                           <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/compliance/${req.id}`); }}>
                             Open Compliance <ArrowRight className="ml-2 h-4 w-4" />
@@ -201,39 +244,40 @@ export function RequisitionsForQuotingTable() {
                         ) : (
                           <Button variant="outline" size="sm">Manage <ArrowRight className="ml-2 h-4 w-4" /></Button>
                         )}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-48 text-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <FileX2 className="h-16 w-16 text-muted-foreground/50" />
+                        <div className="space-y-1">
+                          <p className="font-semibold">No Requisitions Found</p>
+                          <p className="text-muted-foreground">
+                            {role === 'Committee_Member'
+                              ? 'There are no requisitions currently assigned to you for scoring.'
+                              : 'There are no requisitions in the RFQ lifecycle stage.'
+                            }
+                          </p>
+                        </div>
+                      </div>
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-48 text-center">
-                    <div className="flex flex-col items-center gap-4">
-                      <FileX2 className="h-16 w-16 text-muted-foreground/50" />
-                      <div className="space-y-1">
-                        <p className="font-semibold">No Requisitions Found</p>
-                        <p className="text-muted-foreground">
-                            {role === 'Committee_Member'
-                                ? 'There are no requisitions currently assigned to you for scoring.'
-                                : 'There are no requisitions in the RFQ lifecycle stage.'
-                            }
-                        </p>
-                      </div>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-         <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages || 1} ({totalCount} total requisitions)
+                )}
+              </TableBody>
+            </Table>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
-            <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft /></Button>
-            <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight /></Button>
-            <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronsRight /></Button>
+          <div className="flex items-center justify-between mt-4">
+            <div className="text-sm text-muted-foreground">
+              Page {currentPage} of {totalPages || 1} ({totalCount} total requisitions)
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
+              <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft /></Button>
+              <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight /></Button>
+              <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronsRight /></Button>
+            </div>
           </div>
         </div>
       </CardContent>
