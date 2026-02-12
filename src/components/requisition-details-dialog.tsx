@@ -2,12 +2,12 @@
 
 import { PurchaseRequisition, PurchaseOrder, PerItemAwardDetail, User, EvaluationCriterion } from '@/lib/types';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from './ui/button';
 import { Separator } from './ui/separator';
@@ -21,9 +21,9 @@ import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'next/navigation';
 
 interface RequisitionDetailsDialogProps {
-  requisition: PurchaseRequisition;
-  isOpen: boolean;
-  onClose: () => void;
+    requisition: PurchaseRequisition;
+    isOpen: boolean;
+    onClose: () => void;
 }
 
 const TimelineStep = ({ title, status, isLast = false }: { title: string, status: 'complete' | 'active' | 'pending', isLast?: boolean }) => {
@@ -36,7 +36,7 @@ const TimelineStep = ({ title, status, isLast = false }: { title: string, status
         <div className="flex items-start">
             <div className="flex flex-col items-center">
                 <div className={`flex h-8 w-8 items-center justify-center rounded-full border-2 ${statusClasses[status]}`}>
-                    {status === 'complete' ? <CheckCircle className="h-5 w-5"/> : <div className="h-2.5 w-2.5 bg-current rounded-full" />}
+                    {status === 'complete' ? <CheckCircle className="h-5 w-5" /> : <div className="h-2.5 w-2.5 bg-current rounded-full" />}
                 </div>
                 {!isLast && <div className={`h-12 w-0.5 ${status === 'complete' ? 'bg-green-500' : 'bg-border'}`}></div>}
             </div>
@@ -87,24 +87,24 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
     }
 
     const getTimelineStatusByKey = (key: string) => {
-                // Canonical timeline keys for stable ordering & correct stage mapping.
-                // NOTE: Not every key must be rendered as a visible TimelineStep.
-                const stepOrder = [
-                        'Draft',
-                        'Submitted',
-                        'Departmental_Approval',
-                        'Procurement_Approval',
-                        'PreApproved',
-                        'Accepting_Quotes',
-                        'Scoring_In_Progress',
-                        'Scoring_Complete',
-                        'Pending_Review',
-                        'PostApproved',
-                        'Awarded',
-                        'PO_Created',
-                        'Fulfilled',
-                        'Closed'
-                ];
+        // Canonical timeline keys for stable ordering & correct stage mapping.
+        // NOTE: Not every key must be rendered as a visible TimelineStep.
+        const stepOrder = [
+            'Draft',
+            'Submitted',
+            'Departmental_Approval',
+            'Procurement_Approval',
+            'PreApproved',
+            'Accepting_Quotes',
+            'Scoring_In_Progress',
+            'Scoring_Complete',
+            'Pending_Review',
+            'PostApproved',
+            'Awarded',
+            'PO_Created',
+            'Fulfilled',
+            'Closed'
+        ];
 
         const raw = (requisition.status || '').replace(/ /g, '_');
 
@@ -179,330 +179,337 @@ export function RequisitionDetailsDialog({ requisition, isOpen, onClose }: Requi
         return 'pending';
     }
 
-  const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
-  const isAwarded = requisition.status && (['Awarded', 'Award_Declined', 'PO_Created', 'Fulfilled', 'Closed', 'PostApproved'].includes(requisition.status) || requisition.status.startsWith('Pending_'));
-  
-  const winningQuote = awardStrategy === 'all' ? requisition.quotations?.find(q => q.status === 'Accepted' || q.status === 'Awarded') : null;
-  
-  const perItemWinners = awardStrategy === 'item' ? requisition.items.map(item => {
-    const awardDetail = (item.perItemAwardDetails || []).find(d => d.status === 'Accepted' || d.status === 'Awarded' || d.status === 'Pending_Award');
-    return {
-        itemName: item.name,
-        winner: awardDetail?.vendorName,
-        price: awardDetail ? awardDetail.unitPrice * item.quantity : 0
-    };
-  }).filter(item => item.winner) : [];
+    const awardStrategy = (requisition.rfqSettings as any)?.awardStrategy;
+    const isAwarded = requisition.status && (['Awarded', 'Award_Declined', 'PO_Created', 'Fulfilled', 'Closed', 'PostApproved'].includes(requisition.status) || requisition.status.startsWith('Pending_'));
 
-  const getItemStatus = (item: PurchaseRequisition['items'][0]): React.ReactNode => {
-      if (awardStrategy === 'item') {
-          const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
-          const winningDetail = details.find(d => ['Accepted', 'Awarded', 'Pending_Award'].includes(d.status));
-          if (winningDetail) {
-              return (
-                <div className="flex flex-col text-xs">
-                    <span className="font-semibold">{winningDetail.status.replace(/_/g, ' ')}</span>
-                    <span className="text-muted-foreground">to {winningDetail.vendorName}</span>
-                </div>
-              )
-          }
-           const standbyDetail = details.find(d => d.status === 'Standby');
-           if (standbyDetail) {
-               return (
-                <div className="flex flex-col text-xs">
-                    <span className="font-semibold">Standby</span>
-                    <span className="text-muted-foreground">{standbyDetail.vendorName} (Rank {standbyDetail.rank})</span>
-                </div>
-               )
-           }
-           if (details.some(d => d.status === 'Declined' || d.status === 'Failed_to_Award')) {
-               return <Badge variant="destructive">Award Declined</Badge>
-           }
-      }
-      return <Badge variant="outline">{requisition.status.replace(/_/g, ' ')}</Badge>;
-  }
-  
-  const financialCommittee = allUsers.filter(u => requisition.financialCommitteeMemberIds?.includes(u.id));
-  const technicalCommittee = allUsers.filter(u => requisition.technicalCommitteeMemberIds?.includes(u.id));
+    const winningQuote = awardStrategy === 'all' ? requisition.quotations?.find(q => q.status === 'Accepted' || q.status === 'Awarded') : null;
 
-  const CriteriaTable = ({ title, weight, criteria }: { title: string, weight: number, criteria: EvaluationCriterion[] }) => (
-    <div>
-        <h5 className="font-semibold mb-1">{title} (Overall Weight: {weight}%)</h5>
-        <div className="border rounded-md">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Criterion</TableHead>
-                        <TableHead className="text-right w-24">Weight</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {criteria.map(c => (
-                        <TableRow key={c.id}>
-                            <TableCell>{c.name}</TableCell>
-                            <TableCell className="text-right font-mono">{c.weight}%</TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </div>
-    </div>
-  )
+    const perItemWinners = awardStrategy === 'item' ? requisition.items.map(item => {
+        const awardDetail = (item.perItemAwardDetails || []).find(d => d.status === 'Accepted' || d.status === 'Awarded' || d.status === 'Pending_Award');
+        return {
+            itemName: item.name,
+            winner: awardDetail?.vendorName,
+            price: awardDetail ? awardDetail.unitPrice * item.quantity : 0
+        };
+    }).filter(item => item.winner) : [];
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-4xl">
-            <DialogHeader>
-            <DialogTitle>Details for Requisition: {requisition.id}</DialogTitle>
-            <DialogDescription>
-                A summary of the lifecycle for the requisition "{requisition.title}".
-            </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-[70vh] pr-4">
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_250px] gap-6 py-4">
-                    <div className="space-y-4">
-                                                        {/* Department Head Pin Status Section */}
-                                                        <div>
-                                                            <h4 className="font-medium text-sm mb-1 flex items-center gap-2">
-                                                                <UserCheck className="h-4 w-4" /> Department Head Pin Status
-                                                            </h4>
-                                                            {deptHeadPinStatus === 'not_generated' ? (
-                                                                <Badge variant="outline">Not Generated</Badge>
-                                                            ) : deptHeadPinStatus === 'pending' ? (
-                                                                <Badge variant="secondary">Pending Verification{deptHeadName ? ` (${deptHeadName})` : ''}</Badge>
-                                                            ) : deptHeadPinStatus === 'verified' ? (
-                                                                <Badge variant="success">Verified{deptHeadName ? ` (${deptHeadName})` : ''}</Badge>
-                                                            ) : deptHeadPinStatus === 'expired' ? (
-                                                                <Badge variant="destructive">Expired{deptHeadName ? ` (${deptHeadName})` : ''}</Badge>
-                                                            ) : null}
-                                                            {pinExpiresAt && deptHeadPinStatus === 'pending' && (
-                                                                <span className="ml-2 text-xs text-muted-foreground">(Expires {format(pinExpiresAt, 'PPp')})</span>
-                                                            )}
-                                                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            <DetailItem label="Requester">{requisition.requesterName}</DetailItem>
-                            <DetailItem label="Department">{requisition.department}</DetailItem>
-                            <DetailItem label="Created">{requisition.createdAt ? format(new Date(requisition.createdAt), 'PP') : 'N/A'}</DetailItem>
-                            <DetailItem label="Urgency"><Badge variant={requisition.urgency === 'High' || requisition.urgency === 'Critical' ? 'destructive' : 'secondary'}>{requisition.urgency}</Badge></DetailItem>
-                            <DetailItem label="Total Value">{(typeof requisition.totalPrice === 'number') ? `${requisition.totalPrice.toLocaleString()} ETB` : 'N/A'}</DetailItem>
-                            <DetailItem label="CPO Requirement">{requisition.cpoAmount ? `${requisition.cpoAmount.toLocaleString()} ETB` : 'None'}</DetailItem>
-                        </div>
-
-                         <div className="space-y-2">
-                            <h4 className="font-medium text-sm">Business Justification</h4>
-                            <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">{requisition.justification}</p>
-                        </div>
-                        
-                        <Separator />
-
-                        <div>
-                            <h4 className="font-medium mb-2">Deadlines</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                <DetailItem label="Quote Submission"><div className="flex items-center gap-1"><Calendar className="h-4 w-4"/>{requisition.deadline ? format(new Date(requisition.deadline), 'PPp') : 'N/A'}</div></DetailItem>
-                                <DetailItem label="Scoring Deadline"><div className="flex items-center gap-1"><Calendar className="h-4 w-4"/>{requisition.scoringDeadline ? format(new Date(requisition.scoringDeadline), 'PPp') : 'N/A'}</div></DetailItem>
-                                <DetailItem label="Vendor Response"><div className="flex items-center gap-1"><Calendar className="h-4 w-4"/>{requisition.awardResponseDeadline ? format(new Date(requisition.awardResponseDeadline), 'PPp') : 'N/A'}</div></DetailItem>
-                            </div>
-                        </div>
-
-                        <Separator />
-
-                        <div>
-                            <h4 className="font-medium mb-2">Items Requested</h4>
-                            <div className="border rounded-md">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Item</TableHead>
-                                            <TableHead className="text-right w-24">Quantity</TableHead>
-                                            <TableHead className="text-right w-40">Status</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {requisition.items?.map(item => (
-                                            <TableRow key={item.id}>
-                                                <TableCell>
-                                                    <p className="font-medium">{item.name}</p>
-                                                    {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
-                                                </TableCell>
-                                                <TableCell className="text-right">{item.quantity}</TableCell>
-                                                <TableCell className="text-right">{getItemStatus(item)}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </div>
-
-                        {requisition.evaluationCriteria && (
-                            <>
-                                <Separator />
-                                <div>
-                                    <h4 className="font-medium mb-2 flex items-center gap-2"><Percent /> Evaluation Criteria</h4>
-                                    <div className="grid md:grid-cols-2 gap-4">
-                                        <CriteriaTable title="Financial" weight={requisition.evaluationCriteria.financialWeight} criteria={requisition.evaluationCriteria.financialCriteria} />
-                                        <CriteriaTable title="Technical" weight={requisition.evaluationCriteria.technicalWeight} criteria={requisition.evaluationCriteria.technicalCriteria} />
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                        
-                        {(requisition.customQuestions && requisition.customQuestions.length > 0) && (
-                            <>
-                                <Separator />
-                                <div>
-                                    <h4 className="font-medium mb-2 flex items-center gap-2"><MessageSquare /> Custom Questions for Vendors</h4>
-                                    <div className="space-y-2 text-sm border rounded-md p-4">
-                                        {requisition.customQuestions.map(q => (
-                                            <p key={q.id} className="text-muted-foreground">&bull; {q.questionText} {q.isRequired && <span className="text-destructive">*</span>}</p>
-                                        ))}
-                                    </div>
-                                </div>
-                            </>
-                        )}
-
-
-                        {(requisition.committeeName || financialCommittee.length > 0 || technicalCommittee.length > 0) && (
-                            <>
-                                <Separator />
-                                <div>
-                                    <h4 className="font-medium mb-2">Evaluation Committee</h4>
-                                    <div className="p-4 bg-muted/50 rounded-lg space-y-4">
-                                        <DetailItem label="Committee Name">{requisition.committeeName || 'Not Set'}</DetailItem>
-                                        <DetailItem label="Purpose / Mandate">{requisition.committeePurpose || 'Not Set'}</DetailItem>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <DetailItem label="Financial Committee"><div className="flex flex-col gap-1 mt-1">{financialCommittee.map(u => <span key={u.id} className="text-xs flex items-center gap-1.5"><UserCog className="h-3 w-3"/> {u.name}</span>)}</div></DetailItem>
-                                            <DetailItem label="Technical Committee"><div className="flex flex-col gap-1 mt-1">{technicalCommittee.map(u => <span key={u.id} className="text-xs flex items-center gap-1.5"><UserCog className="h-3 w-3"/> {u.name}</span>)}</div></DetailItem>
-                                        </div>
-                                    </div>
-                                </div>
-                            </>
-                        )}
-
-                        {isAwarded && (
-                            <>
-                                <Separator />
-                                <div>
-                                    <h4 className="font-medium mb-2 flex items-center gap-2"><Trophy className="text-amber-500" /> Award Summary</h4>
-                                    <div className="p-4 bg-muted/50 rounded-lg space-y-4">
-                                        {awardStrategy === 'all' ? (
-                                            <div className="flex justify-between items-center">
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">Winning Vendor (Single Award)</p>
-                                                    <p className="font-semibold">{winningQuote?.vendorName || 'N/A'}</p>
-                                                </div>
-                                                 <div className="text-right">
-                                                     <p className="text-xs text-muted-foreground">Total Award Value</p>
-                                                     <p className="font-semibold text-lg">{requisition.totalPrice.toLocaleString()} ETB</p>
-                                                 </div>
-                                            </div>
-                                        ) : (
-                                            <Table>
-                                                <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Winning Vendor</TableHead><TableHead className="text-right">Price</TableHead></TableRow></TableHeader>
-                                                <TableBody>
-                                                    {perItemWinners.map(item => (
-                                                        <TableRow key={item.itemName}><TableCell>{item.itemName}</TableCell><TableCell>{item.winner}</TableCell><TableCell className="text-right">{item.price.toLocaleString()} ETB</TableCell></TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        )}
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                        {(requisition.purchaseOrders && requisition.purchaseOrders.length > 0) && (
-                            <>
-                                <Separator />
-                                <div>
-                                    <h4 className="font-medium mb-2 flex items-center gap-2"><FileText /> Final Documents</h4>
-                                    <div className="space-y-2">
-                                        {(requisition.purchaseOrders as any[]).map((po: {id: string, vendor: {name: string}}) => (
-                                            <Button key={po.id} variant="outline" asChild className="w-full justify-start">
-                                                <Link href={`/purchase-orders/${po.id}`}>PO: {po.id} ({po.vendor.name})</Link>
-                                            </Button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </>
-                        )}
-
+    const getItemStatus = (item: PurchaseRequisition['items'][0]): React.ReactNode => {
+        if (awardStrategy === 'item') {
+            const details = (item.perItemAwardDetails as PerItemAwardDetail[] | undefined) || [];
+            const winningDetail = details.find(d => ['Accepted', 'Awarded', 'Pending_Award'].includes(d.status));
+            if (winningDetail) {
+                return (
+                    <div className="flex flex-col text-xs">
+                        <span className="font-semibold">{winningDetail.status.replace(/_/g, ' ')}</span>
+                        <span className="text-muted-foreground">to {winningDetail.vendorName}</span>
                     </div>
-                    {/* Vendor Submissions Section */}
-                    {requisition.quotations && requisition.quotations.length > 0 && (
-                        <>
-                            <Separator />
+                )
+            }
+            const standbyDetail = details.find(d => d.status === 'Standby');
+            if (standbyDetail) {
+                return (
+                    <div className="flex flex-col text-xs">
+                        <span className="font-semibold">Standby</span>
+                        <span className="text-muted-foreground">{standbyDetail.vendorName} (Rank {standbyDetail.rank})</span>
+                    </div>
+                )
+            }
+            if (details.some(d => d.status === 'Declined' || d.status === 'Failed_to_Award')) {
+                return <Badge variant="destructive">Award Declined</Badge>
+            }
+        }
+        return <Badge variant="outline">{requisition.status.replace(/_/g, ' ')}</Badge>;
+    }
+
+    const financialCommittee = allUsers.filter(u => requisition.financialCommitteeMemberIds?.includes(u.id));
+    const technicalCommittee = allUsers.filter(u => requisition.technicalCommitteeMemberIds?.includes(u.id));
+
+    const CriteriaTable = ({ title, weight, criteria }: { title: string, weight: number, criteria: EvaluationCriterion[] }) => (
+        <div>
+            <h5 className="font-semibold mb-1">{title} (Overall Weight: {weight}%)</h5>
+            <div className="border rounded-md">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>Criterion</TableHead>
+                            <TableHead className="text-right w-24">Weight</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {criteria.map(c => (
+                            <TableRow key={c.id}>
+                                <TableCell>{c.name}</TableCell>
+                                <TableCell className="text-right font-mono">{c.weight}%</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+        </div>
+    )
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                    <DialogTitle>Details for Requisition: {requisition.title}</DialogTitle>
+                    <DialogDescription>
+                        A summary of the lifecycle for the requisition "{requisition.title}".
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[70vh] pr-4">
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_250px] gap-6 py-4">
+                        <div className="space-y-4">
+                            {/* Department Head Pin Status Section */}
                             <div>
-                                <h4 className="font-medium mb-2 flex items-center gap-2"><Users /> Vendor Submissions</h4>
+                                <h4 className="font-medium text-sm mb-1 flex items-center gap-2">
+                                    <UserCheck className="h-4 w-4" /> Department Head Pin Status
+                                </h4>
+                                {deptHeadPinStatus === 'not_generated' ? (
+                                    <Badge variant="outline">Not Generated</Badge>
+                                ) : deptHeadPinStatus === 'pending' ? (
+                                    <Badge variant="secondary">Pending Verification{deptHeadName ? ` (${deptHeadName})` : ''}</Badge>
+                                ) : deptHeadPinStatus === 'verified' ? (
+                                    <Badge variant="success">Verified{deptHeadName ? ` (${deptHeadName})` : ''}</Badge>
+                                ) : deptHeadPinStatus === 'expired' ? (
+                                    <Badge variant="destructive">Expired{deptHeadName ? ` (${deptHeadName})` : ''}</Badge>
+                                ) : null}
+                                {pinExpiresAt && deptHeadPinStatus === 'pending' && (
+                                    <span className="ml-2 text-xs text-muted-foreground">(Expires {format(pinExpiresAt, 'PPp')})</span>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                <DetailItem label="Requester">{requisition.requesterName}</DetailItem>
+                                <DetailItem label="Department">{requisition.department}</DetailItem>
+                                <DetailItem label="Created">{requisition.createdAt ? format(new Date(requisition.createdAt), 'PP') : 'N/A'}</DetailItem>
+                                <DetailItem label="Urgency"><Badge variant={requisition.urgency === 'High' || requisition.urgency === 'Critical' ? 'destructive' : 'secondary'}>{requisition.urgency}</Badge></DetailItem>
+                                <DetailItem label="Total Value">{(typeof requisition.totalPrice === 'number') ? `${requisition.totalPrice.toLocaleString()} ETB` : 'N/A'}</DetailItem>
+                                <DetailItem label="CPO Requirement">{requisition.cpoAmount ? `${requisition.cpoAmount.toLocaleString()} ETB` : 'None'}</DetailItem>
+                            </div>
+
+                            <div className="space-y-2">
+                                <h4 className="font-medium text-sm">Business Justification</h4>
+                                <p className="text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">{requisition.justification}</p>
+                            </div>
+
+                            <Separator />
+
+                            <div>
+                                <h4 className="font-medium mb-2">Deadlines</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                    <DetailItem label="Quote Submission"><div className="flex items-center gap-1"><Calendar className="h-4 w-4" />{requisition.deadline ? format(new Date(requisition.deadline), 'PPp') : 'N/A'}</div></DetailItem>
+                                    <DetailItem label="Scoring Deadline"><div className="flex items-center gap-1"><Calendar className="h-4 w-4" />{requisition.scoringDeadline ? format(new Date(requisition.scoringDeadline), 'PPp') : 'N/A'}</div></DetailItem>
+                                    <DetailItem label="Vendor Response"><div className="flex items-center gap-1"><Calendar className="h-4 w-4" />{requisition.awardResponseDeadline ? format(new Date(requisition.awardResponseDeadline), 'PPp') : 'N/A'}</div></DetailItem>
+                                </div>
+                            </div>
+
+                            <Separator />
+
+                            <div>
+                                <h4 className="font-medium mb-2">Items Requested</h4>
                                 <div className="border rounded-md">
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead>Vendor</TableHead>
-                                                <TableHead>Quote Value</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead>Documents</TableHead>
+                                                <TableHead>Item</TableHead>
+                                                <TableHead className="text-right w-24">Quantity</TableHead>
+                                                <TableHead className="text-right w-40">Status</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {requisition.quotations.map(q => (
-                                                <TableRow key={q.id}>
-                                                    <TableCell>{q.vendorName}</TableCell>
-                                                    <TableCell>{q.totalPrice ? `${q.totalPrice.toLocaleString()} ETB` : 'N/A'}</TableCell>
-                                                    <TableCell><Badge variant={q.status === 'Awarded' ? 'success' : q.status === 'Declined' ? 'destructive' : 'secondary'}>{q.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                            {requisition.items?.map(item => (
+                                                <TableRow key={item.id}>
                                                     <TableCell>
-                                                        {q.documents && q.documents.length > 0 ? (
-                                                            <div className="flex flex-col gap-1">
-                                                                {q.documents.map((doc: any) => (
-                                                                    <a key={doc.id} href={doc.url} target="_blank" rel="noopener" className="text-xs underline text-primary">{doc.name}</a>
-                                                                ))}
-                                                            </div>
-                                                        ) : 'None'}
+                                                        <p className="font-medium">{item.name}</p>
+                                                        {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
                                                     </TableCell>
+                                                    <TableCell className="text-right">{item.quantity}</TableCell>
+                                                    <TableCell className="text-right">{getItemStatus(item)}</TableCell>
                                                 </TableRow>
                                             ))}
                                         </TableBody>
                                     </Table>
                                 </div>
                             </div>
-                        </>
-                    )}
 
-                    {/* Requester Attachments Section */}
-                    {requisition.attachments && requisition.attachments.length > 0 && (
+                            {requisition.evaluationCriteria && (
+                                <>
+                                    <Separator />
+                                    <div>
+                                        <h4 className="font-medium mb-2 flex items-center gap-2"><Percent /> Evaluation Criteria</h4>
+                                        <div className="grid md:grid-cols-2 gap-4">
+                                            <CriteriaTable title="Financial" weight={requisition.evaluationCriteria.financialWeight} criteria={requisition.evaluationCriteria.financialCriteria} />
+                                            <CriteriaTable title="Technical" weight={requisition.evaluationCriteria.technicalWeight} criteria={requisition.evaluationCriteria.technicalCriteria} />
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {(requisition.customQuestions && requisition.customQuestions.length > 0) && (
+                                <>
+                                    <Separator />
+                                    <div>
+                                        <h4 className="font-medium mb-2 flex items-center gap-2"><MessageSquare /> Custom Questions for Vendors</h4>
+                                        <div className="space-y-2 text-sm border rounded-md p-4">
+                                            {requisition.customQuestions.map(q => (
+                                                <p key={q.id} className="text-muted-foreground">&bull; {q.questionText} {q.isRequired && <span className="text-destructive">*</span>}</p>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+
+                            {(requisition.committeeName || financialCommittee.length > 0 || technicalCommittee.length > 0) && (
+                                <>
+                                    <Separator />
+                                    <div>
+                                        <h4 className="font-medium mb-2">Evaluation Committee</h4>
+                                        <div className="p-4 bg-muted/50 rounded-lg space-y-4">
+                                            <DetailItem label="Committee Name">{requisition.committeeName || 'Not Set'}</DetailItem>
+                                            <DetailItem label="Purpose / Mandate">{requisition.committeePurpose || 'Not Set'}</DetailItem>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <DetailItem label="Financial Committee"><div className="flex flex-col gap-1 mt-1">{financialCommittee.map(u => <span key={u.id} className="text-xs flex items-center gap-1.5"><UserCog className="h-3 w-3" /> {u.name}</span>)}</div></DetailItem>
+                                                <DetailItem label="Technical Committee"><div className="flex flex-col gap-1 mt-1">{technicalCommittee.map(u => <span key={u.id} className="text-xs flex items-center gap-1.5"><UserCog className="h-3 w-3" /> {u.name}</span>)}</div></DetailItem>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {isAwarded && (
+                                <>
+                                    <Separator />
+                                    <div>
+                                        <h4 className="font-medium mb-2 flex items-center gap-2"><Trophy className="text-amber-500" /> Award Summary</h4>
+                                        <div className="p-4 bg-muted/50 rounded-lg space-y-4">
+                                            {awardStrategy === 'all' ? (
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <p className="text-xs text-muted-foreground">Winning Vendor (Single Award)</p>
+                                                        <p className="font-semibold">{winningQuote?.vendorName || 'N/A'}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-xs text-muted-foreground">Total Award Value</p>
+                                                        <p className="font-semibold text-lg">{requisition.totalPrice.toLocaleString()} ETB</p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <Table>
+                                                    <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Winning Vendor</TableHead><TableHead className="text-right">Price</TableHead></TableRow></TableHeader>
+                                                    <TableBody>
+                                                        {perItemWinners.map(item => (
+                                                            <TableRow key={item.itemName}><TableCell>{item.itemName}</TableCell><TableCell>{item.winner}</TableCell><TableCell className="text-right">{item.price.toLocaleString()} ETB</TableCell></TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            {(requisition.purchaseOrders && requisition.purchaseOrders.length > 0) && (
+                                <>
+                                    <Separator />
+                                    <div>
+                                        <h4 className="font-medium mb-2 flex items-center gap-2"><FileText /> Final Documents</h4>
+                                        <div className="space-y-2">
+                                            {(requisition.purchaseOrders as any[]).map((po: { id: string, vendor: { name: string } }) => (
+                                                <Button key={po.id} variant="outline" asChild className="w-full justify-start">
+                                                    <Link href={`/purchase-orders/${po.id}`}>PO: {po.id} ({po.vendor.name})</Link>
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                        </div>
+                        {/* Vendor Submissions Section */}
+                        {requisition.quotations && requisition.quotations.length > 0 && (
+                            <>
+                                <Separator />
+                                <div>
+                                    <h4 className="font-medium mb-2 flex items-center gap-2"><Users /> Vendor Submissions</h4>
+                                    <div className="border rounded-md">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Vendor</TableHead>
+                                                    <TableHead>Quote Value</TableHead>
+                                                    <TableHead>Status</TableHead>
+                                                    <TableHead>Documents</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {requisition.quotations.map(q => (
+                                                    <TableRow key={q.id}>
+                                                        <TableCell>{q.vendorName}</TableCell>
+                                                        <TableCell>{q.totalPrice ? `${q.totalPrice.toLocaleString()} ETB` : 'N/A'}</TableCell>
+                                                        <TableCell><Badge variant={q.status === 'Awarded' ? 'success' : q.status === 'Declined' ? 'destructive' : 'secondary'}>{q.status.replace(/_/g, ' ')}</Badge></TableCell>
+                                                        <TableCell>
+                                                            {q.documents && q.documents.length > 0 ? (
+                                                                <div className="flex flex-col gap-1">
+                                                                    {q.documents.map((doc: any) => (
+                                                                        <a key={doc.id} href={doc.url} target="_blank" rel="noopener" className="text-xs underline text-primary">{doc.name}</a>
+                                                                    ))}
+                                                                </div>
+                                                            ) : 'None'}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* RFQ / Requester Attachments Section (optional) */}
                         <>
                             <Separator />
                             <div>
-                                <h4 className="font-medium mb-2 flex items-center gap-2"><FileText /> Requester Attachments</h4>
+                                <h4 className="font-medium mb-2 flex items-center gap-2"><FileText /> RFQ Document (Optional)</h4>
                                 <div className="flex flex-col gap-2">
-                                    {requisition.attachments.map((att: any) => (
-                                        <a key={att.id} href={att.url} target="_blank" rel="noopener" className="text-xs underline text-primary">{att.name}</a>
-                                    ))}
+                                    {((requisition.attachments && requisition.attachments.length > 0) || (requisition.rfqSettings && (requisition.rfqSettings as any).rfqDocumentUrl)) ? (
+                                        <>
+                                            {requisition.attachments && requisition.attachments.length > 0 && requisition.attachments.map((att: any, idx: number) => (
+                                                <a key={att.id || idx} href={att.url} target="_blank" rel="noopener" className="text-xs underline text-primary">{att.name}</a>
+                                            ))}
+                                            {(requisition.rfqSettings as any)?.rfqDocumentUrl && (
+                                                <a key="rfqDoc" href={(requisition.rfqSettings as any).rfqDocumentUrl} target="_blank" rel="noopener" className="text-xs underline text-primary">RFQ Document</a>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground">No RFQ document attached. (Optional)</p>
+                                    )}
                                 </div>
                             </div>
                         </>
-                    )}
-                    <div className="space-y-4">
-                         <h4 className="font-medium text-sm">Lifecycle Status</h4>
-                         <TimelineStep title="Draft" status={getTimelineStatusByKey('Draft')} />
-                        <TimelineStep title="Submitted for Approval" status={getTimelineStatusByKey('Submitted')} />
-                        <TimelineStep title="Departmental Approval" status={getTimelineStatusByKey('Departmental_Approval')} />
-                        <TimelineStep title="Procurement Approval" status={getTimelineStatusByKey('Procurement_Approval')} />
-                         <TimelineStep title="RFQ & Bidding" status={getTimelineStatusByKey('Accepting_Quotes')} />
-                         <TimelineStep title="Committee Scoring" status={getTimelineStatusByKey('Scoring_In_Progress')} />
-                         <TimelineStep title="Final Award Review" status={getTimelineStatusByKey('Pending_Review')} />
-                         <TimelineStep title="Vendor Awarded" status={getTimelineStatusByKey('Awarded')} />
-                         <TimelineStep title="Fulfilled & Closed" status={getTimelineStatusByKey('Closed')} isLast/>
+                        <div className="space-y-4">
+                            <h4 className="font-medium text-sm">Lifecycle Status</h4>
+                            <TimelineStep title="Draft" status={getTimelineStatusByKey('Draft')} />
+                            <TimelineStep title="Submitted for Approval" status={getTimelineStatusByKey('Submitted')} />
+                            <TimelineStep title="Departmental Approval" status={getTimelineStatusByKey('Departmental_Approval')} />
+                            <TimelineStep title="Procurement Approval" status={getTimelineStatusByKey('Procurement_Approval')} />
+                            <TimelineStep title="RFQ & Bidding" status={getTimelineStatusByKey('Accepting_Quotes')} />
+                            <TimelineStep title="Committee Scoring" status={getTimelineStatusByKey('Scoring_In_Progress')} />
+                            <TimelineStep title="Final Award Review" status={getTimelineStatusByKey('Pending_Review')} />
+                            <TimelineStep title="Vendor Awarded" status={getTimelineStatusByKey('Awarded')} />
+                            <TimelineStep title="Fulfilled & Closed" status={getTimelineStatusByKey('Closed')} isLast />
+                        </div>
                     </div>
-                </div>
-            </ScrollArea>
-            <DialogFooter>
-                {/* If the requisition was rejected allow the requester to resubmit by editing */}
-                {user && requisition.requesterId === user.id && requisition.status === 'Rejected' && (
-                    <Button variant="secondary" onClick={() => { onClose(); router.push(`/requisitions/${requisition.id}/edit`); }} className="mr-2">
-                        Resubmit
-                    </Button>
-                )}
-                <Button onClick={onClose}>Close</Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
-  );
+                </ScrollArea>
+                <DialogFooter>
+                    {/* If the requisition was rejected allow the requester to resubmit by editing */}
+                    {user && requisition.requesterId === user.id && requisition.status === 'Rejected' && (
+                        <Button variant="secondary" onClick={() => { onClose(); router.push(`/requisitions/${requisition.id}/edit`); }} className="mr-2">
+                            Resubmit
+                        </Button>
+                    )}
+                    <Button onClick={onClose}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
 }

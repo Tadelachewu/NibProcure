@@ -1268,6 +1268,31 @@ export default function VendorRequisitionPage() {
                             <p className="text-muted-foreground">{requisition.title}</p>
                         </div>
 
+                        {/* RFQ Attachment (vendor view) */}
+                        <div>
+                            <h3 className="font-semibold text-sm mt-3">Attachment</h3>
+                            <div className="mt-1">
+                                {((requisition.attachments && requisition.attachments.length > 0) || (requisition.rfqSettings && (requisition.rfqSettings as any).rfqDocumentUrl)) ? (
+                                    <div className="flex flex-col gap-2">
+                                        {requisition.attachments && requisition.attachments.length > 0 && requisition.attachments.map((att: any, idx: number) => (
+                                            <div key={att.id || idx} className="flex items-center justify-between p-2 border rounded-md bg-muted/50">
+                                                <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-sm underline text-primary">{att.name}</a>
+                                                <a href={att.url} download className="text-sm text-primary underline">Download</a>
+                                            </div>
+                                        ))}
+                                        {(requisition.rfqSettings as any)?.rfqDocumentUrl && (
+                                            <div className="flex items-center justify-between p-2 border rounded-md bg-muted/50">
+                                                <a href={(requisition.rfqSettings as any).rfqDocumentUrl} target="_blank" rel="noopener noreferrer" className="text-sm underline text-primary">RFQ Document</a>
+                                                <a href={(requisition.rfqSettings as any).rfqDocumentUrl} download className="text-sm text-primary underline">Download</a>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground">No attachments</p>
+                                )}
+                            </div>
+                        </div>
+
                         <Separator />
 
                         <div>

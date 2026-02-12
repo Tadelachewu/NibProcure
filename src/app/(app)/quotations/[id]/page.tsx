@@ -1598,6 +1598,8 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const [deadlineDate, setDeadlineDate] = useState<Date | undefined>();
     const [deadlineTime, setDeadlineTime] = useState('17:00');
     const [cpoAmount, setCpoAmount] = useState<number | undefined>(requisition.cpoAmount);
+    const [rfqFile, setRfqFile] = useState<File | null>(null);
+    const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
 
     const [allowQuoteEdits, setAllowQuoteEdits] = useState(requisition.rfqSettings?.allowQuoteEdits ?? true);
     const [experienceDocumentRequired, setExperienceDocumentRequired] = useState(requisition.rfqSettings?.experienceDocumentRequired ?? false);
@@ -1680,6 +1682,16 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
 
         setSubmitting(true);
         try {
+            let rfqDocumentUrl: string | undefined;
+            if (rfqFile) {
+                const form = new FormData();
+                form.append('file', rfqFile);
+                form.append('directory', 'rfq');
+                const uploadResponse = await fetch('/api/upload', { method: 'POST', body: form });
+                const uploadResult = await uploadResponse.json();
+                if (!uploadResponse.ok) throw new Error(uploadResult.error || 'Failed to upload RFQ document.');
+                rfqDocumentUrl = uploadResult.path;
+            }
             const response = await fetch(`/api/requisitions/${requisition.id}/send-rfq`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -1691,7 +1703,8 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                     rfqSettings: {
                         allowQuoteEdits,
                         experienceDocumentRequired,
-                        method: procurementMethod
+                        method: procurementMethod,
+                        rfqDocumentUrl,
                     },
                     procurementMethod
                 }),
@@ -1814,6 +1827,51 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                             <SelectItem value="select">Send to selected vendors</SelectItem>
                         </SelectContent>
                     </Select>
+                </div>
+
+                <div className="space-y-2">
+                    <Label>RFQ Attachment (optional)</Label>
+                    {!rfqFile ? (
+                        <input
+                            type="file"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt"
+                            onChange={(e) => {
+                                const f = e.target.files?.[0] || null;
+                                if (!f) return setRfqFile(null);
+                                if (f.size > MAX_FILE_BYTES) {
+                                    toast({ variant: 'destructive', title: 'File too large', description: 'Maximum allowed size is 25 MB.' });
+                                    return;
+                                }
+                                setRfqFile(f);
+                            }}
+                            disabled={!canTakeAction}
+                        />
+                    ) : (
+                        <div className="flex items-center justify-between gap-4 p-2 border rounded-md bg-muted/50">
+                            <div className="flex items-center gap-3">
+                                <div className="text-sm">
+                                    <div className="font-medium">{rfqFile.name}</div>
+                                    <div className="text-xs text-muted-foreground">{(rfqFile.size / 1024 / 1024).toFixed(2)} MB</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="cursor-pointer text-sm text-primary underline" aria-label="Change attached file">
+                                    <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt" className="hidden" onChange={(e) => {
+                                        const f = e.target.files?.[0] || null;
+                                        if (!f) return;
+                                        if (f.size > MAX_FILE_BYTES) {
+                                            toast({ variant: 'destructive', title: 'File too large', description: 'Maximum allowed size is 25 MB.' });
+                                            return;
+                                        }
+                                        setRfqFile(f);
+                                    }} disabled={!canTakeAction} />
+                                    Change
+                                </label>
+                                <button type="button" className="text-sm text-destructive underline" onClick={() => setRfqFile(null)} aria-label="Remove attached file">Remove</button>
+                            </div>
+                        </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">Attach an RFQ document that vendors can read when submitting quotations. Optional. Allowed: PDF, DOCX, XLSX, PNG, JPG, TXT. Max 25 MB.</p>
                 </div>
 
                 {distributionType === 'select' && (

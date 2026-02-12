@@ -44,9 +44,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './
 
 
 const evaluationCriteriaSchema = z.object({
-      id: z.string(),
-      name: z.string().min(1, "Criterion name is required."),
-      weight: z.coerce.number().min(1, "Weight must be at least 1%.").max(100, "Weight cannot exceed 100%."),
+  id: z.string(),
+  name: z.string().min(1, "Criterion name is required."),
+  weight: z.coerce.number().min(1, "Weight must be at least 1%.").max(100, "Weight cannot exceed 100%."),
 });
 
 const baseFormSchema = z.object({
@@ -89,32 +89,32 @@ const baseFormSchema = z.object({
 
 // A more lenient schema for saving drafts
 const draftFormSchema = baseFormSchema.deepPartial().extend({
-    title: z.string().min(1, "Title is required to save a draft."),
+  title: z.string().min(1, "Title is required to save a draft."),
 });
 
 const formSchema = baseFormSchema.refine(data => {
   if (!data.evaluationCriteria) return true;
-    const { financialWeight, technicalWeight, financialCriteria, technicalCriteria } = data.evaluationCriteria;
+  const { financialWeight, technicalWeight, financialCriteria, technicalCriteria } = data.evaluationCriteria;
 
-    if (financialWeight + technicalWeight !== 100) {
-        return false;
-    }
-    if (financialCriteria.reduce((acc, c) => acc + c.weight, 0) !== 100) {
-        return false;
-    }
-     if (technicalCriteria.reduce((acc, c) => acc + c.weight, 0) !== 100) {
-        return false;
-    }
-    return true;
+  if (financialWeight + technicalWeight !== 100) {
+    return false;
+  }
+  if (financialCriteria.reduce((acc, c) => acc + c.weight, 0) !== 100) {
+    return false;
+  }
+  if (technicalCriteria.reduce((acc, c) => acc + c.weight, 0) !== 100) {
+    return false;
+  }
+  return true;
 }, {
-    message: "The sum of weights in each evaluation category (Overall, Financial, Technical) must equal 100%.",
-    path: ["evaluationCriteria"],
+  message: "The sum of weights in each evaluation category (Overall, Financial, Technical) must equal 100%.",
+  path: ["evaluationCriteria"],
 });
 
 
 interface NeedsRecognitionFormProps {
-    existingRequisition?: PurchaseRequisition;
-    onSuccess?: () => void;
+  existingRequisition?: PurchaseRequisition;
+  onSuccess?: () => void;
 }
 
 export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRecognitionFormProps) {
@@ -127,24 +127,24 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: isEditMode ? {
-        ...existingRequisition,
-        requesterId: existingRequisition.requesterId,
-        department: existingRequisition.department || user?.department,
+      ...existingRequisition,
+      requesterId: existingRequisition.requesterId,
+      department: existingRequisition.department || user?.department,
       title: existingRequisition.title,
       urgency: existingRequisition.urgency || 'Low',
       justification: existingRequisition.justification,
       evaluationCriteria: existingRequisition.evaluationCriteria ?? undefined,
-        items: existingRequisition.items.map(item => ({
-            id: item.id,
-            name: item.name,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            description: item.description,
-        })),
-        customQuestions: existingRequisition.customQuestions?.map(q => ({
-            ...q,
-            options: q.options?.map(opt => ({ value: opt })) || []
-        }))
+      items: existingRequisition.items.map(item => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        description: item.description,
+      })),
+      customQuestions: existingRequisition.customQuestions?.map(q => ({
+        ...q,
+        options: q.options?.map(opt => ({ value: opt })) || []
+      }))
     } : {
       requesterId: user?.id || '',
       department: user?.department || '',
@@ -159,34 +159,34 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
   useEffect(() => {
     const savedData = localStorage.getItem(storageKey);
     if (savedData) {
-        try {
+      try {
         const parsedData = JSON.parse(savedData);
         // sanitize potential nulls coming from saved drafts
         if (parsedData && Object.prototype.hasOwnProperty.call(parsedData, 'evaluationCriteria') && parsedData.evaluationCriteria === null) {
           parsedData.evaluationCriteria = undefined;
         }
         form.reset(parsedData);
-            toast({ title: 'Form Restored', description: 'Your previously entered data has been restored.' });
-        } catch (e) {
-            console.error("Failed to parse saved form data", e);
-        }
+        toast({ title: 'Form Restored', description: 'Your previously entered data has been restored.' });
+      } catch (e) {
+        console.error("Failed to parse saved form data", e);
+      }
     }
   }, [storageKey, form, toast]);
 
   // Save to localStorage on change
   useEffect(() => {
-      const subscription = form.watch((value) => {
-          localStorage.setItem(storageKey, JSON.stringify(value));
-      });
-      return () => subscription.unsubscribe();
+    const subscription = form.watch((value) => {
+      localStorage.setItem(storageKey, JSON.stringify(value));
+    });
+    return () => subscription.unsubscribe();
   }, [form, storageKey]);
 
 
   useEffect(() => {
     // If user data loads after form initialization, update the fields
     if (user && !isEditMode) {
-        form.setValue('department', user.department || '');
-        form.setValue('requesterId', user.id || '');
+      form.setValue('department', user.department || '');
+      form.setValue('requesterId', user.id || '');
     }
   }, [user, form, isEditMode]);
 
@@ -234,55 +234,55 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
       await form.trigger();
       return;
     }
-    
+
     try {
-        const formattedValues = {
-          ...validationResult.data,
-          customQuestions: validationResult.data.customQuestions?.map(q => ({
+      const formattedValues = {
+        ...validationResult.data,
+        customQuestions: validationResult.data.customQuestions?.map(q => ({
           ...q,
           options: q.options?.map(opt => opt.value)
-          }))
-        };
+        }))
+      };
 
-        const status = isDraft ? 'Draft' : 'Pending_Approval';
-        // Ensure we do not send explicit null for optional objects (zod expects object or undefined)
-        const payload: any = { ...formattedValues, id: existingRequisition?.id, status: status, requesterId: user?.id };
-        if (payload.evaluationCriteria === null) delete payload.evaluationCriteria;
-        if (payload.customQuestions && payload.customQuestions.length === 0) delete payload.customQuestions;
-        // Include both requesterId (requisition owner) and userId (actor performing this request)
-        const body = { ...payload, userId: user?.id };
-        
-        const response = await fetch('/api/requisitions', {
-            method: isEditMode ? 'PATCH' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
+      const status = isDraft ? 'Draft' : 'Pending_Approval';
+      // Ensure we do not send explicit null for optional objects (zod expects object or undefined)
+      const payload: any = { ...formattedValues, id: existingRequisition?.id, status: status, requesterId: user?.id };
+      if (payload.evaluationCriteria === null) delete payload.evaluationCriteria;
+      if (payload.customQuestions && payload.customQuestions.length === 0) delete payload.customQuestions;
+      // Include both requesterId (requisition owner) and userId (actor performing this request)
+      const body = { ...payload, userId: user?.id };
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `Failed to ${isEditMode ? 'update' : 'create'} requisition.`);
-        }
+      const response = await fetch('/api/requisitions', {
+        method: isEditMode ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
 
-        toast({
-            title: `Requisition ${isEditMode ? 'Updated' : (isDraft ? 'Saved' : 'Submitted')}`,
-            description: `Your purchase requisition has been successfully ${isEditMode ? 'updated' : (isDraft ? 'saved as a draft' : 'submitted for approval')}.`,
-        });
-        
-        localStorage.removeItem(storageKey); // Clear saved data on success
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to ${isEditMode ? 'update' : 'create'} requisition.`);
+      }
 
-        if (onSuccess) {
-            onSuccess();
-        } else {
-            form.reset();
-        }
+      toast({
+        title: `Requisition ${isEditMode ? 'Updated' : (isDraft ? 'Saved' : 'Submitted')}`,
+        description: `Your purchase requisition has been successfully ${isEditMode ? 'updated' : (isDraft ? 'saved as a draft' : 'submitted for approval')}.`,
+      });
+
+      localStorage.removeItem(storageKey); // Clear saved data on success
+
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        form.reset();
+      }
     } catch (error) {
-        toast({
-            variant: 'destructive',
-            title: 'Submission Failed',
-            description: error instanceof Error ? error.message : 'An unknown error occurred.',
-        });
+      toast({
+        variant: 'destructive',
+        title: 'Submission Failed',
+        description: error instanceof Error ? error.message : 'An unknown error occurred.',
+      });
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   }
 
@@ -295,189 +295,189 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
       <CardHeader>
         <CardTitle>{isEditMode ? 'Edit Purchase Requisition' : 'New Purchase Requisition'}</CardTitle>
         <CardDescription>
-          {isEditMode ? `Editing requisition ${existingRequisition.id}. Make your changes and resubmit for approval.` : 'Fill out the form below to request a new purchase.'}
+          {isEditMode ? `Editing requisition "${existingRequisition.title}". Make your changes and resubmit for approval.` : 'Fill out the form below to request a new purchase.'}
         </CardDescription>
       </CardHeader>
       <CardContent>
-         {isEditMode && existingRequisition.approverComment && (
-            <Alert variant="destructive" className="mb-6">
-                <AlertTitle>Rejection Reason from Approver</AlertTitle>
-                <AlertDescription>"{existingRequisition.approverComment}"</AlertDescription>
-            </Alert>
-         )}
+        {isEditMode && existingRequisition.approverComment && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertTitle>Rejection Reason from Approver</AlertTitle>
+            <AlertDescription>"{existingRequisition.approverComment}"</AlertDescription>
+          </Alert>
+        )}
         <Form {...form}>
           <form onSubmit={(e) => { e.preventDefault(); }} className="space-y-8">
             <div className="grid md:grid-cols-2 gap-8">
-                <FormItem>
-                  <FormLabel>Your Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. Jane Doe" value={user?.name || ''} disabled />
-                  </FormControl>
-                </FormItem>
-                 <FormField
-                    control={form.control}
-                    name="department"
-                    render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Department</FormLabel>
-                        <FormControl>
-                            <Input {...field} disabled />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                    )}
-                />
+              <FormItem>
+                <FormLabel>Your Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. Jane Doe" value={user?.name || ''} disabled />
+                </FormControl>
+              </FormItem>
+              <FormField
+                control={form.control}
+                name="department"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Department</FormLabel>
+                    <FormControl>
+                      <Input {...field} disabled />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-            
+
             <div className="grid md:grid-cols-2 gap-8">
-                <FormField
+              <FormField
                 control={form.control}
                 name="title"
                 render={({ field }) => (
-                    <FormItem>
+                  <FormItem>
                     <FormLabel>Requisition Title</FormLabel>
                     <FormControl>
-                        <Input
+                      <Input
                         placeholder="e.g. New Laptops for Design Team"
                         {...field}
-                        />
+                      />
                     </FormControl>
                     <FormDescription>
-                        A short, descriptive title for your request.
+                      A short, descriptive title for your request.
                     </FormDescription>
                     <FormMessage />
-                    </FormItem>
+                  </FormItem>
                 )}
-                />
-                 <FormField
-                  control={form.control}
-                  name="urgency"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Urgency</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a priority level" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {(['Low', 'Medium', 'High', 'Critical'] as Urgency[]).map(level => (
-                            <SelectItem key={level} value={level}>{level}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                       <FormDescription>
-                        How urgently is this request needed?
+              />
+              <FormField
+                control={form.control}
+                name="urgency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Urgency</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a priority level" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {(['Low', 'Medium', 'High', 'Critical'] as Urgency[]).map(level => (
+                          <SelectItem key={level} value={level}>{level}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      How urgently is this request needed?
                     </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <Separator />
 
-             <Accordion type="single" collapsible defaultValue="item-0">
-                <AccordionItem value="items-section">
-                    <AccordionTrigger className="text-lg font-medium">Items</AccordionTrigger>
-                    <AccordionContent className="pt-4">
-                         <div className="space-y-6">
-                            {fields.map((field, index) => (
-                            <Accordion key={field.id} type="single" collapsible className="border rounded-lg" defaultValue={`item-${index}`}>
-                                <AccordionItem value={`item-${index}`}>
-                                <div className="flex items-center px-4 py-2 bg-muted/50 rounded-t-lg">
-                                    <AccordionTrigger className="flex-1 py-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-semibold">{form.watch(`items.${index}.name`) || `Item ${index + 1}`}</span>
-                                            <Badge variant="outline">Qty: {form.watch(`items.${index}.quantity`) || 0}</Badge>
-                                        </div>
-                                    </AccordionTrigger>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => remove(index)}
-                                        className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                                <AccordionContent className="p-4">
-                                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                                        <FormField
-                                            control={form.control}
-                                            name={`items.${index}.name`}
-                                            render={({ field }) => (
-                                            <FormItem className="md:col-span-3">
-                                                <FormLabel>Item Name</FormLabel>
-                                                <FormControl>
-                                                <Input
-                                                    placeholder="e.g. MacBook Pro 16-inch"
-                                                    {...field}
-                                                />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name={`items.${index}.quantity`}
-                                            render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Quantity</FormLabel>
-                                                <FormControl>
-                                                <Input type="number" {...field} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name={`items.${index}.description`}
-                                            render={({ field }) => (
-                                            <FormItem className="md:col-span-5">
-                                                <FormLabel>Description (Optional)</FormLabel>
-                                                <FormControl>
-                                                <Textarea
-                                                    placeholder="Add any specific details, model numbers, or specifications here..."
-                                                    {...field}
-                                                />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                            )}
-                                        />
-                                        </div>
-                                </AccordionContent>
-                                </AccordionItem>
-                            </Accordion>
-                            ))}
-                        </div>
-                        <div className="flex justify-between items-center mt-4">
+            <Accordion type="single" collapsible defaultValue="item-0">
+              <AccordionItem value="items-section">
+                <AccordionTrigger className="text-lg font-medium">Items</AccordionTrigger>
+                <AccordionContent className="pt-4">
+                  <div className="space-y-6">
+                    {fields.map((field, index) => (
+                      <Accordion key={field.id} type="single" collapsible className="border rounded-lg" defaultValue={`item-${index}`}>
+                        <AccordionItem value={`item-${index}`}>
+                          <div className="flex items-center px-4 py-2 bg-muted/50 rounded-t-lg">
+                            <AccordionTrigger className="flex-1 py-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold">{form.watch(`items.${index}.name`) || `Item ${index + 1}`}</span>
+                                <Badge variant="outline">Qty: {form.watch(`items.${index}.quantity`) || 0}</Badge>
+                              </div>
+                            </AccordionTrigger>
                             <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                append({ id: `ITEM-${Date.now()}`, name: '', quantity: 1, unitPrice: 0, description: '' })
-                                }
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => remove(index)}
+                              className="h-7 w-7 text-destructive hover:bg-destructive/10 shrink-0"
                             >
-                                <PlusCircle className="mr-2 h-4 w-4" />
-                                Add Item
+                              <Trash2 className="h-4 w-4" />
                             </Button>
-                        </div>
-                    </AccordionContent>
-                </AccordionItem>
+                          </div>
+                          <AccordionContent className="p-4">
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                              <FormField
+                                control={form.control}
+                                name={`items.${index}.name`}
+                                render={({ field }) => (
+                                  <FormItem className="md:col-span-3">
+                                    <FormLabel>Item Name</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        placeholder="e.g. MacBook Pro 16-inch"
+                                        {...field}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name={`items.${index}.quantity`}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Quantity</FormLabel>
+                                    <FormControl>
+                                      <Input type="number" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name={`items.${index}.description`}
+                                render={({ field }) => (
+                                  <FormItem className="md:col-span-5">
+                                    <FormLabel>Description (Optional)</FormLabel>
+                                    <FormControl>
+                                      <Textarea
+                                        placeholder="Add any specific details, model numbers, or specifications here..."
+                                        {...field}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      </Accordion>
+                    ))}
+                  </div>
+                  <div className="flex justify-between items-center mt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        append({ id: `ITEM-${Date.now()}`, name: '', quantity: 1, unitPrice: 0, description: '' })
+                      }
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Add Item
+                    </Button>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
             </Accordion>
 
 
-             <Separator />
+            <Separator />
 
-            
-             <FormField
+
+            <FormField
               control={form.control}
               name="justification"
               render={({ field }) => (
@@ -494,7 +494,7 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
                 </FormItem>
               )}
             />
-            
+
             <Separator />
 
             <div className="grid md:grid-cols-2 gap-8">
@@ -515,12 +515,12 @@ export function NeedsRecognitionForm({ existingRequisition, onSuccess }: NeedsRe
                 )}
               />
             </div>
-            
+
             <div className="flex justify-end items-center gap-4">
-                <Button type="button" onClick={handleSaveDraft} variant="secondary" disabled={loading}>
-                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Save as Draft
-                </Button>
+              <Button type="button" onClick={handleSaveDraft} variant="secondary" disabled={loading}>
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Save as Draft
+              </Button>
             </div>
           </form>
         </Form>
