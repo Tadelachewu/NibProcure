@@ -2,8 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { generateAI } from '@/lib/ollama-client';
+import { useAuth } from '@/contexts/auth-context';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function AIPromptPage() {
+    const { token, user } = useAuth();
+    const { toast } = useToast();
     const [requisitionId, setRequisitionId] = useState('');
     const [type, setType] = useState<'minutes' | 'report' | 'advice'>('minutes');
     const [prompt, setPrompt] = useState('');
@@ -14,13 +20,15 @@ export default function AIPromptPage() {
     const [systemResult, setSystemResult] = useState('');
     const [requisitions, setRequisitions] = useState<Array<{ id: string; title: string }>>([]);
     const [scope, setScope] = useState<'specific' | 'system'>('specific');
+    const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
         let mounted = true;
         (async () => {
             try {
-                const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-                const res = await fetch('/api/requisitions?limit=100', { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+                const res = await fetch('/api/requisitions?limit=100', { 
+                    headers: token ? { Authorization: `Bearer ${token}` } : undefined 
+                });
                 if (!res.ok) return;
                 const data = await res.json();
                 const items = Array.isArray(data.requisitions) ? data.requisitions : data;
@@ -31,7 +39,36 @@ export default function AIPromptPage() {
             }
         })();
         return () => { mounted = false; };
-    }, []);
+    }, [token]);
+
+    const handleRefreshSummary = async () => {
+        if (!token) return;
+        setRefreshing(true);
+        try {
+            const res = await fetch('/api/reports/refresh-summary', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || 'Failed to refresh system data');
+            }
+            
+            toast({ 
+                title: 'Data Refreshed', 
+                description: 'The pre-computed system summary for AI analysis has been updated.' 
+            });
+        } catch (err: any) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Refresh Failed', 
+                description: err.message || 'An error occurred while refreshing data.' 
+            });
+        } finally {
+            setRefreshing(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -49,9 +86,29 @@ export default function AIPromptPage() {
         }
     };
 
+    const isAdmin = Boolean(user && (user.roles as any[]).some(r => (typeof r === 'string' ? r === 'Admin' : r?.name === 'Admin')));
+
     return (
         <div className="p-6">
-            <h1 className="text-2xl font-semibold mb-4">AI Assistant</h1>
+            <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl font-semibold">AI Assistant</h1>
+                {isAdmin && (
+                    <Button 
+                        onClick={handleRefreshSummary} 
+                        disabled={refreshing} 
+                        variant="outline"
+                        title="Refreshes the pre-computed data used for system-wide AI scans."
+                    >
+                        {refreshing ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                        )}
+                        Sync AI Data
+                    </Button>
+                )}
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-4 max-w-2xl">
                 <div>
                     <label className="block text-sm font-medium">Scope</label>
@@ -77,14 +134,11 @@ export default function AIPromptPage() {
                             <textarea value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={4} className="w-full mt-1 border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300" placeholder="E.g. Which requisitions need urgent action this week?" />
                         </div>
 
-
-
                         <div>
                             <button type="button" disabled={systemLoading || !systemPrompt.trim()} onClick={async () => {
                                 setSystemLoading(true);
                                 setSystemResult('');
                                 try {
-                                    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
                                     const res = await fetch('/api/ollama-systemwide-requisitions', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ prompt: systemPrompt }) });
                                     const text = await res.text();
                                     let data: any = null;
@@ -93,7 +147,6 @@ export default function AIPromptPage() {
                                         const errMsg = data?.error || text || 'Failed to generate';
                                         throw new Error(errMsg);
                                     }
-                                    // prefer server-produced result, fall back to returned prompt
                                     const out = (data && (data.result || data.prompt)) || (text && !data ? text : JSON.stringify(data?.requisitions || {}).slice(0, 2000));
                                     setSystemResult(typeof out === 'string' ? out : JSON.stringify(out));
                                 } catch (err: any) {
@@ -148,7 +201,6 @@ export default function AIPromptPage() {
                     <button
                         type="button"
                         disabled={!(scope === 'system' ? systemResult : result)}
-                        aria-disabled={!(scope === 'system' ? systemResult : result)}
                         className={`inline-flex items-center px-4 py-2 rounded-md text-white shadow-md border-0 ${(!(scope === 'system' ? systemResult : result)) ? 'opacity-50 cursor-not-allowed bg-gray-300' : 'bg-gradient-to-r from-indigo-600 to-violet-500 hover:from-indigo-700 hover:to-violet-600'}`}
                         onClick={async () => {
                             const effective = scope === 'system' ? systemResult : result;
@@ -167,8 +219,6 @@ export default function AIPromptPage() {
                                     return;
                                 }
 
-                                // specific requisition download
-                                const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
                                 if (!requisitionId) return;
                                 const body = { type, requisitionId, prompt: prompt || undefined, filename: `requisition-${requisitionId}-${type}.html` };
                                 const res = await fetch('/api/ai/generate/download', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
@@ -196,14 +246,12 @@ export default function AIPromptPage() {
                     <button
                         type="button"
                         disabled={!(scope === 'system' ? systemResult : result)}
-                        aria-disabled={!(scope === 'system' ? systemResult : result)}
                         className={`inline-flex items-center px-4 py-2 rounded-md text-white shadow-md border-0 ${(!(scope === 'system' ? systemResult : result)) ? 'opacity-50 cursor-not-allowed bg-gray-300' : 'bg-gradient-to-r from-green-500 to-emerald-400 hover:from-green-600 hover:to-emerald-500'}`}
                         onClick={() => {
                             const effective = scope === 'system' ? systemResult : result;
                             if (!effective) return;
                             const w = window.open('', '_blank', 'noopener');
                             if (!w) return;
-                            // escape HTML entities so the generated text renders correctly
                             const escapeHtml = (str: string) => str
                                 .replace(/&/g, '&amp;')
                                 .replace(/</g, '&lt;')
@@ -211,7 +259,7 @@ export default function AIPromptPage() {
                                 .replace(/"/g, '&quot;')
                                 .replace(/'/g, '&#39;');
                             const escaped = escapeHtml(effective || '');
-                            const title = scope === 'system' ? `System-wide AI` : `Requisition AI - ${(document.querySelector('select')?.value) || ''}`;
+                            const title = scope === 'system' ? `System-wide AI` : `Requisition AI - ${requisitionId}`;
                             const printable = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111}pre{white-space:pre-wrap;word-wrap:break-word;font-family:inherit}</style></head><body><h1>${title}</h1><pre>${escaped}</pre></body></html>`;
                             w.document.open();
                             w.document.write(printable);
@@ -224,7 +272,6 @@ export default function AIPromptPage() {
                     </button>
                 </div>
             </div>
-
         </div>
     );
 }

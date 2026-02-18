@@ -5,43 +5,11 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, RefreshCw } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
 
 export default function ReportsIndexPage() {
     const { token, user } = useAuth();
     const [loading, setLoading] = useState(false);
-    const [refreshing, setRefreshing] = useState(false);
-    const { toast } = useToast();
-
-    const handleRefreshSummary = async () => {
-        if (!token) return;
-        setRefreshing(true);
-        try {
-            const res = await fetch('/api/reports/refresh-summary', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.error || 'Failed to refresh system data');
-            }
-            
-            toast({ 
-                title: 'Data Refreshed', 
-                description: 'The pre-computed system summary for AI analysis has been updated.' 
-            });
-        } catch (err: any) {
-            toast({ 
-                variant: 'destructive', 
-                title: 'Refresh Failed', 
-                description: err.message || 'An error occurred while refreshing data.' 
-            });
-        } finally {
-            setRefreshing(false);
-        }
-    };
 
     if (loading) return <div className="p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
 
@@ -53,19 +21,6 @@ export default function ReportsIndexPage() {
                     <p className="text-sm text-muted-foreground">Access procurement reports and dashboards.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button 
-                        onClick={handleRefreshSummary} 
-                        disabled={refreshing} 
-                        variant="outline"
-                        title="Refreshes the materialized view used by system-wide AI analysis."
-                    >
-                        {refreshing ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                        )}
-                        Sync AI Data
-                    </Button>
                     <Link href="/report/status"><Button>Open Status Report</Button></Link>
                 </div>
             </div>
