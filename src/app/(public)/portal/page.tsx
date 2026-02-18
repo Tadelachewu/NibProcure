@@ -22,7 +22,7 @@ export default function PublicPortalPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const router = useRouter();
   const { toast } = useToast();
-  
+
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const fetchOpenTenders = useCallback(async (page: number, search: string) => {
@@ -42,8 +42,15 @@ export default function PublicPortalPage() {
         throw new Error('Failed to fetch open tenders.');
       }
       const data = await response.json();
-      setRequisitions(data.requisitions || []);
-      setTotalCount(data.totalCount || 0);
+      // Filter out any requisitions that have already passed their announcement end date
+      const now = new Date();
+      const fetched = data.requisitions || [];
+      const openRequisitions = fetched.filter((r: PurchaseRequisition) => {
+        return !r.announcementEndDate || new Date(r.announcementEndDate) > now;
+      });
+      setRequisitions(openRequisitions);
+      // Use the filtered count for pagination/display
+      setTotalCount(openRequisitions.length || 0);
     } catch (error) {
       console.error(error);
       toast({
@@ -55,11 +62,11 @@ export default function PublicPortalPage() {
       setLoading(false);
     }
   }, [toast]);
-  
+
   useEffect(() => {
     fetchOpenTenders(currentPage, debouncedSearchTerm);
   }, [currentPage, debouncedSearchTerm, fetchOpenTenders]);
-  
+
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearchTerm]);
@@ -80,17 +87,17 @@ export default function PublicPortalPage() {
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex-1">
-                <CardTitle>Open Requisitions</CardTitle>
-                <CardDescription>The following tenders are currently open for bidding.</CardDescription>
+              <CardTitle>Open Requisitions</CardTitle>
+              <CardDescription>The following tenders are currently open for bidding.</CardDescription>
             </div>
             <div className="relative w-full md:max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                    placeholder="Search by title or item name..." 
-                    className="pl-10"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by title or item name..."
+                className="pl-10"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
           </div>
         </CardHeader>
@@ -109,19 +116,19 @@ export default function PublicPortalPage() {
                     </CardHeader>
                     <CardContent className="flex-grow space-y-4 text-sm">
                       <div className="flex items-center gap-2 text-muted-foreground">
-                          <Building className="h-4 w-4" />
-                          <span>{req.department} Department</span>
+                        <Building className="h-4 w-4" />
+                        <span>{req.department} Department</span>
                       </div>
-                       <div className="flex items-center gap-2 text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span>Posted on: {format(new Date(req.createdAt), 'PP')}</span>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        <span>Posted on: {format(new Date(req.createdAt), 'PPpp')}</span>
                       </div>
                       {req.announcementEndDate && (
-                          <div className="flex items-center gap-2 text-destructive font-semibold">
-                              <Timer className="h-4 w-4" />
-                              <span>Closes on: {format(new Date(req.announcementEndDate), 'PP')}</span>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 text-destructive font-semibold">
+                          <Timer className="h-4 w-4" />
+                          <span>Closes on: {format(new Date(req.announcementEndDate), 'PPpp')}</span>
+                        </div>
+                      )}
                     </CardContent>
                     <CardFooter>
                       <Button className="w-full" onClick={() => router.push(`/portal/${req.id}`)}>
@@ -133,23 +140,23 @@ export default function PublicPortalPage() {
               </div>
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-6">
-                    <div className="text-sm text-muted-foreground">
-                        Page {currentPage} of {totalPages}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
-                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft /></Button>
-                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight /></Button>
-                        <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronsRight /></Button>
-                    </div>
+                  <div className="text-sm text-muted-foreground">
+                    Page {currentPage} of {totalPages}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}><ChevronsLeft /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}><ChevronsRight /></Button>
+                  </div>
                 </div>
               )}
             </>
           ) : (
             <div className="h-64 flex flex-col items-center justify-center text-center border-2 border-dashed rounded-lg">
-                <FileText className="h-12 w-12 text-muted-foreground" />
-                <p className="mt-4 font-semibold">No Open Tenders</p>
-                <p className="text-sm text-muted-foreground">There are currently no requisitions open for public bidding that match your search.</p>
+              <FileText className="h-12 w-12 text-muted-foreground" />
+              <p className="mt-4 font-semibold">No Open Tenders</p>
+              <p className="text-sm text-muted-foreground">There are currently no requisitions open for public bidding that match your search.</p>
             </div>
           )}
         </CardContent>
