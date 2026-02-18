@@ -3,56 +3,16 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getActorFromToken, isAdmin } from '@/lib/auth';
+import { getActorFromToken } from '@/lib/auth';
 
 /**
- * Enterprise analytical snapshot logic.
- * Aggregates highly normalized data into a flattened JSONB schema for AI and Reporting.
+ * Enterprise analytics refresh endpoint.
+ * 
+ * DESIGN CONSTRAINTS:
+ * 1. Does NOT define the view (separation of concerns: DB setup happens in seed/migration).
+ * 2. Uses CONCURRENTLY to ensure ZERO DOWNTIME for AI analysis.
+ * 3. Atomic transition between old and new state.
  */
-const VIEW_NAME = '"RequisitionSystemWideSummary"';
-const INDEX_NAME = '"idx_requisition_summary_id"';
-
-const REFRESH_SQL = `
-CREATE MATERIALIZED VIEW IF NOT EXISTS ${VIEW_NAME} AS
-SELECT
-  r.id,
-  jsonb_build_object(
-    'id', r.id,
-    'transactionId', r."transactionId",
-    'title', r.title,
-    'status', r.status,
-    'urgency', r.urgency,
-    'totalPrice', r."totalPrice",
-    'createdAt', r."createdAt",
-    'updatedAt', r."updatedAt",
-    'justification', r.justification,
-    'requester', (SELECT jsonb_build_object('name', u.name, 'email', u.email) FROM "User" u WHERE u.id = r."requesterId"),
-    'department', (SELECT jsonb_build_object('name', d.name) FROM "Department" d WHERE d.id = r."departmentId"),
-    'item_count', (SELECT count(*) FROM "RequisitionItem" i WHERE i."requisitionId" = r.id),
-    'items', (
-      SELECT jsonb_agg(jsonb_build_object('name', i.name, 'quantity', i.quantity, 'unitPrice', i."unitPrice"))
-      FROM "RequisitionItem" i WHERE i."requisitionId" = r.id
-    ),
-    'quotations', (
-      SELECT jsonb_agg(jsonb_build_object(
-        'vendor', q."vendorName",
-        'total', q."totalPrice",
-        'status', q.status,
-        'submittedAt', q."createdAt"
-      ))
-      FROM "Quotation" q WHERE q."requisitionId" = r.id
-    ),
-    'last_audit_action', (
-      SELECT action FROM "AuditLog" a 
-      WHERE a."entityId" = r.id AND a.entity = 'Requisition' 
-      ORDER BY a.timestamp DESC LIMIT 1
-    )
-  ) as data
-FROM "PurchaseRequisition" r;
-`;
-
-const INDEX_SQL = `CREATE UNIQUE INDEX IF NOT EXISTS ${INDEX_NAME} ON ${VIEW_NAME} (id);`;
-
 export async function POST(request: Request) {
     try {
         const actor = await getActorFromToken(request);
@@ -62,15 +22,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
-        // 1. Bootstrap view and indices
-        await prisma.$executeRawUnsafe(REFRESH_SQL);
-        await prisma.$executeRawUnsafe(INDEX_SQL);
+        const VIEW_NAME = '"RequisitionSystemWideSummary"';
 
-        // 2. Perform concurrent refresh (Zero downtime for AI reads)
+        console.log(`[REFRESH_AI] Start concurrent refresh for ${VIEW_NAME}`);
+
         try {
+            // Attempt concurrent refresh (requires unique index + previous population)
             await prisma.$executeRawUnsafe(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${VIEW_NAME}`);
         } catch (e) {
-            // Concurrent refresh fails if it's the very first populate
+            console.warn('[REFRESH_AI] Concurrent refresh failed (likely first run). Falling back to standard refresh.');
+            // Regular refresh for first population or if index is missing
             await prisma.$executeRawUnsafe(`REFRESH MATERIALIZED VIEW ${VIEW_NAME}`);
         }
 
@@ -79,10 +40,10 @@ export async function POST(request: Request) {
             message: 'System analytical snapshot synchronized successfully.' 
         });
     } catch (err: any) {
-        console.error('[REFRESH_VIEW] Failed:', err);
+        console.error('[REFRESH_VIEW] Final Failure:', err);
         return NextResponse.json({ 
             error: 'Failed to synchronize AI data', 
-            details: err?.message 
+            details: err?.message || 'The database was unable to refresh the analytical snapshot.' 
         }, { status: 500 });
     }
 }
