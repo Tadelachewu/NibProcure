@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { generateAI } from '@/lib/ollama-client';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Database, Eye, EyeOff, ClipboardList, Bot, Printer } from 'lucide-react';
+import { Loader2, RefreshCw, Database, Eye, EyeOff, ClipboardList, Bot, Printer, Search, BrainCircuit, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,16 +12,17 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
+type AIStatus = 'idle' | 'fetching' | 'analyzing' | 'complete';
+
 export default function AIPromptPage() {
     const { token, user, role } = useAuth();
     const { toast } = useToast();
     const [requisitionId, setRequisitionId] = useState('');
     const [type, setType] = useState<'minutes' | 'report' | 'advice'>('minutes');
     const [prompt, setPrompt] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [status, setStatus] = useState<AIStatus>('idle');
     const [result, setResult] = useState('');
     const [systemPrompt, setSystemPrompt] = useState('');
-    const [systemLoading, setSystemLoading] = useState(false);
     const [systemResult, setSystemResult] = useState('');
     const [requisitions, setRequisitions] = useState<Array<{ id: string; title: string }>>([]);
     const [scope, setScope] = useState<'specific' | 'system'>('specific');
@@ -53,7 +54,6 @@ export default function AIPromptPage() {
         setRefreshing(true);
         setTestDataPreview(null);
         try {
-            // 1. Trigger Refresh
             const res = await fetch('/api/reports/refresh-summary', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -64,7 +64,6 @@ export default function AIPromptPage() {
                 throw new Error(data.error || 'Failed to refresh system data');
             }
 
-            // 2. Fetch Full Data for Test Preview
             const dataRes = await fetch('/api/ollama-systemwide-requisitions', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -89,7 +88,46 @@ export default function AIPromptPage() {
         }
     };
 
+    const handleRunAnalysis = async () => {
+        setResult('');
+        setSystemResult('');
+        setStatus('fetching');
+
+        try {
+            if (scope === 'system') {
+                const res = await fetch('/api/ollama-systemwide-requisitions', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, 
+                    body: JSON.stringify({ prompt: systemPrompt }) 
+                });
+                
+                // We transition to 'analyzing' once the request is sent and we are waiting for Ollama
+                setStatus('analyzing');
+                
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'AI Failed');
+                setSystemResult(data.result || '');
+            } else {
+                // For specific, the wrapper does the fetch inside generateAI
+                // We simulate the transition for visual feedback
+                setTimeout(() => setStatus('analyzing'), 600);
+                
+                const res = await generateAI(type, requisitionId, { prompt: prompt || undefined });
+                setResult(res || '');
+            }
+            setStatus('complete');
+            setTimeout(() => setStatus('idle'), 3000);
+        } catch (err: any) {
+            const errorMsg = 'Error: ' + err.message;
+            if (scope === 'system') setSystemResult(errorMsg);
+            else setResult(errorMsg);
+            setStatus('idle');
+            toast({ variant: 'destructive', title: 'Analysis Failed', description: err.message });
+        }
+    };
+
     const canSync = role === 'Admin' || role === 'Procurement_Officer';
+    const isWorking = status === 'fetching' || status === 'analyzing';
 
     return (
         <div className="p-6 space-y-6">
@@ -102,7 +140,7 @@ export default function AIPromptPage() {
                     <div className="flex gap-2">
                         <Button 
                             onClick={handleRefreshSummary} 
-                            disabled={refreshing} 
+                            disabled={refreshing || isWorking} 
                             variant="default"
                             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm"
                         >
@@ -123,7 +161,6 @@ export default function AIPromptPage() {
                 )}
             </div>
 
-            {/* Test Mode Preview - Full Data Display */}
             {testDataPreview && showPreview && (
                 <Card className="border-blue-200 bg-blue-50/30 overflow-hidden">
                     <CardHeader className="py-3 px-4 border-b border-blue-100 bg-blue-100/50">
@@ -159,6 +196,7 @@ export default function AIPromptPage() {
                                 <div className="mt-2 flex gap-3">
                                     <button 
                                         onClick={() => setScope('specific')}
+                                        disabled={isWorking}
                                         className={cn(
                                             "flex-1 px-3 py-2 text-sm rounded-md border transition-all",
                                             scope === 'specific' ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-background border-input hover:bg-muted"
@@ -168,6 +206,7 @@ export default function AIPromptPage() {
                                     </button>
                                     <button 
                                         onClick={() => setScope('system')}
+                                        disabled={isWorking}
                                         className={cn(
                                             "flex-1 px-3 py-2 text-sm rounded-md border transition-all",
                                             scope === 'system' ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-background border-input hover:bg-muted"
@@ -185,6 +224,7 @@ export default function AIPromptPage() {
                                         <select 
                                             value={requisitionId} 
                                             onChange={e => setRequisitionId(e.target.value)} 
+                                            disabled={isWorking}
                                             className="w-full border rounded-md px-3 py-2 bg-background focus:ring-2 focus:ring-primary/20"
                                         >
                                             <option value="">-- Select --</option>
@@ -198,6 +238,7 @@ export default function AIPromptPage() {
                                         <select 
                                             value={type} 
                                             onChange={e => setType(e.target.value as any)} 
+                                            disabled={isWorking}
                                             className="w-full border rounded-md px-3 py-2 bg-background focus:ring-2 focus:ring-primary/20"
                                         >
                                             <option value="minutes">Minutes</option>
@@ -218,51 +259,45 @@ export default function AIPromptPage() {
                                     value={scope === 'system' ? systemPrompt : prompt} 
                                     onChange={e => scope === 'system' ? setSystemPrompt(e.target.value) : setPrompt(e.target.value)} 
                                     rows={4} 
+                                    disabled={isWorking}
                                     placeholder={scope === 'system' ? "e.g. Which requisitions are high value and have no quotes yet?" : "Add custom instructions..."}
                                 />
                             </div>
 
-                            <Button 
-                                className="w-full" 
-                                disabled={scope === 'system' ? (systemLoading || !systemPrompt.trim()) : (loading || !requisitionId)}
-                                onClick={async () => {
-                                    if (scope === 'system') {
-                                        setSystemLoading(true);
-                                        setSystemResult('');
-                                        try {
-                                            const res = await fetch('/api/ollama-systemwide-requisitions', { 
-                                                method: 'POST', 
-                                                headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, 
-                                                body: JSON.stringify({ prompt: systemPrompt }) 
-                                            });
-                                            const data = await res.json();
-                                            if (!res.ok) throw new Error(data.error || 'AI Failed');
-                                            setSystemResult(data.result || '');
-                                        } catch (err: any) {
-                                            setSystemResult('Error: ' + err.message);
-                                        } finally {
-                                            setSystemLoading(false);
-                                        }
-                                    } else {
-                                        setLoading(true);
-                                        setResult('');
-                                        try {
-                                            const res = await generateAI(type, requisitionId, { prompt: prompt || undefined });
-                                            setResult(res || '');
-                                        } catch (err: any) {
-                                            setResult('Error: ' + err.message);
-                                        } finally {
-                                            setLoading(false);
-                                        }
-                                    }
-                                }}
-                            >
-                                {(scope === 'system' ? systemLoading : loading) ? (
-                                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Thinking...</>
-                                ) : (
-                                    <><Bot className="mr-2 h-4 w-4" /> Run AI Analysis</>
+                            <div className="space-y-3">
+                                <Button 
+                                    className="w-full" 
+                                    disabled={isWorking || (scope === 'system' ? !systemPrompt.trim() : !requisitionId)}
+                                    onClick={handleRunAnalysis}
+                                >
+                                    {status === 'fetching' ? (
+                                        <><Search className="mr-2 h-4 w-4 animate-pulse" /> Fetching Context...</>
+                                    ) : status === 'analyzing' ? (
+                                        <><BrainCircuit className="mr-2 h-4 w-4 animate-spin" /> AI Analysis...</>
+                                    ) : status === 'complete' ? (
+                                        <><CheckCircle2 className="mr-2 h-4 w-4 text-green-400" /> Complete</>
+                                    ) : (
+                                        <><Bot className="mr-2 h-4 w-4" /> Run AI Analysis</>
+                                    )}
+                                </Button>
+
+                                {isWorking && (
+                                    <div className="space-y-2 px-1">
+                                        <div className="flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
+                                            <span>Progress</span>
+                                            <span>{status === 'fetching' ? '40%' : '85%'}</span>
+                                        </div>
+                                        <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                            <div 
+                                                className={cn(
+                                                    "h-full bg-primary transition-all duration-500 ease-out",
+                                                    status === 'fetching' ? "w-[40%]" : "w-[85%]"
+                                                )}
+                                            />
+                                        </div>
+                                    </div>
                                 )}
-                            </Button>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
@@ -287,14 +322,18 @@ export default function AIPromptPage() {
                         <CardContent className="flex-1 p-0 overflow-hidden">
                             <ScrollArea className="h-[600px]">
                                 <div className="p-6">
-                                    {((scope === 'system' ? systemResult : result)) ? (
+                                    {(scope === 'system' ? systemResult : result) ? (
                                         <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap font-body text-base">
                                             {scope === 'system' ? systemResult : result}
                                         </div>
                                     ) : (
                                         <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-20">
-                                            <Bot className="h-12 w-12 opacity-20 mb-4" />
-                                            <p className="text-sm">Configure analysis and run to see AI output here.</p>
+                                            <Bot className={cn("h-12 w-12 opacity-20 mb-4", isWorking && "animate-bounce")} />
+                                            <p className="text-sm">
+                                                {status === 'fetching' ? 'Retrieving system context...' : 
+                                                 status === 'analyzing' ? 'Ollama is generating your report...' : 
+                                                 'Configure analysis and run to see AI output here.'}
+                                            </p>
                                         </div>
                                     )}
                                 </div>
