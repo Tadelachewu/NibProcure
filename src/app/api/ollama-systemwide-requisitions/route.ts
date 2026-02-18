@@ -1,23 +1,40 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-console.log('[app-api] ollama-systemwide-requisitions route loaded');
+console.log('[app-api] ollama-systemwide-requisitions route loaded with performance optimization');
 
+/**
+ * GET: Returns full detailed system-wide requisitions dataset.
+ * Uses Materialized View for high performance, falls back to raw query if view is missing.
+ */
 export async function GET() {
     try {
-        const requisitions = await prisma.purchaseRequisition.findMany({
-            include: {
-                requester: true,
-                department: true,
-                approver: true,
-                quotations: { include: { items: true, scores: true } },
-                items: true,
-                minutes: { include: { author: true, attendees: true, signatures: true } },
-                financialCommitteeMembers: true,
-                technicalCommitteeMembers: true,
-            },
-            orderBy: { createdAt: 'desc' },
-        });
+        let requisitions: any[] = [];
+        
+        try {
+            // Attempt to fetch from high-performance pre-computed view
+            const viewData = await prisma.$queryRaw<any[]>`
+                SELECT data FROM "RequisitionSystemWideSummary" ORDER BY (data->>'createdAt') DESC
+            `;
+            requisitions = viewData.map(row => row.data);
+        } catch (e) {
+            console.warn('[AI_API] Materialized view not found or accessible, falling back to standard query.', e);
+            // FALLBACK: Standard joined query (Zero Regression)
+            const rawData = await prisma.purchaseRequisition.findMany({
+                include: {
+                    requester: true,
+                    department: true,
+                    approver: true,
+                    quotations: { include: { items: true, scores: true } },
+                    items: true,
+                    minutes: { include: { author: true, attendees: true, signatures: true } },
+                    financialCommitteeMembers: true,
+                    technicalCommitteeMembers: true,
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            requisitions = rawData;
+        }
 
         return NextResponse.json({ requisitions });
     } catch (err) {
@@ -26,31 +43,45 @@ export async function GET() {
     }
 }
 
+/**
+ * POST: Accepts a simple user prompt and returns AI analysis.
+ * Performance is optimized using the RequisitionSystemWideSummary materialized view.
+ */
 export async function POST(request: Request) {
     try {
         const body = await request.json().catch(() => ({}));
         const userPrompt = (body?.prompt || '').toString().trim();
 
-        const requisitions = await prisma.purchaseRequisition.findMany({
-            include: {
-                requester: true,
-                department: true,
-                approver: true,
-                quotations: { include: { items: true, scores: true } },
-                items: true,
-                minutes: { include: { author: true, attendees: true, signatures: true } },
-                financialCommitteeMembers: true,
-                technicalCommitteeMembers: true,
-            },
-            orderBy: { createdAt: 'desc' },
-        });
+        let requisitions: any[] = [];
+        try {
+            // Attempt high-performance fetch
+            const viewData = await prisma.$queryRaw<any[]>`
+                SELECT data FROM "RequisitionSystemWideSummary" ORDER BY (data->>'createdAt') DESC
+            `;
+            requisitions = viewData.map(row => row.data);
+        } catch (e) {
+            console.warn('[AI_API] Materialized view fetch failed in POST, falling back.', e);
+            const rawData = await prisma.purchaseRequisition.findMany({
+                include: {
+                    requester: true,
+                    department: true,
+                    approver: true,
+                    quotations: { include: { items: true, scores: true } },
+                    items: true,
+                    minutes: { include: { author: true, attendees: true, signatures: true } },
+                    financialCommitteeMembers: true,
+                    technicalCommitteeMembers: true,
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            requisitions = rawData;
+        }
 
         const simpleIntro = `You are Ollama, an assistant for the procurement system. The user is a non-technical person. Explain simply and clearly.`;
         const userInstruction = userPrompt
             ? `User asked: "${userPrompt}".`
             : 'User has not provided a specific question — summarize the most important requisitions and actionable items.';
 
-        // Provide full data context and instruct model to only use it
         const contextJson = JSON.stringify(requisitions, null, 2);
         const ollamaSystemWidePrompt = [
             simpleIntro,
@@ -103,10 +134,20 @@ export async function POST(request: Request) {
 
             assembled = assembled.trim();
 
-            return NextResponse.json({ requisitions, prompt: ollamaSystemWidePrompt, result: assembled, metadata: { count: requisitions.length } });
+            return NextResponse.json({ 
+                requisitions, 
+                prompt: ollamaSystemWidePrompt, 
+                result: assembled, 
+                metadata: { count: requisitions.length } 
+            });
         } catch (err) {
             console.error('Failed to call Ollama for system-wide prompt:', err);
-            return NextResponse.json({ requisitions, prompt: ollamaSystemWidePrompt, metadata: { count: requisitions.length }, error: 'Ollama call failed' }, { status: 500 });
+            return NextResponse.json({ 
+                requisitions, 
+                prompt: ollamaSystemWidePrompt, 
+                metadata: { count: requisitions.length }, 
+                error: 'Ollama call failed' 
+            }, { status: 500 });
         }
     } catch (err) {
         console.error('ollama-systemwide-requisitions.POST error', err);
