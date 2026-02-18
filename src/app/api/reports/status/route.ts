@@ -33,13 +33,26 @@ export async function GET(request: Request) {
 
         const total = await prisma.purchaseRequisition.count({ where });
 
-        const approvedStatuses = ['PostApproved', 'Awarded', 'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed'];
+        // Consider PreApproved as "approved" for reporting purposes as requested
+        const approvedStatuses = ['PreApproved', 'PostApproved', 'Awarded', 'PO_Created', 'Fulfilled', 'Closed', 'Partially_Closed'];
         const rejectedStatuses = ['Award_Declined', 'Declined', 'Rejected', 'Failed'];
 
         const approved = await prisma.purchaseRequisition.count({ where: { ...where, status: { in: approvedStatuses } } });
         const rejected = await prisma.purchaseRequisition.count({ where: { ...where, OR: [{ status: { in: rejectedStatuses } }, { status: { contains: 'Declined' } }] } });
 
-        const pending = await prisma.purchaseRequisition.count({ where: { ...where, OR: [{ status: { startsWith: 'Pending_' } }, { status: { in: ['Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete'] } }] } });
+        // Pending overall (any in-progress states)
+        const pending = await prisma.purchaseRequisition.count({ where: { ...where, OR: [{ status: { startsWith: 'Pending_' } }, { status: { in: ['Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 'Pending_Review', 'Pending_Procurement_Approval'] } }] } });
+
+        // Split pending into two useful buckets:
+        const beforePreapprovalStatuses = ['Pending_Approval', 'Pending_Director_Approval', 'Pending_Managerial_Approval', 'Pending_Committee_A_Recommendation', 'Pending_Committee_B_Review'];
+        const afterPreapprovalBeforePostStatuses = ['Pending_Procurement_Approval', 'Accepting_Quotes', 'Scoring_In_Progress', 'Scoring_Complete', 'Pending_Review'];
+
+        const pendingBeforePreapproval = await prisma.purchaseRequisition.count({ where: { ...where, status: { in: beforePreapprovalStatuses } } });
+        const pendingAfterPreapproval = await prisma.purchaseRequisition.count({ where: { ...where, status: { in: afterPreapprovalBeforePostStatuses } } });
+
+        // Completed requisitions (finalized)
+        const completedStatuses = ['Fulfilled', 'Closed', 'Partially_Closed'];
+        const completedCount = await prisma.purchaseRequisition.count({ where: { ...where, status: { in: completedStatuses } } });
 
         // Converted to PO: count of purchase orders created in the period
         const convertedToPO = await prisma.purchaseOrder.count({ where: { createdAt: { gte: start, lte: end } } });
@@ -97,6 +110,9 @@ export async function GET(request: Request) {
             approved,
             rejected,
             pending,
+            pendingBeforePreapproval,
+            pendingAfterPreapproval,
+            completed: completedCount,
             convertedToPO,
             averageApprovalTimeDays: avgApprovalDays,
             averageTimeToPODays: avgTimeToPODays,
@@ -114,6 +130,9 @@ export async function GET(request: Request) {
                 ['approved', String(result.approved)],
                 ['rejected', String(result.rejected)],
                 ['pending', String(result.pending)],
+                ['pendingBeforePreapproval', String(result.pendingBeforePreapproval)],
+                ['pendingAfterPreapproval', String(result.pendingAfterPreapproval)],
+                ['completed', String(result.completed)],
                 ['convertedToPO', String(result.convertedToPO)],
                 ['averageApprovalTimeDays', result.averageApprovalTimeDays == null ? '' : String(result.averageApprovalTimeDays)],
                 ['averageTimeToPODays', result.averageTimeToPODays == null ? '' : String(result.averageTimeToPODays)],
