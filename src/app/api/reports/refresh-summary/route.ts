@@ -6,14 +6,13 @@ import { prisma } from '@/lib/prisma';
 import { getActorFromToken, isAdmin } from '@/lib/auth';
 
 /**
- * SQL definition for the Materialized View.
- * Aggregates the entire requisition lifecycle into a single JSONB blob per row.
- * This is the 'Enterprise Standard' for high-performance AI data retrieval.
+ * Enterprise analytical snapshot logic.
+ * Aggregates highly normalized data into a flattened JSONB schema for AI and Reporting.
  */
 const VIEW_NAME = '"RequisitionSystemWideSummary"';
 const INDEX_NAME = '"idx_requisition_summary_id"';
 
-const VIEW_SQL = `
+const REFRESH_SQL = `
 CREATE MATERIALIZED VIEW IF NOT EXISTS ${VIEW_NAME} AS
 SELECT
   r.id,
@@ -29,6 +28,7 @@ SELECT
     'justification', r.justification,
     'requester', (SELECT jsonb_build_object('name', u.name, 'email', u.email) FROM "User" u WHERE u.id = r."requesterId"),
     'department', (SELECT jsonb_build_object('name', d.name) FROM "Department" d WHERE d.id = r."departmentId"),
+    'item_count', (SELECT count(*) FROM "RequisitionItem" i WHERE i."requisitionId" = r.id),
     'items', (
       SELECT jsonb_agg(jsonb_build_object('name', i.name, 'quantity', i.quantity, 'unitPrice', i."unitPrice"))
       FROM "RequisitionItem" i WHERE i."requisitionId" = r.id
@@ -37,13 +37,15 @@ SELECT
       SELECT jsonb_agg(jsonb_build_object(
         'vendor', q."vendorName",
         'total', q."totalPrice",
-        'status', q.status
+        'status', q.status,
+        'submittedAt', q."createdAt"
       ))
       FROM "Quotation" q WHERE q."requisitionId" = r.id
     ),
-    'audit_summary', (
-      SELECT jsonb_agg(jsonb_build_object('action', a.action, 'details', a.details, 'ts', a.timestamp))
-      FROM "AuditLog" a WHERE a."entityId" = r.id AND a.entity = 'Requisition'
+    'last_audit_action', (
+      SELECT action FROM "AuditLog" a 
+      WHERE a."entityId" = r.id AND a.entity = 'Requisition' 
+      ORDER BY a.timestamp DESC LIMIT 1
     )
   ) as data
 FROM "PurchaseRequisition" r;
@@ -60,27 +62,26 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
-        // 1. Ensure view and unique index exist (Index is required for CONCURRENTLY)
-        await prisma.$executeRawUnsafe(VIEW_SQL);
+        // 1. Bootstrap view and indices
+        await prisma.$executeRawUnsafe(REFRESH_SQL);
         await prisma.$executeRawUnsafe(INDEX_SQL);
 
-        // 2. Refresh the view. 
-        // We use CONCURRENTLY so the AI API remains readable during the refresh.
-        await prisma.$executeRawUnsafe(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${VIEW_NAME}`);
+        // 2. Perform concurrent refresh (Zero downtime for AI reads)
+        try {
+            await prisma.$executeRawUnsafe(`REFRESH MATERIALIZED VIEW CONCURRENTLY ${VIEW_NAME}`);
+        } catch (e) {
+            // Concurrent refresh fails if it's the very first populate
+            await prisma.$executeRawUnsafe(`REFRESH MATERIALIZED VIEW ${VIEW_NAME}`);
+        }
 
         return NextResponse.json({ 
             success: true, 
-            message: 'AI Knowledge Base synchronized successfully (Concurrent Refresh).' 
+            message: 'System analytical snapshot synchronized successfully.' 
         });
     } catch (err: any) {
-        console.error('Refresh summary error:', err);
-        // Fallback to non-concurrent if the index isn't ready or first-run
-        if (err?.message?.includes('concurrently')) {
-             await prisma.$executeRawUnsafe(`REFRESH MATERIALIZED VIEW ${VIEW_NAME}`);
-             return NextResponse.json({ success: true, message: 'Synchronized (Standard Refresh).' });
-        }
+        console.error('[REFRESH_VIEW] Failed:', err);
         return NextResponse.json({ 
-            error: 'Failed to sync AI data', 
+            error: 'Failed to synchronize AI data', 
             details: err?.message 
         }, { status: 500 });
     }
