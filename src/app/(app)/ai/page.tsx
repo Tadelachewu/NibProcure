@@ -8,7 +8,7 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export default function AIPromptPage() {
-    const { token, user } = useAuth();
+    const { token, user, role } = useAuth();
     const { toast } = useToast();
     const [requisitionId, setRequisitionId] = useState('');
     const [type, setType] = useState<'minutes' | 'report' | 'advice'>('minutes');
@@ -86,13 +86,14 @@ export default function AIPromptPage() {
         }
     };
 
-    const isAdmin = Boolean(user && (user.roles as any[]).some(r => (typeof r === 'string' ? r === 'Admin' : r?.name === 'Admin')));
+    // Allow Admins and Procurement Officers to sync data
+    const canSync = role === 'Admin' || role === 'Procurement_Officer';
 
     return (
         <div className="p-6">
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-semibold">AI Assistant</h1>
-                {isAdmin && (
+                {canSync && (
                     <Button 
                         onClick={handleRefreshSummary} 
                         disabled={refreshing} 

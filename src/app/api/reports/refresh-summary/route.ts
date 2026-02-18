@@ -58,21 +58,21 @@ const INDEX_SQL = `CREATE UNIQUE INDEX IF NOT EXISTS "idx_requisition_summary_id
 export async function POST(request: Request) {
     try {
         const actor = await getActorFromToken(request);
-        if (!isAdmin(actor)) {
+        const roles = (actor.roles || []).map((r: any) => (typeof r === 'string' ? r : r.name));
+        
+        if (!roles.includes('Admin') && !roles.includes('Procurement_Officer')) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
         }
 
-        // Check if the materialized view exists in the PostgreSQL catalog
+        // Check if the materialized view exists
         const viewExists = await prisma.$queryRaw<any[]>`
             SELECT 1 FROM pg_matviews WHERE matviewname = 'RequisitionSystemWideSummary'
         `;
 
         if (viewExists.length > 0) {
-            // Concurrent refresh isn't possible without a unique index, 
-            // but we use standard refresh for simplicity here.
             await prisma.$executeRawUnsafe(`REFRESH MATERIALIZED VIEW "RequisitionSystemWideSummary"`);
         } else {
-            // Create the view if it's the first time running
+            // Create the view and index for the first time
             await prisma.$executeRawUnsafe(VIEW_SQL);
             await prisma.$executeRawUnsafe(INDEX_SQL);
         }
