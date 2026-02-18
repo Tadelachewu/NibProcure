@@ -280,3 +280,12 @@ For a more detailed technical overview, please see `docs/architecture.md`.
 npm install
 npm run build
 node .next/standalone/server.js
+
+
+
+
+
+test apis like 
+curl.exe -X POST "http://localhost:9005/api/ollama-systemwide-requisitions" ` 
+    -H "Content-Type: application/json" `
+    -d '{"prompt":"Summarize outstanding high-value requisitions."}'
