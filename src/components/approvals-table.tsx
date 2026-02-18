@@ -74,6 +74,9 @@ export function ApprovalsTable() {
   const [isOpenTender, setIsOpenTender] = useState(false);
   const [announcementEndDate, setAnnouncementEndDate] = useState<Date | undefined>();
   const [announcementEndTime, setAnnouncementEndTime] = useState('17:00');
+  const [editingDeadlineReq, setEditingDeadlineReq] = useState<PurchaseRequisition | null>(null);
+  const [editingDeadlineDate, setEditingDeadlineDate] = useState<Date | undefined>();
+  const [editingDeadlineTime, setEditingDeadlineTime] = useState('17:00');
 
   useEffect(() => {
     if (isActionDialogOpen && selectedRequisition) {
@@ -241,6 +244,34 @@ export function ApprovalsTable() {
     }
   }
 
+  const openEditDeadline = (req: PurchaseRequisition) => {
+    setEditingDeadlineReq(req);
+    setEditingDeadlineDate(req.announcementEndDate ? new Date(req.announcementEndDate) : undefined);
+    setEditingDeadlineTime(req.announcementEndDate ? format(new Date(req.announcementEndDate), 'HH:mm') : '17:00');
+  }
+
+  const submitDeadlineUpdate = async () => {
+    if (!editingDeadlineReq || !token) return;
+    try {
+      const payload: any = { id: editingDeadlineReq.id };
+      if (editingDeadlineDate) {
+        const [h, m] = editingDeadlineTime.split(':').map(Number);
+        const ann = setMinutes(setHours(editingDeadlineDate, h), m);
+        payload.announcementEndDate = ann;
+      } else {
+        payload.announcementEndDate = null;
+      }
+
+      const res = await fetch('/api/requisitions', { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error('Failed to update deadline');
+      toast({ title: 'Deadline updated', variant: 'success' });
+      setEditingDeadlineReq(null);
+      fetchRequisitions();
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', variant: 'destructive' });
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(requisitions.length / PAGE_SIZE));
   const paginatedRequisitions = requisitions.slice(
     (currentPage - 1) * PAGE_SIZE,
@@ -292,6 +323,7 @@ export function ApprovalsTable() {
                   <TableHead>Approver</TableHead>
                   <TableHead>Urgency</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Closing Deadline</TableHead>
                   <TableHead>Assigned Senders</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -328,6 +360,20 @@ export function ApprovalsTable() {
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {req.announcementEndDate ? (
+                              <span className="text-sm">{format(new Date(req.announcementEndDate), 'PPpp')}</span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
+                            )}
+                            {user && ((user.roles as any[]).some((r: any) => (typeof r === 'string' ? r : r.name) === 'Manager_Procurement_Division')) && (
+                              <Button variant="ghost" size="icon" onClick={() => openEditDeadline(req)}>
+                                <CalendarIcon className="h-4 w-4" />
+                              </Button>
                             )}
                           </div>
                         </TableCell>
@@ -371,7 +417,7 @@ export function ApprovalsTable() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-48 text-center">
+                    <TableCell colSpan={10} className="h-48 text-center">
                       <div className="flex flex-col items-center gap-4">
                         <Inbox className="h-16 w-16 text-muted-foreground/50" />
                         <div className="space-y-1">
@@ -497,6 +543,44 @@ export function ApprovalsTable() {
               >
                 Submit {actionType === 'approve' ? 'Approval' : 'Rejection'}
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={!!editingDeadlineReq} onOpenChange={(open) => { if (!open) setEditingDeadlineReq(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Update Closing Deadline: {editingDeadlineReq?.id}</DialogTitle>
+              <DialogDescription>Adjust the public closing date/time for this requisition.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <div className="grid gap-2">
+                <Label>Announcement End Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {editingDeadlineDate ? format(editingDeadlineDate, 'PPP') : <span>Pick an end date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={editingDeadlineDate}
+                      onSelect={setEditingDeadlineDate}
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                <div className="mt-2 w-40">
+                  <Input type="time" value={editingDeadlineTime} onChange={(e) => setEditingDeadlineTime(e.target.value)} />
+                </div>
+                <p className="text-xs text-muted-foreground">The date/time this tender will no longer be publicly visible.</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setEditingDeadlineReq(null)}>Cancel</Button>
+              <Button onClick={submitDeadlineUpdate}>Save</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
