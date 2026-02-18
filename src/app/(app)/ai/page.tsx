@@ -4,10 +4,13 @@ import React, { useEffect, useState } from 'react';
 import { generateAI } from '@/lib/ollama-client';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Database, Eye, EyeOff, ClipboardList } from 'lucide-react';
+import { Loader2, RefreshCw, Database, Eye, EyeOff, ClipboardList, Bot, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 
 export default function AIPromptPage() {
     const { token, user, role } = useAuth();
@@ -73,7 +76,7 @@ export default function AIPromptPage() {
             
             toast({ 
                 title: 'AI Data Synced', 
-                description: `Materialized view refreshed with ${Array.isArray(testDataPreview) ? testDataPreview.length : 'latest'} records.` 
+                description: `Materialized view refreshed with latest records.` 
             });
         } catch (err: any) {
             toast({ 
@@ -83,21 +86,6 @@ export default function AIPromptPage() {
             });
         } finally {
             setRefreshing(false);
-        }
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setResult('');
-        try {
-            const res = await generateAI(type, requisitionId, { prompt: prompt || undefined });
-            const sanitize = (s: string) => s ? s.replace(/[\*\+\[\]\{\}\<\>\`\|\\]/g, '').replace(/\r\n|\r/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/ {2,}/g, ' ') : '';
-            setResult(sanitize(res || ''));
-        } catch (err: any) {
-            setResult('Error: ' + (err?.message || String(err)));
-        } finally {
-            setLoading(false);
         }
     };
 
