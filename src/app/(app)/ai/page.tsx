@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -16,7 +15,7 @@ import { cn } from '@/lib/utils';
 type AIStatus = 'idle' | 'fetching' | 'syncing' | 'analyzing' | 'complete';
 
 export default function AIPromptPage() {
-    const { token, user, role } = useAuth();
+    const { token, role } = useAuth();
     const { toast } = useToast();
     const [requisitionId, setRequisitionId] = useState('');
     const [type, setType] = useState<'minutes' | 'report' | 'summary' | 'advice'>('report');
@@ -261,7 +260,7 @@ export default function AIPromptPage() {
                                             <option value="advice">Risk & Decision Advice</option>
                                         </select>
                                     </div>
-                                </>
+                                </div>
                             ) : (
                                 <div className="p-4 bg-primary/5 rounded-md border border-primary/20 text-xs text-muted-foreground leading-relaxed">
                                     <p className="flex items-center gap-2 font-semibold text-primary mb-1">
