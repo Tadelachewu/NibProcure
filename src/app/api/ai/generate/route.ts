@@ -1,13 +1,14 @@
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActorFromToken } from '@/lib/auth';
 
 type GenerateRequest = {
-    type: 'report' | 'minutes' | 'advice';
+    type: 'report' | 'minutes' | 'summary' | 'advice';
     requisitionId: string;
     model?: string;
     max_tokens?: number;
-    prompt?: string; // optional override
+    prompt?: string;
 }
 
 async function fetchRequisitionContext(id: string) {
@@ -26,15 +27,77 @@ async function fetchRequisitionContext(id: string) {
 
 function buildPrompt(type: string, context: any, override?: string) {
     const ctxJson = JSON.stringify(context, null, 2);
-    if (override) return override;
+    
+    const baseConstraints = `
+STRICT FORMATTING RULES:
+1. NEVER use asterisks (*), hashtags (#), or backticks (\`) for formatting.
+2. Use ALL CAPS for main section headers.
+3. Use plain indentation or numeric lists (1., 2., 3.) for itemization.
+4. Ensure the output is "Ready Made" for a professional physical print-out.
+5. Do NOT include markdown code blocks or symbols.
+6. Provide a formal, executive tone.
+7. If data is missing for a section, simply omit the section or state "Not recorded".
+`;
 
     if (type === 'minutes') {
-        return `You are an assistant that writes formal procurement minutes from structured requisition context.\n\nRequisition Context:\n${ctxJson}\n\nProduce concise minutes with: Requisition Reference, Purpose, Summary of Actions, Decisions Made, Justifications, Outstanding Items/Next Steps, Date and Status Summary.`;
+        return `You are a formal committee secretary. Write meeting minutes for requisition ${context.id}.
+${baseConstraints}
+STRUCTURE:
+- MEETING MINUTES: [REQUISITION TITLE]
+- REFERENCE ID: [ID]
+- DATE RECORDED: [CURRENT DATE]
+- SUMMARY OF PROCURMENT ACTION
+- DECISIONS AND RESOLUTIONS
+- JUSTIFICATION FOR SELECTION
+- ACTION ITEMS AND NEXT STEPS
+
+Context:
+${ctxJson}
+
+${override ? `Additional User Request: ${override}` : ''}`;
     }
+
     if (type === 'report') {
-        return `You are an assistant that generates an audit-ready procurement report.\n\nRequisition Context:\n${ctxJson}\n\nProduce a professional report summarizing key metrics, timelines, approvals, vendors, risks, and recommendations. Include a short executive summary followed by structured sections.`;
+        return `You are a Senior Procurement Auditor. Generate a formal Audit Lifecycle Report for requisition ${context.id}.
+${baseConstraints}
+STRUCTURE:
+- AUDIT LIFECYCLE REPORT
+- REQUISITION: [TITLE]
+- EXECUTIVE SUMMARY
+- LIFECYCLE CHRONOLOGY (List from Created to Current Status)
+- VENDOR EVALUATION SUMMARY
+- COMPLIANCE AND RISK ASSESSMENT
+- AUDITOR RECOMMENDATIONS
+
+Context:
+${ctxJson}
+
+${override ? `Additional User Request: ${override}` : ''}`;
     }
-    return `You are an assistant that provides decision analysis.\n\nRequisition Context:\n${ctxJson}\n\nBased on the facts above, identify why decisions in the approval history may have been taken, list pros/cons, and highlight risks. Clearly separate facts from advisory opinion.`;
+
+    if (type === 'summary') {
+        return `Generate a concise Procurement Summary for requisition ${context.id}.
+${baseConstraints}
+STRUCTURE:
+- PROCUREMENT SUMMARY
+- ITEM OVERVIEW
+- CURRENT STATUS AND APPROVAL STAGE
+- REMAINING REQUIREMENTS
+
+Context:
+${ctxJson}
+
+${override ? `Additional User Request: ${override}` : ''}`;
+    }
+
+    return `Provide expert Procurement Decision Advice for requisition ${context.id}.
+${baseConstraints}
+Identify risks, pros/cons, and identify if any standard policies seem challenged based on the history.
+
+Context:
+${ctxJson}
+
+${override ? `Additional User Request: ${override}` : ''}`;
 }
 
 export async function POST(request: Request) {
@@ -52,7 +115,6 @@ export async function POST(request: Request) {
         const requisition = await fetchRequisitionContext(body.requisitionId);
         if (!requisition) return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
 
-        // Build structured context that is safe to send (mask sensitive fields if needed)
         const structured = {
             id: requisition.id,
             reference: requisition.title,
@@ -74,7 +136,7 @@ export async function POST(request: Request) {
         const res = await fetch(`${ollamaUrl}/api/generate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model, prompt })
+            body: JSON.stringify({ model, prompt, stream: false })
         });
 
         if (!res.ok) {
@@ -82,45 +144,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Ollama error', details: text }, { status: 502 });
         }
 
-        // Ollama may stream NDJSON chunks with { response, done, ... } per-line.
-        // Read full text and try to assemble a single string from 'response' fields.
-        const raw = await res.text();
-        // If NDJSON (many JSON objects separated by newlines), parse each line.
-        const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        if (lines.length > 1) {
-            let assembled = '';
-            for (const line of lines) {
-                try {
-                    const obj = JSON.parse(line);
-                    if (typeof obj.response === 'string') {
-                        assembled += obj.response;
-                    } else if (typeof obj.result === 'string') {
-                        assembled += obj.result;
-                    }
-                } catch (e) {
-                    // not JSON — append raw line
-                    assembled += line + '\n';
-                }
-            }
-            return NextResponse.json({ result: assembled.trim() });
-        }
+        const data = await res.json();
+        const rawResult = data.response || data.result || "";
+        
+        // Final sanity sanitization to remove any lingering markdown artifacts
+        const sanitized = rawResult.replace(/[*#`]/g, '').trim();
 
-        // If single block, attempt to parse as JSON
-        try {
-            const parsed = JSON.parse(raw);
-            // Try common fields
-            if (typeof parsed.response === 'string') return NextResponse.json({ result: parsed.response });
-            if (typeof parsed.result === 'string') return NextResponse.json({ result: parsed.result });
-            if (Array.isArray(parsed.choices)) {
-                // e.g., choices[].text
-                const text = parsed.choices.map((c: any) => c.text || c.message?.content || '').join('');
-                return NextResponse.json({ result: text });
-            }
-        } catch (e) {
-            // not JSON — fall through to return raw
-        }
-
-        return NextResponse.json({ result: raw });
+        return NextResponse.json({ result: sanitized });
     } catch (err: any) {
         console.error('AI generate error:', err);
         return NextResponse.json({ error: 'Internal error', details: err.message || String(err) }, { status: 500 });

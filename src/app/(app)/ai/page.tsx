@@ -1,10 +1,11 @@
+
 "use client";
 
 import React, { useEffect, useState } from 'react';
 import { generateAI } from '@/lib/ollama-client';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, RefreshCw, Database, Eye, EyeOff, ClipboardList, Bot, Printer, Search, BrainCircuit, CheckCircle2 } from 'lucide-react';
+import { Loader2, RefreshCw, Database, Eye, EyeOff, ClipboardList, Bot, Printer, Search, BrainCircuit, CheckCircle2, Download, FileText, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,13 +13,13 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 
-type AIStatus = 'idle' | 'fetching' | 'analyzing' | 'complete';
+type AIStatus = 'idle' | 'fetching' | 'syncing' | 'analyzing' | 'complete';
 
 export default function AIPromptPage() {
     const { token, user, role } = useAuth();
     const { toast } = useToast();
     const [requisitionId, setRequisitionId] = useState('');
-    const [type, setType] = useState<'minutes' | 'report' | 'advice'>('minutes');
+    const [type, setType] = useState<'minutes' | 'report' | 'summary' | 'advice'>('report');
     const [prompt, setPrompt] = useState('');
     const [status, setStatus] = useState<AIStatus>('idle');
     const [result, setResult] = useState('');
@@ -88,6 +89,19 @@ export default function AIPromptPage() {
         }
     };
 
+    const handleDownload = async () => {
+        const content = scope === 'system' ? systemResult : result;
+        if (!content) return;
+
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `requisition-ai-${type}-${new Date().getTime()}.txt`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    };
+
     const handleRunAnalysis = async () => {
         setResult('');
         setSystemResult('');
@@ -101,18 +115,16 @@ export default function AIPromptPage() {
                     body: JSON.stringify({ prompt: systemPrompt }) 
                 });
                 
-                // We transition to 'analyzing' once the request is sent and we are waiting for Ollama
-                setStatus('analyzing');
-                
+                setStatus('syncing');
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'AI Failed');
+                
+                setStatus('analyzing');
                 setSystemResult(data.result || '');
             } else {
-                // For specific, the wrapper does the fetch inside generateAI
-                // We simulate the transition for visual feedback
-                setTimeout(() => setStatus('analyzing'), 600);
-                
-                const res = await generateAI(type, requisitionId, { prompt: prompt || undefined });
+                setStatus('syncing');
+                const res = await generateAI(type as any, requisitionId, { prompt: prompt || undefined });
+                setStatus('analyzing');
                 setResult(res || '');
             }
             setStatus('complete');
@@ -127,14 +139,14 @@ export default function AIPromptPage() {
     };
 
     const canSync = role === 'Admin' || role === 'Procurement_Officer';
-    const isWorking = status === 'fetching' || status === 'analyzing';
+    const isWorking = status !== 'idle' && status !== 'complete';
 
     return (
-        <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
+        <div className="p-6 space-y-6 max-w-7xl mx-auto">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">AI Assistant</h1>
-                    <p className="text-muted-foreground mt-1">Generate minutes, reports, and perform system-wide analysis using Ollama.</p>
+                    <h1 className="text-3xl font-bold tracking-tight">AI Intelligent Assistant</h1>
+                    <p className="text-muted-foreground mt-1">Generate professional audit reports and minutes optimized for printing.</p>
                 </div>
                 {canSync && (
                     <div className="flex gap-2">
@@ -142,19 +154,19 @@ export default function AIPromptPage() {
                             onClick={handleRefreshSummary} 
                             disabled={refreshing || isWorking} 
                             variant="default"
-                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-sm"
+                            className="bg-primary hover:bg-primary/90 shadow-sm"
                         >
                             {refreshing ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             ) : (
                                 <RefreshCw className="mr-2 h-4 w-4" />
                             )}
-                            Sync AI Data
+                            Sync AI Brain
                         </Button>
                         {testDataPreview && (
                             <Button variant="outline" onClick={() => setShowPreview(!showPreview)}>
                                 {showPreview ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-                                {showPreview ? 'Hide Preview' : 'Show Preview'}
+                                {showPreview ? 'Hide Raw Data' : 'Preview Sync'}
                             </Button>
                         )}
                     </div>
@@ -162,12 +174,12 @@ export default function AIPromptPage() {
             </div>
 
             {testDataPreview && showPreview && (
-                <Card className="border-blue-200 bg-blue-50/30 overflow-hidden">
+                <Card className="border-blue-200 bg-blue-50/30 overflow-hidden print:hidden">
                     <CardHeader className="py-3 px-4 border-b border-blue-100 bg-blue-100/50">
                         <div className="flex items-center justify-between">
                             <CardTitle className="text-sm font-semibold flex items-center gap-2 text-blue-800">
                                 <Database className="h-4 w-4" />
-                                Materialized View Preview (Full System Context)
+                                Pre-computed System Context (JSON)
                             </CardTitle>
                             <Badge variant="secondary" className="bg-blue-200 text-blue-800 border-0">
                                 {testDataPreview.length} Records Loaded
@@ -185,113 +197,122 @@ export default function AIPromptPage() {
             )}
 
             <div className="flex flex-col lg:flex-row gap-6">
-                <div className="w-full lg:w-1/3 space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-lg">Configuration</CardTitle>
+                <div className="w-full lg:w-1/3 space-y-6 print:hidden">
+                    <Card className="shadow-sm border-muted">
+                        <CardHeader className="pb-3 border-b bg-muted/20">
+                            <CardTitle className="text-lg">Analysis Configuration</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent className="space-y-5 pt-6">
                             <div>
-                                <label className="text-sm font-medium">Scope</label>
-                                <div className="mt-2 flex gap-3">
+                                <label className="text-sm font-semibold mb-2 block">Analytical Scope</label>
+                                <div className="grid grid-cols-2 gap-2">
                                     <button 
                                         onClick={() => setScope('specific')}
                                         disabled={isWorking}
                                         className={cn(
-                                            "flex-1 px-3 py-2 text-sm rounded-md border transition-all",
+                                            "px-3 py-2 text-sm rounded-md border transition-all flex items-center justify-center gap-2",
                                             scope === 'specific' ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-background border-input hover:bg-muted"
                                         )}
                                     >
+                                        <FileText className="h-4 w-4" />
                                         Requisition
                                     </button>
                                     <button 
                                         onClick={() => setScope('system')}
                                         disabled={isWorking}
                                         className={cn(
-                                            "flex-1 px-3 py-2 text-sm rounded-md border transition-all",
+                                            "px-3 py-2 text-sm rounded-md border transition-all flex items-center justify-center gap-2",
                                             scope === 'system' ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-background border-input hover:bg-muted"
                                         )}
                                     >
+                                        <Database className="h-4 w-4" />
                                         System-wide
                                     </button>
                                 </div>
                             </div>
 
                             {scope === 'specific' ? (
-                                <>
+                                <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-300">
                                     <div>
-                                        <label className="block text-sm font-medium mb-1">Requisition</label>
+                                        <label className="block text-sm font-semibold mb-1.5">Select Requisition</label>
                                         <select 
                                             value={requisitionId} 
                                             onChange={e => setRequisitionId(e.target.value)} 
                                             disabled={isWorking}
-                                            className="w-full border rounded-md px-3 py-2 bg-background focus:ring-2 focus:ring-primary/20"
+                                            className="w-full border rounded-md px-3 py-2 bg-background focus:ring-2 focus:ring-primary/20 text-sm h-10 outline-none"
                                         >
-                                            <option value="">-- Select --</option>
+                                            <option value="">-- Choose Record --</option>
                                             {requisitions.map(r => (
                                                 <option key={r.id} value={r.id}>{r.title} ({r.id})</option>
                                             ))}
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium mb-1">Type</label>
+                                        <label className="block text-sm font-semibold mb-1.5">Report Format</label>
                                         <select 
                                             value={type} 
                                             onChange={e => setType(e.target.value as any)} 
                                             disabled={isWorking}
-                                            className="w-full border rounded-md px-3 py-2 bg-background focus:ring-2 focus:ring-primary/20"
+                                            className="w-full border rounded-md px-3 py-2 bg-background focus:ring-2 focus:ring-primary/20 text-sm h-10 outline-none"
                                         >
-                                            <option value="minutes">Minutes</option>
-                                            <option value="report">Audit Report</option>
-                                            <option value="advice">Decision Advice</option>
+                                            <option value="report">Audited Lifecycle Report</option>
+                                            <option value="summary">Procurement Summary</option>
+                                            <option value="minutes">Formal Meeting Minutes</option>
+                                            <option value="advice">Risk & Decision Advice</option>
                                         </select>
                                     </div>
                                 </>
                             ) : (
-                                <div className="p-3 bg-muted/50 rounded-md border border-dashed text-xs text-muted-foreground leading-relaxed">
-                                    <p>System-wide mode uses the high-performance materialized view to scan all requisitions simultaneously.</p>
+                                <div className="p-4 bg-primary/5 rounded-md border border-primary/20 text-xs text-muted-foreground leading-relaxed">
+                                    <p className="flex items-center gap-2 font-semibold text-primary mb-1">
+                                        <ShieldCheck className="h-3 w-3" /> System-wide Intelligence
+                                    </p>
+                                    Uses the pre-computed materialized view to scan entire system history simultaneously.
                                 </div>
                             )}
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Your Question / Prompt</label>
+                                <label className="block text-sm font-semibold mb-1.5">Custom Instructions</label>
                                 <Textarea 
                                     value={scope === 'system' ? systemPrompt : prompt} 
                                     onChange={e => scope === 'system' ? setSystemPrompt(e.target.value) : setPrompt(e.target.value)} 
                                     rows={4} 
                                     disabled={isWorking}
-                                    placeholder={scope === 'system' ? "e.g. Which requisitions are high value and have no quotes yet?" : "Add custom instructions..."}
+                                    className="resize-none"
+                                    placeholder={scope === 'system' ? "e.g. Which departments have the highest rejection rates?" : "Focus on compliance gaps..."}
                                 />
                             </div>
 
-                            <div className="space-y-3">
+                            <div className="space-y-3 pt-2">
                                 <Button 
-                                    className="w-full" 
+                                    className="w-full h-11" 
                                     disabled={isWorking || (scope === 'system' ? !systemPrompt.trim() : !requisitionId)}
                                     onClick={handleRunAnalysis}
                                 >
                                     {status === 'fetching' ? (
-                                        <><Search className="mr-2 h-4 w-4 animate-pulse" /> Fetching Context...</>
+                                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Scanning DB...</>
+                                    ) : status === 'syncing' ? (
+                                        <><RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Loading Context...</>
                                     ) : status === 'analyzing' ? (
-                                        <><BrainCircuit className="mr-2 h-4 w-4 animate-spin" /> AI Analysis...</>
+                                        <><BrainCircuit className="mr-2 h-4 w-4 animate-pulse" /> AI Thinking...</>
                                     ) : status === 'complete' ? (
-                                        <><CheckCircle2 className="mr-2 h-4 w-4 text-green-400" /> Complete</>
+                                        <><CheckCircle2 className="mr-2 h-4 w-4" /> Ready</>
                                     ) : (
-                                        <><Bot className="mr-2 h-4 w-4" /> Run AI Analysis</>
+                                        <><Bot className="mr-2 h-4 w-4" /> Run Intelligent Analysis</>
                                     )}
                                 </Button>
 
                                 {isWorking && (
                                     <div className="space-y-2 px-1">
                                         <div className="flex items-center justify-between text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
-                                            <span>Progress</span>
-                                            <span>{status === 'fetching' ? '40%' : '85%'}</span>
+                                            <span>System Load</span>
+                                            <span>{status === 'fetching' ? '25%' : status === 'syncing' ? '60%' : '90%'}</span>
                                         </div>
                                         <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                                             <div 
                                                 className={cn(
-                                                    "h-full bg-primary transition-all duration-500 ease-out",
-                                                    status === 'fetching' ? "w-[40%]" : "w-[85%]"
+                                                    "h-full bg-primary transition-all duration-700 ease-in-out",
+                                                    status === 'fetching' ? "w-[25%]" : status === 'syncing' ? "w-[60%]" : "w-[90%]"
                                                 )}
                                             />
                                         </div>
@@ -303,15 +324,18 @@ export default function AIPromptPage() {
                 </div>
 
                 <div className="flex-1">
-                    <Card className="h-full flex flex-col">
-                        <CardHeader className="border-b bg-muted/30">
+                    <Card className="h-full flex flex-col shadow-sm min-h-[600px] print:border-0 print:shadow-none">
+                        <CardHeader className="border-b bg-muted/10 print:hidden">
                             <div className="flex items-center justify-between">
                                 <CardTitle className="text-lg flex items-center gap-2">
                                     <ClipboardList className="h-5 w-5 text-primary" />
-                                    AI Output
+                                    Analysis Output
                                 </CardTitle>
                                 {(scope === 'system' ? systemResult : result) && (
                                     <div className="flex gap-2">
+                                        <Button size="sm" variant="outline" onClick={handleDownload}>
+                                            <Download className="mr-2 h-4 w-4" /> Download
+                                        </Button>
                                         <Button size="sm" variant="outline" onClick={() => window.print()}>
                                             <Printer className="mr-2 h-4 w-4" /> Print
                                         </Button>
@@ -319,21 +343,22 @@ export default function AIPromptPage() {
                                 )}
                             </div>
                         </CardHeader>
-                        <CardContent className="flex-1 p-0 overflow-hidden">
-                            <ScrollArea className="h-[600px]">
-                                <div className="p-6">
+                        <CardContent className="flex-1 p-0 overflow-hidden bg-white dark:bg-card">
+                            <ScrollArea className="h-full max-h-[800px]">
+                                <div className="p-8 md:p-12 print:p-0">
                                     {(scope === 'system' ? systemResult : result) ? (
-                                        <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap font-body text-base">
+                                        <div className="prose prose-sm max-w-none whitespace-pre-wrap font-body text-base leading-relaxed text-slate-900 dark:text-slate-100">
                                             {scope === 'system' ? systemResult : result}
                                         </div>
                                     ) : (
-                                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-20">
-                                            <Bot className={cn("h-12 w-12 opacity-20 mb-4", isWorking && "animate-bounce")} />
-                                            <p className="text-sm">
-                                                {status === 'fetching' ? 'Retrieving system context...' : 
-                                                 status === 'analyzing' ? 'Ollama is generating your report...' : 
-                                                 'Configure analysis and run to see AI output here.'}
-                                            </p>
+                                        <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground/40 text-center space-y-4 print:hidden">
+                                            <div className="p-6 rounded-full bg-muted/20">
+                                                <Bot className={cn("h-16 w-16", isWorking && "animate-bounce")} />
+                                            </div>
+                                            <div>
+                                                <p className="text-lg font-medium">Ready for Intelligent Analysis</p>
+                                                <p className="text-sm max-w-xs mx-auto">Select a scope and click the button to generate a clean, ready-made report.</p>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
