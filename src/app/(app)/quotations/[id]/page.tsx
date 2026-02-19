@@ -1603,6 +1603,16 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
 
     const [allowQuoteEdits, setAllowQuoteEdits] = useState(requisition.rfqSettings?.allowQuoteEdits ?? true);
     const [experienceDocumentRequired, setExperienceDocumentRequired] = useState(requisition.rfqSettings?.experienceDocumentRequired ?? false);
+    const [termsAndConditions, setTermsAndConditions] = useState<string[]>(
+        Array.isArray((requisition.rfqSettings as any)?.termsAndConditions)
+            ? (requisition.rfqSettings as any).termsAndConditions
+            : ((requisition.rfqSettings as any)?.termsAndConditions
+                ? String((requisition.rfqSettings as any).termsAndConditions)
+                    .split('\n')
+                    .map(t => t.trim())
+                    .filter(Boolean)
+                : [])
+    );
     const [procurementMethod, setProcurementMethod] = useState<string>(
         requisition.procurementMethod ?? (requisition.isOpenTender ? 'OpenTender' : ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'))
     );
@@ -1623,7 +1633,25 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
         setCpoAmount(requisition.cpoAmount);
         setAllowQuoteEdits(requisition.rfqSettings?.allowQuoteEdits ?? true);
         setExperienceDocumentRequired(requisition.rfqSettings?.experienceDocumentRequired ?? true);
-        setProcurementMethod(requisition.procurementMethod ?? (requisition.isOpenTender ? 'OpenTender' : ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ')));
+        const existingTerms = (requisition.rfqSettings as any)?.termsAndConditions;
+        if (Array.isArray(existingTerms)) {
+            setTermsAndConditions(existingTerms.map((t: any) => String(t).trim()).filter(Boolean));
+        } else if (existingTerms) {
+            setTermsAndConditions(
+                String(existingTerms)
+                    .split('\n')
+                    .map(t => t.trim())
+                    .filter(Boolean)
+            );
+        } else {
+            setTermsAndConditions([]);
+        }
+        setProcurementMethod(
+            requisition.procurementMethod ??
+            (requisition.isOpenTender
+                ? 'OpenTender'
+                : ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'))
+        );
     }, [requisition]);
 
     const deadline = useMemo(() => {
@@ -1705,6 +1733,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                         experienceDocumentRequired,
                         method: procurementMethod,
                         rfqDocumentUrl,
+                        termsAndConditions: termsAndConditions,
                     },
                     procurementMethod
                 }),
@@ -1947,6 +1976,61 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                     </div>
                     <p className="text-xs text-muted-foreground">Optional. If set, vendors must submit a CPO of this amount to qualify.</p>
                 </div>
+                <Accordion type="single" collapsible defaultValue="terms">
+                    <AccordionItem value="terms">
+                        <AccordionTrigger>
+                            <span className="text-sm font-medium">Terms and Conditions</span>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                            <div className="space-y-2 mt-2">
+                                <div className="space-y-2">
+                                    {termsAndConditions.length > 0 && (
+                                        <div className="space-y-1">
+                                            {termsAndConditions.map((term, index) => (
+                                                <div key={index} className="flex items-start gap-2">
+                                                    <span className="mt-1 text-xs text-muted-foreground">{index + 1}.</span>
+                                                    <Input
+                                                        value={term}
+                                                        onChange={(e) => {
+                                                            const next = [...termsAndConditions];
+                                                            next[index] = e.target.value;
+                                                            setTermsAndConditions(next.filter(t => t.trim().length > 0));
+                                                        }}
+                                                        disabled={!canTakeAction}
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const next = termsAndConditions.filter((_, i) => i !== index);
+                                                            setTermsAndConditions(next);
+                                                        }}
+                                                        disabled={!canTakeAction}
+                                                    >
+                                                        Remove
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setTermsAndConditions([...termsAndConditions, ''])}
+                                        disabled={!canTakeAction}
+                                    >
+                                        Add Term
+                                    </Button>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Optional. Add one term per input. Vendors will see each term separately and must accept all of them when submitting their quotations.
+                                </p>
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
                 <div className="grid md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">

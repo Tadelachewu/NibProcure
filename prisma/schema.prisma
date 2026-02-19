@@ -180,6 +180,7 @@ model Quotation {
   cpoDocumentUrl   String?
   experienceDocumentUrl String?
   bidDocumentUrl String?
+  termsAccepted    Boolean     @default(false)
   scores           CommitteeScoreSet[]
   complianceSets   CommitteeComplianceSet[]
 }

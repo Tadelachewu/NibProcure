@@ -20,6 +20,7 @@ export async function POST(request: Request) {
       cpoDocumentUrl,
       experienceDocumentUrl,
       bidDocumentUrl,
+      termsAccepted,
     } = body || {};
 
     if (!requisitionId || !vendorId || !Array.isArray(items) || items.length === 0) {
@@ -37,6 +38,24 @@ export async function POST(request: Request) {
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: String(requisitionId) } });
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
+    }
+
+    const rfqSettings = (requisition.rfqSettings || {}) as any;
+    const rawTerms = rfqSettings?.termsAndConditions as string | string[] | undefined;
+    const termsArray = Array.isArray(rawTerms)
+      ? rawTerms.map(t => String(t).trim()).filter(Boolean)
+      : (rawTerms
+        ? String(rawTerms)
+          .split('\n')
+          .map(t => t.trim())
+          .filter(Boolean)
+        : []);
+    const hasTerms = termsArray.length > 0;
+    if (hasTerms && !termsAccepted) {
+      return NextResponse.json(
+        { error: 'Terms and conditions must be accepted when capturing a quotation.' },
+        { status: 400 }
+      );
     }
 
     const rfqSettings = (requisition.rfqSettings || {}) as any;
@@ -94,6 +113,7 @@ export async function POST(request: Request) {
       cpoDocumentUrl,
       experienceDocumentUrl,
       bidDocumentUrl,
+      termsAccepted: hasTerms ? true : false,
       items: {
         create: items.map((item: any) => ({
           requisitionItemId: String(item.requisitionItemId),

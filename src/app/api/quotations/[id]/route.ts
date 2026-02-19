@@ -69,7 +69,7 @@ export async function PATCH(request: Request, context: { params: any }) {
         }
 
         const body = await request.json();
-        const { items, notes, answers, cpoDocumentUrl, experienceDocumentUrl, bidDocumentUrl } = body;
+        const { items, notes, answers, cpoDocumentUrl, experienceDocumentUrl, bidDocumentUrl, termsAccepted } = body;
 
         const quote = await prisma.quotation.findUnique({
             where: { id: quoteId },
@@ -82,6 +82,24 @@ export async function PATCH(request: Request, context: { params: any }) {
 
         if (quote.vendorId !== actor.vendorId) {
             return NextResponse.json({ error: 'You are not authorized to edit this quotation.' }, { status: 403 });
+        }
+
+        const rfqSettings = (quote.requisition.rfqSettings || {}) as any;
+        const rawTerms = rfqSettings?.termsAndConditions as string | string[] | undefined;
+        const termsArray = Array.isArray(rawTerms)
+            ? rawTerms.map(t => String(t).trim()).filter(Boolean)
+            : (rawTerms
+                ? String(rawTerms)
+                    .split('\n')
+                    .map(t => t.trim())
+                    .filter(Boolean)
+                : []);
+        const hasTerms = termsArray.length > 0;
+        if (hasTerms && !termsAccepted && !quote.termsAccepted) {
+            return NextResponse.json(
+                { error: 'You must accept the terms and conditions before updating your quotation.' },
+                { status: 400 }
+            );
         }
 
         const isAwardProcessStarted = await prisma.quotation.count({
@@ -117,6 +135,7 @@ export async function PATCH(request: Request, context: { params: any }) {
                 cpoDocumentUrl,
                 experienceDocumentUrl,
                 bidDocumentUrl,
+                termsAccepted: hasTerms ? true : quote.termsAccepted,
                 items: {
                     create: items.map((item: any) => ({
                         requisitionItemId: item.requisitionItemId,

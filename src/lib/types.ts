@@ -203,6 +203,7 @@ export type PurchaseRequisition = {
       technicalEvaluatorSeesPrices?: boolean;
       experienceDocumentRequired?: boolean;
       needsCompliance?: boolean;
+      termsAndConditions?: string;
       [key: string]: any;
   };
   assignedRfqSenderIds?: string[];
@@ -341,6 +342,7 @@ export type Quotation = {
     cpoDocumentUrl?: string;
     experienceDocumentUrl?: string;
     bidDocumentUrl?: string;
+    termsAccepted?: boolean;
 };
 
 export type POItem = {

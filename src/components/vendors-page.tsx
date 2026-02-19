@@ -42,6 +42,8 @@ import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from './ui/form';
 import { Badge } from './ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { ScrollArea } from './ui/scroll-area';
 
 const vendorSchema = z.object({
   name: z.string().min(2, "Vendor name is required."),
@@ -89,6 +91,11 @@ export function VendorsPage() {
   const [isSubmitting, setSubmitting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [requisitionHistoryData, setRequisitionHistoryData] = useState<any[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const form = useForm<z.infer<typeof vendorSchema>>({
     resolver: zodResolver(vendorSchema),
@@ -117,7 +124,25 @@ export function VendorsPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, token]);
+
+  const fetchRequisitionHistory = useCallback(async () => {
+    if (requisitionHistoryData) return;
+    try {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      const response = await fetch('/api/requisitions?limit=200', {
+        headers: { Authorization: token ? `Bearer ${token}` : '' },
+      });
+      if (!response.ok) throw new Error('Failed to fetch requisition history');
+      const data = await response.json();
+      setRequisitionHistoryData(data.requisitions || []);
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : 'Could not fetch participation history.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [token, requisitionHistoryData]);
 
   const canManageVendors = (user && (user.roles || []).includes('Admin')) || (user && (user.roles || []).includes('Procurement_Officer'));
 
@@ -155,6 +180,41 @@ export function VendorsPage() {
     const startIndex = (currentPage - 1) * PAGE_SIZE;
     return vendors.slice(startIndex, startIndex + PAGE_SIZE);
   }, [vendors, currentPage]);
+
+  const vendorParticipation = useMemo(() => {
+    if (!selectedVendor || !requisitionHistoryData) return [];
+    const vid = selectedVendor.id;
+    const rows: {
+      requisitionId: string;
+      title: string;
+      status: string;
+      createdAt: string | Date;
+      totalPrice: number | null;
+      quoteStatus: string;
+      score: number | null;
+    }[] = [];
+    for (const req of requisitionHistoryData) {
+      const quotes = (req.quotations || []).filter((q: any) => q.vendorId === vid);
+      if (!quotes.length) continue;
+      const quote = quotes[0];
+      rows.push({
+        requisitionId: req.id,
+        title: req.title,
+        status: req.status,
+        createdAt: req.createdAt,
+        totalPrice: quote.totalPrice ?? null,
+        quoteStatus: quote.status,
+        score: quote.finalAverageScore ?? null,
+      });
+    }
+    return rows;
+  }, [selectedVendor, requisitionHistoryData]);
+
+  const handleOpenDetails = (vendor: Vendor) => {
+    setSelectedVendor(vendor);
+    setIsDetailsOpen(true);
+    fetchRequisitionHistory();
+  };
 
   const onSubmit = async (values: z.infer<typeof vendorSchema>) => {
     setSubmitting(true);
@@ -328,15 +388,18 @@ export function VendorsPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {canManageVendors ? (
-                        vendor.blacklist && (vendor.blacklist.blacklisted === true || vendor.blacklist.status === 'blacklisted') ? (
-                          <Button size="sm" variant="outline" onClick={() => handleUnblacklist(vendor.id)}>Unblacklist</Button>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handleOpenDetails(vendor)}>Details</Button>
+                        {canManageVendors ? (
+                          vendor.blacklist && (vendor.blacklist.blacklisted === true || vendor.blacklist.status === 'blacklisted') ? (
+                            <Button size="sm" variant="outline" onClick={() => handleUnblacklist(vendor.id)}>Unblacklist</Button>
+                          ) : (
+                            <Button size="sm" variant="destructive" onClick={() => handleBlacklist(vendor.id)}>Blacklist</Button>
+                          )
                         ) : (
-                          <Button size="sm" variant="destructive" onClick={() => handleBlacklist(vendor.id)}>Blacklist</Button>
-                        )
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -374,6 +437,164 @@ export function VendorsPage() {
           </div>
         </div>
       </CardContent>
+      <Dialog open={isDetailsOpen} onOpenChange={(open) => {
+        setIsDetailsOpen(open);
+        if (!open) {
+          setSelectedVendor(null);
+        }
+      }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Vendor Details</DialogTitle>
+            <DialogDescription>
+              View full vendor profile and participation history.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedVendor && (
+            <Tabs defaultValue="details" className="mt-4">
+              <TabsList>
+                <TabsTrigger value="details">Vendor Details</TabsTrigger>
+                <TabsTrigger value="participation">Participation History</TabsTrigger>
+              </TabsList>
+              <TabsContent value="details" className="mt-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Vendor Name</p>
+                    <p className="font-medium">{selectedVendor.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Contact Person</p>
+                    <p className="font-medium">{selectedVendor.contactPerson}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Email</p>
+                    <p className="font-medium">{selectedVendor.email || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Phone</p>
+                    <p className="font-medium">{selectedVendor.phone}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <p className="text-xs text-muted-foreground">Address</p>
+                    <p className="font-medium break-words">{selectedVendor.address}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">KYC Status</p>
+                    <div className="mt-1">
+                      <KycStatusBadge status={selectedVendor.kycStatus} reason={selectedVendor.rejectionReason} />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Blacklist Status</p>
+                    <div className="mt-1">
+                      {selectedVendor.blacklist && (selectedVendor.blacklist.blacklisted === true || selectedVendor.blacklist.status === 'blacklisted') ? (
+                        <Badge variant="destructive">Blacklisted</Badge>
+                      ) : (
+                        <Badge variant="secondary">Active</Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">KYC Documents</p>
+                  {selectedVendor.kycDocuments && selectedVendor.kycDocuments.length > 0 ? (
+                    <ScrollArea className="max-h-40 border rounded-md p-2">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Document</TableHead>
+                            <TableHead>Submitted At</TableHead>
+                            <TableHead>Link</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedVendor.kycDocuments.map((doc, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>{doc.name}</TableCell>
+                              <TableCell>{doc.submittedAt ? new Date(doc.submittedAt).toLocaleString() : '—'}</TableCell>
+                              <TableCell>
+                                {doc.url && doc.url !== '#' ? (
+                                  <a href={doc.url} target="_blank" rel="noreferrer" className="text-sm text-primary underline">
+                                    Open
+                                  </a>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">N/A</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No KYC documents recorded.</p>
+                  )}
+                </div>
+              </TabsContent>
+              <TabsContent value="participation" className="mt-4">
+                {historyLoading && (
+                  <div className="flex h-32 items-center justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  </div>
+                )}
+                {!historyLoading && historyError && (
+                  <p className="text-sm text-destructive">{historyError}</p>
+                )}
+                {!historyLoading && !historyError && (
+                  vendorParticipation.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      This vendor has not yet participated in any requisitions.
+                    </p>
+                  ) : (
+                    <ScrollArea className="max-h-64 border rounded-md">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Requisition</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Quote Status</TableHead>
+                            <TableHead className="text-right">Total Price</TableHead>
+                            <TableHead className="text-right">Score</TableHead>
+                            <TableHead>Created</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {vendorParticipation.map(row => (
+                            <TableRow key={row.requisitionId}>
+                              <TableCell>
+                                <div className="space-y-0.5">
+                                  <div className="font-medium">{row.title}</div>
+                                  <div className="text-xs text-muted-foreground">{row.requisitionId}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell>{row.status}</TableCell>
+                              <TableCell>{row.quoteStatus}</TableCell>
+                              <TableCell className="text-right">
+                                {row.totalPrice != null ? row.totalPrice.toFixed ? row.totalPrice.toFixed(2) : row.totalPrice : '—'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {row.score != null ? row.score.toFixed ? row.score.toFixed(2) : row.score : '—'}
+                              </TableCell>
+                              <TableCell>
+                                {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '—'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  )
+                )}
+              </TabsContent>
+            </Tabs>
+          )}
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

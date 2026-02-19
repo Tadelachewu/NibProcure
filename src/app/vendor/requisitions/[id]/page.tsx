@@ -29,6 +29,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import Image from 'next/image';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const quoteFormSchema = z.object({
     notes: z.string().optional(),
@@ -48,6 +50,7 @@ const quoteFormSchema = z.object({
     cpoDocumentUrl: z.string().optional(),
     experienceDocumentUrl: z.string().optional(),
     bidDocumentUrl: z.string().optional(),
+    termsAccepted: z.boolean().optional(),
 }).refine(
     (data, ctx) => {
         return true;
@@ -268,6 +271,7 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             cpoDocumentUrl: '',
             experienceDocumentUrl: '',
             bidDocumentUrl: '',
+            termsAccepted: false,
         },
     });
 
@@ -360,6 +364,12 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             return;
         }
 
+        if (hasTerms && !values.termsAccepted) {
+            form.setError('termsAccepted', { type: 'manual', message: 'You must accept the terms and conditions before submitting.' });
+            toast({ variant: 'destructive', title: 'Terms Not Accepted', description: 'Please review and accept the terms and conditions to continue.' });
+            return;
+        }
+
         if (requisition.cpoAmount && requisition.cpoAmount > 0 && !values.cpoDocumentUrl) {
             form.setError("cpoDocumentUrl", { type: "manual", message: "CPO Document is required." });
             return;
@@ -423,8 +433,22 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
     const isCpoRequired = !!(requisition.cpoAmount && requisition.cpoAmount > 0);
     const experienceDocumentValue = form.watch('experienceDocumentUrl');
     const isExperienceRequired = requisition.rfqSettings?.experienceDocumentRequired;
+    const rawTerms = (requisition.rfqSettings as any)?.termsAndConditions as string | string[] | undefined;
+    const termsArray = Array.isArray(rawTerms)
+        ? rawTerms.map(t => String(t).trim()).filter(Boolean)
+        : (rawTerms
+            ? String(rawTerms)
+                .split('\n')
+                .map(t => t.trim())
+                .filter(Boolean)
+            : []);
+    const hasTerms = termsArray.length > 0;
+    const termsAcceptedValue = form.watch('termsAccepted');
 
-    const canSubmit = (!isCpoRequired || (isCpoRequired && !!cpoDocumentValue)) && (!isExperienceRequired || (isExperienceRequired && !!experienceDocumentValue));
+    const canSubmit =
+        (!isCpoRequired || (isCpoRequired && !!cpoDocumentValue)) &&
+        (!isExperienceRequired || (isExperienceRequired && !!experienceDocumentValue)) &&
+        (!hasTerms || !!termsAcceptedValue);
 
     const originalItems = requisition.items;
 
@@ -494,12 +518,16 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                 <FormItem>
                                     <FormLabel>Official Bid Document (Optional)</FormLabel>
                                     <FormControl>
-                                        <Input type="file" accept=".pdf" onChange={async (e) => {
-                                            if (e.target.files?.[0]) {
-                                                const path = await handleFileUpload(e.target.files[0]);
-                                                if (path) field.onChange(path);
-                                            }
-                                        }} />
+                                        <Input
+                                            type="file"
+                                            accept=".pdf"
+                                            onChange={async (e) => {
+                                                if (e.target.files?.[0]) {
+                                                    const path = await handleFileUpload(e.target.files[0]);
+                                                    if (path) field.onChange(path);
+                                                }
+                                            }}
+                                        />
                                     </FormControl>
                                     <FormDescription>
                                         Upload your official bid document or a summary here.
@@ -508,6 +536,50 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
                                 </FormItem>
                             )}
                         />
+
+                        {hasTerms && (
+                            <Accordion type="single" collapsible defaultValue="terms">
+                                <AccordionItem value="terms">
+                                    <AccordionTrigger>
+                                        <span className="text-sm font-medium">Terms and Conditions</span>
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                        <div className="border border-primary/30 bg-muted/40 rounded-md p-4 space-y-4 mt-2">
+                                            <div className="border rounded-md p-3 bg-background">
+                                                <ScrollArea className="max-h-48 pr-2 space-y-2">
+                                                    {termsArray.map((term, index) => (
+                                                        <div key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
+                                                            <span className="mt-0.5">{index + 1}.</span>
+                                                            <p className="flex-1">{term}</p>
+                                                        </div>
+                                                    ))}
+                                                </ScrollArea>
+                                            </div>
+                                            <FormField
+                                                control={form.control}
+                                                name="termsAccepted"
+                                                render={({ field }) => (
+                                                    <FormItem className="flex flex-row items-start space-x-2 space-y-0">
+                                                        <FormControl>
+                                                            <Checkbox
+                                                                checked={field.value}
+                                                                onCheckedChange={field.onChange}
+                                                            />
+                                                        </FormControl>
+                                                        <div className="space-y-1 leading-none">
+                                                            <FormLabel className="font-normal">
+                                                                I have read and agree to the terms and conditions above.
+                                                            </FormLabel>
+                                                            <FormMessage />
+                                                        </div>
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
+                        )}
 
                         <Accordion type="single" collapsible defaultValue="item-0" className="space-y-4">
                             {originalItems.map((originalItem, itemIndex) => {

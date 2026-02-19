@@ -51,91 +51,110 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { requisitionId, vendorId, items, notes, answers, cpoDocumentUrl, experienceDocumentUrl, bidDocumentUrl } = body;
+    const { requisitionId, vendorId, items, notes, answers, cpoDocumentUrl, experienceDocumentUrl, bidDocumentUrl, termsAccepted } = body;
 
     const vendor = await prisma.vendor.findUnique({ where: { id: vendorId }, include: { user: true } });
     if (!vendor) {
       return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
     }
-    
+
     const requisition = await prisma.purchaseRequisition.findUnique({ where: { id: requisitionId } });
     if (!requisition) {
       return NextResponse.json({ error: 'Requisition not found' }, { status: 404 });
+    }
+
+    const rfqSettings = (requisition.rfqSettings || {}) as any;
+    const rawTerms = rfqSettings?.termsAndConditions as string | string[] | undefined;
+    const termsArray = Array.isArray(rawTerms)
+      ? rawTerms.map(t => String(t).trim()).filter(Boolean)
+      : (rawTerms
+        ? String(rawTerms)
+          .split('\n')
+          .map(t => t.trim())
+          .filter(Boolean)
+        : []);
+    const hasTerms = termsArray.length > 0;
+    if (hasTerms && !termsAccepted) {
+      return NextResponse.json(
+        { error: 'You must accept the terms and conditions before submitting your quotation.' },
+        { status: 400 }
+      );
     }
 
     const existingQuote = await prisma.quotation.findFirst({
       where: { requisitionId, vendorId }
     });
     if (existingQuote) {
-        return NextResponse.json({ error: 'You have already submitted a quote for this requisition.' }, { status: 409 });
+      return NextResponse.json({ error: 'You have already submitted a quote for this requisition.' }, { status: 409 });
     }
 
     let totalPrice = 0;
     let maxLeadTime = 0;
 
     items.forEach((item: any) => {
-        totalPrice += (item.unitPrice || 0) * (item.quantity || 0);
-        if (item.leadTimeDays > maxLeadTime) {
-            maxLeadTime = item.leadTimeDays;
-        }
+      totalPrice += (item.unitPrice || 0) * (item.quantity || 0);
+      if (item.leadTimeDays > maxLeadTime) {
+        maxLeadTime = item.leadTimeDays;
+      }
     });
 
     const newQuotation = await prisma.quotation.create({
-        data: {
-            transactionId: requisition.transactionId,
-            requisition: { connect: { id: requisitionId } },
-            vendor: { connect: { id: vendorId } },
-            vendorName: vendor.name,
-            totalPrice,
-            deliveryDate: addDays(new Date(), maxLeadTime),
-            status: 'Submitted',
-            notes,
-            cpoDocumentUrl,
-            experienceDocumentUrl,
-            bidDocumentUrl,
-            items: {
-                create: items.map((item: any) => ({
-                    requisitionItemId: item.requisitionItemId,
-                    name: item.name,
-                    quantity: item.quantity,
-                    unitPrice: Number(item.unitPrice),
-                    leadTimeDays: Number(item.leadTimeDays),
-                    brandDetails: item.brandDetails,
-                    imageUrl: item.imageUrl,
-                }))
-            },
-            answers: {
-                create: answers?.map((ans: any) => ({
-                    questionId: ans.questionId,
-                    answer: ans.answer,
-                }))
-            }
+      data: {
+        transactionId: requisition.transactionId,
+        requisition: { connect: { id: requisitionId } },
+        vendor: { connect: { id: vendorId } },
+        vendorName: vendor.name,
+        totalPrice,
+        deliveryDate: addDays(new Date(), maxLeadTime),
+        status: 'Submitted',
+        notes,
+        cpoDocumentUrl,
+        experienceDocumentUrl,
+        bidDocumentUrl,
+        termsAccepted: hasTerms ? true : false,
+        items: {
+          create: items.map((item: any) => ({
+            requisitionItemId: item.requisitionItemId,
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: Number(item.unitPrice),
+            leadTimeDays: Number(item.leadTimeDays),
+            brandDetails: item.brandDetails,
+            imageUrl: item.imageUrl,
+          }))
+        },
+        answers: {
+          create: answers?.map((ans: any) => ({
+            questionId: ans.questionId,
+            answer: ans.answer,
+          }))
         }
+      }
     });
 
 
     if (vendor.user) {
-        await prisma.auditLog.create({
-            data: {
-                transactionId: requisition.transactionId,
-                timestamp: new Date(),
-                user: { connect: { id: vendor.user.id } },
-                action: 'SUBMIT_QUOTATION',
-                entity: 'Quotation',
-                entityId: newQuotation.id,
-                details: `Submitted quotation from ${vendor.name} for requisition ${requisitionId}.`,
-            }
-        });
+      await prisma.auditLog.create({
+        data: {
+          transactionId: requisition.transactionId,
+          timestamp: new Date(),
+          user: { connect: { id: vendor.user.id } },
+          action: 'SUBMIT_QUOTATION',
+          entity: 'Quotation',
+          entityId: newQuotation.id,
+          details: `Submitted quotation from ${vendor.name} for requisition ${requisitionId}.`,
+        }
+      });
     }
 
     return NextResponse.json(newQuotation, { status: 201 });
   } catch (error) {
     console.error('Failed to create quotation:', error);
     if (error instanceof Error && (error as any).code === 'P2003') {
-       return NextResponse.json({ error: 'Foreign key constraint failed. One of the item IDs does not exist.' }, { status: 400 });
+      return NextResponse.json({ error: 'Foreign key constraint failed. One of the item IDs does not exist.' }, { status: 400 });
     }
     if (error instanceof Error) {
-        return NextResponse.json({ error: 'Failed to process quotation', details: error.message }, { status: 400 });
+      return NextResponse.json({ error: 'Failed to process quotation', details: error.message }, { status: 400 });
     }
     return NextResponse.json({ error: 'An unknown error occurred' }, { status: 500 });
   }

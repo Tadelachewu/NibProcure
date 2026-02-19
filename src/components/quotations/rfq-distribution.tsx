@@ -18,6 +18,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Loader2, Send, CheckCircle, CalendarIcon, Search } from 'lucide-react';
 
 type Props = {
@@ -42,6 +44,16 @@ export default function RFQDistribution({ requisition, vendors, quotations = [],
   const [allowQuoteEdits, setAllowQuoteEdits] = useState(requisition.rfqSettings?.allowQuoteEdits ?? true);
   const [experienceDocumentRequired, setExperienceDocumentRequired] = useState(requisition.rfqSettings?.experienceDocumentRequired ?? false);
   const [needsCompliance, setNeedsCompliance] = useState<boolean>(requisition.rfqSettings?.needsCompliance ?? true);
+  const [termsAndConditions, setTermsAndConditions] = useState<string[]>(
+    Array.isArray((requisition.rfqSettings as any)?.termsAndConditions)
+      ? (requisition.rfqSettings as any).termsAndConditions
+      : ((requisition.rfqSettings as any)?.termsAndConditions
+        ? String((requisition.rfqSettings as any).termsAndConditions)
+          .split('\n')
+          .map(t => t.trim())
+          .filter(Boolean)
+        : [])
+  );
   const [procurementMethod, setProcurementMethod] = useState<string>(
     requisition.procurementMethod ?? (requisition.isOpenTender ? 'OpenTender' : ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'))
   );
@@ -63,6 +75,19 @@ export default function RFQDistribution({ requisition, vendors, quotations = [],
     setAllowQuoteEdits(requisition.rfqSettings?.allowQuoteEdits ?? true);
     setExperienceDocumentRequired(requisition.rfqSettings?.experienceDocumentRequired ?? false);
     setNeedsCompliance((requisition.rfqSettings as any)?.needsCompliance ?? true);
+    const existingTerms = (requisition.rfqSettings as any)?.termsAndConditions;
+    if (Array.isArray(existingTerms)) {
+      setTermsAndConditions(existingTerms.map((t: any) => String(t).trim()).filter(Boolean));
+    } else if (existingTerms) {
+      setTermsAndConditions(
+        String(existingTerms)
+          .split('\n')
+          .map(t => t.trim())
+          .filter(Boolean)
+      );
+    } else {
+      setTermsAndConditions([]);
+    }
     setProcurementMethod(requisition.procurementMethod ?? (requisition.isOpenTender ? 'OpenTender' : ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ')));
   }, [requisition]);
 
@@ -140,6 +165,7 @@ export default function RFQDistribution({ requisition, vendors, quotations = [],
             needsCompliance,
             method: procurementMethod,
             rfqDocumentUrl,
+            termsAndConditions,
           },
           procurementMethod,
         }),
@@ -285,6 +311,63 @@ export default function RFQDistribution({ requisition, vendors, quotations = [],
             </div>
             <p className="text-xs text-muted-foreground">Optional. If set, vendors must submit a CPO of this amount to qualify.</p>
           </div>
+
+          <Accordion type="single" collapsible defaultValue="terms">
+            <AccordionItem value="terms">
+              <AccordionTrigger>
+                <span className="text-sm font-medium">Terms and Conditions</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-2 mt-2">
+                  <div className="space-y-2">
+                    {termsAndConditions.length > 0 && (
+                      <div className="space-y-1">
+                        {termsAndConditions.map((term, index) => (
+                          <div key={index} className="flex items-start gap-2">
+                            <span className="mt-1 text-xs text-muted-foreground">{index + 1}.</span>
+                            <Input
+                              value={term}
+                              onChange={(e) => {
+                                const next = [...termsAndConditions];
+                                next[index] = e.target.value;
+                                const cleaned = next.map(t => t.trim());
+                                setTermsAndConditions(cleaned.filter(t => t.length > 0));
+                              }}
+                              disabled={!canTakeAction}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const next = termsAndConditions.filter((_, i) => i !== index);
+                                setTermsAndConditions(next);
+                              }}
+                              disabled={!canTakeAction}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTermsAndConditions([...termsAndConditions, ''])}
+                      disabled={!canTakeAction}
+                    >
+                      Add Term
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Optional. Add one term per input. Vendors will see each term separately and must accept all of them when submitting quotations.
+                  </p>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
 
           <div className="grid md:grid-cols-2 gap-4">
             <div className="space-y-2">
