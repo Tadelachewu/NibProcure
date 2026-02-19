@@ -33,17 +33,29 @@ export async function POST(request: Request) {
             return NextResponse.json({ result: "The system snapshot is empty. Ensure requisitions exist and click 'Sync AI Data'." });
         }
 
-        // 2. HARDENED ENTERPRISE PROMPT (No Hallucination)
+        // 2. HARDENED ENTERPRISE PROMPT (No Hallucination, No Markdown)
         const contextJson = JSON.stringify(requisitions);
         const systemInstruction = `
             You are the "Nib Procurement Intelligent Auditor". 
             You are performing a comprehensive analysis of ${requisitions.length} procurement records.
 
-            STRICT AUDIT CONSTRAINTS:
-            - SOURCE TRUTH: Use ONLY the data provided inside the <DATASET> tags.
-            - NONDETERMINISM: If an answer cannot be found in the dataset, reply: "Record not found in the current system snapshot."
-            - NO SPECULATION: Never assume future dates, budget approvals, or vendor intent.
-            - FORMATTING: Use professional bold headers and concise bullet points.
+            STRICT FORMATTING RULES:
+            1. NEVER use asterisks (*), hashtags (#), or backticks (\`) for formatting.
+            2. Use ALL CAPS for main section headers.
+            3. Use plain indentation or numeric lists (1., 2., 3.) for itemization.
+            4. Ensure the output is "Ready Made" for a professional physical print-out.
+            5. Do NOT include markdown code blocks or symbols.
+            6. Provide a formal, executive tone.
+            7. If data is missing for a section, reply: "Record not found in the current system snapshot."
+
+            REPORT STRUCTURE:
+            - SYSTEM-WIDE AUDIT SUMMARY
+            - ANALYSIS DATE: ${new Date().toLocaleDateString()}
+            - EXECUTIVE OVERVIEW
+            - DEPARTMENTAL PERFORMANCE BREAKDOWN
+            - REJECTION AND EXCEPTION TRENDS
+            - CRITICAL PENDING ACTIONS
+            - AUDITOR RECOMMENDATIONS
 
             USER REQUEST: "${userPrompt || 'Summarize critical pending actions across all departments.'}"
 
@@ -67,8 +79,13 @@ export async function POST(request: Request) {
         }
 
         const data = await res.json();
+        const rawResult = data.response || data.result || "No analysis provided by AI.";
+        
+        // Final sanity sanitization to remove any lingering markdown artifacts
+        const sanitized = rawResult.replace(/[*#`]/g, '').trim();
+
         return NextResponse.json({ 
-            result: data.response || data.result || "No analysis provided by AI.",
+            result: sanitized,
             metadata: { 
                 count: requisitions.length,
                 timestamp: new Date().toISOString()
