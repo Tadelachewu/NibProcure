@@ -31,6 +31,7 @@ import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
+import { HtmlRenderer } from '@/components/editor/rich-text-editor';
 
 const quoteFormSchema = z.object({
     notes: z.string().optional(),
@@ -463,6 +464,20 @@ function QuoteSubmissionForm({ requisition, quote, onQuoteSubmitted }: { requisi
             <CardContent>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
+                        {requisition.rfqSettings?.vendorInstructionsHtml && (
+                            <Accordion type="single" collapsible defaultValue="instructions">
+                                <AccordionItem value="instructions">
+                                    <AccordionTrigger>
+                                        <span className="text-sm font-medium">Vendor Instructions</span>
+                                    </AccordionTrigger>
+                                    <AccordionContent>
+                                        <div className="border rounded-md p-3 bg-muted/40">
+                                            <HtmlRenderer html={String(requisition.rfqSettings?.vendorInstructionsHtml || '')} />
+                                        </div>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
+                        )}
                         {isCpoRequired && (
                             <FormField
                                 control={form.control}

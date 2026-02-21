@@ -12,6 +12,28 @@ export async function POST(
     context: { params: any }
 ) {
     try {
+        const serverSanitize = (html: any) => {
+            if (!html || typeof html !== 'string') return '';
+            let out = html;
+            out = out.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
+            out = out.replace(/\son\w+="[^"]*"/gi, '').replace(/\son\w+='[^']*'/gi, '');
+            out = out.replace(/javascript:/gi, '');
+            out = out.replace(/<(?!\/?(?:b|strong|i|em|u|p|br|span|ul|ol|li|a|table|thead|tbody|tr|th|td|h1|h2|h3|h4|h5|h6|img)\b)[^>]*>/gi, '');
+            out = out.replace(/<a([^>]*)>/gi, (m, attrs) => {
+                let a = attrs || '';
+                a = a.replace(/\srel="[^"]*"/gi, '');
+                if (!/target=/.test(a)) a += ' target="_blank"';
+                a += ' rel="noopener noreferrer"';
+                return `<a${a}>`;
+            });
+            out = out.replace(/<img([^>]*)>/gi, (m, attrs) => {
+                let a = attrs || '';
+                a = a.replace(/src\s*=\s*"(?!https?:|\/)/gi, ''); 
+                a = a.replace(/src\s*=\s*'(?!https?:|\/)/gi, '');
+                return `<img${a}>`;
+            });
+            return out;
+        };
         const actor = await getActorFromToken(request);
         if (!actor) {
             return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
@@ -126,6 +148,13 @@ export async function POST(
                     let merged = { ...(typeof current === 'object' ? current : {}) };
                     if (incoming && typeof incoming === 'object') {
                         merged = { ...merged, ...incoming };
+                    }
+
+                    if (merged.vendorInstructionsHtml) {
+                        merged.vendorInstructionsHtml = serverSanitize(String(merged.vendorInstructionsHtml));
+                    }
+                    if (merged.vendorInstructionsText && typeof merged.vendorInstructionsText === 'string') {
+                        merged.vendorInstructionsText = merged.vendorInstructionsText.trim();
                     }
 
                     // Once director verification is completed, do not allow re-sealing.

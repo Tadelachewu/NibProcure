@@ -204,6 +204,8 @@ export type PurchaseRequisition = {
       experienceDocumentRequired?: boolean;
       needsCompliance?: boolean;
       termsAndConditions?: string;
+      vendorInstructionsHtml?: string;
+      vendorInstructionsText?: string;
       [key: string]: any;
   };
   assignedRfqSenderIds?: string[];

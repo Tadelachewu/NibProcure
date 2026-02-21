@@ -35,6 +35,8 @@ import { useForm, useFieldArray, FormProvider, useFormContext, Control, Controll
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { RichTextEditor, HtmlRenderer } from '@/components/editor/rich-text-editor';
+import { htmlToPlainText, sanitizeHtml } from '@/lib/sanitize';
 import { PurchaseOrder, PurchaseRequisition, Quotation, Vendor, QuotationStatus, EvaluationCriteria, User, CommitteeScoreSet, EvaluationCriterion, QuoteItem, PerItemAwardDetail, UserRole, CustomQuestion } from '@/lib/types';
 import { format, formatDistanceToNow, isBefore, isPast, setHours, setMinutes, differenceInCalendarDays } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
@@ -1616,6 +1618,10 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
     const [procurementMethod, setProcurementMethod] = useState<string>(
         requisition.procurementMethod ?? (requisition.isOpenTender ? 'OpenTender' : ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'))
     );
+    const [vendorInstructionsHtml, setVendorInstructionsHtml] = useState<string>(
+        String(((requisition.rfqSettings as any)?.vendorInstructionsHtml) || '')
+    );
+    const [showInstructionsPreview, setShowInstructionsPreview] = useState(false);
     const { user, token } = useAuth();
     const { toast } = useToast();
 
@@ -1652,6 +1658,7 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                 ? 'OpenTender'
                 : ((requisition.rfqSettings && (requisition.rfqSettings as any).method) || 'RFQ'))
         );
+        setVendorInstructionsHtml(String(((requisition.rfqSettings as any)?.vendorInstructionsHtml) || ''));
     }, [requisition]);
 
     const deadline = useMemo(() => {
@@ -1734,6 +1741,8 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                         method: procurementMethod,
                         rfqDocumentUrl,
                         termsAndConditions: termsAndConditions,
+                        vendorInstructionsHtml: sanitizeHtml(vendorInstructionsHtml || ''),
+                        vendorInstructionsText: htmlToPlainText(vendorInstructionsHtml || ''),
                     },
                     procurementMethod
                 }),
@@ -1800,6 +1809,35 @@ const RFQDistribution = ({ requisition, vendors, onRfqSent, isAuthorized }: { re
                 </div>
             </CardHeader>
             <CardContent className="space-y-4">
+                <Accordion type="single" collapsible defaultValue="vendor-instructions">
+                    <AccordionItem value="vendor-instructions">
+                        <AccordionTrigger>
+                            <span className="text-sm font-medium">Vendor Instructions</span>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                            <div className="space-y-3 mt-2">
+                                <RichTextEditor
+                                    value={vendorInstructionsHtml}
+                                    onChange={setVendorInstructionsHtml}
+                                    readOnly={!canTakeAction}
+                                    placeholder="Provide clear submission instructions, required documents, and contact info."
+                                    maxChars={20000}
+                                />
+                                <div className="flex items-center gap-2">
+                                    <Button type="button" variant="outline" onClick={() => setShowInstructionsPreview(!showInstructionsPreview)}>
+                                        {showInstructionsPreview ? 'Hide Preview' : 'Preview as Vendor'}
+                                    </Button>
+                                    <p className="text-xs text-muted-foreground">Formatting is preserved for vendors.</p>
+                                </div>
+                                {showInstructionsPreview && (
+                                    <div className="border rounded-md p-3 bg-muted/30">
+                                        <HtmlRenderer html={vendorInstructionsHtml} />
+                                    </div>
+                                )}
+                            </div>
+                        </AccordionContent>
+                    </AccordionItem>
+                </Accordion>
                 {!isAuthorized && !isSent && (
                     <Alert variant="default" className="border-amber-500/50">
                         <AlertCircle className="h-4 w-4 text-amber-600" />
