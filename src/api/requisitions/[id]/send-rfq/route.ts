@@ -7,6 +7,7 @@ import { isBefore } from 'date-fns';
 import { UserRole } from '@/lib/types';
 import { sendEmail } from '@/services/email-service';
 import { getActorFromToken } from '@/lib/auth';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 export async function POST(request: Request, context: { params: any }) {
     try {
@@ -112,6 +113,11 @@ export async function POST(request: Request, context: { params: any }) {
         const validInitialStatuses = ['PreApproved', 'Accepting_Quotes'];
         if (!validInitialStatuses.includes(requisition.status)) {
             return NextResponse.json({ error: `Cannot start RFQ for a requisition that is not in a valid state.` }, { status: 400 });
+        }
+
+        // Sanitize vendor instructions on the server before saving to DB.
+        if (rfqSettings && typeof rfqSettings.vendorInstructionsHtml === 'string') {
+            rfqSettings.vendorInstructionsHtml = sanitizeHtml(rfqSettings.vendorInstructionsHtml || '');
         }
 
         const updatedRequisition = await prisma.purchaseRequisition.update({

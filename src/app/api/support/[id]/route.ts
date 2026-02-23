@@ -9,9 +9,7 @@ import { getActorFromToken } from '@/lib/auth';
 export async function PATCH(request: Request, context: { params: any }) {
     try {
         const actor = await getActorFromToken(request);
-        if (!actor || !(actor.roles as string[]).includes('Admin')) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 
         const params = await context.params;
         const ticketId = params?.id;
@@ -27,25 +25,35 @@ export async function PATCH(request: Request, context: { params: any }) {
             return NextResponse.json({ error: 'Invalid status provided.' }, { status: 400 });
         }
 
-        const updatedTicket = await prisma.supportTicket.update({
-            where: { id: ticketId },
-            data: {
-                response,
-                status,
-                adminId: actor.id,
-                updatedAt: new Date(),
-            }
-        });
+        const roles = (actor.roles as string[] || []);
+        const isAdmin = roles.includes('Admin');
+        const isProcurement = roles.includes('Procurement_Officer');
 
-        // Here you would typically trigger an email notification to the user
+        const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
+        if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
 
-        return NextResponse.json(updatedTicket);
+        // Admin can respond to admin tickets
+        if (isAdmin && (ticket.recipientType === 'Admin' || ticket.recipientType === null)) {
+            const updatedTicket = await prisma.supportTicket.update({
+                where: { id: ticketId },
+                data: { response, status, adminId: actor.id, updatedAt: new Date() },
+            });
+            return NextResponse.json(updatedTicket);
+        }
+
+        // Procurement officer can respond to tickets assigned to them
+        if (isProcurement && ticket.recipientType === 'ProcurementOfficer' && ticket.procurementOfficerId === actor.id) {
+            const updatedTicket = await prisma.supportTicket.update({
+                where: { id: ticketId },
+                data: { response, status, procurementResponderId: actor.id, updatedAt: new Date() },
+            });
+            return NextResponse.json(updatedTicket);
+        }
+
+        return NextResponse.json({ error: 'Unauthorized or ticket not assigned to you' }, { status: 403 });
 
     } catch (error) {
-        console.error("Failed to update ticket:", error);
-        if (error instanceof Error && error.message === 'Unauthorized') {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
-        }
+        console.error('Failed to update ticket:', error);
         return NextResponse.json({ error: 'Failed to update support ticket' }, { status: 500 });
     }
 }

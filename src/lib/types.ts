@@ -129,37 +129,37 @@ export type Contract = {
 }
 
 export type Signature = {
-    id: string;
-    minuteId: string;
-    signerId: string;
-    signerName: string;
-    signerRole: string;
-    decision: 'APPROVED' | 'REJECTED';
-    comment: string;
-    signedAt: Date;
+  id: string;
+  minuteId: string;
+  signerId: string;
+  signerName: string;
+  signerRole: string;
+  decision: 'APPROVED' | 'REJECTED';
+  comment: string;
+  signedAt: Date;
 }
 
 export type MinuteDecision = 'APPROVED' | 'REJECTED' | 'REVISION';
 export type MinuteType = 'system_generated' | 'uploaded_document';
 
 export type Minute = {
-    id: string;
-    requisitionId: string;
-    authorId: string;
-    author: User;
-    decision: MinuteDecision;
-    decisionBody: string; // e.g., "Committee A", "VP Resources"
-    justification: string;
-    attendees: User[];
-    createdAt: Date;
-    type: MinuteType;
-    documentUrl?: string;
-    signatures?: Signature[];
+  id: string;
+  requisitionId: string;
+  authorId: string;
+  author: User;
+  decision: MinuteDecision;
+  decisionBody: string; // e.g., "Committee A", "VP Resources"
+  justification: string;
+  attendees: User[];
+  createdAt: Date;
+  type: MinuteType;
+  documentUrl?: string;
+  signatures?: Signature[];
 }
 
 
 export type PurchaseRequisition = {
-  id:string; // Will be UUID
+  id: string; // Will be UUID
   transactionId: string;
   requesterId: string; // User ID
   requesterName?: string;
@@ -178,8 +178,8 @@ export type PurchaseRequisition = {
   currentApproverId?: string;
   quotations?: Quotation[];
   contract?: {
-      fileName: string;
-      uploadDate: Date;
+    fileName: string;
+    uploadDate: Date;
   };
   negotiationNotes?: string;
   purchaseOrderId?: string;
@@ -198,15 +198,15 @@ export type PurchaseRequisition = {
   committeePurpose?: string;
   cpoAmount?: number;
   rfqSettings?: {
-      awardStrategy?: 'all' | 'item';
-      allowQuoteEdits?: boolean;
-      technicalEvaluatorSeesPrices?: boolean;
-      experienceDocumentRequired?: boolean;
-      needsCompliance?: boolean;
-      termsAndConditions?: string;
-      vendorInstructionsHtml?: string;
-      vendorInstructionsText?: string;
-      [key: string]: any;
+    awardStrategy?: 'all' | 'item';
+    allowQuoteEdits?: boolean;
+    technicalEvaluatorSeesPrices?: boolean;
+    experienceDocumentRequired?: boolean;
+    needsCompliance?: boolean;
+    termsAndConditions?: string;
+    vendorInstructionsHtml?: string;
+    vendorInstructionsText?: string;
+    [key: string]: any;
   };
   assignedRfqSenderIds?: string[];
   minutes?: Minute[];
@@ -231,9 +231,9 @@ export type AuditLog = {
 export type KycStatus = 'Pending' | 'Verified' | 'Rejected';
 
 export type KycDocument = {
-    name: string;
-    url: string;
-    submittedAt: Date;
+  name: string;
+  url: string;
+  submittedAt: Date;
 }
 
 export type Vendor = {
@@ -250,14 +250,14 @@ export type Vendor = {
 };
 
 export type QuoteItem = {
-    id: string;
-    requisitionItemId: string;
-    name: string;
-    quantity: number;
-    unitPrice: number;
-    leadTimeDays: number;
-    brandDetails?: string;
-    imageUrl?: string;
+  id: string;
+  requisitionItemId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  leadTimeDays: number;
+  brandDetails?: string;
+  imageUrl?: string;
 };
 
 export type QuoteAnswer = {
@@ -290,20 +290,20 @@ export type Score = {
 }
 
 export type ItemScore = {
-    id: string;
-    quoteItemId: string;
-    scores: Score[];
-    finalScore: number;
+  id: string;
+  quoteItemId: string;
+  scores: Score[];
+  finalScore: number;
 }
 
 export type CommitteeScoreSet = {
-    id: string;
-    scorerId: string;
-    scorer: { name?: string };
-    itemScores: ItemScore[];
-    finalScore: number;
-    committeeComment: string;
-    submittedAt: Date;
+  id: string;
+  scorerId: string;
+  scorer: { name?: string };
+  itemScores: ItemScore[];
+  finalScore: number;
+  committeeComment: string;
+  submittedAt: Date;
 }
 
 export type ItemCompliance = {
@@ -323,80 +323,80 @@ export type CommitteeComplianceSet = {
 }
 
 export type Quotation = {
-    id: string;
-    transactionId: string;
-    requisitionId: string;
-    vendorId: string; // Changed from optional to required
-    vendorName: string;
-    items: QuoteItem[];
-    totalPrice: number;
-    deliveryDate: Date;
-    createdAt: Date;
-    updatedAt: Date;
-    status: QuotationStatus;
-    notes?: string;
-    rejectionReason?: string;
-    rank?: 1 | 2 | 3;
-    finalAverageScore?: number;
-    answers?: QuoteAnswer[];
-    scores?: CommitteeScoreSet[];
-    submissionMethod?: 'Portal' | 'Manual';
-    cpoDocumentUrl?: string;
-    experienceDocumentUrl?: string;
-    bidDocumentUrl?: string;
-    termsAccepted?: boolean;
+  id: string;
+  transactionId: string;
+  requisitionId: string;
+  vendorId: string; // Changed from optional to required
+  vendorName: string;
+  items: QuoteItem[];
+  totalPrice: number;
+  deliveryDate: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  status: QuotationStatus;
+  notes?: string;
+  rejectionReason?: string;
+  rank?: 1 | 2 | 3;
+  finalAverageScore?: number;
+  answers?: QuoteAnswer[];
+  scores?: CommitteeScoreSet[];
+  submissionMethod?: 'Portal' | 'Manual';
+  cpoDocumentUrl?: string;
+  experienceDocumentUrl?: string;
+  bidDocumentUrl?: string;
+  termsAccepted?: boolean;
 };
 
 export type POItem = {
-    id: string;
-    name: string;
-    quantity: number;
-    unitPrice: number;
-    totalPrice: number;
-    receivedQuantity: number;
-    requisitionItemId: string;
+  id: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  receivedQuantity: number;
+  requisitionItemId: string;
 };
 
 export type PurchaseOrderStatus = 'Issued' | 'Acknowledged' | 'Shipped' | 'Partially_Delivered' | 'Delivered' | 'Cancelled' | 'Matched' | 'Mismatched' | 'On_Hold' | 'Closed';
 
 export type PurchaseOrder = {
-    id: string;
-    transactionId: string;
-    requisitionId: string;
-    requisitionTitle: string;
-    vendor: Vendor;
-    items: POItem[];
-    totalAmount: number;
-    status: PurchaseOrderStatus;
-    createdAt: Date;
-    contract?: {
-        fileName: string;
-        uploadDate: Date;
-    };
-    notes?: string;
-    receipts?: GoodsReceiptNote[];
-    invoices?: Invoice[];
+  id: string;
+  transactionId: string;
+  requisitionId: string;
+  requisitionTitle: string;
+  vendor: Vendor;
+  items: POItem[];
+  totalAmount: number;
+  status: PurchaseOrderStatus;
+  createdAt: Date;
+  contract?: {
+    fileName: string;
+    uploadDate: Date;
+  };
+  notes?: string;
+  receipts?: GoodsReceiptNote[];
+  invoices?: Invoice[];
 };
 
 
 export type ReceiptItem = {
-    poItemId: string;
-    name: string;
-    quantityOrdered: number;
-    quantityReceived: number;
-    condition: 'Good' | 'Damaged' | 'Incorrect';
-    notes?: string;
+  poItemId: string;
+  name: string;
+  quantityOrdered: number;
+  quantityReceived: number;
+  condition: 'Good' | 'Damaged' | 'Incorrect';
+  notes?: string;
 }
 
 export type GoodsReceiptNote = {
-    id: string;
-    transactionId: string;
-    purchaseOrderId: string;
-    receivedBy: User;
-    receivedById: string;
-    receivedDate: Date;
-    items: ReceiptItem[];
-    photos?: { name: string; url: string }[];
+  id: string;
+  transactionId: string;
+  purchaseOrderId: string;
+  receivedBy: User;
+  receivedById: string;
+  receivedDate: Date;
+  items: ReceiptItem[];
+  photos?: { name: string; url: string }[];
 }
 
 export type InvoiceItem = {
@@ -453,30 +453,30 @@ export type MatchingResult = {
 };
 
 export type DocumentRecord = {
-    id: string;
-    type: 'Requisition' | 'Purchase Order' | 'Invoice' | 'Quotation' | 'Goods Receipt' | 'Contract';
-    title: string;
-    status: string;
-    date: Date;
-    amount: number;
-    user: string;
-    transactionId: string;
-    auditTrail?: AuditLog[];
-    minutes?: Minute[];
+  id: string;
+  type: 'Requisition' | 'Purchase Order' | 'Invoice' | 'Quotation' | 'Goods Receipt' | 'Contract';
+  title: string;
+  status: string;
+  date: Date;
+  amount: number;
+  user: string;
+  transactionId: string;
+  auditTrail?: AuditLog[];
+  minutes?: Minute[];
 }
 
 export interface ApprovalStep {
-    role: UserRole;
-    id?: string;
-    order?: number;
+  role: UserRole;
+  id?: string;
+  order?: number;
 }
 
 export interface ApprovalThreshold {
-    id: string;
-    name: string;
-    min: number;
-    max: number | null; // null for infinity
-    steps: ApprovalStep[];
+  id: string;
+  name: string;
+  min: number;
+  max: number | null; // null for infinity
+  steps: ApprovalStep[];
 }
 
 export type SupportTicketStatus = 'Open' | 'In_Progress' | 'Closed';
@@ -492,5 +492,10 @@ export type SupportTicket = {
   requester: User;
   adminId?: string | null;
   admin?: User | null;
+  procurementOfficerId?: string | null;
+  procurementOfficer?: User | null;
+  procurementResponderId?: string | null;
+  procurementResponder?: User | null;
+  recipientType?: 'Admin' | 'ProcurementOfficer' | null;
   response?: string | null;
 }
