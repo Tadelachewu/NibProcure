@@ -607,7 +607,7 @@ const ManageRFQ = ({
     onSuccess: () => void,
     isAuthorized: boolean,
 }) => {
-    const [actionDialog, setActionDialog] = useState<{ isOpen: boolean, type: 'update' | 'cancel' | 'restart' }>({ isOpen: false, type: 'update' });
+    const [actionDialog, setActionDialog] = useState<{ isOpen: boolean, type: 'update' | 'cancel' | 'restart' | 'amend' }>({ isOpen: false, type: 'update' });
     const canManageRfq = isAuthorized && requisition.status === 'Accepting_Quotes' && !isPast(new Date(requisition.deadline!));
 
     if (!canManageRfq) return null;
@@ -656,6 +656,7 @@ const ManageRFQ = ({
                 </CardContent>
                 <CardFooter className="flex gap-2">
                     <Button variant="outline" onClick={() => setActionDialog({ isOpen: true, type: 'update' })}><Settings2 className="mr-2" /> Update RFQ</Button>
+                    <Button variant="secondary" onClick={() => setActionDialog({ isOpen: true, type: 'amend' })}><Edit2 className="mr-2" /> Amend RFQ</Button>
                     <Button variant="destructive" onClick={() => setActionDialog({ isOpen: true, type: 'cancel' })}><Ban className="mr-2" /> Cancel RFQ</Button>
                 </CardFooter>
             </Card>
