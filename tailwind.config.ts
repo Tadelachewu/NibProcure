@@ -1,12 +1,14 @@
 
-import type {Config} from 'tailwindcss';
+import type { Config } from 'tailwindcss';
 
 export default {
   darkMode: ['class'],
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    // Include app sources but exclude API route folders to avoid statting dynamic bracketed routes
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    '!./src/app/api/**',
   ],
   theme: {
     extend: {
@@ -51,8 +53,8 @@ export default {
           foreground: 'hsl(var(--success-foreground))',
         },
         warning: {
-            DEFAULT: 'hsl(var(--warning))',
-            foreground: 'hsl(var(--warning-foreground))',
+          DEFAULT: 'hsl(var(--warning))',
+          foreground: 'hsl(var(--warning-foreground))',
         },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

@@ -656,8 +656,7 @@ const ManageRFQ = ({
                 </CardContent>
                 <CardFooter className="flex gap-2">
                     <Button variant="outline" onClick={() => setActionDialog({ isOpen: true, type: 'update' })}><Settings2 className="mr-2" /> Update RFQ</Button>
-                    <Button variant="secondary" onClick={() => setActionDialog({ isOpen: true, type: 'amend' })}><Edit2 className="mr-2" /> Amend RFQ</Button>
-                    <Button variant="destructive" onClick={() => setActionDialog({ isOpen: true, type: 'cancel' })}><Ban className="mr-2" /> Cancel RFQ</Button>
+                    <Button variant="destructive" onClick={() => setActionDialog({ isOpen: true, type: 'cancel' })}><Ban className="mr-2" /> Amend RFQ</Button>
                 </CardFooter>
             </Card>
             <RFQActionDialog
