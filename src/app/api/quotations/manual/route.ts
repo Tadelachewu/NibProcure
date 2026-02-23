@@ -58,7 +58,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const rfqSettings = (requisition.rfqSettings || {}) as any;
     const isUnmasked = rfqSettings?.masked === false || Boolean(rfqSettings?.directorPresenceVerified);
 
     // Allow manual upload when sealed only if the deadline has passed and current quotes are below committee quorum

@@ -19,7 +19,7 @@
     "test:codegen": "node scripts/playwright.js codegen http://localhost:9002"
   },
   "dependencies": {
-    "@ckeditor/ckeditor5-build-classic": "^39.0.2",
+    "@ckeditor/ckeditor5-build-classic": "^38.1.1",
     "@ckeditor/ckeditor5-react": "^11.0.1",
     "@hookform/resolvers": "^3.9.0",
     "@prisma/client": "^5.17.0",
