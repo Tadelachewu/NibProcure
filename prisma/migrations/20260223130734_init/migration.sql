@@ -426,6 +426,9 @@ CREATE TABLE "SupportTicket" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "requesterId" TEXT NOT NULL,
     "adminId" TEXT,
+    "procurementOfficerId" TEXT,
+    "procurementResponderId" TEXT,
+    "recipientType" TEXT,
     "response" TEXT,
 
     CONSTRAINT "SupportTicket_pkey" PRIMARY KEY ("id")
@@ -741,6 +744,12 @@ ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_requesterId_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_adminId_fkey" FOREIGN KEY ("adminId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_procurementOfficerId_fkey" FOREIGN KEY ("procurementOfficerId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_procurementResponderId_fkey" FOREIGN KEY ("procurementResponderId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Pin" ADD CONSTRAINT "Pin_requisitionId_fkey" FOREIGN KEY ("requisitionId") REFERENCES "PurchaseRequisition"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
